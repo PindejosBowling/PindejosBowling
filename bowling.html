@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pindejos Bowling League</title>
+    <style>
+        body { font-family: sans-serif; background: #f4f2ed; padding: 20px; }
+        .card { background: white; border-radius: 12px; padding: 15px; margin-bottom: 20px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        .matchup { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #eee; padding: 10px 0; }
+        .score-input { width: 50px; padding: 8px; border: 1px solid #ddd; border-radius: 4px; text-align: center; }
+        h2 { color: #18180f; border-bottom: 2px solid #db2777; padding-bottom: 5px; }
+        .unavailable { color: #aeada6; font-style: italic; }
+    </style>
+</head>
+<body>
+
+    <h1>🎳 Pindejos League</h1>
+    
+    <div id="standings-btn" style="background:#18180f; color:white; padding:10px; text-align:center; border-radius:8px; margin-bottom:20px;">
+        View Standings
+    </div>
+
+    <div id="app-content">Loading Matchups...</div>
+
+    <script>
+        const API_URL = "YOUR_APPS_SCRIPT_WEB_APP_URL_HERE";
+
+        async function loadMatchups() {
+            const response = await fetch(`${API_URL}?action=getCurrentWeek`);
+            const data = await response.json();
+            renderMatchups(data);
+        }
+
+        function renderMatchups(data) {
+            const container = document.getElementById('app-content');
+            container.innerHTML = "<h2>Current Week Matchups</h2>";
+
+            // We loop through your sheet rows (adjusting for your Game 1/2 layout)
+            // This is a simplified version to get you started
+            let html = "";
+            for (let i = 5; i < 15; i++) { // Rows 6-15
+                if (!data[i][0]) continue; // Skip empty rows
+                html += `
+                    <div class="card">
+                        <div class="matchup">
+                            <span>${data[i][0]}</span>
+                            <input type="number" class="score-input" value="${data[i][2]}" onchange="saveScore('${i+1}', 'C', this.value)">
+                        </div>
+                    </div>
+                `;
+            }
+            container.innerHTML += html;
+        }
+
+        async function saveScore(row, col, value) {
+            // Sends the score back to the sheet live
+            await fetch(API_URL, {
+                method: 'POST',
+                body: JSON.stringify({
+                    action: 'updateScore',
+                    cell: col + row,
+                    score: value
+                })
+            });
+        }
+
+        loadMatchups();
+    </script>
+</body>
+</html>
