@@ -8,27 +8,17 @@
 @import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;800;900&family=Barlow:wght@400;500;600&display=swap');
 
 :root {
-  --bg: #0a0a0c;
-  --surface: #131316;
-  --surface2: #1c1c21;
-  --surface3: #25252b;
-  --border: rgba(255,255,255,0.08);
-  --border2: rgba(255,255,255,0.14);
-  --accent: #e8ff47;
-  --accent-dim: rgba(232,255,71,0.12);
-  --accent2: #ff4f6d;
-  --accent3: #4fc3ff;
-  --text: #f0f0f0;
-  --muted: #7a7a85;
-  --muted2: #55555e;
-  --success: #4ade80;
-  --danger: #ff4f6d;
+  --bg: #0a0a0c; --surface: #131316; --surface2: #1c1c21; --surface3: #25252b;
+  --border: rgba(255,255,255,0.08); --border2: rgba(255,255,255,0.14);
+  --accent: #e8ff47; --accent-dim: rgba(232,255,71,0.12);
+  --accent2: #ff4f6d; --accent3: #4fc3ff;
+  --text: #f0f0f0; --muted: #7a7a85; --muted2: #55555e;
+  --success: #4ade80; --danger: #ff4f6d;
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
 body { font-family: 'Barlow', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; padding-bottom: 76px; overflow-x: hidden; }
 
-/* HEADER */
 header { padding: 20px 20px 12px; position: sticky; top: 0; z-index: 50; background: linear-gradient(var(--bg) 70%, transparent); }
 .logo-row { display: flex; align-items: baseline; gap: 10px; }
 .logo { font-family: 'Barlow Condensed', sans-serif; font-weight: 900; font-size: 30px; letter-spacing: -0.5px; line-height: 1; color: var(--text); }
@@ -40,27 +30,31 @@ header { padding: 20px 20px 12px; position: sticky; top: 0; z-index: 50; backgro
 .section.active { display: block; }
 @keyframes fadeUp { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
 
-/* LOADING */
 .loading { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 60px 0; gap: 16px; }
 .spinner { width: 32px; height: 32px; border: 2px solid var(--surface2); border-top: 2px solid var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 .loading-text { font-size: 13px; color: var(--muted); letter-spacing: 1px; text-transform: uppercase; }
 
-/* SECTION HEADERS */
 .match-header { display: flex; align-items: center; gap: 10px; margin: 20px 0 12px; }
 .match-title { font-family: 'Barlow Condensed', sans-serif; font-weight: 800; font-size: 22px; letter-spacing: 0.5px; text-transform: uppercase; }
 .game-pill { font-size: 11px; font-weight: 600; letter-spacing: 1.5px; text-transform: uppercase; color: var(--accent); background: var(--accent-dim); border: 1px solid rgba(232,255,71,0.25); border-radius: 20px; padding: 3px 10px; }
-.section-header { font-family: 'Barlow Condensed', sans-serif; font-size: 13px; font-weight: 700; letter-spacing: 2.5px; text-transform: uppercase; color: var(--muted); margin: 20px 0 12px; }
+.section-header { font-family: 'Barlow Condensed', sans-serif; font-size: 13px; font-weight: 700; letter-spacing: 2.5px; text-transform: uppercase; color: var(--muted); margin: 20px 0 12px; display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.section-header .actions { display: flex; gap: 6px; }
+.section-header button { font-size: 10px; }
 
-/* MATCHUPS */
 .matchup { background: var(--surface); border: 1px solid var(--border); border-radius: 18px; overflow: hidden; margin-bottom: 16px; }
 .team-block { padding: 14px 16px; }
+.team-block.winner { background: rgba(232,255,71,0.04); }
 .team-label { font-family: 'Barlow Condensed', sans-serif; font-size: 11px; font-weight: 700; letter-spacing: 2.5px; text-transform: uppercase; color: var(--muted); margin-bottom: 10px; }
+.team-label.winner { color: var(--accent); }
 .player-row { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--border); }
 .player-row:last-child { border-bottom: none; }
+.player-row.absent .player-name { color: var(--muted); }
+.player-row.absent .player-avatar { opacity: 0.5; }
+.absent-tag { font-size: 9px; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase; color: var(--danger); background: rgba(255,79,109,0.12); border: 1px solid rgba(255,79,109,0.3); border-radius: 4px; padding: 1px 5px; margin-left: 6px; }
 .player-avatar { width: 34px; height: 34px; border-radius: 10px; background: var(--surface2); border: 1px solid var(--border2); display: flex; align-items: center; justify-content: center; font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 14px; color: var(--muted); flex-shrink: 0; }
 .player-info { flex: 1; min-width: 0; }
-.player-name { font-family: 'Barlow Condensed', sans-serif; font-size: 17px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.player-name { font-family: 'Barlow Condensed', sans-serif; font-size: 17px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; align-items: center; }
 .player-avg { font-size: 12px; color: var(--muted); }
 .score-inputs { display: flex; gap: 6px; flex-shrink: 0; }
 .score-group { display: flex; flex-direction: column; align-items: center; gap: 3px; }
@@ -75,18 +69,17 @@ input.has-score { border-color: rgba(232,255,71,0.35); color: var(--accent); }
 textarea { width: 100%; background: var(--surface2); border: 1.5px solid var(--border2); border-radius: 10px; color: var(--text); padding: 10px 12px; font-family: 'Barlow', sans-serif; font-size: 14px; outline: none; resize: vertical; min-height: 70px; }
 textarea:focus { border-color: var(--accent); }
 
-.vs-bar { display: flex; align-items: center; gap: 0; position: relative; margin: 0; }
+.vs-bar { display: flex; align-items: center; position: relative; margin: 0; }
 .vs-bar::before { content: ''; position: absolute; inset: 0; background: linear-gradient(90deg, transparent, rgba(255,79,109,0.08), transparent); }
 .vs-left, .vs-right { flex: 1; height: 1px; background: var(--border2); }
 .vs-chip { font-family: 'Barlow Condensed', sans-serif; font-weight: 900; font-size: 11px; letter-spacing: 2px; padding: 5px 14px; background: var(--accent2); color: white; border-radius: 20px; flex-shrink: 0; margin: 0 12px; }
 
-.team-total { display: flex; align-items: center; gap: 8px; padding: 10px 16px 12px; }
+.team-total-row { display: flex; align-items: center; justify-content: space-between; padding: 10px 16px 12px; }
 .total-label { font-size: 12px; color: var(--muted); font-weight: 500; }
-.total-val { font-family: 'Barlow Condensed', sans-serif; font-size: 20px; font-weight: 800; }
+.total-val { font-family: 'Barlow Condensed', sans-serif; font-size: 22px; font-weight: 800; }
 .total-winning { color: var(--accent); }
 .total-losing { color: var(--muted); }
 
-/* STANDINGS */
 .standings-card { background: var(--surface); border: 1px solid var(--border); border-radius: 18px; overflow: hidden; }
 .standings-header { display: grid; grid-template-columns: 28px 1fr 70px 60px 56px; gap: 8px; padding: 10px 16px; border-bottom: 1px solid var(--border); }
 .standings-header span { font-size: 10px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; color: var(--muted); }
@@ -103,7 +96,6 @@ textarea:focus { border-color: var(--accent); }
 .s-avg { font-family: 'Barlow Condensed', sans-serif; font-size: 16px; font-weight: 800; text-align: right; }
 .s-rank-1 .s-name { color: var(--accent); }
 
-/* RSVP */
 .rsvp-row { display: flex; align-items: center; gap: 12px; padding: 10px 16px; border-bottom: 1px solid var(--border); }
 .rsvp-row:last-child { border-bottom: none; }
 .rsvp-name { flex: 1; font-family: 'Barlow Condensed', sans-serif; font-size: 17px; font-weight: 700; }
@@ -119,28 +111,26 @@ textarea:focus { border-color: var(--accent); }
 .rsvp-stat.out .rsvp-stat-val { color: var(--danger); }
 .rsvp-stat.unknown .rsvp-stat-val { color: var(--muted); }
 
-/* BUTTONS */
 .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; font-family: 'Barlow Condensed', sans-serif; font-size: 14px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; padding: 12px 18px; border-radius: 12px; border: 1.5px solid var(--border2); background: var(--surface2); color: var(--text); cursor: pointer; transition: all 0.15s; width: 100%; }
 .btn:hover { background: var(--surface3); }
 .btn:active { transform: scale(0.98); }
+.btn.sm { padding: 6px 10px; font-size: 11px; width: auto; border-radius: 8px; }
 .btn.primary { background: var(--accent); color: #0a0a0c; border-color: var(--accent); }
 .btn.primary:hover { background: #d8ee37; }
 .btn.danger { background: rgba(255,79,109,0.15); border-color: var(--danger); color: var(--danger); }
 .btn-row { display: flex; gap: 8px; margin: 16px 0; }
 .btn-row .btn { flex: 1; }
 
-/* TOGGLES */
 .toggle-group { display: flex; gap: 4px; background: var(--surface2); border-radius: 10px; padding: 3px; }
 .toggle-btn { flex: 1; font-family: 'Barlow Condensed', sans-serif; font-size: 12px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; padding: 8px 12px; border-radius: 8px; border: none; background: transparent; color: var(--muted); cursor: pointer; transition: all 0.15s; white-space: nowrap; }
 .toggle-btn.active { background: var(--accent); color: #0a0a0c; }
 
-.season-toggle { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 4px; display: flex; gap: 2px; margin-bottom: 12px; overflow-x: auto; }
+.season-bar { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 4px; display: flex; gap: 2px; margin-bottom: 14px; overflow-x: auto; }
 
-/* GENERATE */
 .gen-controls { background: var(--surface); border: 1px solid var(--border); border-radius: 18px; padding: 16px; margin-bottom: 16px; }
-.gen-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.gen-row { display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px; }
 .gen-row:last-child { margin-bottom: 0; }
-.gen-label { flex-shrink: 0; font-family: 'Barlow Condensed', sans-serif; font-size: 13px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; color: var(--muted); width: 100px; }
+.gen-label { font-family: 'Barlow Condensed', sans-serif; font-size: 12px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; color: var(--muted); }
 
 .team-preview-card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; margin-bottom: 12px; overflow: hidden; }
 .tp-head { display: flex; justify-content: space-between; align-items: center; padding: 12px 14px; background: var(--surface2); border-bottom: 1px solid var(--border); }
@@ -149,11 +139,10 @@ textarea:focus { border-color: var(--accent); }
 .tp-list { padding: 4px 14px; }
 .tp-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--border); }
 .tp-row:last-child { border-bottom: none; }
-.tp-player { font-family: 'Barlow Condensed', sans-serif; font-size: 15px; font-weight: 600; }
-.tp-player.unavail { color: var(--muted); text-decoration: line-through; }
+.tp-player { font-family: 'Barlow Condensed', sans-serif; font-size: 15px; font-weight: 600; display: flex; align-items: center; gap: 6px; }
+.tp-player.unavail { color: var(--muted); }
 .tp-avg { font-family: 'Barlow Condensed', sans-serif; font-size: 14px; color: var(--muted); }
 
-/* PLAYERS */
 .player-search { width: 100%; padding: 10px 14px; background: var(--surface2); border: 1.5px solid var(--border2); border-radius: 12px; color: var(--text); font-size: 14px; outline: none; margin-bottom: 12px; text-align: left; font-family: 'Barlow', sans-serif; font-weight: 500; }
 .player-search:focus { border-color: var(--accent); }
 .player-card { display: flex; align-items: center; gap: 12px; padding: 12px 14px; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; margin-bottom: 8px; cursor: pointer; transition: all 0.15s; }
@@ -176,8 +165,7 @@ textarea:focus { border-color: var(--accent); }
 .stat-tile-val { font-family: 'Barlow Condensed', sans-serif; font-size: 26px; font-weight: 800; line-height: 1.1; margin-top: 4px; color: var(--accent); }
 
 .chart-card { background: var(--surface); border: 1px solid var(--border); border-radius: 18px; padding: 16px; margin-bottom: 16px; }
-.chart-title-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
-.chart-title { font-family: 'Barlow Condensed', sans-serif; font-size: 13px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; color: var(--muted); }
+.chart-title { font-family: 'Barlow Condensed', sans-serif; font-size: 13px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; color: var(--muted); margin-bottom: 12px; }
 .chart-wrap { position: relative; height: 220px; }
 
 .score-history-table { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; overflow: hidden; }
@@ -188,8 +176,8 @@ textarea:focus { border-color: var(--accent); }
 .score-history-row span:not(:nth-child(1)):not(:nth-child(2)) { text-align: right; font-family: 'Barlow Condensed', sans-serif; font-weight: 700; }
 .sh-week { font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 14px; }
 .sh-team { font-size: 12px; color: var(--muted); }
+.sh-absent { font-size: 10px; color: var(--danger); font-weight: 600; }
 
-/* BOARD */
 .board-composer { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 12px; margin-bottom: 16px; }
 .board-author-row { display: flex; gap: 8px; margin-bottom: 8px; }
 .board-author-input { flex: 1; padding: 8px 12px; background: var(--surface2); border: 1.5px solid var(--border2); border-radius: 10px; color: var(--text); font-size: 13px; outline: none; font-family: 'Barlow', sans-serif; font-weight: 500; text-align: left; }
@@ -200,7 +188,6 @@ textarea:focus { border-color: var(--accent); }
 .board-time { font-size: 11px; color: var(--muted); margin-left: auto; }
 .board-msg { font-size: 14px; line-height: 1.5; color: var(--text); white-space: pre-wrap; word-wrap: break-word; }
 
-/* HISTORY / MATCHUPS */
 .history-season { background: var(--surface); border: 1px solid var(--border); border-radius: 18px; margin-bottom: 16px; overflow: hidden; }
 .history-head { padding: 14px 16px; background: var(--surface2); border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
 .history-season-name { font-family: 'Barlow Condensed', sans-serif; font-weight: 800; font-size: 18px; }
@@ -211,33 +198,17 @@ textarea:focus { border-color: var(--accent); }
 .week-pill.active { background: var(--accent); color: #0a0a0c; border-color: var(--accent); }
 .week-pill:hover:not(.active) { background: var(--surface3); }
 
-.matchup-result { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; margin-bottom: 12px; overflow: hidden; }
-.mr-team { padding: 12px 14px; }
-.mr-team.winner { background: rgba(232,255,71,0.04); }
-.mr-team-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
-.mr-team-name { font-family: 'Barlow Condensed', sans-serif; font-weight: 800; font-size: 16px; }
-.mr-team-name.winner { color: var(--accent); }
-.mr-team-total { font-family: 'Barlow Condensed', sans-serif; font-weight: 800; font-size: 18px; }
-.mr-team-total.winner { color: var(--accent); }
-.mr-player-row { display: grid; grid-template-columns: 1fr 50px 50px; gap: 8px; padding: 4px 0; align-items: center; }
-.mr-player-row .name { font-size: 13px; }
-.mr-player-row .score { text-align: right; font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 14px; }
-.mr-player-row .score.muted { color: var(--muted); }
-
-/* MORE */
 .more-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 16px; }
 .more-tile { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 16px 14px; cursor: pointer; transition: all 0.15s; text-align: center; }
 .more-tile:hover { background: var(--surface2); border-color: var(--border2); }
 .more-tile-icon { font-size: 24px; margin-bottom: 6px; }
 .more-tile-label { font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 14px; letter-spacing: 1px; text-transform: uppercase; }
 
-/* NAV */
 nav { position: fixed; bottom: 0; left: 0; right: 0; background: rgba(19,19,22,0.92); backdrop-filter: blur(16px); border-top: 1px solid var(--border); display: flex; z-index: 100; padding-bottom: env(safe-area-inset-bottom); }
 .nav-btn { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 10px 0; cursor: pointer; color: var(--muted); font-size: 10px; font-weight: 600; letter-spacing: 1px; text-transform: uppercase; font-family: 'Barlow Condensed', sans-serif; border: none; background: none; transition: color 0.15s; }
 .nav-btn.active { color: var(--accent); }
 .nav-icon { font-size: 20px; line-height: 1; }
 
-/* MISC */
 .error-banner { background: rgba(255,79,109,0.1); border: 1px solid rgba(255,79,109,0.25); border-radius: 12px; padding: 14px 16px; font-size: 13px; color: #ff8a9a; margin: 16px 0; }
 .empty-state { text-align: center; padding: 40px 20px; color: var(--muted); font-size: 14px; }
 .toast { position: fixed; bottom: 90px; left: 50%; transform: translateX(-50%); background: var(--surface3); border: 1px solid var(--border2); border-radius: 12px; padding: 10px 18px; font-size: 13px; font-weight: 600; z-index: 200; animation: toastIn 0.2s ease; }
@@ -245,7 +216,6 @@ nav { position: fixed; bottom: 0; left: 0; right: 0; background: rgba(19,19,22,0
 .toast.error { border-color: var(--danger); color: var(--danger); }
 @keyframes toastIn { from { opacity: 0; transform: translate(-50%, 10px); } to { opacity: 1; transform: translate(-50%, 0); } }
 
-/* MODAL */
 .modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 150; display: none; align-items: flex-end; backdrop-filter: blur(4px); }
 .modal-backdrop.active { display: flex; animation: fadeUp 0.2s; }
 .modal { background: var(--surface); border: 1px solid var(--border2); border-top-left-radius: 22px; border-top-right-radius: 22px; padding: 20px; width: 100%; max-height: 85vh; overflow-y: auto; padding-bottom: calc(20px + env(safe-area-inset-bottom)); }
@@ -268,8 +238,8 @@ nav { position: fixed; bottom: 0; left: 0; right: 0; background: rgba(19,19,22,0
   <div id="section-rsvp" class="section">
     <div id="rsvp-content"><div class="loading"><div class="spinner"></div><div class="loading-text">Loading RSVP</div></div></div>
   </div>
-  <div id="section-players" class="section">
-    <div id="players-content"><div class="loading"><div class="spinner"></div><div class="loading-text">Loading players</div></div></div>
+  <div id="section-standings" class="section">
+    <div id="standings-content"><div class="loading"><div class="spinner"></div><div class="loading-text">Loading standings</div></div></div>
   </div>
   <div id="section-board" class="section">
     <div id="board-content"><div class="loading"><div class="spinner"></div><div class="loading-text">Loading board</div></div></div>
@@ -286,48 +256,38 @@ nav { position: fixed; bottom: 0; left: 0; right: 0; background: rgba(19,19,22,0
 <nav>
   <button class="nav-btn active" id="nav-matchups" onclick="switchTab('matchups')"><span class="nav-icon">🎳</span>Matchups</button>
   <button class="nav-btn" id="nav-rsvp" onclick="switchTab('rsvp')"><span class="nav-icon">📋</span>RSVP</button>
-  <button class="nav-btn" id="nav-players" onclick="switchTab('players')"><span class="nav-icon">👤</span>Players</button>
+  <button class="nav-btn" id="nav-standings" onclick="switchTab('standings')"><span class="nav-icon">📊</span>Standings</button>
   <button class="nav-btn" id="nav-board" onclick="switchTab('board')"><span class="nav-icon">💬</span>Board</button>
   <button class="nav-btn" id="nav-more" onclick="switchTab('more')"><span class="nav-icon">⋯</span>More</button>
 </nav>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
 <script>
-// ============================================================
-// CONFIG
-// ============================================================
 const API = "https://script.google.com/macros/s/AKfycbz8sg1ZRlVaD0tXpN6GRlC1awZYu1_KhD7z5Bc88KjsTNntq1dBzAf8aHGbW0th_Tjhiw/exec";
 
-// Weekly Stats column indices
-const SC = { SEASON: 0, WEEK: 1, PLAYER: 2, TEAM: 3, G1: 4, G2: 5, PINS: 6, WINS: 7, LOSSES: 8, GAMES: 9 };
+// New Weekly Stats columns
+const SC = {
+  SEASON: 0, WEEK: 1, PLAYER: 2, TEAM: 3,
+  G1: 4, G1_OPP: 5, G2: 6, G2_OPP: 7,
+  PINS: 8, WINS: 9, LOSSES: 10, GAMES: 11, PRESENT: 12
+};
 
-// ============================================================
-// STATE
-// ============================================================
 const state = {
   current: null, roster: null, rsvp: null, stats: null,
   board: null, history: null, generated: null, settings: null,
   selectedPlayer: null,
-  selectedSeason: null,        // for standings/matchup history
-  selectedHistWeek: null,      // for matchup history
-  myName: localStorage.getItem('pb_myname') || ''
+  selectedSeason: null,
+  selectedHistWeek: null,
+  moreView: 'home',
+  myName: localStorage.getItem('pb_myname') || '',
+  genFillMode: 'League Avg',
+  genAvgSource: 'last-season',
+  genTeams: null
 };
 
-// ============================================================
-// UTILITIES
-// ============================================================
 const $ = id => document.getElementById(id);
-
-function initials(name) {
-  if (!name) return '?';
-  return name.split(' ').map(w => w[0]).join('').substring(0, 2).toUpperCase();
-}
-
-function escapeHtml(s) {
-  if (s == null) return '';
-  return s.toString().replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' })[c]);
-}
-
+function initials(name) { if (!name) return '?'; return name.split(' ').map(w => w[0]).join('').substring(0, 2).toUpperCase(); }
+function escapeHtml(s) { if (s == null) return ''; return s.toString().replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' })[c]); }
 function timeAgo(date) {
   const d = new Date(date);
   const s = Math.floor((Date.now() - d.getTime()) / 1000);
@@ -337,56 +297,41 @@ function timeAgo(date) {
   if (s < 604800) return Math.floor(s/86400) + 'd ago';
   return d.toLocaleDateString();
 }
-
 function toast(msg, type = '') {
-  const t = document.createElement('div');
-  t.className = 'toast ' + type;
-  t.textContent = msg;
-  document.body.appendChild(t);
-  setTimeout(() => t.remove(), 2400);
+  const t = document.createElement('div'); t.className = 'toast ' + type; t.textContent = msg;
+  document.body.appendChild(t); setTimeout(() => t.remove(), 2400);
 }
-
-function openModal(html) {
-  $('modal-content').innerHTML = html;
-  $('modal-backdrop').classList.add('active');
-}
+function openModal(html) { $('modal-content').innerHTML = html; $('modal-backdrop').classList.add('active'); }
 function closeModal() { $('modal-backdrop').classList.remove('active'); }
-
-async function apiGet(action) {
-  const r = await fetch(`${API}?action=${action}`);
-  return r.json();
-}
+async function apiGet(action) { const r = await fetch(`${API}?action=${action}`); return r.json(); }
 async function apiPost(action, payload = {}) {
   const r = await fetch(API, { method: 'POST', body: JSON.stringify({ action, ...payload }) });
   return r.json();
 }
 
-// ============================================================
-// STATS DERIVATION (Weekly Stats is source of truth)
-// ============================================================
-function statsRows() {
-  return state.stats ? state.stats.slice(1).filter(r => r[SC.PLAYER]) : [];
-}
+// Treats sheet TRUE/'TRUE'/1 as truthy
+function isPresent(v) { return v === true || v === 'TRUE' || v === 1 || v === '1'; }
 
+// ============================================================
+// STATS DERIVATION
+// ============================================================
+function statsRows() { return state.stats ? state.stats.slice(1).filter(r => r[SC.PLAYER]) : []; }
 function getSeasons() {
-  const seasons = new Set();
-  statsRows().forEach(r => {
-    const s = r[SC.SEASON];
-    if (s !== '' && s != null) seasons.add(String(s));
-  });
-  return Array.from(seasons).sort();
+  const s = new Set();
+  statsRows().forEach(r => { if (r[SC.SEASON] !== '' && r[SC.SEASON] != null) s.add(String(r[SC.SEASON])); });
+  return Array.from(s).sort();
 }
-
 function getCurrentSeason() {
-  const seasons = getSeasons();
-  return seasons.length ? seasons[seasons.length - 1] : '1';
+  const s = getSeasons(); return s.length ? s[s.length - 1] : '1';
 }
 
-// Aggregate stats per player for a given season
-function aggregateStandings(season) {
+// Aggregate (Present=TRUE only, unless includeAbsent=true for matchup history)
+function aggregateStandings(season, opts = {}) {
+  const includeAbsent = !!opts.includeAbsent;
   const players = {};
   statsRows().forEach(r => {
     if (String(r[SC.SEASON]) !== String(season)) return;
+    if (!includeAbsent && !isPresent(r[SC.PRESENT])) return;
     const name = r[SC.PLAYER];
     if (!players[name]) players[name] = { name, team: r[SC.TEAM], wins: 0, losses: 0, pins: 0, games: 0, weeks: new Set(), highGame: 0 };
     players[name].wins += parseInt(r[SC.WINS]) || 0;
@@ -401,38 +346,38 @@ function aggregateStandings(season) {
     if (g2 > players[name].highGame) players[name].highGame = g2;
   });
   return Object.values(players).map(p => ({
-    ...p,
-    avg: p.games ? p.pins / p.games : 0,
-    weekCount: p.weeks.size
+    ...p, avg: p.games ? p.pins / p.games : 0, weekCount: p.weeks.size
   })).sort((a, b) => b.wins - a.wins || b.avg - a.avg);
 }
 
-// Player profile: all-time stats + per-game log
-function getPlayerProfile(name) {
-  const games = [];  // each entry: { season, week, team, score, gameNum }
-  const rows = statsRows().filter(r => r[SC.PLAYER] === name);
+function getPlayerProfile(name, season) {
+  // season optional → all-time when omitted
+  const games = [];
+  const rows = statsRows().filter(r => r[SC.PLAYER] === name && (!season || String(r[SC.SEASON]) === String(season)));
+  // Only count games for averages if Present=true
   rows.forEach(r => {
+    const present = isPresent(r[SC.PRESENT]);
     const g1 = parseInt(r[SC.G1]) || 0;
     const g2 = parseInt(r[SC.G2]) || 0;
-    if (r[SC.G1] !== '' && g1 > 0) games.push({ season: r[SC.SEASON], week: r[SC.WEEK], team: r[SC.TEAM], score: g1, gameNum: 1 });
-    if (r[SC.G2] !== '' && g2 > 0) games.push({ season: r[SC.SEASON], week: r[SC.WEEK], team: r[SC.TEAM], score: g2, gameNum: 2 });
+    if (r[SC.G1] !== '' && g1 > 0) games.push({ season: r[SC.SEASON], week: r[SC.WEEK], team: r[SC.TEAM], score: g1, gameNum: 1, present });
+    if (r[SC.G2] !== '' && g2 > 0) games.push({ season: r[SC.SEASON], week: r[SC.WEEK], team: r[SC.TEAM], score: g2, gameNum: 2, present });
   });
-
-  const allScores = games.map(g => g.score);
+  const presentGames = games.filter(g => g.present);
+  const allScores = presentGames.map(g => g.score);
   const allTimeAvg = allScores.length ? allScores.reduce((a,b)=>a+b,0) / allScores.length : 0;
   const last5 = allScores.slice(-5);
   const last5Avg = last5.length ? last5.reduce((a,b)=>a+b,0) / last5.length : 0;
-  const totalWins = rows.reduce((a,r) => a + (parseInt(r[SC.WINS])||0), 0);
-  const totalLosses = rows.reduce((a,r) => a + (parseInt(r[SC.LOSSES])||0), 0);
-  const totalGames = rows.reduce((a,r) => a + (parseInt(r[SC.GAMES])||0), 0);
-  const totalPins = rows.reduce((a,r) => a + (parseInt(r[SC.PINS])||0), 0);
+  const presentRows = rows.filter(r => isPresent(r[SC.PRESENT]));
+  const totalWins = presentRows.reduce((a,r) => a + (parseInt(r[SC.WINS])||0), 0);
+  const totalLosses = presentRows.reduce((a,r) => a + (parseInt(r[SC.LOSSES])||0), 0);
+  const totalGames = presentRows.reduce((a,r) => a + (parseInt(r[SC.GAMES])||0), 0);
+  const totalPins = presentRows.reduce((a,r) => a + (parseInt(r[SC.PINS])||0), 0);
   const highGame = allScores.length ? Math.max(...allScores) : 0;
 
-  // Current season stats
-  const curSeason = state.selectedSeason || getCurrentSeason();
-  const seasonGames = games.filter(g => String(g.season) === String(curSeason));
-  const seasonScores = seasonGames.map(g => g.score);
-  const seasonAvg = seasonScores.length ? seasonScores.reduce((a,b)=>a+b,0) / seasonScores.length : 0;
+  // Season avg = avg in current selected season (Present=TRUE)
+  const curSeason = getCurrentSeason();
+  const seasonGames = games.filter(g => g.present && String(g.season) === String(curSeason)).map(g => g.score);
+  const seasonAvg = seasonGames.length ? seasonGames.reduce((a,b)=>a+b,0) / seasonGames.length : 0;
 
   return {
     name, games, rows,
@@ -441,33 +386,58 @@ function getPlayerProfile(name) {
   };
 }
 
-// Matchup history: group by season + week, then by team
+// Real matchups using G1/G2 Opp columns
 function getMatchupsForWeek(season, week) {
-  const teams = {};  // { 'Team 1': { players: [{ name, g1, g2, total, w, l }], total: 0 } }
-  statsRows().forEach(r => {
-    if (String(r[SC.SEASON]) !== String(season)) return;
-    if (String(r[SC.WEEK]) !== String(week)) return;
-    const team = r[SC.TEAM];
-    if (!team) return;
-    if (!teams[team]) teams[team] = { name: team, players: [], total: 0, wins: 0, losses: 0 };
-    const g1 = parseInt(r[SC.G1]) || 0;
-    const g2 = parseInt(r[SC.G2]) || 0;
-    const total = parseInt(r[SC.PINS]) || 0;
-    teams[team].players.push({ name: r[SC.PLAYER], g1, g2, total, w: parseInt(r[SC.WINS])||0, l: parseInt(r[SC.LOSSES])||0 });
-    teams[team].total += total;
-    teams[team].wins += parseInt(r[SC.WINS])||0;
-    teams[team].losses += parseInt(r[SC.LOSSES])||0;
-  });
-  return Object.values(teams).sort((a, b) => b.wins - a.wins);
+  // Returns array of matchup objects, one per game (so 2 entries for a normal week, possibly 1+ for playoffs)
+  const rows = statsRows().filter(r =>
+    String(r[SC.SEASON]) === String(season) && String(r[SC.WEEK]) === String(week)
+  );
+  if (!rows.length) return [];
+
+  // Build per-game matchup structures
+  // Game 1: group by team's G1 score; pair Team X vs G1Opp
+  // Game 2: same with G2
+
+  const buildGameMap = (gameNum) => {
+    const teamRosters = {};   // teamName -> [{ name, score, w, l, present }]
+    rows.forEach(r => {
+      const team = r[SC.TEAM];
+      const opp = r[gameNum === 1 ? SC.G1_OPP : SC.G2_OPP];
+      const score = parseInt(r[gameNum === 1 ? SC.G1 : SC.G2]) || 0;
+      if (!team || !opp) return;  // skip rows without this game (e.g. playoff 1-game-only)
+      if (!teamRosters[team]) teamRosters[team] = { team, opp, players: [], total: 0 };
+      teamRosters[team].players.push({
+        name: r[SC.PLAYER], score, present: isPresent(r[SC.PRESENT])
+      });
+      teamRosters[team].total += score;
+    });
+    return teamRosters;
+  };
+
+  const buildPairings = (gameNum) => {
+    const map = buildGameMap(gameNum);
+    const seen = new Set();
+    const pairings = [];
+    Object.values(map).forEach(t => {
+      if (seen.has(t.team)) return;
+      const oppData = map[t.opp];
+      if (oppData && oppData.opp === t.team) {
+        seen.add(t.team); seen.add(t.opp);
+        pairings.push({ gameNum, a: t, b: oppData });
+      } else {
+        seen.add(t.team);
+        pairings.push({ gameNum, a: t, b: null });
+      }
+    });
+    return pairings;
+  };
+
+  return [...buildPairings(1), ...buildPairings(2)];
 }
 
 function getWeeksForSeason(season) {
   const weeks = new Set();
-  statsRows().forEach(r => {
-    if (String(r[SC.SEASON]) !== String(season)) return;
-    if (r[SC.WEEK] !== '' && r[SC.WEEK] != null) weeks.add(String(r[SC.WEEK]));
-  });
-  // Sort: numeric weeks first, then non-numeric (Playoffs, etc.)
+  statsRows().forEach(r => { if (String(r[SC.SEASON]) === String(season) && r[SC.WEEK] !== '' && r[SC.WEEK] != null) weeks.add(String(r[SC.WEEK])); });
   return Array.from(weeks).sort((a, b) => {
     const na = parseInt(a), nb = parseInt(b);
     if (!isNaN(na) && !isNaN(nb)) return na - nb;
@@ -485,15 +455,15 @@ function switchTab(tab) {
   document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
   $('section-' + tab).classList.add('active');
   $('nav-' + tab).classList.add('active');
-  if (tab !== 'players') state.selectedPlayer = null;
+  if (tab !== 'players-detail') state.selectedPlayer = null;
   if (tab === 'rsvp') renderRSVP();
-  if (tab === 'players') renderPlayersHub();
+  if (tab === 'standings') renderStandings();
   if (tab === 'board') renderBoard();
-  if (tab === 'more') renderMore();
+  if (tab === 'more') { state.moreView = 'home'; renderMore(); }
 }
 
 // ============================================================
-// MATCHUPS (current week, from Current Week sheet)
+// MATCHUPS — current week
 // ============================================================
 function getTeamTotals(d) {
   const sum = (rows, col) => rows.reduce((a, r) => a + (Number(r[col]) || 0), 0);
@@ -506,21 +476,29 @@ function getTeamTotals(d) {
 }
 
 function getPlayerCurrentAvg(name) {
-  // Pull from latest season aggregation
   const standings = aggregateStandings(getCurrentSeason());
   const p = standings.find(s => s.name === name);
-  return p ? p.avg : 0;
+  return p && p.avg ? p.avg : 0;
+}
+
+function isPlayerOut(name) {
+  if (!state.rsvp) return false;
+  for (let i = 1; i < state.rsvp.length; i++) {
+    if (state.rsvp[i][0] === name) return state.rsvp[i][1] === 'Out';
+  }
+  return false;
 }
 
 function renderPlayerRow(name, g1Val, g2Val, cellG1, cellG2) {
   const ini = initials(name);
   const avg = getPlayerCurrentAvg(name);
+  const absent = isPlayerOut(name);
   const g1 = cellG1 ? `<div class="score-group"><span class="score-label">G1</span><input type="number" class="${g1Val ? 'has-score' : ''}" placeholder="—" value="${g1Val || ''}" data-cell="${cellG1}" onchange="saveScore(this)"></div>` : '';
   const g2 = cellG2 ? `<div class="score-group"><span class="score-label">G2</span><input type="number" class="${g2Val ? 'has-score' : ''}" placeholder="—" value="${g2Val || ''}" data-cell="${cellG2}" onchange="saveScore(this)"></div>` : '';
-  return `<div class="player-row">
+  return `<div class="player-row ${absent ? 'absent' : ''}">
     <div class="player-avatar">${ini}</div>
     <div class="player-info">
-      <div class="player-name">${escapeHtml(name)}</div>
+      <div class="player-name">${escapeHtml(name)}${absent ? '<span class="absent-tag">OUT</span>' : ''}</div>
       ${avg > 0 ? `<div class="player-avg">avg ${avg.toFixed(1)}</div>` : ''}
     </div>
     <div class="score-inputs">${g1}${g2}</div>
@@ -529,16 +507,16 @@ function renderPlayerRow(name, g1Val, g2Val, cellG1, cellG2) {
 
 function renderTeamBlock(label, players, winning, total) {
   const cls = total > 0 ? (winning ? 'total-winning' : 'total-losing') : '';
-  return `<div class="team-block">
-    <div class="team-label">${label}</div>
+  const winnerCls = total > 0 && winning ? 'winner' : '';
+  return `<div class="team-block ${winnerCls}">
+    <div class="team-label ${winnerCls}">${label}</div>
     ${players}
-    ${total > 0 ? `<div class="team-total"><span class="total-label">Team total</span><span class="total-val ${cls}">${total}</span></div>` : ''}
+    ${total > 0 ? `<div class="team-total-row"><span class="total-label">Team total</span><span class="total-val ${cls}">${total}</span></div>` : ''}
   </div>`;
 }
 
 function renderMatchups() {
-  const d = state.current;
-  if (!d) return;
+  const d = state.current; if (!d) return;
   const T = getTeamTotals(d);
 
   const buildRows = (rows, isCol1, gameNum) => rows.map(i => {
@@ -595,8 +573,7 @@ function renderMatchups() {
 }
 
 async function saveScore(input) {
-  const cell = input.dataset.cell;
-  const val = input.value;
+  const cell = input.dataset.cell, val = input.value;
   if (!cell || val === '') return;
   input.style.opacity = '0.5';
   try {
@@ -605,16 +582,13 @@ async function saveScore(input) {
     if (state.current) {
       const m = cell.match(/([A-Z]+)(\d+)/);
       if (m) {
-        const col = m[1].charCodeAt(0) - 65;
-        const row = parseInt(m[2]) - 1;
+        const col = m[1].charCodeAt(0) - 65, row = parseInt(m[2]) - 1;
         if (state.current[row]) state.current[row][col] = parseInt(val);
         renderMatchups();
       }
     }
     toast('Saved', 'success');
-  } catch(e) {
-    toast('Save failed', 'error');
-  }
+  } catch(e) { toast('Save failed', 'error'); }
   input.style.opacity = '1';
 }
 
@@ -641,7 +615,8 @@ function renderRSVP() {
     <div class="rsvp-stat unknown"><div class="rsvp-stat-label">No reply</div><div class="rsvp-stat-val">${unknown}</div></div>
   </div>`;
 
-  html += `<div class="section-header">This Week</div><div class="standings-card">`;
+  html += `<div class="section-header">This Week<div class="actions"><button class="btn sm danger" onclick="confirmResetRSVP()">Reset</button></div></div>
+    <div class="standings-card">`;
   players.forEach(p => {
     const status = rsvpMap[p[0]] || '';
     html += `<div class="rsvp-row">
@@ -666,30 +641,140 @@ async function setRSVP(name, status) {
     }
     if (!found) state.rsvp.push([name, status, '', new Date()]);
     renderRSVP();
+    renderMatchups();   // re-render to show OUT tags
     toast(`${name}: ${status}`, 'success');
-  } catch(e) {
-    toast('Could not save', 'error');
-  }
+  } catch(e) { toast('Could not save', 'error'); }
+}
+
+function confirmResetRSVP() {
+  openModal(`<div class="modal-title">Reset RSVPs?</div>
+    <p style="color:var(--muted);font-size:14px;line-height:1.5;margin-bottom:16px;">
+      This clears every RSVP for the upcoming week. Use this before requesting fresh responses.
+    </p>
+    <div class="btn-row">
+      <button class="btn" onclick="closeModal()">Cancel</button>
+      <button class="btn danger" onclick="doResetRSVP()">Reset All</button>
+    </div>`);
+}
+
+async function doResetRSVP() {
+  closeModal();
+  toast('Resetting...');
+  try {
+    await apiPost('resetRSVP');
+    state.rsvp = [['Player','Status','Note','Updated']];
+    // Roster statuses also reset
+    if (state.roster) {
+      for (let i = 1; i < state.roster.length; i++) {
+        if (state.roster[i][0]) state.roster[i][1] = 'Unavailable';
+      }
+    }
+    renderRSVP();
+    renderMatchups();
+    toast('RSVPs reset', 'success');
+  } catch(e) { toast('Reset failed', 'error'); }
 }
 
 // ============================================================
-// PLAYERS HUB
+// STANDINGS — standalone tab
 // ============================================================
-function renderPlayersHub() {
-  if (!state.stats) return;
-  if (state.selectedPlayer) {
-    renderPlayerDetail(state.selectedPlayer);
+function renderStandings() {
+  const seasons = getSeasons();
+  if (!state.selectedSeason) state.selectedSeason = getCurrentSeason();
+
+  let html = `<div class="section-header">Standings</div>`;
+  if (seasons.length > 1) {
+    html += `<div class="season-bar">`;
+    seasons.forEach(s => {
+      html += `<button class="toggle-btn ${state.selectedSeason === s ? 'active' : ''}" onclick="state.selectedSeason='${s}';renderStandings();">Season ${s}</button>`;
+    });
+    html += `</div>`;
+  }
+
+  const rows = aggregateStandings(state.selectedSeason);
+  if (!rows.length) {
+    html += `<div class="empty-state">No data for this season yet.</div>`;
+    $('standings-content').innerHTML = html;
     return;
   }
 
-  // Build list from unique players in stats
+  html += `<div class="standings-card">
+    <div class="standings-header"><span>#</span><span>Bowler</span><span>W—L</span><span>Pins</span><span>Avg</span></div>`;
+  rows.forEach((r, i) => {
+    const rank = i + 1;
+    html += `<div class="standing-row ${rank===1?'s-rank-1':''}" onclick="openPlayerDetail('${escapeHtml(r.name)}')">
+      <div class="s-rank ${rank<=3?'top':''}">${rank}</div>
+      <div><div class="s-name">${escapeHtml(r.name)}</div>${r.team ? `<div class="s-team">${escapeHtml(r.team)}</div>` : ''}</div>
+      <div class="s-wl">${r.wins}—${r.losses}</div>
+      <div class="s-pins">${r.pins || '—'}</div>
+      <div class="s-avg">${r.avg > 0 ? r.avg.toFixed(1) : '—'}</div>
+    </div>`;
+  });
+  html += `</div>`;
+  $('standings-content').innerHTML = html;
+}
+
+function openPlayerDetail(name) {
+  state.selectedPlayer = name;
+  state.moreView = 'player-detail';
+  switchTab('more');
+}
+
+// ============================================================
+// MORE
+// ============================================================
+function renderMore() {
+  if (state.moreView === 'player-list') return renderPlayerList();
+  if (state.moreView === 'player-detail') return renderPlayerDetail();
+  if (state.moreView === 'matchup-history') return renderMatchupHistoryView();
+  if (state.moreView === 'season-history') return renderSeasonHistoryView();
+
+  // home view — season selector + tile menu
+  const seasons = getSeasons();
+  if (!state.selectedSeason) state.selectedSeason = getCurrentSeason();
+
+  let html = '';
+  if (seasons.length > 1) {
+    html += `<div class="section-header">Filter by Season</div>
+      <div class="season-bar">`;
+    seasons.forEach(s => {
+      html += `<button class="toggle-btn ${state.selectedSeason === s ? 'active' : ''}" onclick="state.selectedSeason='${s}';renderMore();">Season ${s}</button>`;
+    });
+    html += `</div>`;
+  }
+
+  html += `<div class="section-header">League Tools</div>
+    <div class="more-grid">
+      <div class="more-tile" onclick="state.moreView='player-list';renderMore();"><div class="more-tile-icon">👤</div><div class="more-tile-label">Players</div></div>
+      <div class="more-tile" onclick="state.moreView='matchup-history';state.selectedHistWeek=null;renderMore();"><div class="more-tile-icon">🗓️</div><div class="more-tile-label">Match History</div></div>
+      <div class="more-tile" onclick="openGenerate()"><div class="more-tile-icon">⚖️</div><div class="more-tile-label">Generate Teams</div></div>
+      <div class="more-tile" onclick="state.moreView='season-history';renderMore();"><div class="more-tile-icon">🏆</div><div class="more-tile-label">Season History</div></div>
+      <div class="more-tile" onclick="confirmArchive()"><div class="more-tile-icon">📦</div><div class="more-tile-label">Archive & Advance</div></div>
+      <div class="more-tile" onclick="confirmEndSeason()"><div class="more-tile-icon">🥇</div><div class="more-tile-label">End Season</div></div>
+    </div>`;
+  $('more-content').innerHTML = html;
+}
+
+function backToMore() {
+  state.moreView = 'home';
+  state.selectedPlayer = null;
+  renderMore();
+}
+
+// PLAYER LIST
+function renderPlayerList() {
+  if (!state.stats) return;
   const playerNames = Array.from(new Set(statsRows().map(r => r[SC.PLAYER]))).filter(Boolean).sort();
 
-  let html = `<input type="text" class="player-search" placeholder="Search bowlers..." oninput="filterPlayers(this.value)">`;
-  html += `<div id="players-list">`;
+  let html = `<div class="section-header">
+    <button class="btn sm" onclick="backToMore()">← Back</button>
+    <span style="margin-left:auto;">Players</span>
+  </div>
+  <input type="text" class="player-search" placeholder="Search bowlers..." oninput="filterPlayers(this.value)">
+  <div id="players-list">`;
   playerNames.forEach(name => {
     const p = getPlayerProfile(name);
-    html += `<div class="player-card" data-name="${escapeHtml(name).toLowerCase()}" onclick="showPlayer('${escapeHtml(name)}')">
+    html += `<div class="player-card" data-name="${escapeHtml(name).toLowerCase()}" onclick="state.selectedPlayer='${escapeHtml(name)}';state.moreView='player-detail';renderMore();">
       <div class="player-avatar">${initials(name)}</div>
       <div class="player-card-info">
         <div class="player-card-name">${escapeHtml(name)}</div>
@@ -699,7 +784,7 @@ function renderPlayersHub() {
     </div>`;
   });
   html += `</div>`;
-  $('players-content').innerHTML = html;
+  $('more-content').innerHTML = html;
 }
 
 function filterPlayers(q) {
@@ -709,30 +794,18 @@ function filterPlayers(q) {
   });
 }
 
-function showPlayer(name) {
-  state.selectedPlayer = name;
-  renderPlayerDetail(name);
-}
-
-function backToPlayers() {
-  state.selectedPlayer = null;
-  renderPlayersHub();
-}
-
-function renderPlayerDetail(name) {
+function renderPlayerDetail() {
+  const name = state.selectedPlayer;
   const p = getPlayerProfile(name);
-  const seasons = getSeasons();
-  const curSeason = state.selectedSeason || getCurrentSeason();
 
   let html = `<div class="player-detail">
     <div class="player-detail-header">
-      <button class="back-btn" onclick="backToPlayers()">←</button>
+      <button class="back-btn" onclick="state.moreView='player-list';renderMore();">←</button>
       <div>
         <div class="player-detail-name">${escapeHtml(name)}</div>
-        ${p.games.length ? `<div class="player-detail-team">Most recent: ${escapeHtml(p.games[p.games.length-1].team || '')}</div>` : ''}
+        ${p.games.length ? `<div class="player-detail-team">Most recent: ${escapeHtml(p.games[p.games.length-1].team || '')}</div>` : '<div class="player-detail-team">New bowler — no history yet</div>'}
       </div>
     </div>
-
     <div class="stat-grid">
       <div class="stat-tile"><div class="stat-tile-label">All-time avg</div><div class="stat-tile-val">${p.allTimeAvg ? p.allTimeAvg.toFixed(1) : '—'}</div></div>
       <div class="stat-tile"><div class="stat-tile-label">Season avg</div><div class="stat-tile-val">${p.seasonAvg ? p.seasonAvg.toFixed(1) : '—'}</div></div>
@@ -744,24 +817,21 @@ function renderPlayerDetail(name) {
 
   if (p.games.length) {
     html += `<div class="chart-card">
-      <div class="chart-title-row">
-        <div class="chart-title">Score progression</div>
-      </div>
+      <div class="chart-title">Score progression</div>
       <div class="chart-wrap"><canvas id="player-chart"></canvas></div>
     </div>`;
-
     html += `<div class="section-header">Game log</div>
       <div class="score-history-table">
         <div class="score-history-row head">
           <span>Wk</span><span>Team</span><span>G1</span><span>G2</span><span>Total</span>
         </div>`;
-    // Group rows back from game log
     p.rows.slice().reverse().forEach(r => {
       const g1 = parseInt(r[SC.G1]) || 0;
       const g2 = parseInt(r[SC.G2]) || 0;
       const total = parseInt(r[SC.PINS]) || 0;
+      const present = isPresent(r[SC.PRESENT]);
       html += `<div class="score-history-row">
-        <span class="sh-week">${escapeHtml(r[SC.WEEK])}</span>
+        <span class="sh-week">${escapeHtml(r[SC.WEEK])}${!present ? ' <span class="sh-absent">OUT</span>' : ''}</span>
         <span class="sh-team">${escapeHtml(r[SC.TEAM])}</span>
         <span>${g1 || '—'}</span>
         <span>${r[SC.G2] === '' ? '—' : (g2 || '—')}</span>
@@ -773,54 +843,40 @@ function renderPlayerDetail(name) {
     html += `<div class="empty-state">No games recorded yet.</div>`;
   }
   html += `</div>`;
-  $('players-content').innerHTML = html;
+  $('more-content').innerHTML = html;
   if (p.games.length) drawPlayerChart(p);
 }
 
 function drawPlayerChart(p) {
-  // Build dual-axis labels: game numbers along bottom, week labels grouped underneath
-  const labels = [];
-  const weekLabels = [];   // for the secondary axis
-  const data = [];
-  const avgVal = p.allTimeAvg;
-
-  p.games.forEach(g => {
+  const labels = [], data = [], weekLabels = [];
+  const presentGames = p.games.filter(g => g.present);
+  presentGames.forEach(g => {
     labels.push('G' + g.gameNum);
     weekLabels.push(String(g.week));
     data.push(g.score);
   });
+  const avgVal = p.allTimeAvg;
 
-  // Build week-label objects: only show week label on the first game of each (season,week) chunk
   const groupedWeekLabels = labels.map((_, i) => {
     if (i === 0) return weekLabels[i];
-    return weekLabels[i] === weekLabels[i-1] && p.games[i].season === p.games[i-1].season ? '' : weekLabels[i];
+    return (weekLabels[i] === weekLabels[i-1] && presentGames[i].season === presentGames[i-1].season) ? '' : weekLabels[i];
   });
 
-  // Custom plugin: draw week labels below x-axis
   const weekLabelPlugin = {
     id: 'weekLabelPlugin',
     afterDraw(chart) {
       const { ctx, chartArea, scales } = chart;
       const x = scales.x;
       ctx.save();
-      ctx.fillStyle = '#7a7a85';
       ctx.font = '700 10px Barlow Condensed';
       ctx.textAlign = 'center';
-      let lastWeek = '';
-      let groupStartX = null;
-      let groupCount = 0;
       const groups = [];
+      let lastWeek = '', groupStartX = null, groupCount = 0;
       groupedWeekLabels.forEach((w, i) => {
         if (w !== '') {
-          if (groupStartX !== null) {
-            groups.push({ label: lastWeek, start: groupStartX, count: groupCount });
-          }
-          lastWeek = w;
-          groupStartX = i;
-          groupCount = 1;
-        } else {
-          groupCount++;
-        }
+          if (groupStartX !== null) groups.push({ label: lastWeek, start: groupStartX, count: groupCount });
+          lastWeek = w; groupStartX = i; groupCount = 1;
+        } else groupCount++;
       });
       if (groupStartX !== null) groups.push({ label: lastWeek, start: groupStartX, count: groupCount });
 
@@ -829,18 +885,13 @@ function drawPlayerChart(p) {
         const xStart = x.getPixelForValue(g.start);
         const xEnd = x.getPixelForValue(g.start + g.count - 1);
         const xMid = (xStart + xEnd) / 2;
-
-        // Bracket
-        ctx.strokeStyle = 'rgba(255,255,255,0.12)';
-        ctx.lineWidth = 1;
+        ctx.strokeStyle = 'rgba(255,255,255,0.12)'; ctx.lineWidth = 1;
         ctx.beginPath();
         ctx.moveTo(xStart - 4, yPos - 8);
         ctx.lineTo(xStart - 4, yPos - 4);
         ctx.lineTo(xEnd + 4, yPos - 4);
         ctx.lineTo(xEnd + 4, yPos - 8);
         ctx.stroke();
-
-        // Week label
         const isPlayoff = isNaN(parseInt(g.label));
         ctx.fillStyle = isPlayoff ? '#ff4f6d' : '#7a7a85';
         ctx.fillText(isPlayoff ? g.label : 'Wk ' + g.label, xMid, yPos + 6);
@@ -849,32 +900,20 @@ function drawPlayerChart(p) {
     }
   };
 
-  const ctx = $('player-chart');
   if (window.__playerChart) window.__playerChart.destroy();
-  window.__playerChart = new Chart(ctx, {
+  window.__playerChart = new Chart($('player-chart'), {
     type: 'line',
     data: {
       labels,
       datasets: [{
-        label: 'Score',
-        data,
-        borderColor: '#e8ff47',
-        backgroundColor: 'rgba(232,255,71,0.12)',
-        borderWidth: 2,
-        fill: true,
-        tension: 0.3,
-        pointBackgroundColor: '#e8ff47',
-        pointBorderColor: '#0a0a0c',
-        pointBorderWidth: 2,
-        pointRadius: 3
+        label: 'Score', data,
+        borderColor: '#e8ff47', backgroundColor: 'rgba(232,255,71,0.12)',
+        borderWidth: 2, fill: true, tension: 0.3,
+        pointBackgroundColor: '#e8ff47', pointBorderColor: '#0a0a0c', pointBorderWidth: 2, pointRadius: 3
       }, {
-        label: 'Avg',
-        data: labels.map(() => avgVal),
-        borderColor: 'rgba(255,79,109,0.6)',
-        borderWidth: 1.5,
-        borderDash: [4, 4],
-        pointRadius: 0,
-        fill: false
+        label: 'Avg', data: labels.map(() => avgVal),
+        borderColor: 'rgba(255,79,109,0.6)', borderWidth: 1.5, borderDash: [4, 4],
+        pointRadius: 0, fill: false
       }]
     },
     options: {
@@ -882,18 +921,272 @@ function drawPlayerChart(p) {
       layout: { padding: { bottom: 32 } },
       plugins: { legend: { display: false } },
       scales: {
-        y: {
-          ticks: { color: '#7a7a85', font: { family: 'Barlow' } },
-          grid: { color: 'rgba(255,255,255,0.05)' }
-        },
-        x: {
-          ticks: { color: '#7a7a85', font: { family: 'Barlow Condensed', size: 10, weight: '700' } },
-          grid: { display: false }
-        }
+        y: { ticks: { color: '#7a7a85', font: { family: 'Barlow' } }, grid: { color: 'rgba(255,255,255,0.05)' } },
+        x: { ticks: { color: '#7a7a85', font: { family: 'Barlow Condensed', size: 10, weight: '700' } }, grid: { display: false } }
       }
     },
     plugins: [weekLabelPlugin]
   });
+}
+
+// MATCHUP HISTORY — using opp columns for real matchups
+function renderMatchupHistoryView() {
+  const seasons = getSeasons();
+  if (!state.selectedSeason) state.selectedSeason = getCurrentSeason();
+  const weeks = getWeeksForSeason(state.selectedSeason);
+  if (!state.selectedHistWeek || !weeks.includes(state.selectedHistWeek)) {
+    state.selectedHistWeek = weeks[weeks.length - 1] || null;
+  }
+
+  let html = `<div class="section-header">
+    <button class="btn sm" onclick="backToMore()">← Back</button>
+    <span style="margin-left:auto;">Match History</span>
+  </div>`;
+
+  if (seasons.length > 1) {
+    html += `<div class="season-bar">`;
+    seasons.forEach(s => {
+      html += `<button class="toggle-btn ${state.selectedSeason === s ? 'active' : ''}" onclick="state.selectedSeason='${s}';state.selectedHistWeek=null;renderMore();">Season ${s}</button>`;
+    });
+    html += `</div>`;
+  }
+
+  if (!weeks.length) {
+    html += `<div class="empty-state">No weeks recorded for this season.</div>`;
+    $('more-content').innerHTML = html;
+    return;
+  }
+
+  html += `<div class="week-selector">`;
+  weeks.forEach(w => {
+    const isPlayoff = isNaN(parseInt(w));
+    html += `<button class="week-pill ${state.selectedHistWeek === w ? 'active' : ''}" onclick="state.selectedHistWeek='${w}';renderMore();">${isPlayoff ? w : 'Wk ' + w}</button>`;
+  });
+  html += `</div>`;
+
+  const matchups = getMatchupsForWeek(state.selectedSeason, state.selectedHistWeek);
+  if (!matchups.length) {
+    html += `<div class="empty-state">No data for this week.</div>`;
+    $('more-content').innerHTML = html;
+    return;
+  }
+
+  // Group by gameNum
+  const game1 = matchups.filter(m => m.gameNum === 1);
+  const game2 = matchups.filter(m => m.gameNum === 2);
+
+  if (game1.length) {
+    html += `<div class="match-header"><div class="match-title">Game 1</div></div>`;
+    game1.forEach(m => html += renderHistoricalMatchup(m));
+  }
+  if (game2.length) {
+    html += `<div class="match-header"><div class="match-title">Game 2</div></div>`;
+    game2.forEach(m => html += renderHistoricalMatchup(m));
+  }
+
+  $('more-content').innerHTML = html;
+}
+
+function renderHistoricalMatchup(m) {
+  const a = m.a, b = m.b;
+  if (!b) {
+    return `<div class="matchup">
+      ${renderHistoricalTeamBlock(a, true)}
+    </div>`;
+  }
+  const aWin = a.total >= b.total;
+  return `<div class="matchup">
+    ${renderHistoricalTeamBlock(a, aWin)}
+    <div class="vs-bar"><div class="vs-left"></div><div class="vs-chip">VS</div><div class="vs-right"></div></div>
+    ${renderHistoricalTeamBlock(b, !aWin)}
+  </div>`;
+}
+
+function renderHistoricalTeamBlock(t, winning) {
+  const cls = winning ? 'winner' : '';
+  return `<div class="team-block ${cls}">
+    <div class="team-label ${cls}">${escapeHtml(t.team)}</div>
+    ${t.players.map(p => `
+      <div class="player-row ${!p.present ? 'absent' : ''}">
+        <div class="player-avatar">${initials(p.name)}</div>
+        <div class="player-info">
+          <div class="player-name">${escapeHtml(p.name)}${!p.present ? '<span class="absent-tag">OUT</span>' : ''}</div>
+        </div>
+        <div class="score-inputs"><div class="score-group"><span class="score-label">Score</span>
+          <div style="width:52px;height:42px;display:flex;align-items:center;justify-content:center;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:18px;color:${p.score?'var(--text)':'var(--muted)'};">${p.score || '—'}</div>
+        </div></div>
+      </div>`).join('')}
+    <div class="team-total-row"><span class="total-label">Team total</span><span class="total-val ${winning ? 'total-winning' : 'total-losing'}">${t.total}</span></div>
+  </div>`;
+}
+
+// SEASON HISTORY
+function renderSeasonHistoryView() {
+  let html = `<div class="section-header">
+    <button class="btn sm" onclick="backToMore()">← Back</button>
+    <span style="margin-left:auto;">Season History</span>
+  </div>`;
+  if (!state.history || state.history.length < 2) {
+    html += `<div class="empty-state">No past seasons archived. Use "End Season" to crown a champion.</div>`;
+    $('more-content').innerHTML = html;
+    return;
+  }
+  state.history.slice(1).reverse().forEach(r => {
+    if (!r[0]) return;
+    html += `<div class="history-season">
+      <div class="history-head">
+        <div class="history-season-name">${escapeHtml(r[0])}</div>
+        ${r[1] ? `<div class="history-champion">🏆 ${escapeHtml(r[1])} · ${r[2] || '—'} avg · ${r[3] || 0}W</div>` : ''}
+      </div>
+    </div>`;
+  });
+  $('more-content').innerHTML = html;
+}
+
+// ============================================================
+// GENERATE TEAMS — fully in-app
+// ============================================================
+function openGenerate() {
+  let html = `<div class="modal-title">Generate Teams</div>
+    <div class="gen-controls">
+      <div class="gen-row">
+        <div class="gen-label">Avg source</div>
+        <div class="toggle-group">
+          <button class="toggle-btn active" id="gen-src-last" onclick="setGenSrc('last-season')">Last season</button>
+          <button class="toggle-btn" id="gen-src-current" onclick="setGenSrc('current-season')">This season</button>
+          <button class="toggle-btn" id="gen-src-all" onclick="setGenSrc('all-time')">All-time</button>
+        </div>
+      </div>
+      <div class="gen-row">
+        <div class="gen-label">Fill mode (for absent)</div>
+        <div class="toggle-group">
+          <button class="toggle-btn active" id="gen-mode-league" onclick="setGenMode('League Avg')">League avg</button>
+          <button class="toggle-btn" id="gen-mode-player" onclick="setGenMode('Player Avg')">Player avg</button>
+        </div>
+      </div>
+    </div>
+    <button class="btn primary" onclick="runGenerate()">Generate</button>
+    <div id="gen-output" style="margin-top:16px;"></div>`;
+  openModal(html);
+  state.genFillMode = 'League Avg';
+  state.genAvgSource = 'last-season';
+}
+
+function setGenMode(mode) {
+  state.genFillMode = mode;
+  $('gen-mode-league').classList.toggle('active', mode === 'League Avg');
+  $('gen-mode-player').classList.toggle('active', mode === 'Player Avg');
+}
+function setGenSrc(src) {
+  state.genAvgSource = src;
+  $('gen-src-last').classList.toggle('active', src === 'last-season');
+  $('gen-src-current').classList.toggle('active', src === 'current-season');
+  $('gen-src-all').classList.toggle('active', src === 'all-time');
+}
+
+async function runGenerate() {
+  $('gen-output').innerHTML = `<div class="loading"><div class="spinner"></div><div class="loading-text">Generating...</div></div>`;
+  try {
+    const res = await apiPost('generateTeams', { fillMode: state.genFillMode, avgSource: state.genAvgSource });
+    if (res.error) throw new Error(res.error);
+    state.genTeams = res.teams;
+    renderGeneratedPreview(res);
+  } catch(e) {
+    $('gen-output').innerHTML = `<div class="error-banner">Could not generate: ${e.message || e}</div>`;
+  }
+}
+
+function renderGeneratedPreview(res) {
+  const teams = res.teams;
+  let html = `<div class="section-header">Proposed teams<span style="font-size:10px;color:var(--muted);font-weight:600;">League avg ${res.leagueAvg.toFixed(1)}</span></div>`;
+  teams.forEach((t, i) => {
+    html += `<div class="team-preview-card">
+      <div class="tp-head"><div class="tp-name">Team ${i+1}</div><div class="tp-total">${Math.round(t.total)}</div></div>
+      <div class="tp-list">`;
+    t.players.forEach(p => {
+      const cls = p.status === 'Unavailable' ? 'unavail' : '';
+      const isNew = p.sourceAvg === undefined;
+      html += `<div class="tp-row">
+        <div class="tp-player ${cls}">${escapeHtml(p.name)}
+          ${p.status === 'Unavailable' ? '<span style="color:var(--muted);font-size:11px;">(out)</span>' : ''}
+          ${isNew ? '<span style="color:var(--accent);font-size:10px;font-weight:700;">NEW</span>' : ''}
+        </div>
+        <div class="tp-avg">${p.avg.toFixed(1)}</div>
+      </div>`;
+    });
+    html += `</div></div>`;
+  });
+
+  if (teams.length > 1) {
+    const totals = teams.map(t => t.total);
+    const spread = Math.max(...totals) - Math.min(...totals);
+    const color = spread < 20 ? 'var(--success)' : spread < 40 ? 'var(--accent)' : 'var(--danger)';
+    html += `<div style="text-align:center;font-size:12px;color:var(--muted);margin:8px 0 12px;">Balance spread: <strong style="color:${color}">${spread.toFixed(0)} pins</strong></div>`;
+  }
+
+  html += `<div class="btn-row">
+    <button class="btn" onclick="runGenerate()">Regenerate</button>
+    <button class="btn primary" onclick="confirmTeams()">Confirm</button>
+  </div>`;
+
+  $('gen-output').innerHTML = html;
+}
+
+async function confirmTeams() {
+  if (!state.genTeams) return;
+  try {
+    await apiPost('confirmMatchups', { teams: state.genTeams.map(t => t.players) });
+    toast('Matchups set!', 'success');
+    closeModal();
+    await loadAll();
+    switchTab('matchups');
+  } catch(e) { toast('Confirm failed', 'error'); }
+}
+
+// ARCHIVE & ADVANCE
+function confirmArchive() {
+  openModal(`<div class="modal-title">Archive & Advance Week?</div>
+    <p style="color:var(--muted);font-size:14px;line-height:1.5;margin-bottom:16px;">
+      This saves all current scores to <strong style="color:var(--text)">Weekly Stats</strong>, advances to the next week number, and clears the scorecard.
+    </p>
+    <div class="btn-row">
+      <button class="btn" onclick="closeModal()">Cancel</button>
+      <button class="btn primary" onclick="doArchive()">Archive & Advance</button>
+    </div>`);
+}
+
+async function doArchive() {
+  closeModal();
+  toast('Archiving...');
+  try {
+    const res = await apiPost('archiveAndAdvance');
+    if (res.error) throw new Error(res.error);
+    await loadAll();
+    toast(`Archived ${res.rowsAdded} rows · now Week ${res.week + 1}`, 'success');
+  } catch(e) { toast('Archive failed', 'error'); }
+}
+
+// END SEASON
+function confirmEndSeason() {
+  openModal(`<div class="modal-title">End the Season?</div>
+    <p style="color:var(--muted);font-size:14px;line-height:1.5;margin-bottom:16px;">
+      Crowns this season's champion (most wins), saves them to <strong style="color:var(--text)">League History</strong>, then rolls forward to a new season number with Week 1.
+    </p>
+    <div class="btn-row">
+      <button class="btn" onclick="closeModal()">Cancel</button>
+      <button class="btn primary" onclick="doEndSeason()">End Season</button>
+    </div>`);
+}
+
+async function doEndSeason() {
+  closeModal();
+  toast('Ending season...');
+  try {
+    const res = await apiPost('endSeason');
+    if (res.error) throw new Error(res.error);
+    await loadAll();
+    toast(`🏆 ${res.champion} wins Season ${res.season}!`, 'success');
+  } catch(e) { toast('Could not end season: ' + (e.message || e), 'error'); }
 }
 
 // ============================================================
@@ -912,8 +1205,7 @@ function renderBoard() {
     html += `<div class="empty-state">No posts yet. Be the first to talk shit.</div>`;
   } else {
     html += `<div class="section-header">Recent posts</div>`;
-    const posts = state.board.slice(1).filter(r => r[0]).reverse();
-    posts.forEach(p => {
+    state.board.slice(1).filter(r => r[0]).reverse().forEach(p => {
       html += `<div class="board-post">
         <div class="board-post-head">
           <div class="board-author">${escapeHtml(p[1])}</div>
@@ -939,289 +1231,7 @@ async function postMessage() {
     $('board-msg').value = '';
     renderBoard();
     toast('Posted', 'success');
-  } catch(e) {
-    toast('Failed to post', 'error');
-  }
-}
-
-// ============================================================
-// MORE — landing
-// ============================================================
-function renderMore() {
-  let html = `<div class="section-header">League Tools</div>
-    <div class="more-grid">
-      <div class="more-tile" onclick="openGenerate()"><div class="more-tile-icon">⚖️</div><div class="more-tile-label">Generate Teams</div></div>
-      <div class="more-tile" onclick="renderStandingsView()"><div class="more-tile-icon">📊</div><div class="more-tile-label">Standings</div></div>
-      <div class="more-tile" onclick="renderMatchupHistoryView()"><div class="more-tile-icon">🗓️</div><div class="more-tile-label">Match History</div></div>
-      <div class="more-tile" onclick="renderSeasonHistoryView()"><div class="more-tile-icon">🏆</div><div class="more-tile-label">Season History</div></div>
-    </div>
-    <div id="more-detail"></div>`;
-  $('more-content').innerHTML = html;
-}
-
-// STANDINGS — derived, with season toggle
-function renderStandingsView() {
-  const seasons = getSeasons();
-  if (!state.selectedSeason) state.selectedSeason = getCurrentSeason();
-
-  let html = `<div class="section-header">Season Standings</div>`;
-  if (seasons.length > 1) {
-    html += `<div class="season-toggle">`;
-    seasons.forEach(s => {
-      html += `<button class="toggle-btn ${state.selectedSeason === s ? 'active' : ''}" onclick="state.selectedSeason='${s}';renderStandingsView();">Season ${s}</button>`;
-    });
-    html += `</div>`;
-  }
-
-  const rows = aggregateStandings(state.selectedSeason);
-  if (!rows.length) {
-    html += `<div class="empty-state">No data for this season yet.</div>`;
-    $('more-detail').innerHTML = html;
-    return;
-  }
-
-  html += `<div class="standings-card">
-    <div class="standings-header"><span>#</span><span>Bowler</span><span>W—L</span><span>Pins</span><span>Avg</span></div>`;
-  rows.forEach((r, i) => {
-    const rank = i + 1;
-    html += `<div class="standing-row ${rank===1?'s-rank-1':''}" onclick="state.selectedPlayer='${escapeHtml(r.name)}';switchTab('players');">
-      <div class="s-rank ${rank<=3?'top':''}">${rank}</div>
-      <div><div class="s-name">${escapeHtml(r.name)}</div>${r.team ? `<div class="s-team">${escapeHtml(r.team)}</div>` : ''}</div>
-      <div class="s-wl">${r.wins}—${r.losses}</div>
-      <div class="s-pins">${r.pins || '—'}</div>
-      <div class="s-avg">${r.avg > 0 ? r.avg.toFixed(1) : '—'}</div>
-    </div>`;
-  });
-  html += `</div>`;
-  $('more-detail').innerHTML = html;
-}
-
-// MATCHUP HISTORY — view past weeks
-function renderMatchupHistoryView() {
-  const seasons = getSeasons();
-  if (!state.selectedSeason) state.selectedSeason = getCurrentSeason();
-  const weeks = getWeeksForSeason(state.selectedSeason);
-  if (!state.selectedHistWeek || !weeks.includes(state.selectedHistWeek)) {
-    state.selectedHistWeek = weeks[weeks.length - 1] || null;
-  }
-
-  let html = `<div class="section-header">Matchup History</div>`;
-  if (seasons.length > 1) {
-    html += `<div class="season-toggle">`;
-    seasons.forEach(s => {
-      html += `<button class="toggle-btn ${state.selectedSeason === s ? 'active' : ''}" onclick="state.selectedSeason='${s}';state.selectedHistWeek=null;renderMatchupHistoryView();">Season ${s}</button>`;
-    });
-    html += `</div>`;
-  }
-
-  if (!weeks.length) {
-    html += `<div class="empty-state">No weeks recorded for this season yet.</div>`;
-    $('more-detail').innerHTML = html;
-    return;
-  }
-
-  html += `<div class="week-selector">`;
-  weeks.forEach(w => {
-    const isPlayoff = isNaN(parseInt(w));
-    const label = isPlayoff ? w : 'Wk ' + w;
-    html += `<button class="week-pill ${state.selectedHistWeek === w ? 'active' : ''}" onclick="state.selectedHistWeek='${w}';renderMatchupHistoryView();">${label}</button>`;
-  });
-  html += `</div>`;
-
-  const teams = getMatchupsForWeek(state.selectedSeason, state.selectedHistWeek);
-  if (!teams.length) {
-    html += `<div class="empty-state">No matchups for this week.</div>`;
-    $('more-detail').innerHTML = html;
-    return;
-  }
-
-  // Pair teams by win record (winners vs losers)
-  // We assume 4 teams, pair 1+2 and 3+4 by ranking. If different, show all individually.
-  if (teams.length === 4) {
-    // Pair: highest scoring vs ?  Actually we don't know matchup pairs from data alone.
-    // Best we can do: list all 4 teams sorted by total. Show as 2 pairs (top 2, bottom 2).
-    // This is a heuristic — actual matchups would need to be stored explicitly.
-    const pairings = [[teams[0], teams[1]], [teams[2], teams[3]]];
-    pairings.forEach(([a, b]) => {
-      html += renderMatchupResult(a, b);
-    });
-  } else {
-    teams.forEach(t => {
-      html += renderMatchupResult(t, null);
-    });
-  }
-
-  html += `<div style="text-align:center;font-size:11px;color:var(--muted);margin-top:8px;line-height:1.5;">Pairings inferred from team standings; actual head-to-head matchups not yet tracked separately.</div>`;
-  $('more-detail').innerHTML = html;
-}
-
-function renderMatchupResult(a, b) {
-  if (!b) {
-    // Single team display
-    return `<div class="matchup-result">
-      <div class="mr-team">
-        <div class="mr-team-head">
-          <div class="mr-team-name">${escapeHtml(a.name)}</div>
-          <div class="mr-team-total">${a.total}</div>
-        </div>
-        ${a.players.map(p => `
-          <div class="mr-player-row">
-            <div class="name">${escapeHtml(p.name)}</div>
-            <div class="score ${p.g1 ? '' : 'muted'}">${p.g1 || '—'}</div>
-            <div class="score ${p.g2 ? '' : 'muted'}">${p.g2 || '—'}</div>
-          </div>`).join('')}
-      </div>
-    </div>`;
-  }
-  const aWin = a.total >= b.total;
-  return `<div class="matchup-result">
-    <div class="mr-team ${aWin ? 'winner' : ''}">
-      <div class="mr-team-head">
-        <div class="mr-team-name ${aWin ? 'winner' : ''}">${escapeHtml(a.name)}</div>
-        <div class="mr-team-total ${aWin ? 'winner' : ''}">${a.total}</div>
-      </div>
-      ${a.players.map(p => `
-        <div class="mr-player-row">
-          <div class="name">${escapeHtml(p.name)}</div>
-          <div class="score ${p.g1 ? '' : 'muted'}">${p.g1 || '—'}</div>
-          <div class="score ${p.g2 ? '' : 'muted'}">${p.g2 || '—'}</div>
-        </div>`).join('')}
-    </div>
-    <div class="vs-bar"><div class="vs-left"></div><div class="vs-chip">VS</div><div class="vs-right"></div></div>
-    <div class="mr-team ${!aWin ? 'winner' : ''}">
-      <div class="mr-team-head">
-        <div class="mr-team-name ${!aWin ? 'winner' : ''}">${escapeHtml(b.name)}</div>
-        <div class="mr-team-total ${!aWin ? 'winner' : ''}">${b.total}</div>
-      </div>
-      ${b.players.map(p => `
-        <div class="mr-player-row">
-          <div class="name">${escapeHtml(p.name)}</div>
-          <div class="score ${p.g1 ? '' : 'muted'}">${p.g1 || '—'}</div>
-          <div class="score ${p.g2 ? '' : 'muted'}">${p.g2 || '—'}</div>
-        </div>`).join('')}
-    </div>
-  </div>`;
-}
-
-// SEASON HISTORY — past champions
-function renderSeasonHistoryView() {
-  let html = `<div class="section-header">Season History</div>`;
-  if (!state.history || state.history.length < 2) {
-    html += `<div class="empty-state">No past seasons archived. Run "End Season" from the sheet to archive a season.</div>`;
-    $('more-detail').innerHTML = html;
-    return;
-  }
-  state.history.slice(1).reverse().forEach(r => {
-    if (!r[0]) return;
-    html += `<div class="history-season">
-      <div class="history-head">
-        <div class="history-season-name">${escapeHtml(r[0])}</div>
-        ${r[1] ? `<div class="history-champion">🏆 ${escapeHtml(r[1])} · ${r[2] || '—'} avg</div>` : ''}
-      </div>
-    </div>`;
-  });
-  $('more-detail').innerHTML = html;
-}
-
-// GENERATE
-function openGenerate() {
-  let html = `<div class="modal-title">Generate Teams</div>
-    <div class="gen-controls">
-      <div class="gen-row">
-        <div class="gen-label">Fill mode</div>
-        <div class="toggle-group" style="flex:1">
-          <button class="toggle-btn active" id="gen-mode-league" onclick="setGenMode('League Avg')">League avg</button>
-          <button class="toggle-btn" id="gen-mode-player" onclick="setGenMode('Player Avg')">Player avg</button>
-        </div>
-      </div>
-      <div style="font-size:12px;color:var(--muted);line-height:1.5;margin-top:4px;">
-        <strong style="color:var(--text)">League avg:</strong> absent players use league average.<br>
-        <strong style="color:var(--text)">Player avg:</strong> absent players use their own historical avg.
-      </div>
-    </div>
-    <button class="btn primary" onclick="runGenerate()">Generate</button>
-    <div id="gen-output" style="margin-top:16px;"></div>`;
-  openModal(html);
-  state.genFillMode = 'League Avg';
-}
-
-function setGenMode(mode) {
-  state.genFillMode = mode;
-  $('gen-mode-league').classList.toggle('active', mode === 'League Avg');
-  $('gen-mode-player').classList.toggle('active', mode === 'Player Avg');
-}
-
-async function runGenerate() {
-  $('gen-output').innerHTML = `<div class="loading"><div class="spinner"></div><div class="loading-text">Generating...</div></div>`;
-  try {
-    const res = await apiPost('generateTeams', { fillMode: state.genFillMode });
-    state.generated = res.data;
-    renderGeneratedPreview();
-  } catch(e) {
-    $('gen-output').innerHTML = `<div class="error-banner">Could not generate teams.</div>`;
-  }
-}
-
-function renderGeneratedPreview() {
-  if (!state.generated) return;
-  const data = state.generated;
-  const teams = [];
-  for (let i = 0; i < data.length; i++) {
-    if (typeof data[i][0] === 'string' && data[i][0].startsWith('Team ')) {
-      const team = { name: data[i][0], total: 0, players: [] };
-      for (let j = i + 1; j < data.length; j++) {
-        const r = data[j];
-        if (!r[0] || (typeof r[0] === 'string' && r[0].startsWith('Team '))) break;
-        team.players.push({ name: r[0], avg: parseFloat(r[1]) || 0, status: r[2] || '' });
-      }
-      team.total = team.players.reduce((s, p) => s + p.avg, 0);
-      teams.push(team);
-    }
-  }
-
-  let html = `<div class="section-header">Proposed teams</div>`;
-  teams.forEach(t => {
-    html += `<div class="team-preview-card">
-      <div class="tp-head"><div class="tp-name">${escapeHtml(t.name)}</div><div class="tp-total">${Math.round(t.total)}</div></div>
-      <div class="tp-list">`;
-    t.players.forEach(p => {
-      const cls = p.status === 'Unavailable' ? 'unavail' : '';
-      html += `<div class="tp-row">
-        <div class="tp-player ${cls}">${escapeHtml(p.name)}${p.status === 'Unavailable' ? ' <span style="color:var(--muted);font-size:11px;">(out)</span>' : ''}</div>
-        <div class="tp-avg">${p.avg.toFixed(1)}</div>
-      </div>`;
-    });
-    html += `</div></div>`;
-  });
-
-  if (teams.length > 1) {
-    const totals = teams.map(t => t.total);
-    const spread = Math.max(...totals) - Math.min(...totals);
-    const color = spread < 20 ? 'var(--success)' : spread < 40 ? 'var(--accent)' : 'var(--danger)';
-    html += `<div style="text-align:center;font-size:12px;color:var(--muted);margin:8px 0 12px;">Balance spread: <strong style="color:${color}">${spread.toFixed(0)} pins</strong></div>`;
-  }
-
-  html += `<div style="font-size:12px;color:var(--muted);line-height:1.5;margin-bottom:12px;">
-    Want to swap players? Edit directly in the <strong style="color:var(--text)">Generated Teams</strong> tab in the sheet, then click confirm below.
-  </div>
-  <div class="btn-row">
-    <button class="btn" onclick="runGenerate()">Regenerate</button>
-    <button class="btn primary" onclick="confirmTeams()">Confirm</button>
-  </div>`;
-
-  $('gen-output').innerHTML = html;
-}
-
-async function confirmTeams() {
-  try {
-    await apiPost('confirmMatchups', {});
-    toast('Matchups confirmed', 'success');
-    closeModal();
-    await loadAll();
-    switchTab('matchups');
-  } catch(e) {
-    toast('Confirm failed', 'error');
-  }
+  } catch(e) { toast('Failed to post', 'error'); }
 }
 
 // ============================================================
@@ -1240,7 +1250,7 @@ async function loadAll() {
     state.settings = all.settings;
     renderMatchups();
   } catch(e) {
-    $('matchups-content').innerHTML = `<div class="error-banner">⚠️ Could not connect to the league sheet. Check the API URL or your internet connection.</div>`;
+    $('matchups-content').innerHTML = `<div class="error-banner">⚠️ Could not connect to the league sheet. Check the API URL or your connection.</div>`;
   }
 }
 
