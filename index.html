@@ -52,7 +52,7 @@ header { padding: 20px 20px 12px; position: sticky; top: 0; z-index: 50; backgro
 .game-pill { font-size: 11px; font-weight: 600; letter-spacing: 1.5px; text-transform: uppercase; color: var(--accent); background: var(--accent-dim); border: 1px solid rgba(232,255,71,0.25); border-radius: 20px; padding: 3px 10px; }
 .section-header { font-family: 'Barlow Condensed', sans-serif; font-size: 13px; font-weight: 700; letter-spacing: 2.5px; text-transform: uppercase; color: var(--muted); margin: 20px 0 12px; }
 
-/* MATCHUP CARDS */
+/* MATCHUPS */
 .matchup { background: var(--surface); border: 1px solid var(--border); border-radius: 18px; overflow: hidden; margin-bottom: 16px; }
 .team-block { padding: 14px 16px; }
 .team-label { font-family: 'Barlow Condensed', sans-serif; font-size: 11px; font-weight: 700; letter-spacing: 2.5px; text-transform: uppercase; color: var(--muted); margin-bottom: 10px; }
@@ -80,7 +80,6 @@ textarea:focus { border-color: var(--accent); }
 .vs-left, .vs-right { flex: 1; height: 1px; background: var(--border2); }
 .vs-chip { font-family: 'Barlow Condensed', sans-serif; font-weight: 900; font-size: 11px; letter-spacing: 2px; padding: 5px 14px; background: var(--accent2); color: white; border-radius: 20px; flex-shrink: 0; margin: 0 12px; }
 
-/* TEAM TOTAL */
 .team-total { display: flex; align-items: center; gap: 8px; padding: 10px 16px 12px; }
 .total-label { font-size: 12px; color: var(--muted); font-weight: 500; }
 .total-val { font-family: 'Barlow Condensed', sans-serif; font-size: 20px; font-weight: 800; }
@@ -105,7 +104,6 @@ textarea:focus { border-color: var(--accent); }
 .s-rank-1 .s-name { color: var(--accent); }
 
 /* RSVP */
-.rsvp-card { background: var(--surface); border: 1px solid var(--border); border-radius: 18px; padding: 6px 0; margin-bottom: 16px; }
 .rsvp-row { display: flex; align-items: center; gap: 12px; padding: 10px 16px; border-bottom: 1px solid var(--border); }
 .rsvp-row:last-child { border-bottom: none; }
 .rsvp-name { flex: 1; font-family: 'Barlow Condensed', sans-serif; font-size: 17px; font-weight: 700; }
@@ -113,8 +111,6 @@ textarea:focus { border-color: var(--accent); }
 .rsvp-btn { font-family: 'Barlow Condensed', sans-serif; font-size: 12px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; padding: 6px 12px; border-radius: 8px; border: 1.5px solid var(--border2); background: var(--surface2); color: var(--muted); cursor: pointer; transition: all 0.15s; }
 .rsvp-btn.active.in { background: rgba(74,222,128,0.15); border-color: var(--success); color: var(--success); }
 .rsvp-btn.active.out { background: rgba(255,79,109,0.15); border-color: var(--danger); color: var(--danger); }
-.rsvp-btn:hover { background: var(--surface3); }
-
 .rsvp-summary { display: flex; gap: 8px; margin-bottom: 12px; }
 .rsvp-stat { flex: 1; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 10px 14px; }
 .rsvp-stat-label { font-size: 10px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; color: var(--muted); }
@@ -130,20 +126,22 @@ textarea:focus { border-color: var(--accent); }
 .btn.primary { background: var(--accent); color: #0a0a0c; border-color: var(--accent); }
 .btn.primary:hover { background: #d8ee37; }
 .btn.danger { background: rgba(255,79,109,0.15); border-color: var(--danger); color: var(--danger); }
-.btn.danger:hover { background: rgba(255,79,109,0.25); }
 .btn-row { display: flex; gap: 8px; margin: 16px 0; }
 .btn-row .btn { flex: 1; }
+
+/* TOGGLES */
+.toggle-group { display: flex; gap: 4px; background: var(--surface2); border-radius: 10px; padding: 3px; }
+.toggle-btn { flex: 1; font-family: 'Barlow Condensed', sans-serif; font-size: 12px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; padding: 8px 12px; border-radius: 8px; border: none; background: transparent; color: var(--muted); cursor: pointer; transition: all 0.15s; white-space: nowrap; }
+.toggle-btn.active { background: var(--accent); color: #0a0a0c; }
+
+.season-toggle { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 4px; display: flex; gap: 2px; margin-bottom: 12px; overflow-x: auto; }
 
 /* GENERATE */
 .gen-controls { background: var(--surface); border: 1px solid var(--border); border-radius: 18px; padding: 16px; margin-bottom: 16px; }
 .gen-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
 .gen-row:last-child { margin-bottom: 0; }
 .gen-label { flex-shrink: 0; font-family: 'Barlow Condensed', sans-serif; font-size: 13px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; color: var(--muted); width: 100px; }
-.toggle-group { display: flex; gap: 4px; flex: 1; background: var(--surface2); border-radius: 10px; padding: 3px; }
-.toggle-btn { flex: 1; font-family: 'Barlow Condensed', sans-serif; font-size: 12px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; padding: 8px; border-radius: 8px; border: none; background: transparent; color: var(--muted); cursor: pointer; transition: all 0.15s; }
-.toggle-btn.active { background: var(--accent); color: #0a0a0c; }
 
-/* TEAMS PREVIEW */
 .team-preview-card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; margin-bottom: 12px; overflow: hidden; }
 .tp-head { display: flex; justify-content: space-between; align-items: center; padding: 12px 14px; background: var(--surface2); border-bottom: 1px solid var(--border); }
 .tp-name { font-family: 'Barlow Condensed', sans-serif; font-weight: 800; font-size: 17px; letter-spacing: 0.5px; }
@@ -155,10 +153,9 @@ textarea:focus { border-color: var(--accent); }
 .tp-player.unavail { color: var(--muted); text-decoration: line-through; }
 .tp-avg { font-family: 'Barlow Condensed', sans-serif; font-size: 14px; color: var(--muted); }
 
-/* PLAYERS HUB */
+/* PLAYERS */
 .player-search { width: 100%; padding: 10px 14px; background: var(--surface2); border: 1.5px solid var(--border2); border-radius: 12px; color: var(--text); font-size: 14px; outline: none; margin-bottom: 12px; text-align: left; font-family: 'Barlow', sans-serif; font-weight: 500; }
 .player-search:focus { border-color: var(--accent); }
-
 .player-card { display: flex; align-items: center; gap: 12px; padding: 12px 14px; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; margin-bottom: 8px; cursor: pointer; transition: all 0.15s; }
 .player-card:hover { background: var(--surface2); border-color: var(--border2); }
 .player-card .player-avatar { width: 40px; height: 40px; font-size: 15px; }
@@ -177,11 +174,11 @@ textarea:focus { border-color: var(--accent); }
 .stat-tile { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 12px; text-align: center; }
 .stat-tile-label { font-size: 10px; font-weight: 700; letter-spacing: 1.2px; text-transform: uppercase; color: var(--muted); }
 .stat-tile-val { font-family: 'Barlow Condensed', sans-serif; font-size: 26px; font-weight: 800; line-height: 1.1; margin-top: 4px; color: var(--accent); }
-.stat-tile-sub { font-size: 11px; color: var(--muted); margin-top: 2px; }
 
 .chart-card { background: var(--surface); border: 1px solid var(--border); border-radius: 18px; padding: 16px; margin-bottom: 16px; }
-.chart-title { font-family: 'Barlow Condensed', sans-serif; font-size: 13px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; color: var(--muted); margin-bottom: 8px; }
-.chart-wrap { position: relative; height: 200px; }
+.chart-title-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+.chart-title { font-family: 'Barlow Condensed', sans-serif; font-size: 13px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; color: var(--muted); }
+.chart-wrap { position: relative; height: 220px; }
 
 .score-history-table { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; overflow: hidden; }
 .score-history-row { display: grid; grid-template-columns: 50px 1fr 50px 50px 60px; gap: 8px; padding: 10px 14px; border-bottom: 1px solid var(--border); align-items: center; }
@@ -197,27 +194,44 @@ textarea:focus { border-color: var(--accent); }
 .board-author-row { display: flex; gap: 8px; margin-bottom: 8px; }
 .board-author-input { flex: 1; padding: 8px 12px; background: var(--surface2); border: 1.5px solid var(--border2); border-radius: 10px; color: var(--text); font-size: 13px; outline: none; font-family: 'Barlow', sans-serif; font-weight: 500; text-align: left; }
 .board-author-input:focus { border-color: var(--accent); }
-
 .board-post { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 14px; margin-bottom: 10px; }
 .board-post-head { display: flex; align-items: baseline; gap: 8px; margin-bottom: 6px; }
 .board-author { font-family: 'Barlow Condensed', sans-serif; font-weight: 800; font-size: 16px; color: var(--accent); }
 .board-time { font-size: 11px; color: var(--muted); margin-left: auto; }
 .board-msg { font-size: 14px; line-height: 1.5; color: var(--text); white-space: pre-wrap; word-wrap: break-word; }
 
-/* HISTORY */
+/* HISTORY / MATCHUPS */
 .history-season { background: var(--surface); border: 1px solid var(--border); border-radius: 18px; margin-bottom: 16px; overflow: hidden; }
 .history-head { padding: 14px 16px; background: var(--surface2); border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
-.history-season-name { font-family: 'Barlow Condensed', sans-serif; font-weight: 800; font-size: 18px; letter-spacing: 0.5px; }
+.history-season-name { font-family: 'Barlow Condensed', sans-serif; font-weight: 800; font-size: 18px; }
 .history-champion { font-size: 12px; color: var(--accent); font-weight: 600; }
 
-/* MORE / SETTINGS */
+.week-selector { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 14px; }
+.week-pill { font-family: 'Barlow Condensed', sans-serif; font-size: 13px; font-weight: 700; letter-spacing: 0.5px; padding: 6px 14px; border-radius: 8px; background: var(--surface2); border: 1.5px solid var(--border2); color: var(--muted); cursor: pointer; transition: all 0.15s; }
+.week-pill.active { background: var(--accent); color: #0a0a0c; border-color: var(--accent); }
+.week-pill:hover:not(.active) { background: var(--surface3); }
+
+.matchup-result { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; margin-bottom: 12px; overflow: hidden; }
+.mr-team { padding: 12px 14px; }
+.mr-team.winner { background: rgba(232,255,71,0.04); }
+.mr-team-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+.mr-team-name { font-family: 'Barlow Condensed', sans-serif; font-weight: 800; font-size: 16px; }
+.mr-team-name.winner { color: var(--accent); }
+.mr-team-total { font-family: 'Barlow Condensed', sans-serif; font-weight: 800; font-size: 18px; }
+.mr-team-total.winner { color: var(--accent); }
+.mr-player-row { display: grid; grid-template-columns: 1fr 50px 50px; gap: 8px; padding: 4px 0; align-items: center; }
+.mr-player-row .name { font-size: 13px; }
+.mr-player-row .score { text-align: right; font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 14px; }
+.mr-player-row .score.muted { color: var(--muted); }
+
+/* MORE */
 .more-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 16px; }
 .more-tile { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 16px 14px; cursor: pointer; transition: all 0.15s; text-align: center; }
 .more-tile:hover { background: var(--surface2); border-color: var(--border2); }
 .more-tile-icon { font-size: 24px; margin-bottom: 6px; }
 .more-tile-label { font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 14px; letter-spacing: 1px; text-transform: uppercase; }
 
-/* BOTTOM NAV */
+/* NAV */
 nav { position: fixed; bottom: 0; left: 0; right: 0; background: rgba(19,19,22,0.92); backdrop-filter: blur(16px); border-top: 1px solid var(--border); display: flex; z-index: 100; padding-bottom: env(safe-area-inset-bottom); }
 .nav-btn { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 10px 0; cursor: pointer; color: var(--muted); font-size: 10px; font-weight: 600; letter-spacing: 1px; text-transform: uppercase; font-family: 'Barlow Condensed', sans-serif; border: none; background: none; transition: color 0.15s; }
 .nav-btn.active { color: var(--accent); }
@@ -248,75 +262,54 @@ nav { position: fixed; bottom: 0; left: 0; right: 0; background: rgba(19,19,22,0
 </header>
 
 <div class="container">
-  <!-- MATCHUPS -->
   <div id="section-matchups" class="section active">
     <div id="matchups-content"><div class="loading"><div class="spinner"></div><div class="loading-text">Loading matchups</div></div></div>
   </div>
-
-  <!-- RSVP -->
   <div id="section-rsvp" class="section">
     <div id="rsvp-content"><div class="loading"><div class="spinner"></div><div class="loading-text">Loading RSVP</div></div></div>
   </div>
-
-  <!-- PLAYERS -->
   <div id="section-players" class="section">
     <div id="players-content"><div class="loading"><div class="spinner"></div><div class="loading-text">Loading players</div></div></div>
   </div>
-
-  <!-- BOARD -->
   <div id="section-board" class="section">
     <div id="board-content"><div class="loading"><div class="spinner"></div><div class="loading-text">Loading board</div></div></div>
   </div>
-
-  <!-- MORE -->
   <div id="section-more" class="section">
     <div id="more-content"></div>
   </div>
 </div>
 
-<!-- MODAL -->
 <div class="modal-backdrop" id="modal-backdrop" onclick="if(event.target===this)closeModal()">
   <div class="modal" id="modal-content"></div>
 </div>
 
 <nav>
-  <button class="nav-btn active" id="nav-matchups" onclick="switchTab('matchups')">
-    <span class="nav-icon">🎳</span>Matchups
-  </button>
-  <button class="nav-btn" id="nav-rsvp" onclick="switchTab('rsvp')">
-    <span class="nav-icon">📋</span>RSVP
-  </button>
-  <button class="nav-btn" id="nav-players" onclick="switchTab('players')">
-    <span class="nav-icon">👤</span>Players
-  </button>
-  <button class="nav-btn" id="nav-board" onclick="switchTab('board')">
-    <span class="nav-icon">💬</span>Board
-  </button>
-  <button class="nav-btn" id="nav-more" onclick="switchTab('more')">
-    <span class="nav-icon">⋯</span>More
-  </button>
+  <button class="nav-btn active" id="nav-matchups" onclick="switchTab('matchups')"><span class="nav-icon">🎳</span>Matchups</button>
+  <button class="nav-btn" id="nav-rsvp" onclick="switchTab('rsvp')"><span class="nav-icon">📋</span>RSVP</button>
+  <button class="nav-btn" id="nav-players" onclick="switchTab('players')"><span class="nav-icon">👤</span>Players</button>
+  <button class="nav-btn" id="nav-board" onclick="switchTab('board')"><span class="nav-icon">💬</span>Board</button>
+  <button class="nav-btn" id="nav-more" onclick="switchTab('more')"><span class="nav-icon">⋯</span>More</button>
 </nav>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
 <script>
 // ============================================================
-// CONFIG — UPDATE THIS IF YOU REDEPLOY THE APPS SCRIPT
+// CONFIG
 // ============================================================
 const API = "https://script.google.com/macros/s/AKfycbz8sg1ZRlVaD0tXpN6GRlC1awZYu1_KhD7z5Bc88KjsTNntq1dBzAf8aHGbW0th_Tjhiw/exec";
+
+// Weekly Stats column indices
+const SC = { SEASON: 0, WEEK: 1, PLAYER: 2, TEAM: 3, G1: 4, G2: 5, PINS: 6, WINS: 7, LOSSES: 8, GAMES: 9 };
 
 // ============================================================
 // STATE
 // ============================================================
 const state = {
-  current: null,
-  roster: null,
-  rsvp: null,
-  archive: null,
-  board: null,
-  history: null,
-  generated: null,
-  settings: null,
+  current: null, roster: null, rsvp: null, stats: null,
+  board: null, history: null, generated: null, settings: null,
   selectedPlayer: null,
+  selectedSeason: null,        // for standings/matchup history
+  selectedHistWeek: null,      // for matchup history
   myName: localStorage.getItem('pb_myname') || ''
 };
 
@@ -357,20 +350,131 @@ function openModal(html) {
   $('modal-content').innerHTML = html;
   $('modal-backdrop').classList.add('active');
 }
-function closeModal() {
-  $('modal-backdrop').classList.remove('active');
-}
+function closeModal() { $('modal-backdrop').classList.remove('active'); }
 
 async function apiGet(action) {
   const r = await fetch(`${API}?action=${action}`);
   return r.json();
 }
 async function apiPost(action, payload = {}) {
-  const r = await fetch(API, {
-    method: 'POST',
-    body: JSON.stringify({ action, ...payload })
-  });
+  const r = await fetch(API, { method: 'POST', body: JSON.stringify({ action, ...payload }) });
   return r.json();
+}
+
+// ============================================================
+// STATS DERIVATION (Weekly Stats is source of truth)
+// ============================================================
+function statsRows() {
+  return state.stats ? state.stats.slice(1).filter(r => r[SC.PLAYER]) : [];
+}
+
+function getSeasons() {
+  const seasons = new Set();
+  statsRows().forEach(r => {
+    const s = r[SC.SEASON];
+    if (s !== '' && s != null) seasons.add(String(s));
+  });
+  return Array.from(seasons).sort();
+}
+
+function getCurrentSeason() {
+  const seasons = getSeasons();
+  return seasons.length ? seasons[seasons.length - 1] : '1';
+}
+
+// Aggregate stats per player for a given season
+function aggregateStandings(season) {
+  const players = {};
+  statsRows().forEach(r => {
+    if (String(r[SC.SEASON]) !== String(season)) return;
+    const name = r[SC.PLAYER];
+    if (!players[name]) players[name] = { name, team: r[SC.TEAM], wins: 0, losses: 0, pins: 0, games: 0, weeks: new Set(), highGame: 0 };
+    players[name].wins += parseInt(r[SC.WINS]) || 0;
+    players[name].losses += parseInt(r[SC.LOSSES]) || 0;
+    players[name].pins += parseInt(r[SC.PINS]) || 0;
+    players[name].games += parseInt(r[SC.GAMES]) || 0;
+    players[name].weeks.add(String(r[SC.WEEK]));
+    players[name].team = r[SC.TEAM];
+    const g1 = parseInt(r[SC.G1]) || 0;
+    const g2 = parseInt(r[SC.G2]) || 0;
+    if (g1 > players[name].highGame) players[name].highGame = g1;
+    if (g2 > players[name].highGame) players[name].highGame = g2;
+  });
+  return Object.values(players).map(p => ({
+    ...p,
+    avg: p.games ? p.pins / p.games : 0,
+    weekCount: p.weeks.size
+  })).sort((a, b) => b.wins - a.wins || b.avg - a.avg);
+}
+
+// Player profile: all-time stats + per-game log
+function getPlayerProfile(name) {
+  const games = [];  // each entry: { season, week, team, score, gameNum }
+  const rows = statsRows().filter(r => r[SC.PLAYER] === name);
+  rows.forEach(r => {
+    const g1 = parseInt(r[SC.G1]) || 0;
+    const g2 = parseInt(r[SC.G2]) || 0;
+    if (r[SC.G1] !== '' && g1 > 0) games.push({ season: r[SC.SEASON], week: r[SC.WEEK], team: r[SC.TEAM], score: g1, gameNum: 1 });
+    if (r[SC.G2] !== '' && g2 > 0) games.push({ season: r[SC.SEASON], week: r[SC.WEEK], team: r[SC.TEAM], score: g2, gameNum: 2 });
+  });
+
+  const allScores = games.map(g => g.score);
+  const allTimeAvg = allScores.length ? allScores.reduce((a,b)=>a+b,0) / allScores.length : 0;
+  const last5 = allScores.slice(-5);
+  const last5Avg = last5.length ? last5.reduce((a,b)=>a+b,0) / last5.length : 0;
+  const totalWins = rows.reduce((a,r) => a + (parseInt(r[SC.WINS])||0), 0);
+  const totalLosses = rows.reduce((a,r) => a + (parseInt(r[SC.LOSSES])||0), 0);
+  const totalGames = rows.reduce((a,r) => a + (parseInt(r[SC.GAMES])||0), 0);
+  const totalPins = rows.reduce((a,r) => a + (parseInt(r[SC.PINS])||0), 0);
+  const highGame = allScores.length ? Math.max(...allScores) : 0;
+
+  // Current season stats
+  const curSeason = state.selectedSeason || getCurrentSeason();
+  const seasonGames = games.filter(g => String(g.season) === String(curSeason));
+  const seasonScores = seasonGames.map(g => g.score);
+  const seasonAvg = seasonScores.length ? seasonScores.reduce((a,b)=>a+b,0) / seasonScores.length : 0;
+
+  return {
+    name, games, rows,
+    allTimeAvg, seasonAvg, last5Avg,
+    totalWins, totalLosses, totalGames, totalPins, highGame
+  };
+}
+
+// Matchup history: group by season + week, then by team
+function getMatchupsForWeek(season, week) {
+  const teams = {};  // { 'Team 1': { players: [{ name, g1, g2, total, w, l }], total: 0 } }
+  statsRows().forEach(r => {
+    if (String(r[SC.SEASON]) !== String(season)) return;
+    if (String(r[SC.WEEK]) !== String(week)) return;
+    const team = r[SC.TEAM];
+    if (!team) return;
+    if (!teams[team]) teams[team] = { name: team, players: [], total: 0, wins: 0, losses: 0 };
+    const g1 = parseInt(r[SC.G1]) || 0;
+    const g2 = parseInt(r[SC.G2]) || 0;
+    const total = parseInt(r[SC.PINS]) || 0;
+    teams[team].players.push({ name: r[SC.PLAYER], g1, g2, total, w: parseInt(r[SC.WINS])||0, l: parseInt(r[SC.LOSSES])||0 });
+    teams[team].total += total;
+    teams[team].wins += parseInt(r[SC.WINS])||0;
+    teams[team].losses += parseInt(r[SC.LOSSES])||0;
+  });
+  return Object.values(teams).sort((a, b) => b.wins - a.wins);
+}
+
+function getWeeksForSeason(season) {
+  const weeks = new Set();
+  statsRows().forEach(r => {
+    if (String(r[SC.SEASON]) !== String(season)) return;
+    if (r[SC.WEEK] !== '' && r[SC.WEEK] != null) weeks.add(String(r[SC.WEEK]));
+  });
+  // Sort: numeric weeks first, then non-numeric (Playoffs, etc.)
+  return Array.from(weeks).sort((a, b) => {
+    const na = parseInt(a), nb = parseInt(b);
+    if (!isNaN(na) && !isNaN(nb)) return na - nb;
+    if (!isNaN(na)) return -1;
+    if (!isNaN(nb)) return 1;
+    return a.localeCompare(b);
+  });
 }
 
 // ============================================================
@@ -381,7 +485,7 @@ function switchTab(tab) {
   document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
   $('section-' + tab).classList.add('active');
   $('nav-' + tab).classList.add('active');
-  state.selectedPlayer = null;  // reset deep views
+  if (tab !== 'players') state.selectedPlayer = null;
   if (tab === 'rsvp') renderRSVP();
   if (tab === 'players') renderPlayersHub();
   if (tab === 'board') renderBoard();
@@ -389,7 +493,7 @@ function switchTab(tab) {
 }
 
 // ============================================================
-// MATCHUPS
+// MATCHUPS (current week, from Current Week sheet)
 // ============================================================
 function getTeamTotals(d) {
   const sum = (rows, col) => rows.reduce((a, r) => a + (Number(r[col]) || 0), 0);
@@ -401,22 +505,23 @@ function getTeamTotals(d) {
   };
 }
 
-function getRosterAvg(name) {
-  if (!state.roster || !name) return '';
-  const row = state.roster.find(r => r[0] === name);
-  return row ? row[5] || '' : '';
+function getPlayerCurrentAvg(name) {
+  // Pull from latest season aggregation
+  const standings = aggregateStandings(getCurrentSeason());
+  const p = standings.find(s => s.name === name);
+  return p ? p.avg : 0;
 }
 
 function renderPlayerRow(name, g1Val, g2Val, cellG1, cellG2) {
   const ini = initials(name);
-  const avg = getRosterAvg(name);
+  const avg = getPlayerCurrentAvg(name);
   const g1 = cellG1 ? `<div class="score-group"><span class="score-label">G1</span><input type="number" class="${g1Val ? 'has-score' : ''}" placeholder="—" value="${g1Val || ''}" data-cell="${cellG1}" onchange="saveScore(this)"></div>` : '';
   const g2 = cellG2 ? `<div class="score-group"><span class="score-label">G2</span><input type="number" class="${g2Val ? 'has-score' : ''}" placeholder="—" value="${g2Val || ''}" data-cell="${cellG2}" onchange="saveScore(this)"></div>` : '';
   return `<div class="player-row">
     <div class="player-avatar">${ini}</div>
     <div class="player-info">
       <div class="player-name">${escapeHtml(name)}</div>
-      ${avg ? `<div class="player-avg">avg ${parseFloat(avg).toFixed(1)}</div>` : ''}
+      ${avg > 0 ? `<div class="player-avg">avg ${avg.toFixed(1)}</div>` : ''}
     </div>
     <div class="score-inputs">${g1}${g2}</div>
   </div>`;
@@ -470,7 +575,6 @@ function renderMatchups() {
     <div class="vs-bar"><div class="vs-left"></div><div class="vs-chip">VS</div><div class="vs-right"></div></div>
     ${renderTeamBlock('Team 4', t4g1, T.t4g1 > T.t2g1, T.t4g1)}
   </div>`;
-
   html += `<div class="match-header"><div class="match-title">Game 2</div></div>`;
   html += `<div class="matchup">
     ${renderTeamBlock('Team 4', t4g2, T.t4g2 > T.t1g2, T.t4g2)}
@@ -484,7 +588,6 @@ function renderMatchups() {
   </div>`;
 
   $('matchups-content').innerHTML = html;
-
   if (weekVal) {
     const wStr = weekVal.toString();
     $('week-badge').textContent = wStr.toLowerCase().includes('week') ? wStr : `Week ${wStr}`;
@@ -538,7 +641,7 @@ function renderRSVP() {
     <div class="rsvp-stat unknown"><div class="rsvp-stat-label">No reply</div><div class="rsvp-stat-val">${unknown}</div></div>
   </div>`;
 
-  html += `<div class="section-header">This Week</div><div class="rsvp-card">`;
+  html += `<div class="section-header">This Week</div><div class="standings-card">`;
   players.forEach(p => {
     const status = rsvpMap[p[0]] || '';
     html += `<div class="rsvp-row">
@@ -550,7 +653,6 @@ function renderRSVP() {
     </div>`;
   });
   html += `</div>`;
-
   $('rsvp-content').innerHTML = html;
 }
 
@@ -573,53 +675,30 @@ async function setRSVP(name, status) {
 // ============================================================
 // PLAYERS HUB
 // ============================================================
-function getPlayerStats(name) {
-  // From archive (Weekly Scores): [Week, Name, Team, G1, G2, TotalPins, Wins, Losses, TotalGames]
-  if (!state.archive) return { games: [], allTimeAvg: 0, seasonAvg: 0, last5Avg: 0, totalGames: 0, totalWins: 0, totalLosses: 0, highGame: 0 };
-  const games = state.archive.slice(1).filter(r => r[1] === name).map(r => ({
-    week: r[0], team: r[2], g1: parseInt(r[3]) || 0, g2: parseInt(r[4]) || 0,
-    total: parseInt(r[5]) || 0, w: parseInt(r[6]) || 0, l: parseInt(r[7]) || 0
-  }));
-
-  const allScores = [];
-  games.forEach(g => { if (g.g1) allScores.push(g.g1); if (g.g2) allScores.push(g.g2); });
-
-  const allTimeAvg = allScores.length ? allScores.reduce((a,b)=>a+b,0) / allScores.length : 0;
-  const last5 = allScores.slice(-5);
-  const last5Avg = last5.length ? last5.reduce((a,b)=>a+b,0) / last5.length : 0;
-  const totalWins = games.reduce((a,g) => a + g.w, 0);
-  const totalLosses = games.reduce((a,g) => a + g.l, 0);
-  const highGame = allScores.length ? Math.max(...allScores) : 0;
-
-  return {
-    games, allTimeAvg, seasonAvg: allTimeAvg, last5Avg,
-    totalGames: games.length, totalWins, totalLosses, highGame
-  };
-}
-
 function renderPlayersHub() {
-  if (!state.roster) return;
+  if (!state.stats) return;
   if (state.selectedPlayer) {
     renderPlayerDetail(state.selectedPlayer);
     return;
   }
 
-  const players = state.roster.slice(1).filter(r => r[0]);
+  // Build list from unique players in stats
+  const playerNames = Array.from(new Set(statsRows().map(r => r[SC.PLAYER]))).filter(Boolean).sort();
+
   let html = `<input type="text" class="player-search" placeholder="Search bowlers..." oninput="filterPlayers(this.value)">`;
   html += `<div id="players-list">`;
-  players.forEach(p => {
-    const stats = getPlayerStats(p[0]);
-    html += `<div class="player-card" data-name="${escapeHtml(p[0]).toLowerCase()}" onclick="showPlayer('${escapeHtml(p[0])}')">
-      <div class="player-avatar">${initials(p[0])}</div>
+  playerNames.forEach(name => {
+    const p = getPlayerProfile(name);
+    html += `<div class="player-card" data-name="${escapeHtml(name).toLowerCase()}" onclick="showPlayer('${escapeHtml(name)}')">
+      <div class="player-avatar">${initials(name)}</div>
       <div class="player-card-info">
-        <div class="player-card-name">${escapeHtml(p[0])}</div>
-        <div class="player-card-stats">${stats.totalGames} games · ${stats.totalWins}W ${stats.totalLosses}L${stats.highGame ? ' · high ' + stats.highGame : ''}</div>
+        <div class="player-card-name">${escapeHtml(name)}</div>
+        <div class="player-card-stats">${p.totalGames} games · ${p.totalWins}W ${p.totalLosses}L${p.highGame ? ' · high ' + p.highGame : ''}</div>
       </div>
-      <div class="player-card-avg">${stats.allTimeAvg ? stats.allTimeAvg.toFixed(1) : '—'}</div>
+      <div class="player-card-avg">${p.allTimeAvg ? p.allTimeAvg.toFixed(1) : '—'}</div>
     </div>`;
   });
   html += `</div>`;
-
   $('players-content').innerHTML = html;
 }
 
@@ -641,31 +720,33 @@ function backToPlayers() {
 }
 
 function renderPlayerDetail(name) {
-  const stats = getPlayerStats(name);
-  const rosterRow = state.roster.slice(1).find(r => r[0] === name) || [];
-  const team = rosterRow[6] || '';
+  const p = getPlayerProfile(name);
+  const seasons = getSeasons();
+  const curSeason = state.selectedSeason || getCurrentSeason();
 
   let html = `<div class="player-detail">
     <div class="player-detail-header">
       <button class="back-btn" onclick="backToPlayers()">←</button>
       <div>
         <div class="player-detail-name">${escapeHtml(name)}</div>
-        ${team ? `<div class="player-detail-team">${escapeHtml(team)}</div>` : ''}
+        ${p.games.length ? `<div class="player-detail-team">Most recent: ${escapeHtml(p.games[p.games.length-1].team || '')}</div>` : ''}
       </div>
     </div>
 
     <div class="stat-grid">
-      <div class="stat-tile"><div class="stat-tile-label">All-time avg</div><div class="stat-tile-val">${stats.allTimeAvg ? stats.allTimeAvg.toFixed(1) : '—'}</div></div>
-      <div class="stat-tile"><div class="stat-tile-label">Last 5 avg</div><div class="stat-tile-val">${stats.last5Avg ? stats.last5Avg.toFixed(1) : '—'}</div></div>
-      <div class="stat-tile"><div class="stat-tile-label">High game</div><div class="stat-tile-val">${stats.highGame || '—'}</div></div>
-      <div class="stat-tile"><div class="stat-tile-label">Games</div><div class="stat-tile-val">${stats.totalGames}</div></div>
-      <div class="stat-tile"><div class="stat-tile-label">Wins</div><div class="stat-tile-val">${stats.totalWins}</div></div>
-      <div class="stat-tile"><div class="stat-tile-label">Losses</div><div class="stat-tile-val">${stats.totalLosses}</div></div>
+      <div class="stat-tile"><div class="stat-tile-label">All-time avg</div><div class="stat-tile-val">${p.allTimeAvg ? p.allTimeAvg.toFixed(1) : '—'}</div></div>
+      <div class="stat-tile"><div class="stat-tile-label">Season avg</div><div class="stat-tile-val">${p.seasonAvg ? p.seasonAvg.toFixed(1) : '—'}</div></div>
+      <div class="stat-tile"><div class="stat-tile-label">Last 5 avg</div><div class="stat-tile-val">${p.last5Avg ? p.last5Avg.toFixed(1) : '—'}</div></div>
+      <div class="stat-tile"><div class="stat-tile-label">High game</div><div class="stat-tile-val">${p.highGame || '—'}</div></div>
+      <div class="stat-tile"><div class="stat-tile-label">W—L</div><div class="stat-tile-val">${p.totalWins}—${p.totalLosses}</div></div>
+      <div class="stat-tile"><div class="stat-tile-label">Games</div><div class="stat-tile-val">${p.totalGames}</div></div>
     </div>`;
 
-  if (stats.games.length) {
+  if (p.games.length) {
     html += `<div class="chart-card">
-      <div class="chart-title">Score progression</div>
+      <div class="chart-title-row">
+        <div class="chart-title">Score progression</div>
+      </div>
       <div class="chart-wrap"><canvas id="player-chart"></canvas></div>
     </div>`;
 
@@ -674,34 +755,103 @@ function renderPlayerDetail(name) {
         <div class="score-history-row head">
           <span>Wk</span><span>Team</span><span>G1</span><span>G2</span><span>Total</span>
         </div>`;
-    stats.games.slice().reverse().forEach(g => {
+    // Group rows back from game log
+    p.rows.slice().reverse().forEach(r => {
+      const g1 = parseInt(r[SC.G1]) || 0;
+      const g2 = parseInt(r[SC.G2]) || 0;
+      const total = parseInt(r[SC.PINS]) || 0;
       html += `<div class="score-history-row">
-        <span class="sh-week">${escapeHtml(g.week)}</span>
-        <span class="sh-team">${escapeHtml(g.team)}</span>
-        <span>${g.g1 || '—'}</span><span>${g.g2 || '—'}</span><span>${g.total || '—'}</span>
+        <span class="sh-week">${escapeHtml(r[SC.WEEK])}</span>
+        <span class="sh-team">${escapeHtml(r[SC.TEAM])}</span>
+        <span>${g1 || '—'}</span>
+        <span>${r[SC.G2] === '' ? '—' : (g2 || '—')}</span>
+        <span>${total || '—'}</span>
       </div>`;
     });
     html += `</div>`;
   } else {
     html += `<div class="empty-state">No games recorded yet.</div>`;
   }
-
   html += `</div>`;
   $('players-content').innerHTML = html;
-
-  if (stats.games.length) drawPlayerChart(stats);
+  if (p.games.length) drawPlayerChart(p);
 }
 
-function drawPlayerChart(stats) {
+function drawPlayerChart(p) {
+  // Build dual-axis labels: game numbers along bottom, week labels grouped underneath
   const labels = [];
+  const weekLabels = [];   // for the secondary axis
   const data = [];
-  stats.games.forEach(g => {
-    if (g.g1) { labels.push(g.week + ' G1'); data.push(g.g1); }
-    if (g.g2) { labels.push(g.week + ' G2'); data.push(g.g2); }
-  });
-  const avg = stats.allTimeAvg;
+  const avgVal = p.allTimeAvg;
 
-  new Chart($('player-chart'), {
+  p.games.forEach(g => {
+    labels.push('G' + g.gameNum);
+    weekLabels.push(String(g.week));
+    data.push(g.score);
+  });
+
+  // Build week-label objects: only show week label on the first game of each (season,week) chunk
+  const groupedWeekLabels = labels.map((_, i) => {
+    if (i === 0) return weekLabels[i];
+    return weekLabels[i] === weekLabels[i-1] && p.games[i].season === p.games[i-1].season ? '' : weekLabels[i];
+  });
+
+  // Custom plugin: draw week labels below x-axis
+  const weekLabelPlugin = {
+    id: 'weekLabelPlugin',
+    afterDraw(chart) {
+      const { ctx, chartArea, scales } = chart;
+      const x = scales.x;
+      ctx.save();
+      ctx.fillStyle = '#7a7a85';
+      ctx.font = '700 10px Barlow Condensed';
+      ctx.textAlign = 'center';
+      let lastWeek = '';
+      let groupStartX = null;
+      let groupCount = 0;
+      const groups = [];
+      groupedWeekLabels.forEach((w, i) => {
+        if (w !== '') {
+          if (groupStartX !== null) {
+            groups.push({ label: lastWeek, start: groupStartX, count: groupCount });
+          }
+          lastWeek = w;
+          groupStartX = i;
+          groupCount = 1;
+        } else {
+          groupCount++;
+        }
+      });
+      if (groupStartX !== null) groups.push({ label: lastWeek, start: groupStartX, count: groupCount });
+
+      const yPos = chartArea.bottom + 38;
+      groups.forEach(g => {
+        const xStart = x.getPixelForValue(g.start);
+        const xEnd = x.getPixelForValue(g.start + g.count - 1);
+        const xMid = (xStart + xEnd) / 2;
+
+        // Bracket
+        ctx.strokeStyle = 'rgba(255,255,255,0.12)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(xStart - 4, yPos - 8);
+        ctx.lineTo(xStart - 4, yPos - 4);
+        ctx.lineTo(xEnd + 4, yPos - 4);
+        ctx.lineTo(xEnd + 4, yPos - 8);
+        ctx.stroke();
+
+        // Week label
+        const isPlayoff = isNaN(parseInt(g.label));
+        ctx.fillStyle = isPlayoff ? '#ff4f6d' : '#7a7a85';
+        ctx.fillText(isPlayoff ? g.label : 'Wk ' + g.label, xMid, yPos + 6);
+      });
+      ctx.restore();
+    }
+  };
+
+  const ctx = $('player-chart');
+  if (window.__playerChart) window.__playerChart.destroy();
+  window.__playerChart = new Chart(ctx, {
     type: 'line',
     data: {
       labels,
@@ -709,17 +859,17 @@ function drawPlayerChart(stats) {
         label: 'Score',
         data,
         borderColor: '#e8ff47',
-        backgroundColor: 'rgba(232,255,71,0.1)',
+        backgroundColor: 'rgba(232,255,71,0.12)',
         borderWidth: 2,
         fill: true,
         tension: 0.3,
         pointBackgroundColor: '#e8ff47',
         pointBorderColor: '#0a0a0c',
         pointBorderWidth: 2,
-        pointRadius: 4
+        pointRadius: 3
       }, {
         label: 'Avg',
-        data: labels.map(() => avg),
+        data: labels.map(() => avgVal),
         borderColor: 'rgba(255,79,109,0.6)',
         borderWidth: 1.5,
         borderDash: [4, 4],
@@ -729,12 +879,20 @@ function drawPlayerChart(stats) {
     },
     options: {
       responsive: true, maintainAspectRatio: false,
+      layout: { padding: { bottom: 32 } },
       plugins: { legend: { display: false } },
       scales: {
-        y: { ticks: { color: '#7a7a85', font: { family: 'Barlow' } }, grid: { color: 'rgba(255,255,255,0.05)' } },
-        x: { ticks: { color: '#7a7a85', font: { family: 'Barlow', size: 9 }, maxRotation: 45 }, grid: { display: false } }
+        y: {
+          ticks: { color: '#7a7a85', font: { family: 'Barlow' } },
+          grid: { color: 'rgba(255,255,255,0.05)' }
+        },
+        x: {
+          ticks: { color: '#7a7a85', font: { family: 'Barlow Condensed', size: 10, weight: '700' } },
+          grid: { display: false }
+        }
       }
-    }
+    },
+    plugins: [weekLabelPlugin]
   });
 }
 
@@ -771,13 +929,9 @@ function renderBoard() {
 async function postMessage() {
   const author = $('board-author').value.trim();
   const msg = $('board-msg').value.trim();
-  if (!author || !msg) {
-    toast('Need a name and a message', 'error');
-    return;
-  }
+  if (!author || !msg) { toast('Need a name and a message', 'error'); return; }
   state.myName = author;
   localStorage.setItem('pb_myname', author);
-
   try {
     await apiPost('postToBoard', { author, message: msg });
     if (!state.board) state.board = [['Timestamp','Author','Message','ID']];
@@ -791,97 +945,191 @@ async function postMessage() {
 }
 
 // ============================================================
-// MORE / GENERATE / HISTORY / ARCHIVE
+// MORE — landing
 // ============================================================
 function renderMore() {
   let html = `<div class="section-header">League Tools</div>
     <div class="more-grid">
       <div class="more-tile" onclick="openGenerate()"><div class="more-tile-icon">⚖️</div><div class="more-tile-label">Generate Teams</div></div>
-      <div class="more-tile" onclick="switchInner('standings')"><div class="more-tile-icon">📊</div><div class="more-tile-label">Standings</div></div>
-      <div class="more-tile" onclick="switchInner('history')"><div class="more-tile-icon">🏆</div><div class="more-tile-label">History</div></div>
-      <div class="more-tile" onclick="confirmArchive()"><div class="more-tile-icon">📦</div><div class="more-tile-label">Archive Week</div></div>
+      <div class="more-tile" onclick="renderStandingsView()"><div class="more-tile-icon">📊</div><div class="more-tile-label">Standings</div></div>
+      <div class="more-tile" onclick="renderMatchupHistoryView()"><div class="more-tile-icon">🗓️</div><div class="more-tile-label">Match History</div></div>
+      <div class="more-tile" onclick="renderSeasonHistoryView()"><div class="more-tile-icon">🏆</div><div class="more-tile-label">Season History</div></div>
     </div>
     <div id="more-detail"></div>`;
   $('more-content').innerHTML = html;
 }
 
-function switchInner(view) {
-  if (view === 'standings') renderStandingsInner();
-  if (view === 'history') renderHistoryInner();
-}
+// STANDINGS — derived, with season toggle
+function renderStandingsView() {
+  const seasons = getSeasons();
+  if (!state.selectedSeason) state.selectedSeason = getCurrentSeason();
 
-function renderStandingsInner() {
-  if (!state.roster) return;
-  const rows = state.roster.slice(1).filter(r => r[0]).sort((a, b) => {
-    const wA = parseInt(a[2]) || 0, wB = parseInt(b[2]) || 0;
-    const avgA = parseFloat(a[4]) || 0, avgB = parseFloat(b[4]) || 0;
-    return wB - wA || avgB - avgA;
-  });
+  let html = `<div class="section-header">Season Standings</div>`;
+  if (seasons.length > 1) {
+    html += `<div class="season-toggle">`;
+    seasons.forEach(s => {
+      html += `<button class="toggle-btn ${state.selectedSeason === s ? 'active' : ''}" onclick="state.selectedSeason='${s}';renderStandingsView();">Season ${s}</button>`;
+    });
+    html += `</div>`;
+  }
 
-  let html = `<div class="section-header">Season Standings</div><div class="standings-card">
-    <div class="standings-header"><span>#</span><span>Bowler</span><span>W — L</span><span>Pins</span><span>Avg</span></div>`;
+  const rows = aggregateStandings(state.selectedSeason);
+  if (!rows.length) {
+    html += `<div class="empty-state">No data for this season yet.</div>`;
+    $('more-detail').innerHTML = html;
+    return;
+  }
+
+  html += `<div class="standings-card">
+    <div class="standings-header"><span>#</span><span>Bowler</span><span>W—L</span><span>Pins</span><span>Avg</span></div>`;
   rows.forEach((r, i) => {
     const rank = i + 1;
-    const w = parseInt(r[2]) || 0;
-    const l = parseInt(r[3]) || 0;
-    const pins = parseInt(r[5]) || 0;
-    const avg = parseFloat(r[4]) || 0;
-    html += `<div class="standing-row ${rank===1?'s-rank-1':''}" onclick="state.selectedPlayer='${escapeHtml(r[0])}';switchTab('players');">
+    html += `<div class="standing-row ${rank===1?'s-rank-1':''}" onclick="state.selectedPlayer='${escapeHtml(r.name)}';switchTab('players');">
       <div class="s-rank ${rank<=3?'top':''}">${rank}</div>
-      <div><div class="s-name">${escapeHtml(r[0])}</div>${r[6] ? `<div class="s-team">${escapeHtml(r[6])}</div>` : ''}</div>
-      <div class="s-wl">${w}—${l}</div>
-      <div class="s-pins">${pins || '—'}</div>
-      <div class="s-avg">${avg > 0 ? avg.toFixed(1) : '—'}</div>
+      <div><div class="s-name">${escapeHtml(r.name)}</div>${r.team ? `<div class="s-team">${escapeHtml(r.team)}</div>` : ''}</div>
+      <div class="s-wl">${r.wins}—${r.losses}</div>
+      <div class="s-pins">${r.pins || '—'}</div>
+      <div class="s-avg">${r.avg > 0 ? r.avg.toFixed(1) : '—'}</div>
     </div>`;
   });
   html += `</div>`;
   $('more-detail').innerHTML = html;
 }
 
-function renderHistoryInner() {
-  if (!state.history || state.history.length < 2) {
-    $('more-detail').innerHTML = `<div class="empty-state">No past seasons yet. Run "End Season" from the sheet to archive a season.</div>`;
+// MATCHUP HISTORY — view past weeks
+function renderMatchupHistoryView() {
+  const seasons = getSeasons();
+  if (!state.selectedSeason) state.selectedSeason = getCurrentSeason();
+  const weeks = getWeeksForSeason(state.selectedSeason);
+  if (!state.selectedHistWeek || !weeks.includes(state.selectedHistWeek)) {
+    state.selectedHistWeek = weeks[weeks.length - 1] || null;
+  }
+
+  let html = `<div class="section-header">Matchup History</div>`;
+  if (seasons.length > 1) {
+    html += `<div class="season-toggle">`;
+    seasons.forEach(s => {
+      html += `<button class="toggle-btn ${state.selectedSeason === s ? 'active' : ''}" onclick="state.selectedSeason='${s}';state.selectedHistWeek=null;renderMatchupHistoryView();">Season ${s}</button>`;
+    });
+    html += `</div>`;
+  }
+
+  if (!weeks.length) {
+    html += `<div class="empty-state">No weeks recorded for this season yet.</div>`;
+    $('more-detail').innerHTML = html;
     return;
   }
-  // Group by season
-  const seasons = {};
-  state.history.slice(1).forEach(r => {
-    if (!r[0]) return;
-    if (!seasons[r[0]]) seasons[r[0]] = [];
-    seasons[r[0]].push(r);
-  });
 
-  let html = `<div class="section-header">Past Seasons</div>`;
-  Object.keys(seasons).reverse().forEach(s => {
-    const players = seasons[s].sort((a, b) => (parseInt(b[2])||0) - (parseInt(a[2])||0));
-    const champ = players.find(p => p[6] === 'YES') || players[0];
+  html += `<div class="week-selector">`;
+  weeks.forEach(w => {
+    const isPlayoff = isNaN(parseInt(w));
+    const label = isPlayoff ? w : 'Wk ' + w;
+    html += `<button class="week-pill ${state.selectedHistWeek === w ? 'active' : ''}" onclick="state.selectedHistWeek='${w}';renderMatchupHistoryView();">${label}</button>`;
+  });
+  html += `</div>`;
+
+  const teams = getMatchupsForWeek(state.selectedSeason, state.selectedHistWeek);
+  if (!teams.length) {
+    html += `<div class="empty-state">No matchups for this week.</div>`;
+    $('more-detail').innerHTML = html;
+    return;
+  }
+
+  // Pair teams by win record (winners vs losers)
+  // We assume 4 teams, pair 1+2 and 3+4 by ranking. If different, show all individually.
+  if (teams.length === 4) {
+    // Pair: highest scoring vs ?  Actually we don't know matchup pairs from data alone.
+    // Best we can do: list all 4 teams sorted by total. Show as 2 pairs (top 2, bottom 2).
+    // This is a heuristic — actual matchups would need to be stored explicitly.
+    const pairings = [[teams[0], teams[1]], [teams[2], teams[3]]];
+    pairings.forEach(([a, b]) => {
+      html += renderMatchupResult(a, b);
+    });
+  } else {
+    teams.forEach(t => {
+      html += renderMatchupResult(t, null);
+    });
+  }
+
+  html += `<div style="text-align:center;font-size:11px;color:var(--muted);margin-top:8px;line-height:1.5;">Pairings inferred from team standings; actual head-to-head matchups not yet tracked separately.</div>`;
+  $('more-detail').innerHTML = html;
+}
+
+function renderMatchupResult(a, b) {
+  if (!b) {
+    // Single team display
+    return `<div class="matchup-result">
+      <div class="mr-team">
+        <div class="mr-team-head">
+          <div class="mr-team-name">${escapeHtml(a.name)}</div>
+          <div class="mr-team-total">${a.total}</div>
+        </div>
+        ${a.players.map(p => `
+          <div class="mr-player-row">
+            <div class="name">${escapeHtml(p.name)}</div>
+            <div class="score ${p.g1 ? '' : 'muted'}">${p.g1 || '—'}</div>
+            <div class="score ${p.g2 ? '' : 'muted'}">${p.g2 || '—'}</div>
+          </div>`).join('')}
+      </div>
+    </div>`;
+  }
+  const aWin = a.total >= b.total;
+  return `<div class="matchup-result">
+    <div class="mr-team ${aWin ? 'winner' : ''}">
+      <div class="mr-team-head">
+        <div class="mr-team-name ${aWin ? 'winner' : ''}">${escapeHtml(a.name)}</div>
+        <div class="mr-team-total ${aWin ? 'winner' : ''}">${a.total}</div>
+      </div>
+      ${a.players.map(p => `
+        <div class="mr-player-row">
+          <div class="name">${escapeHtml(p.name)}</div>
+          <div class="score ${p.g1 ? '' : 'muted'}">${p.g1 || '—'}</div>
+          <div class="score ${p.g2 ? '' : 'muted'}">${p.g2 || '—'}</div>
+        </div>`).join('')}
+    </div>
+    <div class="vs-bar"><div class="vs-left"></div><div class="vs-chip">VS</div><div class="vs-right"></div></div>
+    <div class="mr-team ${!aWin ? 'winner' : ''}">
+      <div class="mr-team-head">
+        <div class="mr-team-name ${!aWin ? 'winner' : ''}">${escapeHtml(b.name)}</div>
+        <div class="mr-team-total ${!aWin ? 'winner' : ''}">${b.total}</div>
+      </div>
+      ${b.players.map(p => `
+        <div class="mr-player-row">
+          <div class="name">${escapeHtml(p.name)}</div>
+          <div class="score ${p.g1 ? '' : 'muted'}">${p.g1 || '—'}</div>
+          <div class="score ${p.g2 ? '' : 'muted'}">${p.g2 || '—'}</div>
+        </div>`).join('')}
+    </div>
+  </div>`;
+}
+
+// SEASON HISTORY — past champions
+function renderSeasonHistoryView() {
+  let html = `<div class="section-header">Season History</div>`;
+  if (!state.history || state.history.length < 2) {
+    html += `<div class="empty-state">No past seasons archived. Run "End Season" from the sheet to archive a season.</div>`;
+    $('more-detail').innerHTML = html;
+    return;
+  }
+  state.history.slice(1).reverse().forEach(r => {
+    if (!r[0]) return;
     html += `<div class="history-season">
       <div class="history-head">
-        <div class="history-season-name">${escapeHtml(s)}</div>
-        ${champ ? `<div class="history-champion">🏆 ${escapeHtml(champ[1])}</div>` : ''}
+        <div class="history-season-name">${escapeHtml(r[0])}</div>
+        ${r[1] ? `<div class="history-champion">🏆 ${escapeHtml(r[1])} · ${r[2] || '—'} avg</div>` : ''}
       </div>
-      <div>`;
-    players.forEach((p, i) => {
-      html += `<div class="standing-row" style="grid-template-columns: 28px 1fr 60px 60px 60px;">
-        <div class="s-rank ${i<3?'top':''}">${i+1}</div>
-        <div><div class="s-name">${escapeHtml(p[1])}</div></div>
-        <div class="s-wl">${p[2]||0}—${p[3]||0}</div>
-        <div class="s-pins">${p[4]||'—'}</div>
-        <div class="s-avg">${p[5] ? parseFloat(p[5]).toFixed(1) : '—'}</div>
-      </div>`;
-    });
-    html += `</div></div>`;
+    </div>`;
   });
   $('more-detail').innerHTML = html;
 }
 
-// GENERATE TEAMS FLOW
+// GENERATE
 function openGenerate() {
   let html = `<div class="modal-title">Generate Teams</div>
     <div class="gen-controls">
       <div class="gen-row">
         <div class="gen-label">Fill mode</div>
-        <div class="toggle-group">
+        <div class="toggle-group" style="flex:1">
           <button class="toggle-btn active" id="gen-mode-league" onclick="setGenMode('League Avg')">League avg</button>
           <button class="toggle-btn" id="gen-mode-player" onclick="setGenMode('Player Avg')">Player avg</button>
         </div>
@@ -916,9 +1164,6 @@ async function runGenerate() {
 
 function renderGeneratedPreview() {
   if (!state.generated) return;
-  // Generated Teams sheet structure: Team headers at certain rows, then players
-  // Row 1: Title, Row 3: empty, then teams with header rows
-  // Format: [Team N | sumFormula | ...] then 3 player rows [name | avg | status]
   const data = state.generated;
   const teams = [];
   for (let i = 0; i < data.length; i++) {
@@ -949,11 +1194,11 @@ function renderGeneratedPreview() {
     html += `</div></div>`;
   });
 
-  // Balance check
   if (teams.length > 1) {
     const totals = teams.map(t => t.total);
     const spread = Math.max(...totals) - Math.min(...totals);
-    html += `<div style="text-align:center;font-size:12px;color:var(--muted);margin:8px 0 12px;">Balance spread: <strong style="color:${spread < 20 ? 'var(--success)' : spread < 40 ? 'var(--accent)' : 'var(--danger)'}">${spread.toFixed(0)} pins</strong></div>`;
+    const color = spread < 20 ? 'var(--success)' : spread < 40 ? 'var(--accent)' : 'var(--danger)';
+    html += `<div style="text-align:center;font-size:12px;color:var(--muted);margin:8px 0 12px;">Balance spread: <strong style="color:${color}">${spread.toFixed(0)} pins</strong></div>`;
   }
 
   html += `<div style="font-size:12px;color:var(--muted);line-height:1.5;margin-bottom:12px;">
@@ -979,32 +1224,8 @@ async function confirmTeams() {
   }
 }
 
-function confirmArchive() {
-  let html = `<div class="modal-title">Archive Week?</div>
-    <p style="color:var(--muted);font-size:14px;line-height:1.5;margin-bottom:16px;">
-      This will save all current scores to <strong style="color:var(--text)">Weekly Scores</strong>, snapshot the week, and reset the scorecard for next week.
-    </p>
-    <div class="btn-row">
-      <button class="btn" onclick="closeModal()">Cancel</button>
-      <button class="btn primary" onclick="doArchive()">Archive</button>
-    </div>`;
-  openModal(html);
-}
-
-async function doArchive() {
-  closeModal();
-  toast('Archiving...');
-  try {
-    await apiPost('archiveWeek');
-    await loadAll();
-    toast('Week archived', 'success');
-  } catch(e) {
-    toast('Archive failed', 'error');
-  }
-}
-
 // ============================================================
-// LOAD ALL DATA
+// LOAD
 // ============================================================
 async function loadAll() {
   try {
@@ -1012,7 +1233,7 @@ async function loadAll() {
     state.current = all.currentWeek;
     state.roster = all.roster;
     state.rsvp = all.rsvp;
-    state.archive = all.archive;
+    state.stats = all.stats;
     state.board = all.board;
     state.history = all.history;
     state.generated = all.generated;
