@@ -38,6 +38,8 @@ header { padding: 18px 20px 12px; position: sticky; top: 0; z-index: 50; backgro
 .tab-title { display: flex; align-items: center; gap: 10px; margin: 6px 0 14px; }
 .tab-title h2 { font-family: 'Barlow Condensed', sans-serif; font-weight: 900; font-size: 28px; letter-spacing: -0.5px; line-height: 1; text-transform: uppercase; }
 .tab-title .pill { font-size: 11px; font-weight: 600; letter-spacing: 1.5px; text-transform: uppercase; color: var(--accent); background: var(--accent-dim); border: 1px solid rgba(232,255,71,0.25); border-radius: 20px; padding: 3px 10px; }
+.view-flip { margin-left: auto; height: 28px; padding: 4px 22px 4px 10px; font-size: 11px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; background-color: transparent; border-color: var(--border2); color: var(--muted); background-position: right 6px center; cursor: pointer; }
+.view-flip:hover { color: var(--text); }
 
 .match-header { display: flex; align-items: center; gap: 10px; margin: 20px 0 12px; }
 .match-title { font-family: 'Barlow Condensed', sans-serif; font-weight: 800; font-size: 22px; letter-spacing: 0.5px; text-transform: uppercase; }
@@ -184,6 +186,8 @@ textarea:focus { border-color: var(--accent); }
 
 .score-history-table { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; overflow: hidden; }
 .score-history-row { display: grid; grid-template-columns: 50px 1fr 50px 50px 56px 36px; gap: 6px; padding: 10px 12px; border-bottom: 1px solid var(--border); align-items: center; }
+.score-history-row.clickable { cursor: pointer; transition: background 0.15s; }
+.score-history-row.clickable:hover { background: var(--surface2); }
 .score-history-row:last-child { border-bottom: none; }
 .score-history-row.head { background: var(--surface2); }
 .score-history-row.head span { font-size: 10px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; color: var(--muted); }
@@ -194,6 +198,10 @@ textarea:focus { border-color: var(--accent); }
 .sh-record.win { color: var(--success); }
 .sh-record.loss { color: var(--danger); }
 .sh-out { color: var(--muted); font-style: italic; }
+.sh-expand-icon { color: var(--muted); font-size: 12px; }
+.week-expand { background: var(--bg); padding: 10px 12px 14px; border-bottom: 1px solid var(--border); }
+.week-expand-inner .matchup { margin-bottom: 8px; }
+.week-expand-inner .matchup:last-child { margin-bottom: 0; }
 
 .board-composer { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 12px; margin-bottom: 16px; }
 .board-author-row { display: flex; gap: 8px; margin-bottom: 8px; }
@@ -234,17 +242,27 @@ textarea:focus { border-color: var(--accent); }
 .record-team-row { display: flex; justify-content: space-between; padding: 4px 0; font-size: 13px; }
 .record-team-row .name { font-family: 'Barlow Condensed', sans-serif; font-weight: 600; }
 .record-team-row .score { font-family: 'Barlow Condensed', sans-serif; font-weight: 700; color: var(--accent); }
+.record-team-game { margin-bottom: 10px; }
+.record-team-game:last-child { margin-bottom: 0; }
+.record-team-game-head { display: flex; justify-content: space-between; align-items: center; padding: 4px 0 6px; border-bottom: 1px solid var(--border); margin-bottom: 4px; }
+.record-team-game-title { font-size: 11px; color: var(--muted); font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; }
+.record-team-game-total { font-family: 'Barlow Condensed', sans-serif; font-weight: 800; font-size: 16px; color: var(--text); }
 
 .h2h-controls { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 12px; margin-bottom: 16px; display: grid; grid-template-columns: 1fr auto 1fr; gap: 8px; align-items: center; }
 .h2h-vs { font-family: 'Barlow Condensed', sans-serif; font-weight: 900; color: var(--accent2); font-size: 14px; }
 .h2h-result { background: var(--surface); border: 1px solid var(--border); border-radius: 18px; overflow: hidden; margin-bottom: 12px; }
-.h2h-head { padding: 16px; display: grid; grid-template-columns: 1fr auto 1fr; gap: 12px; align-items: center; text-align: center; background: var(--surface2); border-bottom: 1px solid var(--border); }
-.h2h-name { font-family: 'Barlow Condensed', sans-serif; font-weight: 800; font-size: 18px; display: flex; align-items: center; justify-content: center; }
+.h2h-head { padding: 14px 16px; display: grid; grid-template-columns: 1fr auto 1fr; gap: 12px; align-items: center; text-align: center; background: var(--surface2); border-bottom: 1px solid var(--border); }
+.h2h-name { font-family: 'Barlow Condensed', sans-serif; font-weight: 800; font-size: 18px; color: var(--text); }
 .h2h-name.lead { color: var(--accent); }
-.h2h-divider { color: var(--muted); font-weight: 700; }
-.h2h-record { padding: 16px; text-align: center; }
-.h2h-record-big { font-family: 'Barlow Condensed', sans-serif; font-weight: 900; font-size: 36px; line-height: 1; }
-.h2h-record-label { font-size: 11px; color: var(--muted); letter-spacing: 1.5px; text-transform: uppercase; margin-top: 4px; }
+.h2h-divider { color: var(--muted); font-weight: 700; font-size: 13px; }
+.h2h-stat-row { padding: 14px 16px; border-bottom: 1px solid var(--border); }
+.h2h-stat-row:last-child { border-bottom: none; }
+.h2h-stat-label { font-size: 10px; color: var(--muted); font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; margin-bottom: 6px; text-align: center; }
+.h2h-stat-line { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; text-align: center; }
+.h2h-stat-num { font-family: 'Barlow Condensed', sans-serif; font-weight: 900; font-size: 32px; line-height: 1; color: var(--muted); }
+.h2h-stat-num.lead { color: var(--accent); }
+.h2h-stat-dash { color: var(--muted2); font-weight: 700; padding: 0 12px; }
+.h2h-stat-sub { text-align: center; font-size: 11px; color: var(--muted); margin-top: 4px; }
 
 .chemistry-tabs { display: flex; gap: 4px; background: var(--surface2); border-radius: 10px; padding: 3px; margin-bottom: 12px; }
 .chem-tab { flex: 1; padding: 8px; border: none; background: transparent; color: var(--muted); font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 12px; letter-spacing: 1px; text-transform: uppercase; cursor: pointer; border-radius: 8px; }
@@ -337,6 +355,7 @@ const state = {
   selectedPlayer: null,
   standingsSeason: null, playerSeason: null,
   playerLogMode: 'bowled',
+  expandedWeek: null,
   histSeason: null, histWeek: null,
   recordsSeason: 'all',
   chemMode: 'pairs',
@@ -405,6 +424,12 @@ function getCurrentSeason() {
   const settingVal = state.settings ? (state.settings.slice(1).find(r => r[0] === 'CurrentSeason') || [])[1] : null;
   if (settingVal) return String(settingVal);
   const s = getSeasons(); return s.length ? s[s.length - 1] : '1';
+}
+// For view defaults: returns the most recent season that actually has stats.
+// Avoids landing users on an empty Season 2 right after End Season.
+function getDefaultViewSeason() {
+  const s = getSeasons();
+  return s.length ? s[s.length - 1] : getCurrentSeason();
 }
 
 function aggregateStandings(season) {
@@ -626,7 +651,7 @@ function getLeagueRecords(season) {
     highGame: { val: 0, by: '', when: '' },
     highSeries: { val: 0, by: '', when: '' },
     highTeamGame: { val: 0, team: '', when: '', roster: [] },
-    highTeamNight: { val: 0, team: '', when: '', roster: [] },
+    highTeamNight: { val: 0, team: '', when: '', g1Roster: [], g2Roster: [], g1Total: 0, g2Total: 0 },
     bestSeasonAvg: { val: 0, by: '', when: '' }
   };
 
@@ -656,12 +681,7 @@ function getLeagueRecords(season) {
     if (g1Total > recs.highTeamGame.val) recs.highTeamGame = { val: g1Total, team, when: `S${s} W${w} G1`, roster: g1Roster };
     if (g2Total > recs.highTeamGame.val) recs.highTeamGame = { val: g2Total, team, when: `S${s} W${w} G2`, roster: g2Roster };
     if (night > recs.highTeamNight.val) {
-      const combined = {};
-      [...g1Roster, ...g2Roster].forEach(p => {
-        if (!combined[p.name]) combined[p.name] = { name: p.name, score: 0 };
-        combined[p.name].score += p.score;
-      });
-      recs.highTeamNight = { val: night, team, when: `S${s} W${w}`, roster: Object.values(combined) };
+      recs.highTeamNight = { val: night, team, when: `S${s} W${w}`, g1Roster, g2Roster, g1Total, g2Total };
     }
   });
 
@@ -680,7 +700,8 @@ function getLeagueRecords(season) {
 // ============================================================
 // TAB SWITCHING
 // ============================================================
-function switchTab(tab) {
+function switchTab(tab, opts) {
+  opts = opts || {};
   document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
   document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
   $('section-' + tab).classList.add('active');
@@ -688,7 +709,11 @@ function switchTab(tab) {
   if (tab === 'rsvp') renderRSVP();
   if (tab === 'standings') renderStandings();
   if (tab === 'history') renderMatchHistory();
-  if (tab === 'more') { state.moreView = 'home'; renderMore(); }
+  if (tab === 'more') {
+    // Only reset to home view if the user clicked the More nav button directly (not a deep-link)
+    if (!opts.preserveView) state.moreView = 'home';
+    renderMore();
+  }
   if (tab === 'matchups') renderMatchups();
 }
 
@@ -841,12 +866,13 @@ function renderMatchups() {
 
   const weekVal = d[0] ? d[0][0] : '';
 
-  let html = `<div class="tab-title"><h2>Matchups</h2><span class="pill">This Week</span></div>`;
-
-  // Toggle between scores and expected outcomes
-  html += `<div class="toggle-group" style="margin-bottom:16px;">
-    <button class="toggle-btn ${mode==='scores'?'active':''}" onclick="state.matchupsView='scores';renderMatchups();">Live Scores</button>
-    <button class="toggle-btn ${mode==='expected'?'active':''}" onclick="state.matchupsView='expected';renderMatchups();">Expected</button>
+  let html = `<div class="tab-title">
+    <h2>Matchups</h2>
+    <span class="pill">This Week</span>
+    <select class="view-flip" onchange="state.matchupsView=this.value;renderMatchups();">
+      <option value="scores" ${mode==='scores'?'selected':''}>Live</option>
+      <option value="expected" ${mode==='expected'?'selected':''}>Expected</option>
+    </select>
   </div>`;
 
   html += `<div class="match-header"><div class="match-title">Game 1</div></div>`;
@@ -1012,7 +1038,7 @@ async function doResetRSVP() {
 // ============================================================
 function renderStandings() {
   const seasons = getSeasons();
-  if (state.standingsSeason === null) state.standingsSeason = getCurrentSeason();
+  if (state.standingsSeason === null) state.standingsSeason = getDefaultViewSeason();
 
   let html = `<div class="tab-title"><h2>Standings</h2></div>`;
   html += `<div class="filter-bar">
@@ -1050,7 +1076,8 @@ function showPlayerDetail(name) {
   state.moreView = 'player-detail';
   state.playerSeason = 'all';
   state.playerLogMode = 'bowled';
-  switchTab('more');
+  state.expandedWeek = null;
+  switchTab('more', { preserveView: true });
 }
 
 // ============================================================
@@ -1058,7 +1085,7 @@ function showPlayerDetail(name) {
 // ============================================================
 function renderMatchHistory() {
   const seasons = getSeasons();
-  if (!state.histSeason) state.histSeason = getCurrentSeason();
+  if (!state.histSeason) state.histSeason = getDefaultViewSeason();
   const weeks = getWeeksForSeason(state.histSeason);
   if (!state.histWeek || !weeks.includes(state.histWeek)) state.histWeek = weeks[weeks.length - 1] || null;
 
@@ -1315,26 +1342,48 @@ function renderPlayerDetail() {
   }
 
   if (logRows.length) {
+    // Group by (season, week) for expandable matchup view
+    const weekGroups = [];
+    const seenKeys = new Set();
+    logRows.forEach(r => {
+      const key = r.season + '|' + r.week;
+      if (seenKeys.has(key)) return;
+      seenKeys.add(key);
+      const allRowsForWeek = logRows.filter(x => x.season === r.season && x.week === r.week);
+      weekGroups.push({ season: r.season, week: r.week, team: r.team, rows: allRowsForWeek });
+    });
+    weekGroups.reverse(); // newest first
+
     html += `<div class="score-history-table">
       <div class="score-history-row head"><span>Week</span><span>Team</span><span>Game</span><span>Score</span><span>W—L</span><span>S</span></div>`;
-    logRows.slice().reverse().forEach(r => {
-      if (r.kind === 'absent') {
-        html += `<div class="score-history-row">
-          <span class="sh-week">${escapeHtml(r.week)}</span>
-          <span class="sh-team">${escapeHtml(r.team || '')}</span>
-          <span class="sh-out" style="grid-column: 3 / 7;">absent</span>
-        </div>`;
-      } else {
-        const wlText = r.w || r.l ? `${r.w}—${r.l}` : '—';
-        const wlCls = r.w > r.l ? 'win' : (r.l > r.w ? 'loss' : '');
-        html += `<div class="score-history-row">
-          <span class="sh-week">${escapeHtml(r.week)}</span>
-          <span class="sh-team">${escapeHtml(r.team || '')}</span>
-          <span>G${r.gameNum}</span>
-          <span style="color:var(--accent);">${r.score}</span>
-          <span class="sh-record ${wlCls}">${wlText}</span>
-          <span style="color:var(--muted);font-size:10px;">S${r.season}</span>
-        </div>`;
+    weekGroups.forEach(grp => {
+      const expandKey = grp.season + '|' + grp.week;
+      const expanded = state.expandedWeek === expandKey;
+      grp.rows.forEach((r, idx) => {
+        const isLast = idx === grp.rows.length - 1;
+        if (r.kind === 'absent') {
+          html += `<div class="score-history-row clickable" onclick="toggleWeekExpand('${escapeHtml(expandKey)}')">
+            <span class="sh-week">${escapeHtml(r.week)}</span>
+            <span class="sh-team">${escapeHtml(r.team || '')}</span>
+            <span class="sh-out" style="grid-column: 3 / 6;">absent</span>
+            <span class="sh-expand-icon">${expanded ? '▾' : '▸'}</span>
+          </div>`;
+        } else {
+          const wlText = r.w || r.l ? `${r.w}—${r.l}` : '—';
+          const wlCls = r.w > r.l ? 'win' : (r.l > r.w ? 'loss' : '');
+          // Only show expand icon on the LAST row of the week group
+          html += `<div class="score-history-row clickable" onclick="toggleWeekExpand('${escapeHtml(expandKey)}')">
+            <span class="sh-week">${escapeHtml(r.week)}</span>
+            <span class="sh-team">${escapeHtml(r.team || '')}</span>
+            <span>G${r.gameNum}</span>
+            <span style="color:var(--accent);">${r.score}</span>
+            <span class="sh-record ${wlCls}">${wlText}</span>
+            <span class="sh-expand-icon">${isLast ? (expanded ? '▾' : '▸') : `S${r.season}`}</span>
+          </div>`;
+        }
+      });
+      if (expanded) {
+        html += `<div class="week-expand">${renderExpandedWeek(grp.season, grp.week)}</div>`;
       }
     });
     html += `</div>`;
@@ -1345,6 +1394,31 @@ function renderPlayerDetail() {
   $('more-content').innerHTML = html;
 
   if (profile.games.length) drawPlayerChart(profile);
+}
+
+// Toggle expandable week view in player game log
+function toggleWeekExpand(key) {
+  state.expandedWeek = state.expandedWeek === key ? null : key;
+  renderPlayerDetail();
+}
+
+// Render the full week's matchup in the same style as Match History
+function renderExpandedWeek(season, week) {
+  const matchups = getMatchupsForWeek(season, week);
+  if (!matchups.length) return `<div class="empty-state" style="padding:16px;">No matchup data for this week.</div>`;
+  const game1 = matchups.filter(m => m.gameNum === 1);
+  const game2 = matchups.filter(m => m.gameNum === 2);
+  let out = '<div class="week-expand-inner">';
+  if (game1.length) {
+    out += `<div class="match-header" style="margin:8px 0 8px;"><div class="match-title" style="font-size:16px;">Game 1</div></div>`;
+    game1.forEach(m => out += renderHistoricalMatchup(m));
+  }
+  if (game2.length) {
+    out += `<div class="match-header" style="margin:8px 0 8px;"><div class="match-title" style="font-size:16px;">Game 2</div></div>`;
+    game2.forEach(m => out += renderHistoricalMatchup(m));
+  }
+  out += '</div>';
+  return out;
 }
 
 // Personal records
@@ -1476,7 +1550,7 @@ function renderLeagueRecordsView() {
   html += renderRecordCard('🎳', 'High Single Game', recs.highGame.val, recs.highGame.by, recs.highGame.when);
   html += renderRecordCard('📈', 'High Series (G1+G2)', recs.highSeries.val, recs.highSeries.by, recs.highSeries.when);
   html += renderTeamRecordCard('💪', 'High Team Game', recs.highTeamGame.val, recs.highTeamGame.team, recs.highTeamGame.when, recs.highTeamGame.roster);
-  html += renderTeamRecordCard('🌙', 'High Team Night', recs.highTeamNight.val, recs.highTeamNight.team, recs.highTeamNight.when, recs.highTeamNight.roster);
+  html += renderTeamNightCard('🌙', 'High Team Night', recs.highTeamNight);
   html += renderRecordCard('🏆', 'Best Season Avg', recs.bestSeasonAvg.val ? recs.bestSeasonAvg.val.toFixed(1) : 0, recs.bestSeasonAvg.by, recs.bestSeasonAvg.when);
 
   $('more-content').innerHTML = html;
@@ -1516,6 +1590,35 @@ function renderTeamRecordCard(icon, label, val, team, when, roster) {
   </div>`;
 }
 
+function renderTeamNightCard(icon, label, rec) {
+  if (!rec.val) return `<div class="record-card"><div class="record-card-head"><div class="record-icon">${icon}</div><div class="record-info"><div class="record-label">${label}</div><div class="record-value" style="color:var(--muted);">No record yet</div></div></div></div>`;
+  const buildGameSection = (title, total, roster) => {
+    if (!roster || !roster.length) return '';
+    return `<div class="record-team-game">
+      <div class="record-team-game-head">
+        <span class="record-team-game-title">${title}</span>
+        <span class="record-team-game-total">${total}</span>
+      </div>
+      ${roster.map(p => `<div class="record-team-row"><span class="name">${nameWithCrown(p.name)}</span><span class="score">${p.score}</span></div>`).join('')}
+    </div>`;
+  };
+  return `<div class="record-card">
+    <div class="record-card-head">
+      <div class="record-icon">${icon}</div>
+      <div class="record-info">
+        <div class="record-label">${label}</div>
+        <div class="record-value">${escapeHtml(rec.team || '')}</div>
+        <div class="record-detail">${escapeHtml(rec.when || '')}</div>
+      </div>
+      <div class="record-num">${rec.val}</div>
+    </div>
+    <div class="record-team-roster">
+      ${buildGameSection('Game 1', rec.g1Total, rec.g1Roster)}
+      ${buildGameSection('Game 2', rec.g2Total, rec.g2Roster)}
+    </div>
+  </div>`;
+}
+
 // HEAD-TO-HEAD
 function renderH2HView() {
   const playerNames = Array.from(new Set(statsRows().map(r => r[SC.PLAYER]))).filter(Boolean).sort();
@@ -1550,27 +1653,30 @@ function renderH2HView() {
   const teamLead = r.teamP1Wins > r.teamP2Wins ? 'p1' : (r.teamP2Wins > r.teamP1Wins ? 'p2' : 'tie');
   const pinLead = r.pinP1Wins > r.pinP2Wins ? 'p1' : (r.pinP2Wins > r.pinP1Wins ? 'p2' : 'tie');
 
+  // Single combined header with names, then two stacked compact records
   html += `<div class="h2h-result">
     <div class="h2h-head">
-      <div class="h2h-name ${teamLead === 'p1' ? 'lead' : ''}">${nameWithCrown(state.h2hP1)}</div>
+      <div class="h2h-name">${nameWithCrown(state.h2hP1)}</div>
       <div class="h2h-divider">vs</div>
-      <div class="h2h-name ${teamLead === 'p2' ? 'lead' : ''}">${nameWithCrown(state.h2hP2)}</div>
+      <div class="h2h-name">${nameWithCrown(state.h2hP2)}</div>
     </div>
-    <div class="h2h-record">
-      <div class="h2h-record-big">${r.teamP1Wins} <span style="color:var(--muted);font-weight:400;">—</span> ${r.teamP2Wins}</div>
-      <div class="h2h-record-label">Team Game Record${r.teamTies ? ` · ${r.teamTies} ties` : ''}</div>
+    <div class="h2h-stat-row">
+      <div class="h2h-stat-label">Team Wins</div>
+      <div class="h2h-stat-line">
+        <span class="h2h-stat-num ${teamLead === 'p1' ? 'lead' : ''}">${r.teamP1Wins}</span>
+        <span class="h2h-stat-dash">—</span>
+        <span class="h2h-stat-num ${teamLead === 'p2' ? 'lead' : ''}">${r.teamP2Wins}</span>
+      </div>
+      ${r.teamTies ? `<div class="h2h-stat-sub">${r.teamTies} tie${r.teamTies>1?'s':''}</div>` : ''}
     </div>
-  </div>`;
-
-  html += `<div class="h2h-result">
-    <div class="h2h-head">
-      <div class="h2h-name ${pinLead === 'p1' ? 'lead' : ''}">${nameWithCrown(state.h2hP1)}</div>
-      <div class="h2h-divider">vs</div>
-      <div class="h2h-name ${pinLead === 'p2' ? 'lead' : ''}">${nameWithCrown(state.h2hP2)}</div>
-    </div>
-    <div class="h2h-record">
-      <div class="h2h-record-big">${r.pinP1Wins} <span style="color:var(--muted);font-weight:400;">—</span> ${r.pinP2Wins}</div>
-      <div class="h2h-record-label">Pin Total Record${r.pinTies ? ` · ${r.pinTies} ties` : ''}</div>
+    <div class="h2h-stat-row">
+      <div class="h2h-stat-label">Pin Total Wins</div>
+      <div class="h2h-stat-line">
+        <span class="h2h-stat-num ${pinLead === 'p1' ? 'lead' : ''}">${r.pinP1Wins}</span>
+        <span class="h2h-stat-dash">—</span>
+        <span class="h2h-stat-num ${pinLead === 'p2' ? 'lead' : ''}">${r.pinP2Wins}</span>
+      </div>
+      ${r.pinTies ? `<div class="h2h-stat-sub">${r.pinTies} tie${r.pinTies>1?'s':''}</div>` : ''}
     </div>
   </div>`;
 
