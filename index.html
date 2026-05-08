@@ -186,6 +186,7 @@ textarea:focus { border-color: var(--accent); }
 
 .score-history-table { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; overflow: hidden; }
 .score-history-row { display: grid; grid-template-columns: 50px 1fr 50px 50px 56px 36px; gap: 6px; padding: 10px 12px; border-bottom: 1px solid var(--border); align-items: center; }
+.score-history-row.week-grouped { grid-template-columns: 70px 1fr 50px 50px 56px 28px; }
 .score-history-row.clickable { cursor: pointer; transition: background 0.15s; }
 .score-history-row.clickable:hover { background: var(--surface2); }
 .score-history-row:last-child { border-bottom: none; }
@@ -218,6 +219,7 @@ textarea:focus { border-color: var(--accent); }
 .history-season-name { font-family: 'Barlow Condensed', sans-serif; font-weight: 800; font-size: 18px; }
 .history-champion { font-size: 13px; color: var(--gold); font-weight: 700; display: flex; align-items: center; gap: 4px; }
 .history-body { padding: 14px 16px; }
+.season-blurb { font-size: 13px; line-height: 1.55; color: var(--text); padding: 10px 12px; margin-bottom: 12px; background: var(--surface2); border-left: 3px solid var(--gold); border-radius: 6px; font-family: 'Barlow', sans-serif; font-style: italic; white-space: pre-wrap; word-wrap: break-word; }
 .history-stat { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
 .history-stat:last-child { border-bottom: none; }
 .history-stat-label { color: var(--muted); }
@@ -275,10 +277,23 @@ textarea:focus { border-color: var(--accent); }
 .odds-toggle { margin-top: 24px; padding: 8px 14px; text-align: center; }
 .odds-toggle-link { font-size: 10px; color: var(--muted2); cursor: pointer; letter-spacing: 1px; text-transform: uppercase; user-select: none; }
 .odds-toggle-link:hover { color: var(--muted); }
-.odds-line { display: flex; gap: 8px; align-items: center; justify-content: flex-end; margin-top: 4px; }
-.odds-chip { font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 10px; letter-spacing: 0.8px; padding: 1px 6px; border-radius: 4px; background: var(--surface3); color: var(--muted); border: 1px solid var(--border2); }
+.odds-line { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; justify-content: flex-end; }
+.odds-chip { font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 10px; letter-spacing: 0.8px; padding: 2px 7px; border-radius: 4px; background: var(--surface3); color: var(--muted); border: 1px solid var(--border2); white-space: nowrap; }
 .odds-chip.fav { color: var(--accent); border-color: rgba(232,255,71,0.3); }
 .odds-chip.dog { color: var(--accent2); border-color: rgba(255,79,109,0.3); }
+.odds-block { padding: 10px 0; border-bottom: 1px solid var(--border); }
+.odds-block:last-of-type { border-bottom: none; }
+.odds-block-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }
+.odds-block-label { font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 12px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--muted); }
+.odds-block-pickem { font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 11px; color: var(--muted); letter-spacing: 1px; }
+.odds-block-teams { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.odds-team-side { padding: 8px 10px; border-radius: 8px; background: var(--surface2); border: 1px solid var(--border2); }
+.odds-team-side.fav { background: rgba(232,255,71,0.05); border-color: rgba(232,255,71,0.25); }
+.odds-team-side.dog { background: rgba(255,79,109,0.04); border-color: rgba(255,79,109,0.18); }
+.odds-team-name { font-family: 'Barlow Condensed', sans-serif; font-weight: 800; font-size: 13px; display: flex; align-items: center; gap: 5px; color: var(--text); }
+.odds-team-proj { margin-left: auto; font-size: 12px; color: var(--muted); font-weight: 600; }
+.odds-tag-fav { font-size: 8px; font-weight: 800; letter-spacing: 1px; padding: 1px 4px; border-radius: 3px; background: var(--accent); color: #0a0a0c; }
+.odds-roster { font-size: 11px; color: var(--muted); font-family: 'Barlow', sans-serif; font-weight: 500; line-height: 1.4; margin-top: 3px; }
 
 nav { position: fixed; bottom: 0; left: 0; right: 0; background: rgba(19,19,22,0.92); backdrop-filter: blur(16px); border-top: 1px solid var(--border); display: flex; z-index: 100; padding-bottom: env(safe-area-inset-bottom); }
 .nav-btn { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 10px 0; cursor: pointer; color: var(--muted); font-size: 9px; font-weight: 600; letter-spacing: 0.8px; text-transform: uppercase; font-family: 'Barlow Condensed', sans-serif; border: none; background: none; transition: color 0.15s; }
@@ -820,16 +835,18 @@ function spreadAndML(t1, t2) {
   const diff = t1 - t2;
   const fav = diff > 0 ? 't1' : (diff < 0 ? 't2' : 'tie');
   const spread = Math.abs(diff);
-  // Simple synthetic moneyline based on diff (not real odds — for fun)
-  // Bigger diff -> bigger negative line for favorite, bigger positive line for dog
+  // Bowling-realistic moneyline. ~5% per pin of edge, with juice.
+  // 5 pins ≈ -130, 15 pins ≈ -180, 30 pins ≈ -240, 50+ ≈ -350
   const ml = (d) => {
     const a = Math.abs(d);
-    if (d === 0) return { fav: 'EVEN', dog: 'EVEN' };
-    if (a < 5) return { fav: '-130', dog: '+110' };
-    if (a < 10) return { fav: '-180', dog: '+150' };
-    if (a < 20) return { fav: '-260', dog: '+210' };
-    if (a < 35) return { fav: '-400', dog: '+320' };
-    return { fav: '-600', dog: '+450' };
+    if (a === 0) return { fav: 'EVEN', dog: 'EVEN' };
+    if (a < 4) return { fav: '-115', dog: '-105' };
+    if (a < 8) return { fav: '-135', dog: '+115' };
+    if (a < 14) return { fav: '-160', dog: '+140' };
+    if (a < 22) return { fav: '-200', dog: '+170' };
+    if (a < 32) return { fav: '-240', dog: '+200' };
+    if (a < 45) return { fav: '-300', dog: '+240' };
+    return { fav: '-380', dog: '+300' };
   };
   return { fav, spread, ml: ml(diff) };
 }
@@ -893,12 +910,21 @@ function renderMatchups() {
       const odds2 = spreadAndML(exp_t2g1, exp_t4g1);
       const odds3 = spreadAndML(exp_t4g2, exp_t1g2);
       const odds4 = spreadAndML(exp_t3g2, exp_t2g2);
+      // Roster lookups from current week
+      const t1G1Roster = getCurrentRoster(d, [5,6,7], true);
+      const t3G1Roster = getCurrentRoster(d, [5,6,7], false);
+      const t2G1Roster = getCurrentRoster(d, [10,11,12], true);
+      const t4G1Roster = getCurrentRoster(d, [10,11,12], false);
+      const t4G2Roster = getCurrentRoster(d, [18,19,20], true);
+      const t1G2Roster = getCurrentRoster(d, [18,19,20], false);
+      const t3G2Roster = getCurrentRoster(d, [23,24,25], true);
+      const t2G2Roster = getCurrentRoster(d, [23,24,25], false);
       html += `<div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:14px;margin-top:8px;">
         <div style="font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:14px;letter-spacing:2px;text-transform:uppercase;color:var(--accent2);margin-bottom:10px;">Tonight's Lines</div>
-        ${renderOddsRow('T1 vs T3', odds1, 'Team 1', 'Team 3', exp_t1g1, exp_t3g1)}
-        ${renderOddsRow('T2 vs T4', odds2, 'Team 2', 'Team 4', exp_t2g1, exp_t4g1)}
-        ${renderOddsRow('T4 vs T1', odds3, 'Team 4', 'Team 1', exp_t4g2, exp_t1g2)}
-        ${renderOddsRow('T3 vs T2', odds4, 'Team 3', 'Team 2', exp_t3g2, exp_t2g2)}
+        ${renderOddsBlock('Game 1 · T1 vs T3', odds1, 'Team 1', 'Team 3', exp_t1g1, exp_t3g1, t1G1Roster, t3G1Roster)}
+        ${renderOddsBlock('Game 1 · T2 vs T4', odds2, 'Team 2', 'Team 4', exp_t2g1, exp_t4g1, t2G1Roster, t4G1Roster)}
+        ${renderOddsBlock('Game 2 · T4 vs T1', odds3, 'Team 4', 'Team 1', exp_t4g2, exp_t1g2, t4G2Roster, t1G2Roster)}
+        ${renderOddsBlock('Game 2 · T3 vs T2', odds4, 'Team 3', 'Team 2', exp_t3g2, exp_t2g2, t3G2Roster, t2G2Roster)}
         <div style="font-size:10px;color:var(--muted2);margin-top:10px;font-style:italic;">For entertainment only. Lines are made up.</div>
       </div>`;
     }
@@ -920,21 +946,54 @@ function renderMatchupCard(t1Players, t2Players, t1Total, t2Total, t1Label, t2La
   </div>`;
 }
 
-function renderOddsRow(label, odds, t1Name, t2Name, e1, e2) {
-  const fav = odds.fav === 't1' ? t1Name : (odds.fav === 't2' ? t2Name : 'PUSH');
-  const dog = odds.fav === 't1' ? t2Name : (odds.fav === 'tie' ? '' : t1Name);
+// Get player names for a team from the current week sheet
+function getCurrentRoster(d, rowIndices, isCol1) {
+  const out = [];
+  rowIndices.forEach(i => {
+    const row = d[i]; if (!row) return;
+    const name = isCol1 ? row[0] : row[4];
+    if (name) out.push(name);
+  });
+  return out;
+}
+
+function renderOddsBlock(label, odds, t1Name, t2Name, e1, e2, t1Roster, t2Roster) {
+  const t1IsFav = odds.fav === 't1';
+  const favName = t1IsFav ? t1Name : (odds.fav === 't2' ? t2Name : '');
+  const dogName = t1IsFav ? t2Name : (odds.fav === 'tie' ? '' : t1Name);
+  const rosterLine = (names) => names.length ? names.join(' · ') : '—';
+
   if (odds.fav === 'tie') {
-    return `<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);font-size:13px;">
-      <span style="font-family:'Barlow Condensed',sans-serif;font-weight:700;">${label}</span>
-      <span style="color:var(--muted);font-family:'Barlow Condensed',sans-serif;">PICK 'EM (${e1})</span>
+    return `<div class="odds-block">
+      <div class="odds-block-head">
+        <span class="odds-block-label">${label}</span>
+        <span class="odds-block-pickem">PICK 'EM (${e1})</span>
+      </div>
+      <div class="odds-block-teams">
+        <div class="odds-team-side"><div class="odds-team-name">${t1Name}</div><div class="odds-roster">${rosterLine(t1Roster)}</div></div>
+        <div class="odds-team-side"><div class="odds-team-name">${t2Name}</div><div class="odds-roster">${rosterLine(t2Roster)}</div></div>
+      </div>
     </div>`;
   }
-  return `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px;">
-    <span style="font-family:'Barlow Condensed',sans-serif;font-weight:700;">${label}</span>
-    <div class="odds-line">
-      <span class="odds-chip fav">${fav} -${odds.spread}</span>
-      <span class="odds-chip fav">${odds.ml.fav}</span>
-      <span class="odds-chip dog">${dog} ${odds.ml.dog}</span>
+
+  return `<div class="odds-block">
+    <div class="odds-block-head">
+      <span class="odds-block-label">${label}</span>
+      <div class="odds-line">
+        <span class="odds-chip fav">${favName} -${odds.spread}</span>
+        <span class="odds-chip fav">${odds.ml.fav}</span>
+        <span class="odds-chip dog">${dogName} ${odds.ml.dog}</span>
+      </div>
+    </div>
+    <div class="odds-block-teams">
+      <div class="odds-team-side ${t1IsFav?'fav':'dog'}">
+        <div class="odds-team-name">${t1Name} ${t1IsFav?'<span class="odds-tag-fav">FAV</span>':''}<span class="odds-team-proj">${e1}</span></div>
+        <div class="odds-roster">${rosterLine(t1Roster)}</div>
+      </div>
+      <div class="odds-team-side ${!t1IsFav?'fav':'dog'}">
+        <div class="odds-team-name">${t2Name} ${!t1IsFav?'<span class="odds-tag-fav">FAV</span>':''}<span class="odds-team-proj">${e2}</span></div>
+        <div class="odds-roster">${rosterLine(t2Roster)}</div>
+      </div>
     </div>
   </div>`;
 }
@@ -1314,76 +1373,63 @@ function renderPlayerDetail() {
     </div>
   </div>`;
 
-  // Build log: either games (bowled mode) or rows-with-blanks (all mode)
-  let logRows = [];
+  // Build week-grouped log
   let allWeeklyRows = profile.rows;
   if (state.playerSeason === 'all') {
-    // include weeks where they were absent across all seasons
     allWeeklyRows = statsRows().filter(r => r[SC.PLAYER] === name);
   } else {
     allWeeklyRows = statsRows().filter(r => r[SC.PLAYER] === name && String(r[SC.SEASON]) === String(state.playerSeason));
   }
 
-  if (state.playerLogMode === 'bowled') {
-    profile.games.forEach(g => logRows.push({ kind: 'game', ...g }));
-  } else {
-    // Show one row per week — even if they were out
-    allWeeklyRows.forEach(r => {
-      const present = isPresent(r[SC.PRESENT]);
-      const g1 = parseInt(r[SC.G1]) || 0, g2 = parseInt(r[SC.G2]) || 0;
-      const w = parseInt(r[SC.WINS]) || 0, l = parseInt(r[SC.LOSSES]) || 0;
-      if (!present) {
-        logRows.push({ kind: 'absent', season: r[SC.SEASON], week: r[SC.WEEK], team: r[SC.TEAM] });
-      } else {
-        if (g1 > 0) logRows.push({ kind: 'game', season: r[SC.SEASON], week: r[SC.WEEK], team: r[SC.TEAM], score: g1, gameNum: 1, present: true, w, l });
-        if (g2 > 0) logRows.push({ kind: 'game', season: r[SC.SEASON], week: r[SC.WEEK], team: r[SC.TEAM], score: g2, gameNum: 2, present: true, w, l });
-      }
+  // One row per week for this player
+  let weekRows = [];
+  allWeeklyRows.forEach(r => {
+    const present = isPresent(r[SC.PRESENT]);
+    if (state.playerLogMode === 'bowled' && !present) return;
+    const g1 = parseInt(r[SC.G1]) || 0, g2 = parseInt(r[SC.G2]) || 0;
+    const w = parseInt(r[SC.WINS]) || 0, l = parseInt(r[SC.LOSSES]) || 0;
+    weekRows.push({
+      season: r[SC.SEASON], week: r[SC.WEEK], team: r[SC.TEAM],
+      g1, g2, w, l, present
     });
-  }
+  });
 
-  if (logRows.length) {
-    // Group by (season, week) for expandable matchup view
-    const weekGroups = [];
-    const seenKeys = new Set();
-    logRows.forEach(r => {
-      const key = r.season + '|' + r.week;
-      if (seenKeys.has(key)) return;
-      seenKeys.add(key);
-      const allRowsForWeek = logRows.filter(x => x.season === r.season && x.week === r.week);
-      weekGroups.push({ season: r.season, week: r.week, team: r.team, rows: allRowsForWeek });
+  if (weekRows.length) {
+    // Sort newest first (descending season then week)
+    weekRows.sort((a, b) => {
+      const sa = parseInt(a.season) || 0, sb = parseInt(b.season) || 0;
+      if (sa !== sb) return sb - sa;
+      const wa = parseInt(a.week) || 0, wb = parseInt(b.week) || 0;
+      return wb - wa;
     });
-    weekGroups.reverse(); // newest first
 
     html += `<div class="score-history-table">
-      <div class="score-history-row head"><span>Week</span><span>Team</span><span>Game</span><span>Score</span><span>W—L</span><span>S</span></div>`;
-    weekGroups.forEach(grp => {
-      const expandKey = grp.season + '|' + grp.week;
+      <div class="score-history-row head week-grouped"><span>Week</span><span>Team</span><span>G1</span><span>G2</span><span>W—L</span><span></span></div>`;
+    weekRows.forEach(r => {
+      const expandKey = r.season + '|' + r.week;
       const expanded = state.expandedWeek === expandKey;
-      grp.rows.forEach((r, idx) => {
-        const isLast = idx === grp.rows.length - 1;
-        if (r.kind === 'absent') {
-          html += `<div class="score-history-row clickable" onclick="toggleWeekExpand('${escapeHtml(expandKey)}')">
-            <span class="sh-week">${escapeHtml(r.week)}</span>
-            <span class="sh-team">${escapeHtml(r.team || '')}</span>
-            <span class="sh-out" style="grid-column: 3 / 6;">absent</span>
-            <span class="sh-expand-icon">${expanded ? '▾' : '▸'}</span>
-          </div>`;
-        } else {
-          const wlText = r.w || r.l ? `${r.w}—${r.l}` : '—';
-          const wlCls = r.w > r.l ? 'win' : (r.l > r.w ? 'loss' : '');
-          // Only show expand icon on the LAST row of the week group
-          html += `<div class="score-history-row clickable" onclick="toggleWeekExpand('${escapeHtml(expandKey)}')">
-            <span class="sh-week">${escapeHtml(r.week)}</span>
-            <span class="sh-team">${escapeHtml(r.team || '')}</span>
-            <span>G${r.gameNum}</span>
-            <span style="color:var(--accent);">${r.score}</span>
-            <span class="sh-record ${wlCls}">${wlText}</span>
-            <span class="sh-expand-icon">${isLast ? (expanded ? '▾' : '▸') : `S${r.season}`}</span>
-          </div>`;
-        }
-      });
+      const wlText = (r.w || r.l) ? `${r.w}—${r.l}` : '—';
+      const wlCls = r.w > r.l ? 'win' : (r.l > r.w ? 'loss' : '');
+      const weekLabel = isNaN(parseInt(r.week)) ? r.week : `S${r.season}W${r.week}`;
+      if (!r.present) {
+        html += `<div class="score-history-row clickable week-grouped" onclick="toggleWeekExpand('${escapeHtml(expandKey)}')">
+          <span class="sh-week">${escapeHtml(weekLabel)}</span>
+          <span class="sh-team">${escapeHtml(r.team || '')}</span>
+          <span class="sh-out" style="grid-column: 3 / 6;">absent</span>
+          <span class="sh-expand-icon">${expanded ? '▾' : '▸'}</span>
+        </div>`;
+      } else {
+        html += `<div class="score-history-row clickable week-grouped" onclick="toggleWeekExpand('${escapeHtml(expandKey)}')">
+          <span class="sh-week">${escapeHtml(weekLabel)}</span>
+          <span class="sh-team">${escapeHtml(r.team || '')}</span>
+          <span style="color:${r.g1?'var(--accent)':'var(--muted)'};">${r.g1 || '—'}</span>
+          <span style="color:${r.g2?'var(--accent)':'var(--muted)'};">${r.g2 || '—'}</span>
+          <span class="sh-record ${wlCls}">${wlText}</span>
+          <span class="sh-expand-icon">${expanded ? '▾' : '▸'}</span>
+        </div>`;
+      }
       if (expanded) {
-        html += `<div class="week-expand">${renderExpandedWeek(grp.season, grp.week)}</div>`;
+        html += `<div class="week-expand">${renderExpandedWeekForPlayer(r.season, r.week, name, r.team)}</div>`;
       }
     });
     html += `</div>`;
@@ -1408,6 +1454,45 @@ function renderExpandedWeek(season, week) {
   if (!matchups.length) return `<div class="empty-state" style="padding:16px;">No matchup data for this week.</div>`;
   const game1 = matchups.filter(m => m.gameNum === 1);
   const game2 = matchups.filter(m => m.gameNum === 2);
+  let out = '<div class="week-expand-inner">';
+  if (game1.length) {
+    out += `<div class="match-header" style="margin:8px 0 8px;"><div class="match-title" style="font-size:16px;">Game 1</div></div>`;
+    game1.forEach(m => out += renderHistoricalMatchup(m));
+  }
+  if (game2.length) {
+    out += `<div class="match-header" style="margin:8px 0 8px;"><div class="match-title" style="font-size:16px;">Game 2</div></div>`;
+    game2.forEach(m => out += renderHistoricalMatchup(m));
+  }
+  out += '</div>';
+  return out;
+}
+
+// Render only the matchups this player was IN that week (their team's G1 + G2)
+function renderExpandedWeekForPlayer(season, week, playerName, playerTeam) {
+  const matchups = getMatchupsForWeek(season, week);
+  if (!matchups.length) return `<div class="empty-state" style="padding:16px;">No matchup data for this week.</div>`;
+
+  // Find matchups where the player's team is involved
+  // Player team may have changed week-to-week, so use the team from this week's row
+  const myMatchups = matchups.filter(m => {
+    if (!m.a) return false;
+    if (m.a.team === playerTeam) return true;
+    if (m.b && m.b.team === playerTeam) return true;
+    return false;
+  });
+
+  if (!myMatchups.length) {
+    // Fallback: try finding by player presence in roster
+    const fallback = matchups.filter(m =>
+      (m.a && m.a.players.some(p => p.name === playerName)) ||
+      (m.b && m.b.players.some(p => p.name === playerName))
+    );
+    if (!fallback.length) return `<div class="empty-state" style="padding:16px;">${escapeHtml(playerName)} did not play this week.</div>`;
+    myMatchups.push(...fallback);
+  }
+
+  const game1 = myMatchups.filter(m => m.gameNum === 1);
+  const game2 = myMatchups.filter(m => m.gameNum === 2);
   let out = '<div class="week-expand-inner">';
   if (game1.length) {
     out += `<div class="match-header" style="margin:8px 0 8px;"><div class="match-title" style="font-size:16px;">Game 1</div></div>`;
@@ -1507,6 +1592,21 @@ function renderSeasonHistoryView() {
     return;
   }
 
+  // Build notes lookup from League History sheet
+  const notesMap = {};
+  if (state.history && state.history.length > 1) {
+    const headers = state.history[0].map(h => String(h).toLowerCase());
+    let seasonCol = headers.indexOf('season'); if (seasonCol === -1) seasonCol = 0;
+    let notesCol = headers.indexOf('notes');
+    if (notesCol !== -1) {
+      for (let i = 1; i < state.history.length; i++) {
+        const cell = String(state.history[i][seasonCol] || '').trim();
+        const key = cell.replace(/season\s*/i, '').trim();
+        if (key && state.history[i][notesCol]) notesMap[key] = state.history[i][notesCol];
+      }
+    }
+  }
+
   // Sort descending so newest first
   seasons.sort((a, b) => parseInt(b) - parseInt(a)).forEach(s => {
     const standings = aggregateStandings(s);
@@ -1516,6 +1616,7 @@ function renderSeasonHistoryView() {
     const totalGames = standings.reduce((sum, p) => sum + p.games, 0);
     const leagueAvg = totalGames ? totalPins / totalGames : 0;
     const totalWeeks = new Set(); statsRows().filter(r => String(r[SC.SEASON]) === String(s)).forEach(r => totalWeeks.add(String(r[SC.WEEK])));
+    const notes = notesMap[String(s)] || '';
 
     html += `<div class="history-season">
       <div class="history-head">
@@ -1523,15 +1624,74 @@ function renderSeasonHistoryView() {
         ${champs.length ? `<div class="history-champion">👑 ${champs.map(escapeHtml).join(', ')}</div>` : ''}
       </div>
       <div class="history-body">
+        ${notes ? `<div class="season-blurb">${escapeHtml(notes)}</div>` : ''}
         <div class="history-stat"><span class="history-stat-label">Top Bowler</span><span class="history-stat-val">${top ? escapeHtml(top.name) + ' (' + top.avg.toFixed(1) + ')' : '—'}</span></div>
         <div class="history-stat"><span class="history-stat-label">League Avg</span><span class="history-stat-val">${leagueAvg.toFixed(1)}</span></div>
         <div class="history-stat"><span class="history-stat-label">Bowlers</span><span class="history-stat-val">${standings.length}</span></div>
         <div class="history-stat"><span class="history-stat-label">Weeks</span><span class="history-stat-val">${totalWeeks.size}</span></div>
+        <button class="btn sm" style="margin-top:10px;" onclick="openSeasonNotesEdit('${escapeHtml(s)}')">${notes ? 'Edit Notes' : '✏️ Add Notes'}</button>
       </div>
     </div>`;
   });
 
   $('more-content').innerHTML = html;
+}
+
+function openSeasonNotesEdit(season) {
+  // Build notes lookup
+  let existing = '';
+  if (state.history && state.history.length > 1) {
+    const headers = state.history[0].map(h => String(h).toLowerCase());
+    let seasonCol = headers.indexOf('season'); if (seasonCol === -1) seasonCol = 0;
+    let notesCol = headers.indexOf('notes');
+    if (notesCol !== -1) {
+      for (let i = 1; i < state.history.length; i++) {
+        const cell = String(state.history[i][seasonCol] || '').trim();
+        const key = cell.replace(/season\s*/i, '').trim();
+        if (key === String(season)) existing = state.history[i][notesCol] || '';
+      }
+    }
+  }
+
+  openModal(`<div class="modal-title">Season ${escapeHtml(season)} Notes</div>
+    <p style="color:var(--muted);font-size:13px;margin-bottom:12px;">Tell the story. Memorable moments, drama, who choked in the playoffs.</p>
+    <textarea id="season-notes-input" class="modal-input" style="min-height:140px;text-align:left;font-family:'Barlow',sans-serif;line-height:1.5;" placeholder="Season ${escapeHtml(season)} was...">${escapeHtml(existing)}</textarea>
+    <div class="btn-row">
+      <button class="btn" onclick="closeModal()">Cancel</button>
+      <button class="btn primary" onclick="saveSeasonNotes('${escapeHtml(season)}')">Save</button>
+    </div>`);
+}
+
+async function saveSeasonNotes(season) {
+  const notes = $('season-notes-input').value.trim();
+  closeModal();
+  toast('Saving...');
+  try {
+    const r = await apiPost('updateSeasonNotes', { season, notes });
+    if (r.error) { toast(r.error, 'error'); return; }
+    // Optimistically update local state
+    if (state.history && state.history.length > 1) {
+      const headers = state.history[0].map(h => String(h).toLowerCase());
+      let seasonCol = headers.indexOf('season'); if (seasonCol === -1) seasonCol = 0;
+      let notesCol = headers.indexOf('notes');
+      if (notesCol === -1) {
+        notesCol = state.history[0].length;
+        state.history[0].push('Notes');
+      }
+      let found = false;
+      for (let i = 1; i < state.history.length; i++) {
+        const cell = String(state.history[i][seasonCol] || '').trim();
+        const key = cell.replace(/season\s*/i, '').trim();
+        if (key === String(season)) {
+          while (state.history[i].length <= notesCol) state.history[i].push('');
+          state.history[i][notesCol] = notes;
+          found = true; break;
+        }
+      }
+    }
+    toast('Saved', 'success');
+    renderSeasonHistoryView();
+  } catch(e) { toast('Failed', 'error'); }
 }
 
 // LEAGUE RECORDS
