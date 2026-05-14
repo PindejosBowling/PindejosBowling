@@ -40,6 +40,11 @@ header { padding: 18px 20px 12px; position: sticky; top: 0; z-index: 50; backgro
 .tab-title .pill { font-size: 11px; font-weight: 600; letter-spacing: 1.5px; text-transform: uppercase; color: var(--accent); background: var(--accent-dim); border: 1px solid rgba(232,255,71,0.25); border-radius: 20px; padding: 3px 10px; }
 .view-flip { margin-left: auto; height: 28px; padding: 4px 22px 4px 10px; font-size: 11px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; background-color: transparent; border-color: var(--border2); color: var(--muted); background-position: right 6px center; cursor: pointer; }
 .view-flip:hover { color: var(--text); }
+.league-avg-banner { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 10px 14px; margin-bottom: 14px; display: flex; align-items: center; gap: 12px; }
+.league-avg-info { flex: 1; min-width: 0; }
+.league-avg-label { font-size: 10px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; color: var(--muted); }
+.league-avg-val { font-family: 'Barlow Condensed', sans-serif; font-weight: 800; font-size: 24px; color: var(--accent); line-height: 1.1; }
+.avg-source-select { height: 32px; padding: 4px 24px 4px 10px; font-size: 11px; font-weight: 700; letter-spacing: 0.5px; }
 
 .match-header { display: flex; align-items: center; gap: 10px; margin: 20px 0 12px; }
 .match-title { font-family: 'Barlow Condensed', sans-serif; font-weight: 800; font-size: 22px; letter-spacing: 0.5px; text-transform: uppercase; }
@@ -75,6 +80,10 @@ input[type=number] { width: 52px; height: 42px; font-size: 17px; }
 input[type=number]::-webkit-inner-spin-button { display: none; }
 input[type=number]:focus, input[type=text]:focus, select:focus { border-color: var(--accent); background: #1a1e0a; }
 input.has-score { border-color: rgba(232,255,71,0.35); color: var(--accent); }
+.score-input-wrap { position: relative; display: inline-block; }
+.score-confirm { position: absolute; top: -6px; right: -8px; width: 24px; height: 24px; padding: 0; border-radius: 50%; background: var(--success); color: #0a0a0c; border: 2px solid var(--bg); font-size: 14px; font-weight: 800; line-height: 1; cursor: pointer; display: flex; align-items: center; justify-content: center; z-index: 5; box-shadow: 0 2px 6px rgba(74,222,128,0.4); animation: confirmIn 0.18s; }
+.score-confirm:disabled { opacity: 0.5; }
+@keyframes confirmIn { from { transform: scale(0.5); opacity: 0; } to { transform: scale(1); opacity: 1; } }
 select { padding: 8px 28px 8px 12px; height: 38px; font-size: 13px; letter-spacing: 0.5px; appearance: none; background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath fill='%237a7a85' d='M0 0l5 6 5-6z'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 10px center; cursor: pointer; }
 textarea { width: 100%; background: var(--surface2); border: 1.5px solid var(--border2); border-radius: 10px; color: var(--text); padding: 10px 12px; font-family: 'Barlow', sans-serif; font-size: 14px; outline: none; resize: vertical; min-height: 70px; }
 textarea:focus { border-color: var(--accent); }
@@ -109,7 +118,13 @@ textarea:focus { border-color: var(--accent); }
 .s-rank-1 .s-name { color: var(--accent); }
 
 .rsvp-row { display: flex; align-items: center; gap: 12px; padding: 10px 16px; border-bottom: 1px solid var(--border); }
+.rsvp-row.pending { background: rgba(232,255,71,0.04); }
 .rsvp-row:last-child { border-bottom: none; }
+.pending-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); margin-left: 6px; display: inline-block; box-shadow: 0 0 8px rgba(232,255,71,0.5); }
+.confirm-bar { position: sticky; bottom: 76px; margin: 12px -16px 0; padding: 12px 16px; background: rgba(19,19,22,0.96); backdrop-filter: blur(12px); border-top: 1px solid var(--border2); border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 10px; z-index: 80; animation: slideUp 0.2s; }
+.confirm-bar-text { flex: 1; font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 13px; letter-spacing: 1px; text-transform: uppercase; color: var(--accent); }
+.confirm-bar-actions { display: flex; gap: 6px; }
+@keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
 .rsvp-name { flex: 1; font-family: 'Barlow Condensed', sans-serif; font-size: 17px; font-weight: 700; display: flex; align-items: center; }
 .rsvp-buttons { display: flex; gap: 4px; }
 .rsvp-btn { font-family: 'Barlow Condensed', sans-serif; font-size: 12px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; padding: 6px 12px; border-radius: 8px; border: 1.5px solid var(--border2); background: var(--surface2); color: var(--muted); cursor: pointer; transition: all 0.15s; }
@@ -363,6 +378,8 @@ nav { position: fixed; bottom: 0; left: 0; right: 0; background: rgba(19,19,22,0
 <script>
 const API = "https://script.google.com/macros/s/AKfycbz8sg1ZRlVaD0tXpN6GRlC1awZYu1_KhD7z5Bc88KjsTNntq1dBzAf8aHGbW0th_Tjhiw/exec";
 const SC = { SEASON: 0, WEEK: 1, PLAYER: 2, TEAM: 3, G1: 4, G1_OPP: 5, G2: 6, G2_OPP: 7, PINS: 8, WINS: 9, LOSSES: 10, GAMES: 11, PRESENT: 12 };
+// Active Week sheet columns
+const AW_SEASON = 0, AW_WEEK = 1, AW_TEAM = 2, AW_SLOT = 3, AW_NAME = 4, AW_G1 = 5, AW_G2 = 6, AW_G1_OPP = 7, AW_G2_OPP = 8, AW_IS_FILL = 9;
 
 const state = {
   current: null, roster: null, rsvp: null, stats: null, board: null,
@@ -377,9 +394,12 @@ const state = {
   chemExpanded: false,
   moreView: 'home',
   myName: localStorage.getItem('pb_myname') || '',
+  pendingRSVP: {},
+  avgDisplay: localStorage.getItem('pb_avgdisplay') || 'last-played',
   matchupsView: 'scores',
   oddsRevealed: false,
   genFillMode: 'League Avg', genAvgSource: 'last-season', genTeams: null,
+  genNumTeams: 4, genTeamSize: 3, genFillToSize: false,
   genSwapTarget: null,
   h2hP1: null, h2hP2: null
 };
@@ -744,10 +764,56 @@ function getTeamTotals(d) {
     t3g2: sum(d.slice(23,26), 2), t2g2: sum(d.slice(23,26), 6)
   };
 }
-function getPlayerCurrentAvg(name) {
+function getPlayerCurrentAvg(name, sourceOverride) {
+  const source = sourceOverride || state.avgDisplay || 'last-played';
+  // sources: 'current-season' | 'all-time' | 'last-played'
+  if (source === 'last-played') {
+    // Use most recent season the player has data in
+    const rows = statsRows().filter(r => r[SC.PLAYER] === name && isPresent(r[SC.PRESENT]));
+    if (!rows.length) return 0;
+    const seasons = Array.from(new Set(rows.map(r => String(r[SC.SEASON])))).sort();
+    const lastSeason = seasons[seasons.length - 1];
+    const lastSeasonRows = rows.filter(r => String(r[SC.SEASON]) === lastSeason);
+    const scores = [];
+    lastSeasonRows.forEach(r => {
+      const g1 = parseInt(r[SC.G1]) || 0, g2 = parseInt(r[SC.G2]) || 0;
+      if (g1 > 0) scores.push(g1);
+      if (g2 > 0) scores.push(g2);
+    });
+    return scores.length ? scores.reduce((a, b) => a + b, 0) / scores.length : 0;
+  }
+  if (source === 'current-season') {
+    const cur = getCurrentSeason();
+    const standings = aggregateStandings(cur);
+    const p = standings.find(s => s.name === name);
+    return p && p.avg ? p.avg : 0;
+  }
+  // all-time
   const standings = aggregateStandings('all');
   const p = standings.find(s => s.name === name);
   return p && p.avg ? p.avg : 0;
+}
+
+function getLeagueAvg(source) {
+  source = source || state.avgDisplay || 'last-played';
+  if (source === 'last-played') {
+    // Get every player's last-season avg, then league avg of those
+    const playerNames = Array.from(new Set(statsRows().filter(r => isPresent(r[SC.PRESENT])).map(r => r[SC.PLAYER])));
+    const avgs = playerNames.map(n => getPlayerCurrentAvg(n, 'last-played')).filter(v => v > 0);
+    return avgs.length ? avgs.reduce((a, b) => a + b, 0) / avgs.length : 0;
+  }
+  if (source === 'current-season') {
+    const cur = getCurrentSeason();
+    const rows = statsRows().filter(r => String(r[SC.SEASON]) === String(cur) && isPresent(r[SC.PRESENT]));
+    const totalPins = rows.reduce((s, r) => s + (parseInt(r[SC.PINS]) || 0), 0);
+    const totalGames = rows.reduce((s, r) => s + (parseInt(r[SC.GAMES]) || 0), 0);
+    return totalGames ? totalPins / totalGames : 0;
+  }
+  // all-time
+  const rows = statsRows().filter(r => isPresent(r[SC.PRESENT]));
+  const totalPins = rows.reduce((s, r) => s + (parseInt(r[SC.PINS]) || 0), 0);
+  const totalGames = rows.reduce((s, r) => s + (parseInt(r[SC.GAMES]) || 0), 0);
+  return totalGames ? totalPins / totalGames : 0;
 }
 function isPlayerOut(name) {
   if (!state.rsvp) return false;
@@ -777,8 +843,18 @@ function renderPlayerRow(name, g1Val, g2Val, cellG1, cellG2, mode) {
       scoreCells = `<div class="score-group"><span class="score-label">G2</span><div class="score-display" style="color:var(--muted);">${exp}</div></div>`;
     }
   } else {
-    const g1 = cellG1 ? `<div class="score-group"><span class="score-label">G1</span><input type="number" class="${g1Val ? 'has-score' : ''}" placeholder="—" value="${g1Val || ''}" data-cell="${cellG1}" onchange="saveScore(this)"></div>` : '';
-    const g2 = cellG2 ? `<div class="score-group"><span class="score-label">G2</span><input type="number" class="${g2Val ? 'has-score' : ''}" placeholder="—" value="${g2Val || ''}" data-cell="${cellG2}" onchange="saveScore(this)"></div>` : '';
+    const buildInput = (cell, val, label) => {
+      const initial = val == null || val === '' ? '' : val;
+      return `<div class="score-group">
+        <span class="score-label">${label}</span>
+        <div class="score-input-wrap">
+          <input type="number" inputmode="numeric" pattern="[0-9]*" class="${initial ? 'has-score' : ''}" placeholder="—" value="${initial}" data-cell="${cell}" data-initial="${initial}" oninput="onScoreEdit(this)">
+          <button class="score-confirm" data-for="${cell}" onclick="confirmScore('${cell}')" style="display:none;">✓</button>
+        </div>
+      </div>`;
+    };
+    const g1 = cellG1 ? buildInput(cellG1, g1Val, 'G1') : '';
+    const g2 = cellG2 ? buildInput(cellG2, g2Val, 'G2') : '';
     scoreCells = g1 + g2;
   }
 
@@ -851,7 +927,230 @@ function spreadAndML(t1, t2) {
   return { fav, spread, ml: ml(diff) };
 }
 
+function hasActiveWeek() {
+  if (!state.active || state.active.length < 2) return false;
+  // Check if there's at least one non-empty data row (name in slot)
+  for (let i = 1; i < state.active.length; i++) {
+    if (state.active[i] && state.active[i][AW_NAME]) return true;
+  }
+  return false;
+}
+
+// Read Active Week into a structured form
+function readActiveWeek() {
+  const teams = {};   // teamName -> { name, players: [{name, slot, g1, g2, isFill}], opponents: {1: 'Team X', 2: 'Team Y'} }
+  if (!state.active) return teams;
+  for (let i = 1; i < state.active.length; i++) {
+    const r = state.active[i];
+    if (!r || !r[AW_NAME]) continue;
+    const team = r[AW_TEAM];
+    if (!teams[team]) teams[team] = { name: team, players: [], opponents: {} };
+    const p = {
+      name: r[AW_NAME],
+      slot: parseInt(r[AW_SLOT]) || 0,
+      g1: r[AW_G1] === '' || r[AW_G1] == null ? '' : (parseInt(r[AW_G1]) || 0),
+      g2: r[AW_G2] === '' || r[AW_G2] == null ? '' : (parseInt(r[AW_G2]) || 0),
+      isFill: r[AW_IS_FILL] === true || r[AW_IS_FILL] === 'TRUE' || r[AW_IS_FILL] === 1
+    };
+    teams[team].players.push(p);
+    if (r[AW_G1_OPP]) teams[team].opponents[1] = r[AW_G1_OPP];
+    if (r[AW_G2_OPP]) teams[team].opponents[2] = r[AW_G2_OPP];
+  }
+  // Sort players by slot within each team
+  Object.values(teams).forEach(t => t.players.sort((a, b) => a.slot - b.slot));
+  return teams;
+}
+
 function renderMatchups() {
+  // Branch: if Active Week is populated, use it. Else fall back to legacy Current Week renderer.
+  if (hasActiveWeek()) {
+    renderActiveMatchups();
+  } else {
+    renderLegacyMatchups();
+  }
+}
+
+function renderActiveMatchups() {
+  const teams = readActiveWeek();
+  const teamNames = Object.keys(teams).sort();  // Team 1, Team 2, Team 3, Team 4
+  const mode = state.matchupsView;
+
+  // Compute team total per game
+  const teamTotals = { 1: {}, 2: {} };
+  teamNames.forEach(t => {
+    teamTotals[1][t] = teams[t].players.reduce((s, p) => s + (parseInt(p.g1) || 0), 0);
+    teamTotals[2][t] = teams[t].players.reduce((s, p) => s + (parseInt(p.g2) || 0), 0);
+  });
+
+  // Build unique matchup pairings per game from opponent fields
+  function buildPairings(gameNum) {
+    const seen = new Set();
+    const pairings = [];
+    teamNames.forEach(t => {
+      if (seen.has(t)) return;
+      const opp = teams[t].opponents[gameNum];
+      if (opp && teams[opp] && teams[opp].opponents[gameNum] === t) {
+        seen.add(t); seen.add(opp);
+        pairings.push({ a: t, b: opp });
+      } else if (!opp) {
+        // Team sits out this game
+        seen.add(t);
+        pairings.push({ a: t, b: null });
+      }
+    });
+    return pairings;
+  }
+
+  const g1Pairings = buildPairings(1);
+  const g2Pairings = buildPairings(2);
+
+  // Set badges
+  const settingsW = state.settings ? (state.settings.slice(1).find(r => r[0] === 'CurrentSeason') || [])[1] : null;
+  const week = state.active[1] ? state.active[1][AW_WEEK] : '';
+  $('week-badge').textContent = typeof week === 'number' || /^\d+$/.test(String(week)) ? `Week ${week}` : (week || 'Week 1');
+  $('season-badge').textContent = `Season ${getCurrentSeason()}`;
+
+  let html = `<div class="tab-title">
+    <h2>Matchups</h2>
+    <span class="pill">This Week</span>
+    <select class="view-flip" onchange="state.matchupsView=this.value;renderMatchups();">
+      <option value="scores" ${mode==='scores'?'selected':''}>Live</option>
+      <option value="expected" ${mode==='expected'?'selected':''}>Expected</option>
+    </select>
+  </div>`;
+
+  // League avg banner
+  const leagueAvg = getLeagueAvg(state.avgDisplay);
+  const sourceLabel = state.avgDisplay === 'current-season' ? 'Season Avg'
+    : state.avgDisplay === 'all-time' ? 'All-time Avg'
+    : 'Last Season Avg';
+  html += `<div class="league-avg-banner">
+    <div class="league-avg-info">
+      <div class="league-avg-label">League ${sourceLabel}</div>
+      <div class="league-avg-val">${leagueAvg > 0 ? leagueAvg.toFixed(1) : '—'}</div>
+    </div>
+    <select class="avg-source-select" onchange="state.avgDisplay=this.value;localStorage.setItem('pb_avgdisplay',this.value);renderMatchups();">
+      <option value="last-played" ${state.avgDisplay==='last-played'?'selected':''}>Last Season</option>
+      <option value="current-season" ${state.avgDisplay==='current-season'?'selected':''}>This Season</option>
+      <option value="all-time" ${state.avgDisplay==='all-time'?'selected':''}>All-time</option>
+    </select>
+  </div>`;
+
+  function renderTeamBlockActive(teamName, gameNum, isWinner) {
+    const t = teams[teamName];
+    if (!t) return '';
+    const total = teamTotals[gameNum][teamName];
+    const playerRows = t.players.map(p => {
+      const score = gameNum === 1 ? p.g1 : p.g2;
+      const avg = p.isFill ? leagueAvg : getPlayerCurrentAvg(p.name);
+      const absent = !p.isFill && isPlayerOut(p.name);
+      const champ = !p.isFill && isChampion(p.name);
+      let cells = '';
+      if (mode === 'expected') {
+        const exp = avg > 0 ? Math.round(avg) : '—';
+        cells = `<div class="score-group"><span class="score-label">G${gameNum}</span><div class="score-display" style="color:var(--muted);">${exp}</div></div>`;
+      } else if (p.isFill) {
+        // Fill placeholder uses league avg, no input
+        cells = `<div class="score-group"><span class="score-label">G${gameNum}</span><div class="score-display" style="color:var(--muted);">${Math.round(leagueAvg)}</div></div>`;
+      } else {
+        const initial = score === '' || score == null ? '' : score;
+        cells = `<div class="score-group"><span class="score-label">G${gameNum}</span>
+          <div class="score-input-wrap">
+            <input type="number" inputmode="numeric" pattern="[0-9]*" class="${initial ? 'has-score' : ''}" placeholder="—" value="${initial}" data-team="${escapeHtml(teamName)}" data-slot="${p.slot}" data-game="${gameNum}" data-initial="${initial}" oninput="onActiveScoreEdit(this)">
+            <button class="score-confirm" data-for="${escapeHtml(teamName)}-${p.slot}-${gameNum}" onclick="confirmActiveScore('${escapeHtml(teamName)}', ${p.slot}, ${gameNum})" style="display:none;">✓</button>
+          </div>
+        </div>`;
+      }
+      const displayName = p.isFill ? `<span style="color:var(--muted);font-style:italic;">League Avg Fill</span>` : nameWithCrown(p.name);
+      const avgLine = (avg > 0 && !p.isFill) ? `<div class="player-avg">avg ${avg.toFixed(1)}</div>` : (p.isFill ? `<div class="player-avg">fill</div>` : '');
+      return `<div class="player-row ${absent?'absent':''}">
+        <div class="player-avatar ${champ?'champ':''}">${p.isFill ? '∅' : initials(p.name)}</div>
+        <div class="player-info">
+          <div class="player-name">${displayName}${absent?'<span class="absent-tag">OUT</span>':''}${p.isFill?'<span class="fill-tag">FILL</span>':''}</div>
+          ${avgLine}
+        </div>
+        <div class="score-inputs">${cells}</div>
+      </div>`;
+    }).join('');
+
+    const expectedTotal = t.players.reduce((s, p) => {
+      const a = p.isFill ? leagueAvg : getPlayerCurrentAvg(p.name);
+      return s + (a > 0 ? Math.round(a) : 0);
+    }, 0);
+
+    let totalRow;
+    if (mode === 'expected') {
+      totalRow = `<div class="team-total-row"><span class="total-label">Expected total</span><div class="total-meta"><span class="total-val total-losing">${expectedTotal}</span></div></div>`;
+    } else if (total > 0) {
+      const cls = isWinner ? 'total-winning' : 'total-losing';
+      totalRow = `<div class="team-total-row"><span class="total-label">Team total</span><div class="total-meta"><span class="total-val ${cls}">${total}</span></div></div>`;
+    } else {
+      totalRow = '';
+    }
+
+    const winnerCls = total > 0 && isWinner ? 'winner' : '';
+    return `<div class="team-block ${winnerCls}">
+      <div class="team-label ${winnerCls}">${escapeHtml(teamName)}</div>
+      ${playerRows}
+      ${totalRow}
+    </div>`;
+  }
+
+  function renderPairing(p, gameNum) {
+    const aTotal = teamTotals[gameNum][p.a] || 0;
+    const bTotal = p.b ? (teamTotals[gameNum][p.b] || 0) : 0;
+    const aWins = aTotal > bTotal;
+    const bWins = bTotal > aTotal;
+    if (!p.b) {
+      return `<div class="matchup">${renderTeamBlockActive(p.a, gameNum, false)}<div style="padding:10px 16px;color:var(--muted);font-size:11px;letter-spacing:1.5px;text-transform:uppercase;text-align:center;font-family:'Barlow Condensed',sans-serif;">— sits out —</div></div>`;
+    }
+    return `<div class="matchup">
+      ${renderTeamBlockActive(p.a, gameNum, aWins)}
+      <div class="vs-bar"><div class="vs-left"></div><div class="vs-chip">VS</div><div class="vs-right"></div></div>
+      ${renderTeamBlockActive(p.b, gameNum, bWins)}
+    </div>`;
+  }
+
+  if (g1Pairings.length) {
+    html += `<div class="match-header"><div class="match-title">Game 1</div></div>`;
+    g1Pairings.forEach(p => html += renderPairing(p, 1));
+  }
+  if (g2Pairings.length) {
+    html += `<div class="match-header"><div class="match-title">Game 2</div></div>`;
+    g2Pairings.forEach(p => html += renderPairing(p, 2));
+  }
+
+  // Odds easter egg
+  if (mode === 'expected') {
+    html += `<div class="odds-toggle">
+      <span class="odds-toggle-link" onclick="state.oddsRevealed=!state.oddsRevealed;renderMatchups();">${state.oddsRevealed ? '· hide odds ·' : '· · ·'}</span>
+    </div>`;
+    if (state.oddsRevealed) {
+      const expectedTotal = teamName => {
+        return teams[teamName].players.reduce((s, p) => {
+          const a = p.isFill ? leagueAvg : getPlayerCurrentAvg(p.name);
+          return s + (a > 0 ? Math.round(a) : 0);
+        }, 0);
+      };
+      const rosterFor = teamName => teams[teamName].players.map(p => p.isFill ? 'Fill' : p.name);
+      let oddsHtml = `<div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:14px;margin-top:8px;">
+        <div style="font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:14px;letter-spacing:2px;text-transform:uppercase;color:var(--accent2);margin-bottom:10px;">Tonight's Lines</div>`;
+      [...g1Pairings.map(p => ({...p, gameNum:1})), ...g2Pairings.map(p => ({...p, gameNum:2}))].forEach(p => {
+        if (!p.b) return;
+        const e1 = expectedTotal(p.a), e2 = expectedTotal(p.b);
+        const odds = spreadAndML(e1, e2);
+        oddsHtml += renderOddsBlock(`Game ${p.gameNum} · ${p.a} vs ${p.b}`, odds, p.a, p.b, e1, e2, rosterFor(p.a), rosterFor(p.b));
+      });
+      oddsHtml += `<div style="font-size:10px;color:var(--muted2);margin-top:10px;font-style:italic;">For entertainment only. Lines are made up.</div></div>`;
+      html += oddsHtml;
+    }
+  }
+
+  $('matchups-content').innerHTML = html;
+}
+
+// LEGACY Current Week renderer (kept for backward compat / pre-migration weeks)
+function renderLegacyMatchups() {
   const d = state.current; if (!d) return;
   const T = getTeamTotals(d);
   const mode = state.matchupsView;
@@ -889,6 +1188,23 @@ function renderMatchups() {
     <select class="view-flip" onchange="state.matchupsView=this.value;renderMatchups();">
       <option value="scores" ${mode==='scores'?'selected':''}>Live</option>
       <option value="expected" ${mode==='expected'?'selected':''}>Expected</option>
+    </select>
+  </div>`;
+
+  // League avg banner with toggle
+  const leagueAvg = getLeagueAvg(state.avgDisplay);
+  const sourceLabel = state.avgDisplay === 'current-season' ? 'Season Avg'
+    : state.avgDisplay === 'all-time' ? 'All-time Avg'
+    : 'Last Season Avg';
+  html += `<div class="league-avg-banner">
+    <div class="league-avg-info">
+      <div class="league-avg-label">League ${sourceLabel}</div>
+      <div class="league-avg-val">${leagueAvg > 0 ? leagueAvg.toFixed(1) : '—'}</div>
+    </div>
+    <select class="avg-source-select" onchange="state.avgDisplay=this.value;localStorage.setItem('pb_avgdisplay',this.value);renderMatchups();">
+      <option value="last-played" ${state.avgDisplay==='last-played'?'selected':''}>Last Season</option>
+      <option value="current-season" ${state.avgDisplay==='current-season'?'selected':''}>This Season</option>
+      <option value="all-time" ${state.avgDisplay==='all-time'?'selected':''}>All-time</option>
     </select>
   </div>`;
 
@@ -998,24 +1314,150 @@ function renderOddsBlock(label, odds, t1Name, t2Name, e1, e2, t1Roster, t2Roster
   </div>`;
 }
 
-async function saveScore(input) {
-  const cell = input.dataset.cell, val = input.value;
-  if (!cell || val === '') return;
+// Score input handlers - show confirm button when changed, save on confirm tap
+function onScoreEdit(input) {
+  const cell = input.dataset.cell;
+  const initial = input.dataset.initial || '';
+  const current = input.value;
+  const btn = document.querySelector(`.score-confirm[data-for="${cell}"]`);
+  if (!btn) return;
+  if (current !== initial) {
+    btn.style.display = 'flex';
+  } else {
+    btn.style.display = 'none';
+  }
+}
+
+// Active Week variant — keyed by team+slot+game instead of cell address
+function onActiveScoreEdit(input) {
+  const team = input.dataset.team;
+  const slot = input.dataset.slot;
+  const game = input.dataset.game;
+  const key = `${team}-${slot}-${game}`;
+  const initial = input.dataset.initial || '';
+  const current = input.value;
+  const btn = document.querySelector(`.score-confirm[data-for="${key}"]`);
+  if (!btn) return;
+  btn.style.display = (current !== initial) ? 'flex' : 'none';
+}
+
+async function confirmActiveScore(team, slot, gameNum) {
+  const key = `${team}-${slot}-${gameNum}`;
+  // Find by exact attribute match (querySelector with escaped quotes)
+  const inputs = document.querySelectorAll(`input[data-team][data-slot="${slot}"][data-game="${gameNum}"]`);
+  let input = null;
+  inputs.forEach(i => { if (i.dataset.team === team) input = i; });
+  const btn = document.querySelector(`.score-confirm[data-for="${CSS.escape(key)}"]`) ||
+              Array.from(document.querySelectorAll('.score-confirm')).find(b => b.dataset.for === key);
+  if (!input) { toast('Input not found', 'error'); return; }
+  const val = input.value;
+  if (val === '' || val == null) { toast('Enter a score first', 'error'); return; }
+  const n = parseInt(val);
+  if (isNaN(n) || n < 0 || n > 300) { toast('Score must be 0-300', 'error'); return; }
+
   input.style.opacity = '0.5';
+  if (btn) btn.disabled = true;
+  try {
+    const r = await apiPost('updateActiveScore', { team, slot, gameNum, score: val });
+    if (r.error) { toast(r.error, 'error'); input.style.opacity = '1'; if (btn) btn.disabled = false; return; }
+    input.classList.add('has-score');
+    input.dataset.initial = val;
+    if (btn) btn.style.display = 'none';
+    // Update local state.active in-place
+    if (state.active) {
+      for (let i = 1; i < state.active.length; i++) {
+        const row = state.active[i];
+        if (!row) continue;
+        if (String(row[AW_TEAM]) === team && parseInt(row[AW_SLOT]) === parseInt(slot)) {
+          state.active[i][gameNum === 1 ? AW_G1 : AW_G2] = parseInt(val);
+          break;
+        }
+      }
+    }
+    // Re-render but preserve focus
+    const active = document.activeElement;
+    const aTeam = active && active.dataset ? active.dataset.team : null;
+    const aSlot = active && active.dataset ? active.dataset.slot : null;
+    const aGame = active && active.dataset ? active.dataset.game : null;
+    const aSelStart = active && active.selectionStart != null ? active.selectionStart : null;
+    renderMatchups();
+    if (aTeam) {
+      Array.from(document.querySelectorAll(`input[data-team][data-slot="${aSlot}"][data-game="${aGame}"]`))
+        .filter(i => i.dataset.team === aTeam)
+        .forEach(newInput => {
+          newInput.focus();
+          if (aSelStart != null) try { newInput.setSelectionRange(aSelStart, aSelStart); } catch(e){}
+        });
+    }
+    toast('Saved', 'success');
+  } catch(e) {
+    toast('Save failed', 'error');
+    input.style.opacity = '1';
+    if (btn) btn.disabled = false;
+  }
+}
+
+async function confirmScore(cell) {
+  const input = document.querySelector(`input[data-cell="${cell}"]`);
+  const btn = document.querySelector(`.score-confirm[data-for="${cell}"]`);
+  if (!input) return;
+  const val = input.value;
+  if (val === '' || val == null) {
+    toast('Enter a score first', 'error');
+    return;
+  }
+  const n = parseInt(val);
+  if (isNaN(n) || n < 0 || n > 300) {
+    toast('Score must be 0-300', 'error');
+    return;
+  }
+
+  input.style.opacity = '0.5';
+  if (btn) btn.disabled = true;
   try {
     await apiPost('updateScore', { cell, score: val });
     input.classList.add('has-score');
+    input.dataset.initial = val;
+    if (btn) btn.style.display = 'none';
     if (state.current) {
       const m = cell.match(/([A-Z]+)(\d+)/);
       if (m) {
         const col = m[1].charCodeAt(0) - 65, row = parseInt(m[2]) - 1;
         if (state.current[row]) state.current[row][col] = parseInt(val);
-        renderMatchups();
+        // Don't re-render the whole matchups - just update totals
+        updateLiveTotals();
       }
     }
     toast('Saved', 'success');
   } catch(e) { toast('Save failed', 'error'); }
   input.style.opacity = '1';
+  if (btn) btn.disabled = false;
+}
+
+// Refresh the team totals without nuking the inputs (avoids losing focus/cursor)
+function updateLiveTotals() {
+  if (!state.current) return;
+  const T = getTeamTotals(state.current);
+  // Find each total-val and update; also winner highlights
+  const update = (selector, val, winning) => {
+    const el = document.querySelector(selector);
+    if (!el) return;
+    el.textContent = val > 0 ? val : '—';
+    el.classList.toggle('total-winning', val > 0 && winning);
+    el.classList.toggle('total-losing', val > 0 && !winning);
+  };
+  // We'll just call renderMatchups again but preserve focus
+  const active = document.activeElement;
+  const activeCell = active && active.dataset ? active.dataset.cell : null;
+  const activeSelStart = active && active.selectionStart != null ? active.selectionStart : null;
+  renderMatchups();
+  if (activeCell) {
+    const newInput = document.querySelector(`input[data-cell="${activeCell}"]`);
+    if (newInput) {
+      newInput.focus();
+      if (activeSelStart != null) try { newInput.setSelectionRange(activeSelStart, activeSelStart); } catch(e){}
+    }
+  }
 }
 
 // ============================================================
@@ -1027,9 +1469,12 @@ function renderRSVP() {
   const rsvpMap = {};
   if (state.rsvp) state.rsvp.slice(1).forEach(r => { if (r[0]) rsvpMap[r[0]] = r[1]; });
 
+  // Apply pending changes for display
+  const pending = state.pendingRSVP || {};
+
   let inCount = 0, outCount = 0, unknown = 0;
   players.forEach(p => {
-    const s = rsvpMap[p[0]];
+    const s = pending[p[0]] !== undefined ? pending[p[0]] : (rsvpMap[p[0]] || '');
     if (s === 'In') inCount++; else if (s === 'Out') outCount++; else unknown++;
   });
 
@@ -1042,32 +1487,101 @@ function renderRSVP() {
   <div class="section-header">This Week<div class="actions"><button class="btn sm danger" onclick="confirmResetRSVP()">Reset</button></div></div>
   <div class="standings-card">`;
   players.forEach(p => {
-    const status = rsvpMap[p[0]] || '';
-    html += `<div class="rsvp-row">
-      <div class="rsvp-name">${nameWithCrown(p[0])}</div>
+    const saved = rsvpMap[p[0]] || '';
+    const current = pending[p[0]] !== undefined ? pending[p[0]] : saved;
+    const isPending = pending[p[0]] !== undefined && pending[p[0]] !== saved;
+    html += `<div class="rsvp-row ${isPending ? 'pending' : ''}">
+      <div class="rsvp-name">${nameWithCrown(p[0])}${isPending ? '<span class="pending-dot" title="Unsaved"></span>' : ''}</div>
       <div class="rsvp-buttons">
-        <button class="rsvp-btn in ${status==='In'?'active':''}" onclick="setRSVP('${escapeHtml(p[0])}', 'In')">In</button>
-        <button class="rsvp-btn out ${status==='Out'?'active':''}" onclick="setRSVP('${escapeHtml(p[0])}', 'Out')">Out</button>
+        <button class="rsvp-btn in ${current==='In'?'active':''}" onclick="stageRSVP('${escapeHtml(p[0])}', 'In')">In</button>
+        <button class="rsvp-btn out ${current==='Out'?'active':''}" onclick="stageRSVP('${escapeHtml(p[0])}', 'Out')">Out</button>
       </div>
     </div>`;
   });
   html += `</div>`;
+
+  // Pending changes bar
+  const pendingCount = Object.keys(pending).filter(name => pending[name] !== (rsvpMap[name] || '')).length;
+  if (pendingCount > 0) {
+    html += `<div class="confirm-bar">
+      <div class="confirm-bar-text">${pendingCount} unsaved change${pendingCount > 1 ? 's' : ''}</div>
+      <div class="confirm-bar-actions">
+        <button class="btn sm" onclick="discardRSVPChanges()">Discard</button>
+        <button class="btn sm primary" onclick="saveRSVPChanges()">Save</button>
+      </div>
+    </div>`;
+  }
   $('rsvp-content').innerHTML = html;
 }
 
-async function setRSVP(name, status) {
-  try {
-    await apiPost('updateRSVP', { name, status });
-    if (!state.rsvp) state.rsvp = [['Player','Status','Note','Updated']];
-    let found = false;
-    for (let i = 1; i < state.rsvp.length; i++) {
-      if (state.rsvp[i][0] === name) { state.rsvp[i][1] = status; found = true; break; }
+function stageRSVP(name, status) {
+  if (!state.pendingRSVP) state.pendingRSVP = {};
+  // Compare against saved state. If toggling back to saved value, remove from pending.
+  const rsvpMap = {};
+  if (state.rsvp) state.rsvp.slice(1).forEach(r => { if (r[0]) rsvpMap[r[0]] = r[1]; });
+  const saved = rsvpMap[name] || '';
+
+  // If they tap the same button as the current pending/saved value, treat as toggle-off
+  const currentPending = state.pendingRSVP[name];
+  const current = currentPending !== undefined ? currentPending : saved;
+  if (current === status) {
+    // Toggle off → empty
+    if (saved === '') {
+      delete state.pendingRSVP[name];
+    } else {
+      state.pendingRSVP[name] = '';
     }
-    if (!found) state.rsvp.push([name, status, '', new Date()]);
-    renderRSVP();
-    renderMatchups();
-    toast(`${name}: ${status}`, 'success');
-  } catch(e) { toast('Could not save', 'error'); }
+  } else {
+    if (status === saved) {
+      delete state.pendingRSVP[name];
+    } else {
+      state.pendingRSVP[name] = status;
+    }
+  }
+  renderRSVP();
+}
+
+function discardRSVPChanges() {
+  state.pendingRSVP = {};
+  renderRSVP();
+  toast('Discarded', 'success');
+}
+
+async function saveRSVPChanges() {
+  const pending = state.pendingRSVP || {};
+  const rsvpMap = {};
+  if (state.rsvp) state.rsvp.slice(1).forEach(r => { if (r[0]) rsvpMap[r[0]] = r[1]; });
+  const toSave = Object.keys(pending).filter(name => pending[name] !== (rsvpMap[name] || ''));
+  if (!toSave.length) return;
+
+  toast(`Saving ${toSave.length}...`);
+  let saved = 0, failed = 0;
+  for (const name of toSave) {
+    const status = pending[name] || '';
+    try {
+      await apiPost('updateRSVP', { name, status });
+      // Update local state
+      if (!state.rsvp) state.rsvp = [['Player','Status','Note','Updated']];
+      let found = false;
+      for (let i = 1; i < state.rsvp.length; i++) {
+        if (state.rsvp[i][0] === name) { state.rsvp[i][1] = status; found = true; break; }
+      }
+      if (!found) state.rsvp.push([name, status, '', new Date()]);
+      saved++;
+    } catch(e) {
+      failed++;
+    }
+  }
+  state.pendingRSVP = {};
+  renderRSVP();
+  renderMatchups();
+  if (failed) toast(`${saved} saved, ${failed} failed`, 'error');
+  else toast(`${saved} saved`, 'success');
+}
+
+// Legacy single-status setter still exposed in case anything calls it
+async function setRSVP(name, status) {
+  stageRSVP(name, status);
 }
 
 function confirmResetRSVP() {
@@ -1978,7 +2492,27 @@ function openGenerate() {
 }
 function renderGenerate() {
   let html = `<div class="player-detail-header"><button class="back-btn" onclick="backToMore()">←</button><div><div class="player-detail-name">Generate Teams</div></div></div>`;
+
+  // Count available players for hints
+  const availCount = state.roster ? state.roster.slice(1).filter(r => r[0] && r[1] === 'Available').length : 0;
+  const requiredCount = state.genNumTeams * state.genTeamSize;
+
   html += `<div class="gen-controls">
+    <div class="gen-row">
+      <div class="gen-label">Number of Teams</div>
+      <div class="toggle-group">
+        <button class="toggle-btn ${state.genNumTeams===2?'active':''}" onclick="state.genNumTeams=2;state.genTeams=null;renderGenerate();">2 Teams</button>
+        <button class="toggle-btn ${state.genNumTeams===3?'active':''}" onclick="state.genNumTeams=3;state.genTeams=null;renderGenerate();">3 Teams</button>
+        <button class="toggle-btn ${state.genNumTeams===4?'active':''}" onclick="state.genNumTeams=4;state.genTeams=null;renderGenerate();">4 Teams</button>
+      </div>
+    </div>
+    <div class="gen-row">
+      <div class="gen-label">Players per Team</div>
+      <div class="toggle-group">
+        <button class="toggle-btn ${state.genTeamSize===3?'active':''}" onclick="state.genTeamSize=3;state.genTeams=null;renderGenerate();">3 Players</button>
+        <button class="toggle-btn ${state.genTeamSize===4?'active':''}" onclick="state.genTeamSize=4;state.genTeams=null;renderGenerate();">4 Players</button>
+      </div>
+    </div>
     <div class="gen-row">
       <div class="gen-label">Avg Source</div>
       <div class="toggle-group">
@@ -1994,6 +2528,16 @@ function renderGenerate() {
         <button class="toggle-btn ${state.genFillMode==='Their Avg'?'active':''}" onclick="state.genFillMode='Their Avg';renderGenerate();">Their Avg</button>
       </div>
     </div>
+    <div class="gen-row">
+      <label style="display:flex;align-items:center;gap:10px;padding:8px;cursor:pointer;background:var(--surface2);border-radius:10px;">
+        <input type="checkbox" id="gen-fill-to-size" ${state.genFillToSize?'checked':''} onchange="state.genFillToSize=this.checked;renderGenerate();" style="width:18px;height:18px;accent-color:var(--accent);">
+        <span style="font-family:'Barlow Condensed',sans-serif;font-weight:600;font-size:13px;">Pad short teams with league avg placeholders</span>
+      </label>
+    </div>
+    <div style="font-size:12px;color:var(--muted);padding:6px 0;line-height:1.5;">
+      Need <strong style="color:var(--accent);">${requiredCount}</strong> players · <strong style="color:${availCount>=requiredCount?'var(--success)':'var(--danger)'};">${availCount} available</strong>
+      ${availCount < requiredCount && !state.genFillToSize ? ` · <span style="color:var(--danger);">Short ${requiredCount - availCount}</span>` : ''}
+    </div>
     <button class="btn primary" onclick="doGenerate()">Generate</button>
   </div>`;
 
@@ -2006,12 +2550,15 @@ function renderGenerate() {
         <div class="tp-list">`;
       t.players.forEach((p, pIdx) => {
         const isSwapTarget = state.genSwapTarget && state.genSwapTarget.team === i && state.genSwapTarget.idx === pIdx;
+        const isFill = p.isFill || p.status === 'Fill';
         html += `<div class="tp-row">
-          <div class="tp-player ${p.status === 'Unavailable' ? 'unavail' : ''}">
-            ${nameWithCrown(p.name)} ${p.status === 'Unavailable' ? '<span class="absent-tag">OUT</span>' : ''}
+          <div class="tp-player ${p.status === 'Unavailable' ? 'unavail' : ''} ${isFill ? 'fill' : ''}">
+            ${isFill ? `<span style="color:var(--muted);font-style:italic;">League Avg Fill</span>` : nameWithCrown(p.name)}
+            ${p.status === 'Unavailable' ? '<span class="absent-tag">OUT</span>' : ''}
+            ${isFill ? '<span class="fill-tag">FILL</span>' : ''}
           </div>
           <div class="tp-avg">${p.avg.toFixed(1)}</div>
-          <button class="swap-btn ${isSwapTarget ? 'selected' : ''}" onclick="handleSwap(${i}, ${pIdx})">${isSwapTarget ? 'Pick swap' : 'Swap'}</button>
+          ${isFill ? '' : `<button class="swap-btn ${isSwapTarget ? 'selected' : ''}" onclick="handleSwap(${i}, ${pIdx})">${isSwapTarget ? 'Pick swap' : 'Swap'}</button>`}
         </div>`;
       });
       html += `</div></div>`;
@@ -2025,7 +2572,13 @@ function renderGenerate() {
 async function doGenerate() {
   toast('Generating...');
   try {
-    const r = await apiPost('generateTeams', { fillMode: state.genFillMode, avgSource: state.genAvgSource });
+    const r = await apiPost('generateTeams', {
+      fillMode: state.genFillMode,
+      avgSource: state.genAvgSource,
+      numTeams: state.genNumTeams,
+      teamSize: state.genTeamSize,
+      fillToSize: state.genFillToSize
+    });
     if (r.error) { toast(r.error, 'error'); return; }
     state.genTeams = r.teams;
     state.genSwapTarget = null;
@@ -2127,6 +2680,7 @@ async function loadAll() {
   try {
     const all = await apiGet('getAll');
     state.current = all.currentWeek;
+    state.active = all.activeWeek;
     state.roster = all.roster;
     state.rsvp = all.rsvp;
     state.stats = all.stats;
