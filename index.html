@@ -80,6 +80,8 @@ input[type=number] { width: 52px; height: 42px; font-size: 17px; }
 input[type=number]::-webkit-inner-spin-button { display: none; }
 input[type=number]:focus, input[type=text]:focus, select:focus { border-color: var(--accent); background: #1a1e0a; }
 input.has-score { border-color: rgba(232,255,71,0.35); color: var(--accent); }
+input.absent-prefill { border-color: var(--border2) !important; color: var(--muted) !important; background: var(--surface2); font-style: italic; }
+input.absent-prefill.score-pending { font-style: normal; }
 input.score-pending { border-color: var(--success) !important; background: rgba(74,222,128,0.08) !important; color: var(--success) !important; animation: pulsePending 1.6s ease-in-out infinite; }
 @keyframes pulsePending { 0%,100% { box-shadow: 0 0 0 0 rgba(74,222,128,0.0); } 50% { box-shadow: 0 0 0 3px rgba(74,222,128,0.18); } }
 .confirm-bar.floating { position: fixed; left: 16px; right: 16px; bottom: calc(76px + env(safe-area-inset-bottom)); margin: 0; border-radius: 14px; box-shadow: 0 6px 24px rgba(0,0,0,0.5); }
@@ -121,7 +123,10 @@ textarea:focus { border-color: var(--accent); }
 .rsvp-row:last-child { border-bottom: none; }
 .pending-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); margin-left: 6px; display: inline-block; box-shadow: 0 0 8px rgba(232,255,71,0.5); }
 .confirm-bar { position: sticky; bottom: 76px; margin: 12px -16px 0; padding: 12px 16px; background: rgba(19,19,22,0.96); backdrop-filter: blur(12px); border-top: 1px solid var(--border2); border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 10px; z-index: 80; animation: slideUp 0.2s; }
-.confirm-bar-text { flex: 1; font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 13px; letter-spacing: 1px; text-transform: uppercase; color: var(--accent); }
+.confirm-bar.saving { justify-content: center; padding: 14px 16px; }
+.confirm-bar-text { flex: 1; font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 13px; letter-spacing: 1px; text-transform: uppercase; color: var(--accent); display: flex; align-items: center; gap: 8px; }
+.confirm-bar.saving .confirm-bar-text { flex: 0; }
+.bar-spinner { width: 14px; height: 14px; border: 2px solid rgba(232,255,71,0.25); border-top-color: var(--accent); border-radius: 50%; display: inline-block; animation: spin 0.7s linear infinite; }
 .confirm-bar-actions { display: flex; gap: 6px; }
 @keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
 .rsvp-name { flex: 1; font-family: 'Barlow Condensed', sans-serif; font-size: 17px; font-weight: 700; display: flex; align-items: center; }
@@ -292,6 +297,9 @@ textarea:focus { border-color: var(--accent); }
 .odds-toggle-link { font-size: 10px; color: var(--muted2); cursor: pointer; letter-spacing: 1px; text-transform: uppercase; user-select: none; }
 .odds-toggle-link:hover { color: var(--muted); }
 .odds-line { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; justify-content: flex-end; }
+.odds-line-stack { display: flex; flex-direction: column; gap: 4px; align-items: flex-end; }
+.odds-line-row { display: flex; gap: 5px; align-items: center; }
+.odds-prefix { font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 9px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--muted); min-width: 42px; text-align: right; }
 .odds-chip { font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 10px; letter-spacing: 0.8px; padding: 2px 7px; border-radius: 4px; background: var(--surface3); color: var(--muted); border: 1px solid var(--border2); white-space: nowrap; }
 .odds-chip.fav { color: var(--accent); border-color: rgba(232,255,71,0.3); }
 .odds-chip.dog { color: var(--accent2); border-color: rgba(255,79,109,0.3); }
@@ -929,6 +937,16 @@ function spreadAndML(t1, t2) {
   return { fav, spread, ml: ml(diff) };
 }
 
+// For expected totals on the matchups screen: returns the projected score for a player.
+// Fill placeholders use league avg. Real players who are RSVP=Out also get league avg
+// (since they're being filled with a soft fill so the team's expected total is realistic).
+// Real present players use their own avg.
+function effectiveAvg(playerName, isFill, leagueAvg) {
+  if (isFill) return leagueAvg;
+  if (isPlayerOut(playerName)) return leagueAvg;
+  return getPlayerCurrentAvg(playerName);
+}
+
 function hasActiveWeek() {
   if (!state.active || state.active.length < 2) return false;
   // Check if there's at least one non-empty data row (name in slot)
@@ -1056,8 +1074,10 @@ function renderActiveMatchups() {
         cells = `<div class="score-group"><span class="score-label">G${gameNum}</span><div class="score-display" style="color:var(--muted);">${Math.round(leagueAvg)}</div></div>`;
       } else {
         const initial = score === '' || score == null ? '' : score;
+        // Absent players have pre-filled league-avg scores; show subtly
+        const isAbsentPrefill = absent && initial !== '';
         cells = `<div class="score-group"><span class="score-label">G${gameNum}</span>
-          <input type="number" inputmode="numeric" pattern="[0-9]*" class="${initial ? 'has-score' : ''}" placeholder="—" value="${initial}" data-team="${escapeHtml(teamName)}" data-slot="${p.slot}" data-game="${gameNum}" data-initial="${initial}" oninput="onActiveScoreEdit(this)">
+          <input type="number" inputmode="numeric" pattern="[0-9]*" class="${initial ? 'has-score' : ''} ${isAbsentPrefill ? 'absent-prefill' : ''}" placeholder="—" value="${initial}" data-team="${escapeHtml(teamName)}" data-slot="${p.slot}" data-game="${gameNum}" data-initial="${initial}" oninput="onActiveScoreEdit(this)" title="${isAbsentPrefill ? 'Pre-filled league avg (player is Out). Type real score to override.' : ''}">
         </div>`;
       }
       const displayName = p.isFill ? `<span style="color:var(--muted);font-style:italic;">League Avg Fill</span>` : nameWithCrown(p.name);
@@ -1073,7 +1093,7 @@ function renderActiveMatchups() {
     }).join('');
 
     const expectedTotal = t.players.reduce((s, p) => {
-      const a = p.isFill ? leagueAvg : getPlayerCurrentAvg(p.name);
+      const a = effectiveAvg(p.name, p.isFill, leagueAvg);
       return s + (a > 0 ? Math.round(a) : 0);
     }, 0);
 
@@ -1127,7 +1147,7 @@ function renderActiveMatchups() {
     if (state.oddsRevealed) {
       const expectedTotal = teamName => {
         return teams[teamName].players.reduce((s, p) => {
-          const a = p.isFill ? leagueAvg : getPlayerCurrentAvg(p.name);
+          const a = effectiveAvg(p.name, p.isFill, leagueAvg);
           return s + (a > 0 ? Math.round(a) : 0);
         }, 0);
       };
@@ -1294,10 +1314,9 @@ function renderOddsBlock(label, odds, t1Name, t2Name, e1, e2, t1Roster, t2Roster
   return `<div class="odds-block">
     <div class="odds-block-head">
       <span class="odds-block-label">${label}</span>
-      <div class="odds-line">
-        <span class="odds-chip fav">${favName} -${odds.spread}</span>
-        <span class="odds-chip fav">${odds.ml.fav}</span>
-        <span class="odds-chip dog">${dogName} ${odds.ml.dog}</span>
+      <div class="odds-line-stack">
+        <div class="odds-line-row"><span class="odds-prefix">SPREAD</span><span class="odds-chip fav">${favName} -${odds.spread}</span></div>
+        <div class="odds-line-row"><span class="odds-prefix">ML</span><span class="odds-chip fav">${favName} ${odds.ml.fav}</span><span class="odds-chip dog">${dogName} ${odds.ml.dog}</span></div>
       </div>
     </div>
     <div class="odds-block-teams">
@@ -1408,20 +1427,27 @@ async function savePendingScores() {
     }
   }
 
+  // Show spinner in bar
   const bar = document.getElementById('pending-score-bar');
-  if (bar) bar.style.opacity = '0.6';
-  toast(`Saving ${keys.length}...`);
+  if (bar) {
+    bar.classList.add('saving');
+    bar.innerHTML = `
+      <div class="confirm-bar-text"><span class="bar-spinner"></span> Saving ${keys.length} score${keys.length > 1 ? 's' : ''}...</div>`;
+  }
 
-  let saved = 0, failed = 0;
-  for (const key of keys) {
-    const p = pending[key];
-    try {
-      if (p.legacy) {
-        await apiPost('updateScore', { cell: p.cell, score: p.score });
-      } else {
-        await apiPost('updateActiveScore', { team: p.team, slot: p.slot, gameNum: p.gameNum, score: p.score });
-      }
-      // Update local state.active so totals reflect saved values
+  // Build batch payload
+  const batchScores = keys.map(k => {
+    const p = pending[k];
+    if (p.legacy) return { cell: p.cell, score: p.score, legacy: true };
+    return { team: p.team, slot: p.slot, gameNum: p.gameNum, score: p.score };
+  });
+
+  try {
+    const r = await apiPost('batchUpdateScores', { scores: batchScores });
+    if (r.error) { toast(r.error, 'error'); updatePendingScoreBar(); return; }
+    // Apply to local state.active / state.current
+    keys.forEach(k => {
+      const p = pending[k];
       if (!p.legacy && state.active) {
         for (let i = 1; i < state.active.length; i++) {
           const row = state.active[i];
@@ -1438,18 +1464,18 @@ async function savePendingScores() {
           if (state.current[row]) state.current[row][col] = parseInt(p.score);
         }
       }
-      saved++;
-    } catch(e) {
-      failed++;
-    }
+    });
+    state.pendingScores = {};
+    renderMatchups();
+    updatePendingScoreBar();
+    const errCount = (r.errors || []).length;
+    if (errCount) toast(`${r.updated} saved, ${errCount} failed`, 'error');
+    else toast(`${r.updated} saved`, 'success');
+  } catch(e) {
+    toast('Save failed', 'error');
+    if (bar) bar.classList.remove('saving');
+    updatePendingScoreBar();
   }
-
-  state.pendingScores = {};
-  renderMatchups();
-  updatePendingScoreBar();
-
-  if (failed) toast(`${saved} saved, ${failed} failed`, 'error');
-  else toast(`${saved} saved`, 'success');
 }
 
 // (Legacy per-input confirm functions removed in v6.1 — replaced by staged batch save above.)
@@ -1547,32 +1573,54 @@ async function saveRSVPChanges() {
   const pending = state.pendingRSVP || {};
   const rsvpMap = {};
   if (state.rsvp) state.rsvp.slice(1).forEach(r => { if (r[0]) rsvpMap[r[0]] = r[1]; });
-  const toSave = Object.keys(pending).filter(name => pending[name] !== (rsvpMap[name] || ''));
-  if (!toSave.length) return;
+  const toSaveNames = Object.keys(pending).filter(name => pending[name] !== (rsvpMap[name] || ''));
+  if (!toSaveNames.length) return;
 
-  toast(`Saving ${toSave.length}...`);
-  let saved = 0, failed = 0;
-  for (const name of toSave) {
-    const status = pending[name] || '';
-    try {
-      await apiPost('updateRSVP', { name, status });
-      // Update local state
-      if (!state.rsvp) state.rsvp = [['Player','Status','Note','Updated']];
+  // Set the bar to saving state with spinner
+  setRSVPBarSaving(toSaveNames.length);
+
+  const changes = toSaveNames.map(name => ({ name, status: pending[name] || '' }));
+
+  try {
+    const r = await apiPost('batchUpdateRSVP', { changes });
+    if (r.error) { toast(r.error, 'error'); renderRSVP(); return; }
+    // Apply to local state.rsvp + state.roster
+    if (!state.rsvp) state.rsvp = [['Player','Status','Note','Updated']];
+    changes.forEach(c => {
       let found = false;
       for (let i = 1; i < state.rsvp.length; i++) {
-        if (state.rsvp[i][0] === name) { state.rsvp[i][1] = status; found = true; break; }
+        if (state.rsvp[i][0] === c.name) { state.rsvp[i][1] = c.status; found = true; break; }
       }
-      if (!found) state.rsvp.push([name, status, '', new Date()]);
-      saved++;
-    } catch(e) {
-      failed++;
-    }
+      if (!found) state.rsvp.push([c.name, c.status, '', new Date()]);
+      // Mirror into roster Available/Unavailable so Generate Teams sees fresh state immediately
+      if (state.roster) {
+        for (let i = 1; i < state.roster.length; i++) {
+          if (state.roster[i][0] === c.name) {
+            state.roster[i][1] = (c.status === 'In') ? 'Available' : 'Unavailable';
+            break;
+          }
+        }
+      }
+    });
+    state.pendingRSVP = {};
+    renderRSVP();
+    renderMatchups();
+    toast(`${r.updated} saved`, 'success');
+  } catch(e) {
+    toast('Save failed', 'error');
+    renderRSVP();
   }
-  state.pendingRSVP = {};
-  renderRSVP();
-  renderMatchups();
-  if (failed) toast(`${saved} saved, ${failed} failed`, 'error');
-  else toast(`${saved} saved`, 'success');
+}
+
+function setRSVPBarSaving(count) {
+  // Re-render with a saving state on the confirm bar
+  const sectionEl = document.getElementById('rsvp-content');
+  if (!sectionEl) return;
+  let bar = sectionEl.querySelector('.confirm-bar');
+  if (bar) {
+    bar.classList.add('saving');
+    bar.innerHTML = `<div class="confirm-bar-text"><span class="bar-spinner"></span> Saving ${count} RSVP${count > 1 ? 's' : ''}...</div>`;
+  }
 }
 
 // Legacy single-status setter still exposed in case anything calls it
@@ -2497,16 +2545,13 @@ function renderGenerate() {
     <div class="gen-row">
       <div class="gen-label">Number of Teams</div>
       <div class="toggle-group">
-        <button class="toggle-btn ${state.genNumTeams===2?'active':''}" onclick="state.genNumTeams=2;state.genTeams=null;renderGenerate();">2 Teams</button>
-        <button class="toggle-btn ${state.genNumTeams===3?'active':''}" onclick="state.genNumTeams=3;state.genTeams=null;renderGenerate();">3 Teams</button>
-        <button class="toggle-btn ${state.genNumTeams===4?'active':''}" onclick="state.genNumTeams=4;state.genTeams=null;renderGenerate();">4 Teams</button>
+        ${[2,3,4,5,6].map(n => `<button class="toggle-btn ${state.genNumTeams===n?'active':''}" onclick="state.genNumTeams=${n};state.genTeams=null;renderGenerate();">${n}</button>`).join('')}
       </div>
     </div>
     <div class="gen-row">
       <div class="gen-label">Players per Team</div>
       <div class="toggle-group">
-        <button class="toggle-btn ${state.genTeamSize===3?'active':''}" onclick="state.genTeamSize=3;state.genTeams=null;renderGenerate();">3 Players</button>
-        <button class="toggle-btn ${state.genTeamSize===4?'active':''}" onclick="state.genTeamSize=4;state.genTeams=null;renderGenerate();">4 Players</button>
+        ${[2,3,4,5].map(n => `<button class="toggle-btn ${state.genTeamSize===n?'active':''}" onclick="state.genTeamSize=${n};state.genTeams=null;renderGenerate();">${n}</button>`).join('')}
       </div>
     </div>
     <div class="gen-row">
@@ -2566,6 +2611,13 @@ function renderGenerate() {
 }
 
 async function doGenerate() {
+  // Refresh roster from server first so latest RSVPs are reflected
+  toast('Loading roster...');
+  try {
+    const fresh = await apiGet('getRoster');
+    if (Array.isArray(fresh)) state.roster = fresh;
+  } catch(e) { /* non-fatal, fall through */ }
+
   toast('Generating...');
   try {
     const r = await apiPost('generateTeams', {
@@ -2602,7 +2654,10 @@ async function confirmGenerate() {
   if (!state.genTeams) return;
   toast('Confirming...');
   try {
-    await apiPost('confirmMatchups', { teams: state.genTeams.map(t => t.players) });
+    await apiPost('confirmMatchups', {
+      teams: state.genTeams.map(t => t.players),
+      avgSource: state.genAvgSource
+    });
     toast('Teams set!', 'success');
     await loadAll();
     state.moreView = 'home'; renderMore();
