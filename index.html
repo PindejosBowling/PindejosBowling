@@ -431,8 +431,19 @@ function openModal(html) { $('modal-content').innerHTML = html; $('modal-backdro
 function closeModal() { $('modal-backdrop').classList.remove('active'); }
 async function apiGet(action) { const r = await fetch(`${API}?action=${action}`); return r.json(); }
 async function apiPost(action, payload = {}) {
-  const r = await fetch(API, { method: 'POST', body: JSON.stringify({ action, ...payload }) });
-  return r.json();
+  const body = JSON.stringify({ action, ...payload });
+  let lastErr = null;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const r = await fetch(API, { method: 'POST', body });
+      return r.json();
+    } catch(e) {
+      lastErr = e;
+      // Brief backoff before retry (Apps Script sometimes has transient hiccups)
+      if (attempt === 0) await new Promise(res => setTimeout(res, 1200));
+    }
+  }
+  throw lastErr || new Error('Network error');
 }
 function isPresent(v) { return v === true || v === 'TRUE' || v === 1 || v === '1'; }
 
