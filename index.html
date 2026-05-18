@@ -2646,7 +2646,9 @@ async function doGenerate() {
       fillToSize: state.genFillToSize
     });
   } catch(e) {
-    toast('Network error: ' + (e.message || e.toString()).slice(0, 60), 'error');
+    const msg = (e && (e.message || e.toString())) || 'unknown';
+    toast('Network error: ' + String(msg).slice(0, 100), 'error');
+    console.error('generateTeams network error:', e);
     return;
   }
   if (!r) {
