@@ -385,8 +385,8 @@ nav { position: fixed; bottom: 0; left: 0; right: 0; background: rgba(19,19,22,0
 <script>
 const API = "https://script.google.com/macros/s/AKfycbz8sg1ZRlVaD0tXpN6GRlC1awZYu1_KhD7z5Bc88KjsTNntq1dBzAf8aHGbW0th_Tjhiw/exec";
 const SC = { SEASON: 0, WEEK: 1, PLAYER: 2, TEAM: 3, G1: 4, G1_OPP: 5, G2: 6, G2_OPP: 7, PINS: 8, WINS: 9, LOSSES: 10, GAMES: 11, PRESENT: 12 };
-// Active Week sheet columns
-const AW_SEASON = 0, AW_WEEK = 1, AW_TEAM = 2, AW_SLOT = 3, AW_NAME = 4, AW_G1 = 5, AW_G2 = 6, AW_G1_OPP = 7, AW_G2_OPP = 8, AW_IS_FILL = 9;
+// Active Week sheet columns (v6.3 schema: supports up to 3 games per night)
+const AW_SEASON = 0, AW_WEEK = 1, AW_TEAM = 2, AW_SLOT = 3, AW_NAME = 4, AW_G1 = 5, AW_G2 = 6, AW_G3 = 7, AW_G1_OPP = 8, AW_G2_OPP = 9, AW_G3_OPP = 10, AW_IS_FILL = 11;
 
 const state = {
   current: null, roster: null, rsvp: null, stats: null, board: null,
@@ -809,21 +809,24 @@ function getPlayerCurrentAvg(name, sourceOverride) {
 
 function getLeagueAvg(source) {
   source = source || state.avgDisplay || 'last-played';
+  // Use weighted avg (total pins / total games) consistently across all sources for apples-to-apples math.
+  let rows;
   if (source === 'last-played') {
-    // Get every player's last-season avg, then league avg of those
-    const playerNames = Array.from(new Set(statsRows().filter(r => isPresent(r[SC.PRESENT])).map(r => r[SC.PLAYER])));
-    const avgs = playerNames.map(n => getPlayerCurrentAvg(n, 'last-played')).filter(v => v > 0);
-    return avgs.length ? avgs.reduce((a, b) => a + b, 0) / avgs.length : 0;
-  }
-  if (source === 'current-season') {
+    // "Last Season" = most recent season EXCLUDING the current/active one.
+    // Fall back to current if there's no prior season.
+    const seasons = getSeasons();
+    if (!seasons.length) return 0;
+    const cur = String(getCurrentSeason());
+    const priorSeasons = seasons.filter(s => String(s) !== cur);
+    const targetSeason = priorSeasons.length ? priorSeasons[priorSeasons.length - 1] : seasons[seasons.length - 1];
+    rows = statsRows().filter(r => String(r[SC.SEASON]) === String(targetSeason) && isPresent(r[SC.PRESENT]));
+  } else if (source === 'current-season') {
     const cur = getCurrentSeason();
-    const rows = statsRows().filter(r => String(r[SC.SEASON]) === String(cur) && isPresent(r[SC.PRESENT]));
-    const totalPins = rows.reduce((s, r) => s + (parseInt(r[SC.PINS]) || 0), 0);
-    const totalGames = rows.reduce((s, r) => s + (parseInt(r[SC.GAMES]) || 0), 0);
-    return totalGames ? totalPins / totalGames : 0;
+    rows = statsRows().filter(r => String(r[SC.SEASON]) === String(cur) && isPresent(r[SC.PRESENT]));
+  } else {
+    // all-time
+    rows = statsRows().filter(r => isPresent(r[SC.PRESENT]));
   }
-  // all-time
-  const rows = statsRows().filter(r => isPresent(r[SC.PRESENT]));
   const totalPins = rows.reduce((s, r) => s + (parseInt(r[SC.PINS]) || 0), 0);
   const totalGames = rows.reduce((s, r) => s + (parseInt(r[SC.GAMES]) || 0), 0);
   return totalGames ? totalPins / totalGames : 0;
@@ -958,7 +961,7 @@ function hasActiveWeek() {
 
 // Read Active Week into a structured form
 function readActiveWeek() {
-  const teams = {};   // teamName -> { name, players: [{name, slot, g1, g2, isFill}], opponents: {1: 'Team X', 2: 'Team Y'} }
+  const teams = {};   // teamName -> { name, players: [{name, slot, g1, g2, g3, isFill}], opponents: {1, 2, 3} }
   if (!state.active) return teams;
   for (let i = 1; i < state.active.length; i++) {
     const r = state.active[i];
@@ -970,11 +973,13 @@ function readActiveWeek() {
       slot: parseInt(r[AW_SLOT]) || 0,
       g1: r[AW_G1] === '' || r[AW_G1] == null ? '' : (parseInt(r[AW_G1]) || 0),
       g2: r[AW_G2] === '' || r[AW_G2] == null ? '' : (parseInt(r[AW_G2]) || 0),
+      g3: r[AW_G3] === '' || r[AW_G3] == null ? '' : (parseInt(r[AW_G3]) || 0),
       isFill: r[AW_IS_FILL] === true || r[AW_IS_FILL] === 'TRUE' || r[AW_IS_FILL] === 1
     };
     teams[team].players.push(p);
     if (r[AW_G1_OPP]) teams[team].opponents[1] = r[AW_G1_OPP];
     if (r[AW_G2_OPP]) teams[team].opponents[2] = r[AW_G2_OPP];
+    if (r[AW_G3_OPP]) teams[team].opponents[3] = r[AW_G3_OPP];
   }
   // Sort players by slot within each team
   Object.values(teams).forEach(t => t.players.sort((a, b) => a.slot - b.slot));
@@ -995,11 +1000,12 @@ function renderActiveMatchups() {
   const teamNames = Object.keys(teams).sort();  // Team 1, Team 2, Team 3, Team 4
   const mode = state.matchupsView;
 
-  // Compute team total per game
-  const teamTotals = { 1: {}, 2: {} };
+  // Compute team total per game (3 possible rounds)
+  const teamTotals = { 1: {}, 2: {}, 3: {} };
   teamNames.forEach(t => {
     teamTotals[1][t] = teams[t].players.reduce((s, p) => s + (parseInt(p.g1) || 0), 0);
     teamTotals[2][t] = teams[t].players.reduce((s, p) => s + (parseInt(p.g2) || 0), 0);
+    teamTotals[3][t] = teams[t].players.reduce((s, p) => s + (parseInt(p.g3) || 0), 0);
   });
 
   // Build unique matchup pairings per game from opponent fields
@@ -1012,17 +1018,18 @@ function renderActiveMatchups() {
       if (opp && teams[opp] && teams[opp].opponents[gameNum] === t) {
         seen.add(t); seen.add(opp);
         pairings.push({ a: t, b: opp });
-      } else if (!opp) {
-        // Team sits out this game
-        seen.add(t);
-        pairings.push({ a: t, b: null });
       }
+      // For 3+ game configs: don't show "sits out" rows here — only teams with opps actually play this round
     });
     return pairings;
   }
 
-  const g1Pairings = buildPairings(1);
-  const g2Pairings = buildPairings(2);
+  // Detect how many rounds this week has
+  const rounds = [];
+  for (let g = 1; g <= 3; g++) {
+    const pairs = buildPairings(g);
+    if (pairs.length) rounds.push({ num: g, pairs });
+  }
 
   // Set badges
   const settingsW = state.settings ? (state.settings.slice(1).find(r => r[0] === 'CurrentSeason') || [])[1] : null;
@@ -1061,7 +1068,7 @@ function renderActiveMatchups() {
     if (!t) return '';
     const total = teamTotals[gameNum][teamName];
     const playerRows = t.players.map(p => {
-      const score = gameNum === 1 ? p.g1 : p.g2;
+      const score = gameNum === 1 ? p.g1 : (gameNum === 2 ? p.g2 : p.g3);
       const avg = p.isFill ? leagueAvg : getPlayerCurrentAvg(p.name);
       const absent = !p.isFill && isPlayerOut(p.name);
       const champ = !p.isFill && isChampion(p.name);
@@ -1130,14 +1137,10 @@ function renderActiveMatchups() {
     </div>`;
   }
 
-  if (g1Pairings.length) {
-    html += `<div class="match-header"><div class="match-title">Game 1</div></div>`;
-    g1Pairings.forEach(p => html += renderPairing(p, 1));
-  }
-  if (g2Pairings.length) {
-    html += `<div class="match-header"><div class="match-title">Game 2</div></div>`;
-    g2Pairings.forEach(p => html += renderPairing(p, 2));
-  }
+  rounds.forEach(rnd => {
+    html += `<div class="match-header"><div class="match-title">Game ${rnd.num}</div></div>`;
+    rnd.pairs.forEach(p => html += renderPairing(p, rnd.num));
+  });
 
   // Odds easter egg
   if (mode === 'expected') {
@@ -1154,7 +1157,9 @@ function renderActiveMatchups() {
       const rosterFor = teamName => teams[teamName].players.map(p => p.isFill ? 'Fill' : p.name);
       let oddsHtml = `<div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:14px;margin-top:8px;">
         <div style="font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:14px;letter-spacing:2px;text-transform:uppercase;color:var(--accent2);margin-bottom:10px;">Tonight's Lines</div>`;
-      [...g1Pairings.map(p => ({...p, gameNum:1})), ...g2Pairings.map(p => ({...p, gameNum:2}))].forEach(p => {
+      const allPairs = [];
+      rounds.forEach(rnd => rnd.pairs.forEach(p => allPairs.push({...p, gameNum: rnd.num})));
+      allPairs.forEach(p => {
         if (!p.b) return;
         const e1 = expectedTotal(p.a), e2 = expectedTotal(p.b);
         const odds = spreadAndML(e1, e2);
@@ -1453,7 +1458,8 @@ async function savePendingScores() {
           const row = state.active[i];
           if (!row) continue;
           if (String(row[AW_TEAM]) === p.team && parseInt(row[AW_SLOT]) === p.slot) {
-            state.active[i][p.gameNum === 1 ? AW_G1 : AW_G2] = parseInt(p.score);
+            const aCol = p.gameNum === 1 ? AW_G1 : (p.gameNum === 2 ? AW_G2 : AW_G3);
+            state.active[i][aCol] = parseInt(p.score);
             break;
           }
         }
@@ -2619,19 +2625,36 @@ async function doGenerate() {
   } catch(e) { /* non-fatal, fall through */ }
 
   toast('Generating...');
+  let r;
   try {
-    const r = await apiPost('generateTeams', {
+    r = await apiPost('generateTeams', {
       fillMode: state.genFillMode,
       avgSource: state.genAvgSource,
       numTeams: state.genNumTeams,
       teamSize: state.genTeamSize,
       fillToSize: state.genFillToSize
     });
-    if (r.error) { toast(r.error, 'error'); return; }
-    state.genTeams = r.teams;
-    state.genSwapTarget = null;
-    renderGenerate();
-  } catch(e) { toast('Failed', 'error'); }
+  } catch(e) {
+    toast('Network error: ' + (e.message || e.toString()).slice(0, 60), 'error');
+    return;
+  }
+  if (!r) {
+    toast('No response from server', 'error');
+    return;
+  }
+  if (r.error) {
+    toast('Server: ' + String(r.error).slice(0, 80), 'error');
+    console.error('generateTeams error:', r);
+    return;
+  }
+  if (!r.teams || !Array.isArray(r.teams)) {
+    toast('Invalid response shape', 'error');
+    console.error('Bad shape:', r);
+    return;
+  }
+  state.genTeams = r.teams;
+  state.genSwapTarget = null;
+  renderGenerate();
 }
 
 function handleSwap(team, idx) {
