@@ -429,3 +429,60 @@ AP-7  Resolved as a natural consequence of completing AP-1 through AP-6
 - **Track C (data):** AP-4, after AP-1
 
 Track B is the highest volume of work. Migrate one view at a time in this order (simplest to most complex): Standings → RSVP → Match History → More (player list, records, H2H, chemistry, board) → Matchups.
+
+---
+
+## Decommissioning `app.js` — End-State Cleanup
+
+When all AP tracks are complete, `app.js` will be empty and the following cleanup closes out the migration entirely. All four steps should be done together in a single commit.
+
+### What moves where
+
+| `app.js` today | Final location in `src/` |
+|---|---|
+| `const state = { ... }` | `src/stores/data.js`, `ui.js`, `pending.js`, `prefs.js` |
+| `apiGet()`, `apiPost()`, `API` const | `src/api.js` |
+| `SC`, `AW_*` column index constants | `src/utils/constants.js` |
+| `escapeHtml()`, `initials()`, etc. | `src/utils/helpers.js` |
+| `aggregateStandings()`, `getChemistry()`, etc. | `src/utils/data.js` |
+| `renderMatchups()`, `renderStandings()`, etc. | `src/views/MatchupsView.vue`, `StandingsView.vue`, etc. |
+| Inline `onclick` handlers | `@click` bindings inside the corresponding `.vue` files |
+
+### The four cleanup steps
+
+**1. Delete `app.js`**
+The file should be empty (or contain only comments) at this point. Remove it from the repo root.
+
+**2. Remove the legacy `<script>` tag from `index.html`**
+```html
+<!-- Remove this line -->
+<script src="app.js"></script>
+```
+The `<div id="vue-app">` is now the sole app mount point.
+
+**3. Remove the `copyLegacyScript` plugin from `vite.config.js`**
+```js
+// Remove the plugin function and its import
+function copyLegacyScript() { ... }
+
+// Remove from plugins array — only vue() remains
+plugins: [vue()]
+```
+
+**4. Remove Chart.js CDN script from `index.html`**
+```html
+<!-- Remove this line — Chart.js is now imported via npm in the component that uses it -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+```
+
+### Verify the build is clean
+
+After cleanup, `npm run build` should produce no warnings and a `dist/` containing only:
+
+```
+dist/index.html
+dist/assets/index-[hash].js   ← Vue bundle
+dist/assets/index-[hash].css  ← compiled styles
+```
+
+No `dist/app.js`. No "can't be bundled" warning. The legacy scaffold is gone.
