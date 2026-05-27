@@ -166,7 +166,9 @@ export default function RsvpScreen() {
         />
         {hasPending && (
           <ConfirmBar
-            message={`${pendingCount} unsaved change${pendingCount !== 1 ? 's' : ''}`}
+            icon="✏️"
+            title={saving ? `Saving ${pendingCount} change${pendingCount !== 1 ? 's' : ''}...` : `${pendingCount} unsaved change${pendingCount !== 1 ? 's' : ''}`}
+            subtext={saving ? undefined : 'Save or discard your changes'}
             saving={saving}
             onDiscard={discard}
             onSave={saveChanges}

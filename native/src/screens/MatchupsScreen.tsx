@@ -57,22 +57,31 @@ function VsBar() {
 }
 
 // ---------------------------------------------------------------------------
-// Active panel
+// Approximate heights for floating bars (used for paddingBottom calculation)
 // ---------------------------------------------------------------------------
 
-function ActivePanel() {
-  const { active, stats, settings, rsvp, loadAll } = useDataStore()
+const CONFIRM_BAR_HEIGHT = 57
+const ARCHIVE_BAR_HEIGHT = 57
+
+// ---------------------------------------------------------------------------
+// Root screen
+// ---------------------------------------------------------------------------
+
+export default function MatchupsScreen() {
+  const { loading, active, stats, settings, rsvp, loadAll, loadActive } = useDataStore()
   const { matchupsView, oddsRevealed, set: setUi } = useUiStore()
   const { pendingScores, set: setPending } = usePendingStore()
   const { avgDisplay } = usePrefsStore()
   const [saving, setSaving] = useState(false)
   const [showArchive, setShowArchive] = useState(false)
 
-  const teams: Record<string, any> = readActiveWeek(active)
+  useEffect(() => { loadActive() }, [])
 
+  const isActive = hasActiveWeek(active)
+  const teams: Record<string, any> = isActive ? readActiveWeek(active) : {}
   const leagueAvg: number = getLeagueAvg(stats, settings, avgDisplay as any)
 
-  const hasSavedScores = Object.values(teams).some((team: any) =>
+  const hasSavedScores = isActive && Object.values(teams).some((team: any) =>
     team.players.some((p: any) =>
       !p.isFill && (
         (p.g1 !== '' && p.g1 > 0) ||
@@ -162,181 +171,9 @@ function ActivePanel() {
     }
   }
 
-  return (
-    <View style={{ flex: 1 }}>
-      {/* Title + view toggle */}
-      <View style={styles.titleRow}>
-        <Text style={styles.screenTitle}>Matchups</Text>
-        <ViewToggle value={matchupsView} onChange={v => setUi({ matchupsView: v })} />
-      </View>
-
-      {/* Archive & Advance prompt */}
-      {hasSavedScores && (
-        <View style={styles.archivePrompt}>
-          <Text style={styles.archiveIcon}>📦</Text>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.archiveTitle}>SCORES SAVED</Text>
-            <Text style={styles.archiveSubtext}>Ready to archive this week?</Text>
-          </View>
-          <TouchableOpacity
-            style={styles.archiveBtn}
-            onPress={() => setShowArchive(true)}
-            activeOpacity={0.7}
-          >
-            <Text style={styles.archiveBtnText}>Archive &amp; Advance</Text>
-          </TouchableOpacity>
-        </View>
-      )}
-
-      {/* Rounds */}
-      {rounds.map(round => (
-        <View key={round.num}>
-          <View style={styles.matchHeader}>
-            <Text style={styles.matchTitle}>Game {round.num}</Text>
-          </View>
-          {round.pairings.map((pairing, pi) => (
-            <View key={pi} style={styles.matchupCard}>
-              {!pairing.b ? (
-                <View>
-                  <View style={[styles.teamBlock]}>
-                    <Text style={styles.teamLabel}>{pairing.a.name}</Text>
-                    {pairing.a.players.map((player: any) => (
-                      <PlayerScoreRow
-                        key={player.slot}
-                        player={player}
-                        teamName={pairing.a.name}
-                        gameNum={round.num}
-                        mode={matchupsView as 'scores' | 'expected'}
-                        leagueAvg={leagueAvg}
-                      />
-                    ))}
-                  </View>
-                  <Text style={styles.sitsOut}>— sits out —</Text>
-                </View>
-              ) : (
-                <>
-                  <View style={[styles.teamBlock, aWins(pairing, round.num) && styles.teamBlockWinner]}>
-                    <Text style={[styles.teamLabel, aWins(pairing, round.num) && styles.teamLabelWinner]}>
-                      {pairing.a.name}
-                    </Text>
-                    {pairing.a.players.map((player: any) => (
-                      <PlayerScoreRow
-                        key={player.slot}
-                        player={player}
-                        teamName={pairing.a.name}
-                        gameNum={round.num}
-                        mode={matchupsView as 'scores' | 'expected'}
-                        leagueAvg={leagueAvg}
-                      />
-                    ))}
-                    {matchupsView === 'expected' ? (
-                      <View style={styles.totalRow}>
-                        <Text style={styles.totalLabel}>Expected total</Text>
-                        <Text style={[styles.totalVal, styles.totalLosing]}>{expectedTotal(pairing.a)}</Text>
-                      </View>
-                    ) : getTotal(pairing.a.name, round.num) > 0 ? (
-                      <View style={styles.totalRow}>
-                        <Text style={styles.totalLabel}>Team total</Text>
-                        <Text style={[styles.totalVal, aWins(pairing, round.num) ? styles.totalWinning : styles.totalLosing]}>
-                          {getTotal(pairing.a.name, round.num)}
-                        </Text>
-                      </View>
-                    ) : null}
-                  </View>
-
-                  <VsBar />
-
-                  <View style={[styles.teamBlock, bWins(pairing, round.num) && styles.teamBlockWinner]}>
-                    <Text style={[styles.teamLabel, bWins(pairing, round.num) && styles.teamLabelWinner]}>
-                      {pairing.b.name}
-                    </Text>
-                    {pairing.b.players.map((player: any) => (
-                      <PlayerScoreRow
-                        key={player.slot}
-                        player={player}
-                        teamName={pairing.b.name}
-                        gameNum={round.num}
-                        mode={matchupsView as 'scores' | 'expected'}
-                        leagueAvg={leagueAvg}
-                      />
-                    ))}
-                    {matchupsView === 'expected' ? (
-                      <View style={styles.totalRow}>
-                        <Text style={styles.totalLabel}>Expected total</Text>
-                        <Text style={[styles.totalVal, styles.totalLosing]}>{expectedTotal(pairing.b)}</Text>
-                      </View>
-                    ) : getTotal(pairing.b.name, round.num) > 0 ? (
-                      <View style={styles.totalRow}>
-                        <Text style={styles.totalLabel}>Team total</Text>
-                        <Text style={[styles.totalVal, bWins(pairing, round.num) ? styles.totalWinning : styles.totalLosing]}>
-                          {getTotal(pairing.b.name, round.num)}
-                        </Text>
-                      </View>
-                    ) : null}
-                  </View>
-                </>
-              )}
-            </View>
-          ))}
-        </View>
-      ))}
-
-      {/* Odds easter egg (expected mode only) */}
-      {matchupsView === 'expected' && (
-        <View>
-          <TouchableOpacity
-            style={styles.oddsToggle}
-            onPress={() => setUi({ oddsRevealed: !oddsRevealed })}
-            activeOpacity={0.7}
-          >
-            <Text style={styles.oddsToggleText}>{oddsRevealed ? '· hide odds ·' : '· · ·'}</Text>
-          </TouchableOpacity>
-          {oddsRevealed && (
-            <View style={styles.oddsPanel}>
-              <Text style={styles.oddsTitle}>Tonight's Lines</Text>
-              {rounds.map(round =>
-                round.pairings
-                  .filter(p => !!p.b)
-                  .map((pairing, pi) => (
-                    <OddsBlock
-                      key={`${round.num}-${pi}`}
-                      teamA={pairing.a}
-                      teamB={pairing.b}
-                      leagueAvg={leagueAvg}
-                      label={`Game ${round.num} · ${pairing.a.name} vs ${pairing.b.name}`}
-                    />
-                  ))
-              )}
-              <Text style={styles.oddsDisclaimer}>For entertainment only. Lines are made up.</Text>
-            </View>
-          )}
-        </View>
-      )}
-
-      {hasPendingScores && (
-        <ConfirmBar
-          message={saving ? `Saving ${pendingCount} score${pendingCount !== 1 ? 's' : ''}...` : `${pendingCount} unsaved score${pendingCount !== 1 ? 's' : ''}`}
-          saving={saving}
-          onDiscard={discardScores}
-          onSave={saveScores}
-        />
-      )}
-
-      <AdminArchiveModal visible={showArchive} onClose={() => setShowArchive(false)} />
-    </View>
-  )
-}
-
-// ---------------------------------------------------------------------------
-// Root screen
-// ---------------------------------------------------------------------------
-
-export default function MatchupsScreen() {
-  const { loading, active, loadActive } = useDataStore()
-
-  useEffect(() => { loadActive() }, [])
-
-  const isActive = hasActiveWeek(active)
+  const floatingPadding =
+    (hasSavedScores ? ARCHIVE_BAR_HEIGHT : 0) +
+    (hasPendingScores ? CONFIRM_BAR_HEIGHT : 0)
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -345,21 +182,188 @@ export default function MatchupsScreen() {
         {loading && !active ? (
           <LoadingView label="Loading matchups" />
         ) : (
-          <ScrollView
-            contentContainerStyle={[styles.scrollContent, { paddingBottom: 100 }]}
-            keyboardShouldPersistTaps="handled"
-            refreshControl={
-              <RefreshControl refreshing={loading} onRefresh={loadActive} tintColor={colors.accent} />
-            }
-          >
-            {isActive ? <ActivePanel /> : (
-              <View style={styles.emptyState}>
-                <Text style={styles.emptyText}>This week's teams haven't been set up yet.</Text>
+          <View style={{ flex: 1 }}>
+            <ScrollView
+              contentContainerStyle={[styles.scrollContent, { paddingBottom: 24 + floatingPadding }]}
+              keyboardShouldPersistTaps="handled"
+              refreshControl={
+                <RefreshControl refreshing={loading} onRefresh={loadActive} tintColor={colors.accent} />
+              }
+            >
+              {isActive ? (
+                <>
+                  {/* Title + view toggle */}
+                  <View style={styles.titleRow}>
+                    <Text style={styles.screenTitle}>Matchups</Text>
+                    <ViewToggle value={matchupsView} onChange={v => setUi({ matchupsView: v })} />
+                  </View>
+
+                  {/* Rounds */}
+                  {rounds.map(round => (
+                    <View key={round.num}>
+                      <View style={styles.matchHeader}>
+                        <Text style={styles.matchTitle}>Game {round.num}</Text>
+                      </View>
+                      {round.pairings.map((pairing, pi) => (
+                        <View key={pi} style={styles.matchupCard}>
+                          {!pairing.b ? (
+                            <View>
+                              <View style={[styles.teamBlock]}>
+                                <Text style={styles.teamLabel}>{pairing.a.name}</Text>
+                                {pairing.a.players.map((player: any) => (
+                                  <PlayerScoreRow
+                                    key={player.slot}
+                                    player={player}
+                                    teamName={pairing.a.name}
+                                    gameNum={round.num}
+                                    mode={matchupsView as 'scores' | 'expected'}
+                                    leagueAvg={leagueAvg}
+                                  />
+                                ))}
+                              </View>
+                              <Text style={styles.sitsOut}>— sits out —</Text>
+                            </View>
+                          ) : (
+                            <>
+                              <View style={[styles.teamBlock, aWins(pairing, round.num) && styles.teamBlockWinner]}>
+                                <Text style={[styles.teamLabel, aWins(pairing, round.num) && styles.teamLabelWinner]}>
+                                  {pairing.a.name}
+                                </Text>
+                                {pairing.a.players.map((player: any) => (
+                                  <PlayerScoreRow
+                                    key={player.slot}
+                                    player={player}
+                                    teamName={pairing.a.name}
+                                    gameNum={round.num}
+                                    mode={matchupsView as 'scores' | 'expected'}
+                                    leagueAvg={leagueAvg}
+                                  />
+                                ))}
+                                {matchupsView === 'expected' ? (
+                                  <View style={styles.totalRow}>
+                                    <Text style={styles.totalLabel}>Expected total</Text>
+                                    <Text style={[styles.totalVal, styles.totalLosing]}>{expectedTotal(pairing.a)}</Text>
+                                  </View>
+                                ) : getTotal(pairing.a.name, round.num) > 0 ? (
+                                  <View style={styles.totalRow}>
+                                    <Text style={styles.totalLabel}>Team total</Text>
+                                    <Text style={[styles.totalVal, aWins(pairing, round.num) ? styles.totalWinning : styles.totalLosing]}>
+                                      {getTotal(pairing.a.name, round.num)}
+                                    </Text>
+                                  </View>
+                                ) : null}
+                              </View>
+
+                              <VsBar />
+
+                              <View style={[styles.teamBlock, bWins(pairing, round.num) && styles.teamBlockWinner]}>
+                                <Text style={[styles.teamLabel, bWins(pairing, round.num) && styles.teamLabelWinner]}>
+                                  {pairing.b.name}
+                                </Text>
+                                {pairing.b.players.map((player: any) => (
+                                  <PlayerScoreRow
+                                    key={player.slot}
+                                    player={player}
+                                    teamName={pairing.b.name}
+                                    gameNum={round.num}
+                                    mode={matchupsView as 'scores' | 'expected'}
+                                    leagueAvg={leagueAvg}
+                                  />
+                                ))}
+                                {matchupsView === 'expected' ? (
+                                  <View style={styles.totalRow}>
+                                    <Text style={styles.totalLabel}>Expected total</Text>
+                                    <Text style={[styles.totalVal, styles.totalLosing]}>{expectedTotal(pairing.b)}</Text>
+                                  </View>
+                                ) : getTotal(pairing.b.name, round.num) > 0 ? (
+                                  <View style={styles.totalRow}>
+                                    <Text style={styles.totalLabel}>Team total</Text>
+                                    <Text style={[styles.totalVal, bWins(pairing, round.num) ? styles.totalWinning : styles.totalLosing]}>
+                                      {getTotal(pairing.b.name, round.num)}
+                                    </Text>
+                                  </View>
+                                ) : null}
+                              </View>
+                            </>
+                          )}
+                        </View>
+                      ))}
+                    </View>
+                  ))}
+
+                  {/* Odds easter egg (expected mode only) */}
+                  {matchupsView === 'expected' && (
+                    <View>
+                      <TouchableOpacity
+                        style={styles.oddsToggle}
+                        onPress={() => setUi({ oddsRevealed: !oddsRevealed })}
+                        activeOpacity={0.7}
+                      >
+                        <Text style={styles.oddsToggleText}>{oddsRevealed ? '· hide odds ·' : '· · ·'}</Text>
+                      </TouchableOpacity>
+                      {oddsRevealed && (
+                        <View style={styles.oddsPanel}>
+                          <Text style={styles.oddsTitle}>Tonight's Lines</Text>
+                          {rounds.map(round =>
+                            round.pairings
+                              .filter(p => !!p.b)
+                              .map((pairing, pi) => (
+                                <OddsBlock
+                                  key={`${round.num}-${pi}`}
+                                  teamA={pairing.a}
+                                  teamB={pairing.b}
+                                  leagueAvg={leagueAvg}
+                                  label={`Game ${round.num} · ${pairing.a.name} vs ${pairing.b.name}`}
+                                />
+                              ))
+                          )}
+                          <Text style={styles.oddsDisclaimer}>For entertainment only. Lines are made up.</Text>
+                        </View>
+                      )}
+                    </View>
+                  )}
+                </>
+              ) : (
+                <View style={styles.emptyState}>
+                  <Text style={styles.emptyText}>This week's teams haven't been set up yet.</Text>
+                </View>
+              )}
+            </ScrollView>
+
+            {/* Floating archive bar — shifts up when ConfirmBar is also visible */}
+            {hasSavedScores && (
+              <View style={[styles.archiveFloatBar, hasPendingScores && { bottom: CONFIRM_BAR_HEIGHT }]}>
+                <Text style={styles.archiveBarIcon}>📦</Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.archiveBarTitle}>SCORES SAVED</Text>
+                  <Text style={styles.archiveBarSubtext}>Ready to archive this week?</Text>
+                </View>
+                <TouchableOpacity
+                  style={styles.archiveBarBtn}
+                  onPress={() => setShowArchive(true)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.archiveBarBtnText}>Archive &amp; Advance</Text>
+                </TouchableOpacity>
               </View>
             )}
-          </ScrollView>
+
+            {/* Floating save/discard bar */}
+            {hasPendingScores && (
+              <ConfirmBar
+                icon="✏️"
+                title={saving ? `Saving ${pendingCount} score${pendingCount !== 1 ? 's' : ''}...` : `${pendingCount} unsaved score${pendingCount !== 1 ? 's' : ''}`}
+                subtext={saving ? undefined : 'Save or discard your changes'}
+                saving={saving}
+                onDiscard={discardScores}
+                onSave={saveScores}
+              />
+            )}
+          </View>
         )}
       </KeyboardAvoidingView>
+
+      <AdminArchiveModal visible={showArchive} onClose={() => setShowArchive(false)} />
     </SafeAreaView>
   )
 }
@@ -433,44 +437,6 @@ const styles = StyleSheet.create({
     fontSize: 22,
     color: colors.text,
     fontWeight: '700',
-  },
-  archivePrompt: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    backgroundColor: 'rgba(251,191,36,0.06)',
-    borderRadius: radius.cardSm,
-    borderWidth: 1,
-    borderColor: 'rgba(251,191,36,0.3)',
-    padding: 12,
-    marginBottom: 12,
-  },
-  archiveIcon: { fontSize: 20 },
-  archiveTitle: {
-    fontFamily: fonts.barlowCondensed,
-    fontSize: 12,
-    letterSpacing: 1.5,
-    textTransform: 'uppercase',
-    color: colors.gold,
-  },
-  archiveSubtext: {
-    fontFamily: fonts.barlow,
-    fontSize: 11,
-    color: colors.muted,
-    marginTop: 2,
-  },
-  archiveBtn: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: radius.cardSm,
-    borderWidth: 1,
-    borderColor: 'rgba(251,191,36,0.4)',
-  },
-  archiveBtnText: {
-    fontFamily: fonts.barlowCondensed,
-    fontSize: 12,
-    color: colors.gold,
-    letterSpacing: 0.5,
   },
   matchHeader: {
     paddingVertical: 6,
@@ -585,6 +551,47 @@ const styles = StyleSheet.create({
     fontFamily: fonts.barlow,
     fontSize: 15,
     color: colors.muted,
+  },
+  archiveFloatBar: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: colors.surface2,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(251,191,36,0.3)',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  archiveBarIcon: { fontSize: 18 },
+  archiveBarTitle: {
+    fontFamily: fonts.barlowCondensed,
+    fontSize: 12,
+    letterSpacing: 1.5,
+    textTransform: 'uppercase',
+    color: colors.gold,
+  },
+  archiveBarSubtext: {
+    fontFamily: fonts.barlow,
+    fontSize: 11,
+    color: colors.muted,
+    marginTop: 1,
+  },
+  archiveBarBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: radius.cardSm,
+    borderWidth: 1,
+    borderColor: 'rgba(251,191,36,0.4)',
+  },
+  archiveBarBtnText: {
+    fontFamily: fonts.barlowCondensed,
+    fontSize: 13,
+    color: colors.gold,
+    letterSpacing: 0.5,
   },
   // Legacy panel player rows
   legacyRow: {
