@@ -1,6 +1,5 @@
 <template>
-  <Teleport to="body">
-    <div class="modal-backdrop active" @click.self="!saving && $emit('close')">
+  <div class="modal-backdrop active" @click.self="!saving && $emit('close')">
       <div class="modal">
         <div class="modal-title">End Season {{ seasonNum }}</div>
         <p style="color:var(--muted);font-size:13px;line-height:1.5;margin-bottom:16px;">
@@ -39,8 +38,7 @@
           </button>
         </div>
       </div>
-    </div>
-  </Teleport>
+  </div>
 </template>
 
 <script setup>

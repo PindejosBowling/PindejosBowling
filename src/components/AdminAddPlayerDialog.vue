@@ -1,6 +1,5 @@
 <template>
-  <Teleport to="body">
-    <div class="modal-backdrop active" @click.self="$emit('close')">
+  <div class="modal-backdrop active" @click.self="$emit('close')">
       <div class="modal">
         <div class="modal-title">Add Player</div>
         <p style="color:var(--muted);font-size:13px;margin-bottom:12px;">
@@ -20,8 +19,7 @@
           </button>
         </div>
       </div>
-    </div>
-  </Teleport>
+  </div>
 </template>
 
 <script setup>
