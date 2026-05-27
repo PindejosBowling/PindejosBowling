@@ -1,6 +1,6 @@
 <template>
   <div class="player-row" :class="{ absent: isOut }">
-    <div class="player-avatar" :class="{ champ: isChamp }">
+    <div class="icon-box sm player-avatar" :class="{ champ: isChamp }">
       {{ player.isFill ? '∅' : initials(player.name) }}
     </div>
     <div class="player-info">
@@ -20,7 +20,7 @@
     </div>
     <div class="score-inputs">
       <div class="score-group">
-        <span class="score-label">G{{ gameNum }}</span>
+        <span class="label-sm">G{{ gameNum }}</span>
         <!-- Fill slot: read-only league avg display -->
         <div v-if="player.isFill" class="score-display" style="color:var(--muted);">
           {{ Math.round(leagueAvg) }}

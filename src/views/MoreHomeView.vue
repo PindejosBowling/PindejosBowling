@@ -5,7 +5,7 @@
 
   <div class="tab-title"><h2>More</h2></div>
 
-  <div class="section-header">League Tools</div>
+  <div class="label section-header">League Tools</div>
   <div class="more-grid">
     <div class="more-tile" @click="router.push({ name: 'player-list' })">
       <div class="more-tile-icon">🎳</div>
@@ -33,7 +33,7 @@
     </div>
   </div>
 
-  <div class="section-header">League Admin</div>
+  <div class="label section-header">League Admin</div>
   <div class="more-grid">
     <div class="more-tile" @click="router.push({ name: 'generate' })">
       <div class="more-tile-icon">🎲</div>

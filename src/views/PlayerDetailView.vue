@@ -22,57 +22,57 @@
   <!-- Stat tiles -->
   <div v-if="profile" class="stat-grid">
     <div class="stat-tile">
-      <div class="stat-tile-label">Avg</div>
+      <div class="label-sm">Avg</div>
       <div class="stat-tile-val">{{ profile.avg > 0 ? profile.avg.toFixed(1) : '—' }}</div>
     </div>
     <div class="stat-tile">
-      <div class="stat-tile-label">High Game</div>
+      <div class="label-sm">High Game</div>
       <div class="stat-tile-val">{{ profile.highGame || '—' }}</div>
     </div>
     <div class="stat-tile">
-      <div class="stat-tile-label">W—L</div>
+      <div class="label-sm">W—L</div>
       <div class="stat-tile-val">{{ profile.totalWins }}–{{ profile.totalLosses }}</div>
     </div>
     <div class="stat-tile">
-      <div class="stat-tile-label">Last 5 Avg</div>
+      <div class="label-sm">Last 5 Avg</div>
       <div class="stat-tile-val">{{ profile.last5Avg > 0 ? profile.last5Avg.toFixed(1) : '—' }}</div>
     </div>
     <div class="stat-tile">
-      <div class="stat-tile-label">Season Avg</div>
+      <div class="label-sm">Season Avg</div>
       <div class="stat-tile-val">{{ profile.seasonAvg > 0 ? profile.seasonAvg.toFixed(1) : '—' }}</div>
     </div>
     <div class="stat-tile">
-      <div class="stat-tile-label">Games</div>
+      <div class="label-sm">Games</div>
       <div class="stat-tile-val">{{ profile.totalGames }}</div>
     </div>
   </div>
 
   <!-- Personal records -->
   <template v-if="records">
-    <div class="section-header">Personal Records</div>
+    <div class="label section-header">Personal Records</div>
     <div class="record-card">
       <div class="record-card-head">
-        <div class="record-icon">🎳</div>
+        <div class="icon-box lg">🎳</div>
         <div class="record-info">
-          <div class="record-label">High Game</div>
+          <div class="label-sm">High Game</div>
           <div class="record-value">{{ records.highGame || '—' }}</div>
         </div>
       </div>
     </div>
     <div class="record-card">
       <div class="record-card-head">
-        <div class="record-icon">📈</div>
+        <div class="icon-box lg">📈</div>
         <div class="record-info">
-          <div class="record-label">High Series (G1+G2)</div>
+          <div class="label-sm">High Series (G1+G2)</div>
           <div class="record-value">{{ records.highSeries || '—' }}</div>
         </div>
       </div>
     </div>
     <div class="record-card">
       <div class="record-card-head">
-        <div class="record-icon">🔥</div>
+        <div class="icon-box lg">🔥</div>
         <div class="record-info">
-          <div class="record-label">Best Streak</div>
+          <div class="label-sm">Best Streak</div>
           <div class="record-value">
             {{ records.bestStreak }} {{ records.bestStreak === 1 ? 'night' : 'nights' }}
           </div>
@@ -86,15 +86,15 @@
   </template>
 
   <!-- Chart -->
-  <div v-if="profile && profile.games.length" class="chart-card">
-    <div class="chart-title">Score Trend</div>
+  <div v-if="profile && profile.games.length" class="card chart-card">
+    <div class="label chart-title">Score Trend</div>
     <div class="chart-wrap">
       <canvas ref="chartCanvas"></canvas>
     </div>
   </div>
 
   <!-- Game log toggle -->
-  <div class="section-header">
+  <div class="label section-header">
     Game Log
     <div class="actions">
       <div class="toggle-group" style="padding:2px;">
@@ -115,7 +115,7 @@
   </div>
 
   <!-- Game log table -->
-  <div v-if="weekRows.length" class="score-history-table">
+  <div v-if="weekRows.length" class="card-md">
     <div class="score-history-row head week-grouped">
       <span>Week</span><span>Team</span><span>G1</span><span>G2</span><span>W—L</span><span></span>
     </div>
@@ -152,18 +152,18 @@
               <div class="match-header" style="margin:8px 0;">
                 <div class="match-title" style="font-size:16px;">Game {{ m.gameNum }}</div>
               </div>
-              <div class="matchup">
+              <div class="card matchup">
                 <div class="vs-bar">
                   <div class="vs-left">
                     <div class="team-block">
-                      <div class="team-label">{{ m.a?.team }}</div>
+                      <div class="label team-label">{{ m.a?.team }}</div>
                       <div
                         v-for="p in m.a?.players"
                         :key="p.name"
                         class="player-row"
                         :class="{ absent: !p.present }"
                       >
-                        <div class="player-avatar">{{ initials(p.name) }}</div>
+                        <div class="icon-box sm player-avatar">{{ initials(p.name) }}</div>
                         <div class="player-name">
                           {{ p.name }}
                           <span v-if="!p.present" class="absent-tag">absent</span>
@@ -179,14 +179,14 @@
                   <div class="vs-chip">VS</div>
                   <div v-if="m.b" class="vs-right">
                     <div class="team-block">
-                      <div class="team-label">{{ m.b.team }}</div>
+                      <div class="label team-label">{{ m.b.team }}</div>
                       <div
                         v-for="p in m.b.players"
                         :key="p.name"
                         class="player-row"
                         :class="{ absent: !p.present }"
                       >
-                        <div class="player-avatar">{{ initials(p.name) }}</div>
+                        <div class="icon-box sm player-avatar">{{ initials(p.name) }}</div>
                         <div class="player-name">
                           {{ p.name }}
                           <span v-if="!p.present" class="absent-tag">absent</span>

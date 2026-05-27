@@ -5,9 +5,9 @@
   </div>
 
   <!-- Controls -->
-  <div class="gen-controls">
+  <div class="card gen-controls">
     <div class="gen-row">
-      <div class="gen-label">Number of Teams</div>
+      <div class="label">Number of Teams</div>
       <div class="toggle-group">
         <button
           v-for="n in [2,3,4,5,6]"
@@ -20,7 +20,7 @@
     </div>
 
     <div class="gen-row">
-      <div class="gen-label">Players per Team</div>
+      <div class="label">Players per Team</div>
       <div class="toggle-group">
         <button
           v-for="n in [2,3,4,5]"
@@ -33,7 +33,7 @@
     </div>
 
     <div class="gen-row">
-      <div class="gen-label">Avg Source</div>
+      <div class="label">Avg Source</div>
       <div class="toggle-group">
         <button
           class="toggle-btn"
@@ -54,7 +54,7 @@
     </div>
 
     <div class="gen-row">
-      <div class="gen-label">Fill MIA Players With</div>
+      <div class="label">Fill MIA Players With</div>
       <div class="toggle-group">
         <button
           class="toggle-btn"
@@ -101,7 +101,7 @@
 
   <!-- Generated teams -->
   <template v-if="pendingStore.genTeams">
-    <div class="section-header">
+    <div class="label section-header">
       Generated Teams
       <div class="actions">
         <span class="right-text">
@@ -113,7 +113,7 @@
     <div
       v-for="(team, tIdx) in pendingStore.genTeams"
       :key="tIdx"
-      class="team-preview-card"
+      class="card-md team-preview-card"
     >
       <div class="tp-head">
         <div class="tp-name">Team {{ tIdx + 1 }}</div>
@@ -123,7 +123,7 @@
         <div
           v-for="(player, pIdx) in team.players"
           :key="pIdx"
-          class="tp-row"
+          class="list-row tp-row"
         >
           <div
             class="tp-player"

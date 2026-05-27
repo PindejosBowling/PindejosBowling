@@ -31,9 +31,9 @@
 
       <template v-for="(pairing, pi) in round.pairings" :key="pi">
         <!-- Team sits out (no opponent for this round) -->
-        <div v-if="!pairing.b" class="matchup">
+        <div v-if="!pairing.b" class="card matchup">
           <div class="team-block">
-            <div class="team-label">{{ pairing.a.name }}</div>
+            <div class="label team-label">{{ pairing.a.name }}</div>
             <PlayerScoreRow
               v-for="player in pairing.a.players"
               :key="player.slot"
@@ -48,10 +48,10 @@
         </div>
 
         <!-- Normal matchup -->
-        <div v-else class="matchup">
+        <div v-else class="card matchup">
           <!-- Team A -->
           <div class="team-block" :class="{ winner: aWins(pairing, round.num) }">
-            <div class="team-label" :class="{ winner: aWins(pairing, round.num) }">{{ pairing.a.name }}</div>
+            <div class="label team-label" :class="{ winner: aWins(pairing, round.num) }">{{ pairing.a.name }}</div>
             <PlayerScoreRow
               v-for="player in pairing.a.players"
               :key="player.slot"
@@ -84,7 +84,7 @@
 
           <!-- Team B -->
           <div class="team-block" :class="{ winner: bWins(pairing, round.num) }">
-            <div class="team-label" :class="{ winner: bWins(pairing, round.num) }">{{ pairing.b.name }}</div>
+            <div class="label team-label" :class="{ winner: bWins(pairing, round.num) }">{{ pairing.b.name }}</div>
             <PlayerScoreRow
               v-for="player in pairing.b.players"
               :key="player.slot"

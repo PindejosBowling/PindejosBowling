@@ -12,11 +12,11 @@
   </div>
 
   <!-- High Single Game -->
-  <div class="record-card">
+  <div class="card-md record-card">
     <div class="record-card-head">
-      <div class="record-icon">🎳</div>
+      <div class="icon-box lg">🎳</div>
       <div class="record-info">
-        <div class="record-label">High Single Game</div>
+        <div class="label-sm">High Single Game</div>
         <template v-if="records.highGame.val">
           <div class="record-value">{{ records.highGame.by }}</div>
           <div class="record-detail">{{ records.highGame.when }}</div>
@@ -28,11 +28,11 @@
   </div>
 
   <!-- High Series -->
-  <div class="record-card">
+  <div class="card-md record-card">
     <div class="record-card-head">
-      <div class="record-icon">📈</div>
+      <div class="icon-box lg">📈</div>
       <div class="record-info">
-        <div class="record-label">High Series (G1+G2)</div>
+        <div class="label-sm">High Series (G1+G2)</div>
         <template v-if="records.highSeries.val">
           <div class="record-value">{{ records.highSeries.by }}</div>
           <div class="record-detail">{{ records.highSeries.when }}</div>
@@ -44,11 +44,11 @@
   </div>
 
   <!-- High Team Game -->
-  <div class="record-card">
+  <div class="card-md record-card">
     <div class="record-card-head">
-      <div class="record-icon">💪</div>
+      <div class="icon-box lg">💪</div>
       <div class="record-info">
-        <div class="record-label">High Team Game</div>
+        <div class="label-sm">High Team Game</div>
         <template v-if="records.highTeamGame.val">
           <div class="record-value">{{ records.highTeamGame.team }}</div>
           <div class="record-detail">{{ records.highTeamGame.when }}</div>
@@ -70,11 +70,11 @@
   </div>
 
   <!-- High Team Night -->
-  <div class="record-card">
+  <div class="card-md record-card">
     <div class="record-card-head">
-      <div class="record-icon">🌙</div>
+      <div class="icon-box lg">🌙</div>
       <div class="record-info">
-        <div class="record-label">High Team Night</div>
+        <div class="label-sm">High Team Night</div>
         <template v-if="records.highTeamNight.val">
           <div class="record-value">{{ records.highTeamNight.team }}</div>
           <div class="record-detail">{{ records.highTeamNight.when }}</div>
@@ -116,11 +116,11 @@
   </div>
 
   <!-- Best Season Avg -->
-  <div class="record-card">
+  <div class="card-md record-card">
     <div class="record-card-head">
-      <div class="record-icon">🏆</div>
+      <div class="icon-box lg">🏆</div>
       <div class="record-info">
-        <div class="record-label">Best Season Avg</div>
+        <div class="label-sm">Best Season Avg</div>
         <template v-if="records.bestSeasonAvg.val">
           <div class="record-value">{{ records.bestSeasonAvg.by }}</div>
           <div class="record-detail">{{ records.bestSeasonAvg.when }}</div>

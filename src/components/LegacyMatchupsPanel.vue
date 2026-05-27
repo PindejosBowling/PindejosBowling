@@ -29,10 +29,10 @@
         <div class="match-title">Game {{ round.num }}</div>
       </div>
 
-      <div v-for="(pairing, pi) in round.pairings" :key="pi" class="matchup">
+      <div v-for="(pairing, pi) in round.pairings" :key="pi" class="card matchup">
         <!-- Team A -->
         <div class="team-block" :class="{ winner: pairing.a.total > pairing.b.total && pairing.a.total > 0 }">
-          <div class="team-label" :class="{ winner: pairing.a.total > pairing.b.total && pairing.a.total > 0 }">
+          <div class="label team-label" :class="{ winner: pairing.a.total > pairing.b.total && pairing.a.total > 0 }">
             {{ pairing.a.name }}
           </div>
           <!-- Player rows -->
@@ -55,7 +55,7 @@
             </div>
             <div class="score-inputs">
               <div class="score-group">
-                <span class="score-label">G{{ round.num }}</span>
+                <span class="label-sm">G{{ round.num }}</span>
                 <div class="score-display" :style="uiStore.matchupsView === 'expected' ? 'color:var(--muted)' : ''">
                   {{ uiStore.matchupsView === 'expected' ? playerExpected(player.name) : (player.score || '—') }}
                 </div>
@@ -85,7 +85,7 @@
 
         <!-- Team B -->
         <div class="team-block" :class="{ winner: pairing.b.total > pairing.a.total && pairing.b.total > 0 }">
-          <div class="team-label" :class="{ winner: pairing.b.total > pairing.a.total && pairing.b.total > 0 }">
+          <div class="label team-label" :class="{ winner: pairing.b.total > pairing.a.total && pairing.b.total > 0 }">
             {{ pairing.b.name }}
           </div>
           <!-- Player rows -->
@@ -108,7 +108,7 @@
             </div>
             <div class="score-inputs">
               <div class="score-group">
-                <span class="score-label">G{{ round.num }}</span>
+                <span class="label-sm">G{{ round.num }}</span>
                 <div class="score-display" :style="uiStore.matchupsView === 'expected' ? 'color:var(--muted)' : ''">
                   {{ uiStore.matchupsView === 'expected' ? playerExpected(player.name) : (player.score || '—') }}
                 </div>

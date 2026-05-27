@@ -4,7 +4,7 @@
     <div class="player-detail-name">Head to Head</div>
   </div>
 
-  <div class="h2h-controls">
+  <div class="card-sm h2h-controls">
     <select :value="uiStore.h2hP1" @change="uiStore.h2hP1 = $event.target.value">
       <option value="">— Bowler 1 —</option>
       <option v-for="name in allPlayerNames" :key="name" :value="name">{{ name }}</option>
@@ -30,14 +30,14 @@
 
     <template v-else>
       <!-- Summary card -->
-      <div class="h2h-result">
+      <div class="card h2h-result">
         <div class="h2h-head">
           <div class="h2h-name" :class="{ lead: teamLead === 'p1' }">{{ uiStore.h2hP1 }}</div>
           <div class="h2h-divider">vs</div>
           <div class="h2h-name" :class="{ lead: teamLead === 'p2' }">{{ uiStore.h2hP2 }}</div>
         </div>
         <div class="h2h-stat-row">
-          <div class="h2h-stat-label">Team Wins</div>
+          <div class="label-sm h2h-stat-label">Team Wins</div>
           <div class="h2h-stat-line">
             <span class="h2h-stat-num" :class="{ lead: teamLead === 'p1' }">{{ h2hData.teamP1Wins }}</span>
             <span class="h2h-stat-dash">—</span>
@@ -48,7 +48,7 @@
           </div>
         </div>
         <div class="h2h-stat-row">
-          <div class="h2h-stat-label">Pin Total Wins</div>
+          <div class="label-sm h2h-stat-label">Pin Total Wins</div>
           <div class="h2h-stat-line">
             <span class="h2h-stat-num" :class="{ lead: pinLead === 'p1' }">{{ h2hData.pinP1Wins }}</span>
             <span class="h2h-stat-dash">—</span>
@@ -61,8 +61,8 @@
       </div>
 
       <!-- Game log -->
-      <div class="section-header">Every Matchup</div>
-      <div class="score-history-table">
+      <div class="label section-header">Every Matchup</div>
+      <div class="card-md">
         <div
           class="score-history-row head"
           style="grid-template-columns: 60px 1fr 1fr 50px 50px;"

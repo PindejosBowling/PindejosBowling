@@ -4,7 +4,7 @@
     <div class="player-detail-name">Trash Board</div>
   </div>
 
-  <div class="board-composer">
+  <div class="card-sm board-composer">
     <div class="board-author-row">
       <input
         class="board-author-input"
@@ -23,7 +23,7 @@
   </div>
 
   <template v-if="posts.length">
-    <div v-for="(p, i) in posts" :key="i" class="board-post">
+    <div v-for="(p, i) in posts" :key="i" class="card-md board-post">
       <div class="board-post-head">
         <div class="board-author">
           {{ p[1] || 'Anon' }}<span v-if="isChampion(dataStore.champions, p[1])" class="champ-crown">👑</span>

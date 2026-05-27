@@ -23,7 +23,7 @@
     <div
       v-for="group in visibleGroups"
       :key="group.names.join('|')"
-      class="chemistry-card"
+      class="card-sm chemistry-card"
     >
       <div class="chem-pair">
         <template v-for="(name, i) in group.names" :key="name">

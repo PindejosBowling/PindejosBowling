@@ -15,18 +15,18 @@
         >{{ s === 'all' ? 'All-time' : 'Season ' + s }}</option>
       </select>
     </div>
-    <div class="standings-card">
+    <div class="card">
       <div class="standings-header">
-        <span>#</span>
-        <span>Bowler</span>
-        <span>W—L</span>
-        <span>Pins</span>
-        <span>Avg</span>
+        <span class="label-sm">#</span>
+        <span class="label-sm">Bowler</span>
+        <span class="label-sm">W—L</span>
+        <span class="label-sm">Pins</span>
+        <span class="label-sm">Avg</span>
       </div>
       <div
         v-for="(player, index) in standings"
         :key="player.name"
-        class="standing-row"
+        class="list-row standing-row"
         @click="goToPlayer(player.name)"
       >
         <span :class="['s-rank', { top: index < 3 }]">{{ index + 1 }}</span>

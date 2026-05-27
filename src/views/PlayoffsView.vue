@@ -10,33 +10,33 @@
     </div>
 
     <!-- Format cards -->
-    <div class="record-card">
+    <div class="card-md record-card">
       <div class="record-card-head">
-        <div class="record-icon">🏁</div>
+        <div class="icon-box lg">🏁</div>
         <div class="record-info">
-          <div class="record-label">Format</div>
+          <div class="label-sm">Format</div>
           <div class="record-value">Top 4 seeds + snake draft</div>
           <div class="record-detail">Seeds → 1, 2, 3, 4, 4, 3, 2, 1 picking remaining players</div>
         </div>
       </div>
     </div>
 
-    <div class="record-card">
+    <div class="card-md record-card">
       <div class="record-card-head">
-        <div class="record-icon">🏆</div>
+        <div class="icon-box lg">🏆</div>
         <div class="record-info">
-          <div class="record-label">Round 1</div>
+          <div class="label-sm">Round 1</div>
           <div class="record-value">Top two scoring teams advance</div>
           <div class="record-detail">All 4 playoff teams play; cumulative pins decide who moves on</div>
         </div>
       </div>
     </div>
 
-    <div class="record-card">
+    <div class="card-md record-card">
       <div class="record-card-head">
-        <div class="record-icon">🥇</div>
+        <div class="icon-box lg">🥇</div>
         <div class="record-info">
-          <div class="record-label">Finals</div>
+          <div class="label-sm">Finals</div>
           <div class="record-value">Top 2 head-to-head for championship; bottom 2 for 3rd</div>
           <div class="record-detail">Higher pin total wins each game</div>
         </div>

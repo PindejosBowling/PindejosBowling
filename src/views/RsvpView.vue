@@ -6,30 +6,30 @@
   <div v-else>
     <div class="tab-title"><h2>RSVP</h2></div>
     <div class="rsvp-summary">
-      <div class="rsvp-stat in">
-        <div class="rsvp-stat-label">In</div>
+      <div class="card-sm rsvp-stat in">
+        <div class="label-sm">In</div>
         <div class="rsvp-stat-val">{{ inCount }}</div>
       </div>
-      <div class="rsvp-stat out">
-        <div class="rsvp-stat-label">Out</div>
+      <div class="card-sm rsvp-stat out">
+        <div class="label-sm">Out</div>
         <div class="rsvp-stat-val">{{ outCount }}</div>
       </div>
-      <div class="rsvp-stat unknown">
-        <div class="rsvp-stat-label">No reply</div>
+      <div class="card-sm rsvp-stat unknown">
+        <div class="label-sm">No reply</div>
         <div class="rsvp-stat-val">{{ noReply }}</div>
       </div>
     </div>
-    <div class="section-header">
+    <div class="label section-header">
       This Week
       <div class="actions">
         <button class="btn sm danger" @click="resetRSVP">Reset</button>
       </div>
     </div>
-    <div class="standings-card">
+    <div class="card">
       <div
         v-for="player in roster"
         :key="player[0]"
-        class="rsvp-row"
+        class="list-row rsvp-row"
         :class="{ pending: isPending(player[0]) }"
       >
         <div class="rsvp-name">

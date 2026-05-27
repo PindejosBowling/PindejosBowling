@@ -13,10 +13,10 @@
     <div
       v-for="player in filteredPlayers"
       :key="player.name"
-      class="player-card"
+      class="card-md player-card"
       @click="select(player.name)"
     >
-      <div class="player-avatar" :class="{ champ: isChampion(dataStore.champions, player.name) }">
+      <div class="icon-box md player-avatar" :class="{ champ: isChampion(dataStore.champions, player.name) }">
         {{ initials(player.name) }}
       </div>
       <div class="player-card-info">

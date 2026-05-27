@@ -1,6 +1,6 @@
 <template>
   <div class="team-block" :class="{ winner }">
-    <div class="team-label" :class="{ winner }">{{ team }}</div>
+    <div class="label team-label" :class="{ winner }">{{ team }}</div>
     <div
       v-for="player in players"
       :key="player.name"
@@ -16,7 +16,7 @@
       </div>
       <div class="score-inputs">
         <div class="score-group">
-          <span class="score-label">Score</span>
+          <span class="label-sm">Score</span>
           <div class="score-display" :style="{ color: player.score ? 'var(--text)' : 'var(--muted)' }">
             {{ player.score || '—' }}
           </div>

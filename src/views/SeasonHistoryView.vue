@@ -6,7 +6,7 @@
 
   <div v-if="!seasonData.length" class="empty-state">No completed seasons yet.</div>
 
-  <div v-for="item in seasonData" :key="item.season" class="history-season">
+  <div v-for="item in seasonData" :key="item.season" class="card history-season">
     <div class="history-head">
       <div class="history-season-name">Season {{ item.season }}</div>
       <div v-if="item.champs.length" class="history-champion">
