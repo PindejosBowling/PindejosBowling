@@ -15,6 +15,7 @@ interface DataStore {
   loading: boolean
   error: string | null
   loadAll: () => Promise<void>
+  loadActive: () => Promise<void>
 }
 
 export const useDataStore = create<DataStore>((set) => ({
@@ -31,6 +32,17 @@ export const useDataStore = create<DataStore>((set) => ({
         board: all.board, history: all.history, champions: all.champions,
         generated: all.generated, settings: all.settings,
       })
+    } catch (e: any) {
+      set({ error: e.message })
+    } finally {
+      set({ loading: false })
+    }
+  },
+  loadActive: async () => {
+    set({ loading: true, error: null })
+    try {
+      const data = await apiGet('getActiveWeek')
+      set({ active: data })
     } catch (e: any) {
       set({ error: e.message })
     } finally {

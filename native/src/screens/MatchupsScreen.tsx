@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import {
   View,
   Text,
@@ -19,8 +19,7 @@ import { useDataStore } from '../stores/dataStore'
 import { useUiStore } from '../stores/uiStore'
 import { usePendingStore } from '../stores/pendingStore'
 import { usePrefsStore } from '../stores/prefsStore'
-import { hasActiveWeek, readActiveWeek, getLeagueAvg, effectiveAvg, isChampion, isPlayerOut, getPlayerCurrentAvg } from '../utils/data.js'
-import { initials } from '../utils/helpers.js'
+import { hasActiveWeek, readActiveWeek, getLeagueAvg, effectiveAvg } from '../utils/data.js'
 import { apiPost } from '../api.js'
 import { colors, fonts, radius } from '../theme'
 
@@ -86,7 +85,7 @@ function VsBar() {
 // ---------------------------------------------------------------------------
 
 function ActivePanel() {
-  const { active, stats, settings, rsvp, champions, loadAll } = useDataStore()
+  const { active, stats, settings, rsvp, loadAll } = useDataStore()
   const { matchupsView, oddsRevealed, set: setUi } = useUiStore()
   const { pendingScores, set: setPending } = usePendingStore()
   const { avgDisplay, setAvgDisplay } = usePrefsStore()
@@ -365,238 +364,13 @@ function ActivePanel() {
 }
 
 // ---------------------------------------------------------------------------
-// Legacy panel
-// ---------------------------------------------------------------------------
-
-function LegacyPanel() {
-  const { current, stats, settings, rsvp, champions } = useDataStore()
-  const { matchupsView, oddsRevealed, set: setUi } = useUiStore()
-  const { avgDisplay, setAvgDisplay } = usePrefsStore()
-
-  const leagueAvg: number = getLeagueAvg(stats, settings, avgDisplay as any)
-
-  const sourceLabel =
-    avgDisplay === 'current-season' ? 'Season Avg' :
-    avgDisplay === 'all-time' ? 'All-time Avg' :
-    'Last Season Avg'
-
-  function isChamp(name: string) { return isChampion(champions, name) }
-  function isOut(name: string) { return isPlayerOut(rsvp, name) }
-  function playerAvg(name: string) { return getPlayerCurrentAvg(stats, settings, name, avgDisplay as any) }
-  function playerExpected(name: string) {
-    const avg = effectiveAvg(stats, settings, rsvp, name, false, leagueAvg)
-    return avg > 0 ? Math.round(avg) : '—'
-  }
-
-  const legacyData = (() => {
-    const d = current
-    if (!d) return null
-
-    function extractPlayers(rowIndices: number[], nameCol: number, scoreCol: number) {
-      return rowIndices.map(i => {
-        const row = d[i]
-        if (!row) return null
-        const name = row[nameCol]
-        if (!name) return null
-        const raw = row[scoreCol]
-        const score = raw != null && raw !== '' ? (parseInt(raw) || 0) : ''
-        return { name, score }
-      }).filter(Boolean)
-    }
-
-    function makeTeam(name: string, players: any[]) {
-      const total = players.reduce((s, p) => s + (parseInt(p.score) || 0), 0)
-      const expectedTotal = players.reduce((s, p) => {
-        const avg = effectiveAvg(stats, settings, rsvp, p.name, false, leagueAvg)
-        return s + (avg > 0 ? Math.round(avg) : 0)
-      }, 0)
-      return { name, players, total, expectedTotal }
-    }
-
-    const t1g1 = extractPlayers([5, 6, 7],   0, 2)
-    const t3g1 = extractPlayers([5, 6, 7],   4, 6)
-    const t2g1 = extractPlayers([10, 11, 12], 0, 2)
-    const t4g1 = extractPlayers([10, 11, 12], 4, 6)
-    const t4g2 = extractPlayers([18, 19, 20], 0, 2)
-    const t1g2 = extractPlayers([18, 19, 20], 4, 6)
-    const t3g2 = extractPlayers([23, 24, 25], 0, 2)
-    const t2g2 = extractPlayers([23, 24, 25], 4, 6)
-
-    return {
-      weekLabel: d[0]?.[0] ?? '',
-      rounds: [
-        {
-          num: 1,
-          pairings: [
-            { a: makeTeam('Team 1', t1g1), b: makeTeam('Team 3', t3g1) },
-            { a: makeTeam('Team 2', t2g1), b: makeTeam('Team 4', t4g1) },
-          ],
-        },
-        {
-          num: 2,
-          pairings: [
-            { a: makeTeam('Team 4', t4g2), b: makeTeam('Team 1', t1g2) },
-            { a: makeTeam('Team 3', t3g2), b: makeTeam('Team 2', t2g2) },
-          ],
-        },
-      ],
-    }
-  })()
-
-  if (!legacyData) return null
-
-  function oddsTeam(team: any) {
-    return { name: team.name, players: team.players.map((p: any) => ({ ...p, isFill: false })) }
-  }
-
-  return (
-    <View style={{ flex: 1 }}>
-      <View style={styles.titleRow}>
-        <Text style={styles.screenTitle}>Matchups</Text>
-        <ViewToggle value={matchupsView} onChange={v => setUi({ matchupsView: v })} />
-      </View>
-
-      <View style={styles.leagueBanner}>
-        <View>
-          <Text style={styles.bannerLabel}>League {sourceLabel}</Text>
-          <Text style={styles.bannerVal}>{leagueAvg > 0 ? leagueAvg.toFixed(1) : '—'}</Text>
-        </View>
-        <AvgSourceToggle value={avgDisplay} onChange={setAvgDisplay} />
-      </View>
-
-      {legacyData.rounds.map(round => (
-        <View key={round.num}>
-          <View style={styles.matchHeader}>
-            <Text style={styles.matchTitle}>Game {round.num}</Text>
-          </View>
-          {round.pairings.map((pairing, pi) => {
-            const aWins = pairing.a.total > pairing.b.total && pairing.a.total > 0
-            const bWins = pairing.b.total > pairing.a.total && pairing.b.total > 0
-            return (
-              <View key={pi} style={styles.matchupCard}>
-                <View style={[styles.teamBlock, aWins && styles.teamBlockWinner]}>
-                  <Text style={[styles.teamLabel, aWins && styles.teamLabelWinner]}>{pairing.a.name}</Text>
-                  {pairing.a.players.map((player: any) => (
-                    <View key={player.name} style={[styles.legacyRow, isOut(player.name) && { opacity: 0.5 }]}>
-                      <View style={[styles.avatar, isChamp(player.name) && styles.avatarChamp]}>
-                        <Text style={styles.avatarText}>{initials(player.name)}</Text>
-                      </View>
-                      <View style={{ flex: 1 }}>
-                        <Text style={styles.playerName}>
-                          {player.name}{isChamp(player.name) ? ' 👑' : ''}
-                          {isOut(player.name) ? <Text style={styles.outTag}> OUT</Text> : null}
-                        </Text>
-                        {playerAvg(player.name) > 0 && (
-                          <Text style={styles.subtext}>avg {playerAvg(player.name).toFixed(1)}</Text>
-                        )}
-                      </View>
-                      <View style={styles.legacyScoreGroup}>
-                        <Text style={styles.gameLabel}>G{round.num}</Text>
-                        <Text style={[styles.scoreDisplay, matchupsView === 'expected' && { color: colors.muted }]}>
-                          {matchupsView === 'expected' ? playerExpected(player.name) : (player.score || '—')}
-                        </Text>
-                      </View>
-                    </View>
-                  ))}
-                  {matchupsView === 'expected' ? (
-                    <View style={styles.totalRow}>
-                      <Text style={styles.totalLabel}>Expected total</Text>
-                      <Text style={[styles.totalVal, styles.totalLosing]}>{pairing.a.expectedTotal}</Text>
-                    </View>
-                  ) : pairing.a.total > 0 ? (
-                    <View style={styles.totalRow}>
-                      <Text style={styles.totalLabel}>Team total</Text>
-                      <Text style={[styles.totalVal, aWins ? styles.totalWinning : styles.totalLosing]}>
-                        {pairing.a.total}
-                      </Text>
-                    </View>
-                  ) : null}
-                </View>
-
-                <VsBar />
-
-                <View style={[styles.teamBlock, bWins && styles.teamBlockWinner]}>
-                  <Text style={[styles.teamLabel, bWins && styles.teamLabelWinner]}>{pairing.b.name}</Text>
-                  {pairing.b.players.map((player: any) => (
-                    <View key={player.name} style={[styles.legacyRow, isOut(player.name) && { opacity: 0.5 }]}>
-                      <View style={[styles.avatar, isChamp(player.name) && styles.avatarChamp]}>
-                        <Text style={styles.avatarText}>{initials(player.name)}</Text>
-                      </View>
-                      <View style={{ flex: 1 }}>
-                        <Text style={styles.playerName}>
-                          {player.name}{isChamp(player.name) ? ' 👑' : ''}
-                          {isOut(player.name) ? <Text style={styles.outTag}> OUT</Text> : null}
-                        </Text>
-                        {playerAvg(player.name) > 0 && (
-                          <Text style={styles.subtext}>avg {playerAvg(player.name).toFixed(1)}</Text>
-                        )}
-                      </View>
-                      <View style={styles.legacyScoreGroup}>
-                        <Text style={styles.gameLabel}>G{round.num}</Text>
-                        <Text style={[styles.scoreDisplay, matchupsView === 'expected' && { color: colors.muted }]}>
-                          {matchupsView === 'expected' ? playerExpected(player.name) : (player.score || '—')}
-                        </Text>
-                      </View>
-                    </View>
-                  ))}
-                  {matchupsView === 'expected' ? (
-                    <View style={styles.totalRow}>
-                      <Text style={styles.totalLabel}>Expected total</Text>
-                      <Text style={[styles.totalVal, styles.totalLosing]}>{pairing.b.expectedTotal}</Text>
-                    </View>
-                  ) : pairing.b.total > 0 ? (
-                    <View style={styles.totalRow}>
-                      <Text style={styles.totalLabel}>Team total</Text>
-                      <Text style={[styles.totalVal, bWins ? styles.totalWinning : styles.totalLosing]}>
-                        {pairing.b.total}
-                      </Text>
-                    </View>
-                  ) : null}
-                </View>
-              </View>
-            )
-          })}
-        </View>
-      ))}
-
-      {matchupsView === 'expected' && (
-        <View>
-          <TouchableOpacity
-            style={styles.oddsToggle}
-            onPress={() => setUi({ oddsRevealed: !oddsRevealed })}
-            activeOpacity={0.7}
-          >
-            <Text style={styles.oddsToggleText}>{oddsRevealed ? '· hide odds ·' : '· · ·'}</Text>
-          </TouchableOpacity>
-          {oddsRevealed && (
-            <View style={styles.oddsPanel}>
-              <Text style={styles.oddsTitle}>Tonight's Lines</Text>
-              {legacyData.rounds.map(round =>
-                round.pairings.map((pairing, pi) => (
-                  <OddsBlock
-                    key={`${round.num}-${pi}`}
-                    teamA={oddsTeam(pairing.a)}
-                    teamB={oddsTeam(pairing.b)}
-                    leagueAvg={leagueAvg}
-                    label={`Game ${round.num} · ${pairing.a.name} vs ${pairing.b.name}`}
-                  />
-                ))
-              )}
-              <Text style={styles.oddsDisclaimer}>For entertainment only. Lines are made up.</Text>
-            </View>
-          )}
-        </View>
-      )}
-    </View>
-  )
-}
-
-// ---------------------------------------------------------------------------
 // Root screen
 // ---------------------------------------------------------------------------
 
 export default function MatchupsScreen() {
-  const { loading, active, current, loadAll } = useDataStore()
+  const { loading, active, loadActive } = useDataStore()
+
+  useEffect(() => { loadActive() }, [])
 
   const isActive = hasActiveWeek(active)
 
@@ -604,19 +378,19 @@ export default function MatchupsScreen() {
     <SafeAreaView style={styles.safeArea}>
       <AppHeader />
       <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
-        {loading && !active && !current ? (
+        {loading && !active ? (
           <LoadingView label="Loading matchups" />
         ) : (
           <ScrollView
             contentContainerStyle={[styles.scrollContent, { paddingBottom: 100 }]}
             keyboardShouldPersistTaps="handled"
             refreshControl={
-              <RefreshControl refreshing={loading} onRefresh={loadAll} tintColor={colors.accent} />
+              <RefreshControl refreshing={loading} onRefresh={loadActive} tintColor={colors.accent} />
             }
           >
-            {isActive ? <ActivePanel /> : current ? <LegacyPanel /> : (
+            {isActive ? <ActivePanel /> : (
               <View style={styles.emptyState}>
-                <Text style={styles.emptyText}>No matchup data available.</Text>
+                <Text style={styles.emptyText}>This week's teams haven't been set up yet.</Text>
               </View>
             )}
           </ScrollView>

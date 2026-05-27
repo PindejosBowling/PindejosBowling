@@ -598,7 +598,7 @@ export function getLeagueRecords(stats, season) {
 export function hasActiveWeek(active) {
   if (!active || active.length < 2) return false
   for (let i = 1; i < active.length; i++) {
-    if (active[i] && active[i][AW.NAME]) return true
+    if (active[i] && active[i][AW.NAME] && active[i][AW.TEAM]) return true
   }
   return false
 }
