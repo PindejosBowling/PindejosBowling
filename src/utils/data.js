@@ -12,8 +12,7 @@
 //   const dataStore = useDataStore()
 //   const standings = computed(() => aggregateStandings(dataStore.stats, 'all'))
 //
-import { SC, AW_NAME, AW_TEAM, AW_SLOT, AW_G1, AW_G2, AW_G3,
-         AW_G1_OPP, AW_G2_OPP, AW_G3_OPP, AW_IS_FILL } from './constants.js'
+import { SC, AW } from './constants.js'
 import { isPresent, combinations } from './helpers.js'
 
 // ---------------------------------------------------------------------------
@@ -599,7 +598,7 @@ export function getLeagueRecords(stats, season) {
 export function hasActiveWeek(active) {
   if (!active || active.length < 2) return false
   for (let i = 1; i < active.length; i++) {
-    if (active[i] && active[i][AW_NAME]) return true
+    if (active[i] && active[i][AW.NAME]) return true
   }
   return false
 }
@@ -615,21 +614,21 @@ export function readActiveWeek(active) {
   if (!active) return teams
   for (let i = 1; i < active.length; i++) {
     const r = active[i]
-    if (!r || !r[AW_NAME]) continue
-    const team = r[AW_TEAM]
+    if (!r || !r[AW.NAME]) continue
+    const team = r[AW.TEAM]
     if (!teams[team]) teams[team] = { name: team, players: [], opponents: {} }
     const p = {
-      name:   r[AW_NAME],
-      slot:   parseInt(r[AW_SLOT]) || 0,
-      g1:     r[AW_G1] === '' || r[AW_G1] == null ? '' : (parseInt(r[AW_G1]) || 0),
-      g2:     r[AW_G2] === '' || r[AW_G2] == null ? '' : (parseInt(r[AW_G2]) || 0),
-      g3:     r[AW_G3] === '' || r[AW_G3] == null ? '' : (parseInt(r[AW_G3]) || 0),
-      isFill: r[AW_IS_FILL] === true || r[AW_IS_FILL] === 'TRUE' || r[AW_IS_FILL] === 1,
+      name:   r[AW.NAME],
+      slot:   parseInt(r[AW.SLOT]) || 0,
+      g1:     r[AW.G1] === '' || r[AW.G1] == null ? '' : (parseInt(r[AW.G1]) || 0),
+      g2:     r[AW.G2] === '' || r[AW.G2] == null ? '' : (parseInt(r[AW.G2]) || 0),
+      g3:     r[AW.G3] === '' || r[AW.G3] == null ? '' : (parseInt(r[AW.G3]) || 0),
+      isFill: r[AW.IS_FILL] === true || r[AW.IS_FILL] === 'TRUE' || r[AW.IS_FILL] === 1,
     }
     teams[team].players.push(p)
-    if (r[AW_G1_OPP]) teams[team].opponents[1] = r[AW_G1_OPP]
-    if (r[AW_G2_OPP]) teams[team].opponents[2] = r[AW_G2_OPP]
-    if (r[AW_G3_OPP]) teams[team].opponents[3] = r[AW_G3_OPP]
+    if (r[AW.G1_OPP]) teams[team].opponents[1] = r[AW.G1_OPP]
+    if (r[AW.G2_OPP]) teams[team].opponents[2] = r[AW.G2_OPP]
+    if (r[AW.G3_OPP]) teams[team].opponents[3] = r[AW.G3_OPP]
   }
   Object.values(teams).forEach(t => t.players.sort((a, b) => a.slot - b.slot))
   return teams

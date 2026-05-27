@@ -18,15 +18,17 @@ export const SC = {
 }
 
 // Active Week sheet (AW) columns — v6.3 schema (supports up to 3 games per night)
-export const AW_SEASON  = 0
-export const AW_WEEK    = 1
-export const AW_TEAM    = 2
-export const AW_SLOT    = 3
-export const AW_NAME    = 4
-export const AW_G1      = 5
-export const AW_G2      = 6
-export const AW_G3      = 7
-export const AW_G1_OPP  = 8
-export const AW_G2_OPP  = 9
-export const AW_G3_OPP  = 10
-export const AW_IS_FILL = 11
+export const AW = {
+  SEASON:  0,
+  WEEK:    1,
+  TEAM:    2,
+  SLOT:    3,
+  NAME:    4,
+  G1:      5,
+  G2:      6,
+  G3:      7,
+  G1_OPP:  8,
+  G2_OPP:  9,
+  G3_OPP:  10,
+  IS_FILL: 11,
+}

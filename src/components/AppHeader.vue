@@ -13,7 +13,7 @@
 import { computed } from 'vue'
 import { useDataStore } from '../stores/data.js'
 import { getCurrentSeason, hasActiveWeek } from '../utils/data.js'
-import { AW_WEEK } from '../utils/constants.js'
+import { AW } from '../utils/constants.js'
 
 const dataStore = useDataStore()
 
@@ -24,7 +24,7 @@ const currentSeason = computed(() =>
 const weekLabel = computed(() => {
   // Active Week takes priority — read week number from first data row
   if (hasActiveWeek(dataStore.active)) {
-    const week = dataStore.active[1]?.[AW_WEEK] ?? ''
+    const week = dataStore.active[1]?.[AW.WEEK] ?? ''
     return (typeof week === 'number' || /^\d+$/.test(String(week)))
       ? `Week ${week}`
       : (week || 'Week 1')
