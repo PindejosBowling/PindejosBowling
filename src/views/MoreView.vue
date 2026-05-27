@@ -1,7 +1,4 @@
 <template>
-  <!-- Back button — visible whenever a sub-view is active -->
-  <button v-if="uiStore.moreView !== 'home'" class="back-btn" @click="uiStore.moreView = 'home'">← Back</button>
-
   <!-- Home menu -->
   <div v-if="uiStore.moreView === 'home'">
     <div class="tab-title"><h2>More</h2></div>
@@ -61,8 +58,8 @@
   </div>
 
   <!-- Sub-views wired in by Tasks 4b–4i: -->
-  <!-- <PlayerList      v-else-if="uiStore.moreView === 'player-list'" /> -->
-  <!-- <PlayerDetail    v-else-if="uiStore.moreView === 'player-detail'" /> -->
+  <PlayerList      v-else-if="uiStore.moreView === 'player-list'" />
+  <PlayerDetail    v-else-if="uiStore.moreView === 'player-detail'" />
   <!-- <SeasonHistory   v-else-if="uiStore.moreView === 'season-history'" /> -->
   <!-- <LeagueRecords   v-else-if="uiStore.moreView === 'records'" /> -->
   <!-- <HeadToHead      v-else-if="uiStore.moreView === 'h2h'" /> -->
@@ -73,7 +70,9 @@
 
 <script setup>
 import { onMounted, onUnmounted } from 'vue'
-import { useUiStore } from '../stores/ui.js'
+import { useUiStore }   from '../stores/ui.js'
+import PlayerList   from '../components/PlayerList.vue'
+import PlayerDetail from '../components/PlayerDetail.vue'
 
 const uiStore = useUiStore()
 

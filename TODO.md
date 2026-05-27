@@ -31,6 +31,8 @@ Each view is migrated one at a time using Vue's **`<Teleport>`** to render into 
 
 **Cross-view navigation during migration:** When a Vue component needs to switch tabs (e.g. a standing row click that navigates to More → Player Detail), call the global `window.switchTab(tab, opts)` from `app.js`. This will be removed when AppNav is migrated in Task 6.
 
+**Back button pattern (established in 4b/4c):** `MoreView.vue` does **not** render a generic back button. Each sub-view is responsible for its own back navigation. Render a back button at the top of your component (typically inside a `.player-detail-header` row) that sets `uiStore.moreView = 'home'` on click. See `PlayerList.vue` for the minimal pattern and `PlayerDetail.vue` for the header-with-title pattern.
+
 **Common store imports** (use as needed per component):
 ```js
 import { useDataStore }    from '../stores/data.js'
@@ -358,7 +360,7 @@ Admin tiles (Add Player, Archive & Advance, End Season): render with `.more-tile
 
 ## Task 4b — `src/components/PlayerList.vue`
 
-- [ ] **Status:** Not started
+- [X] **Status:** Complete
 
 **Prerequisite:** Task 4a
 **Creates:** `src/components/PlayerList.vue`
@@ -411,7 +413,7 @@ Add to script: `import PlayerList from '../components/PlayerList.vue'`
 
 ## Task 4c — `src/components/PlayerDetail.vue`
 
-- [ ] **Status:** Not started
+- [x] **Status:** Complete
 
 **Prerequisite:** Task 4b
 **Creates:** `src/components/PlayerDetail.vue`
@@ -502,6 +504,8 @@ watch(profile, () => {
 **Creates:** `src/components/SeasonHistory.vue`
 **Modifies:** `src/views/MoreView.vue`
 
+> **Back button:** Include a back button at the top of this component (e.g. inside a `.player-detail-header`) that sets `uiStore.moreView = 'home'`. `MoreView.vue` no longer provides a generic one.
+
 ### Template structure
 - `v-for` over `seasonData` (seasons descending)
 - Each: `.history-season` card
@@ -543,6 +547,8 @@ const seasonData = computed(() =>
 **Prerequisite:** Task 4a (can run in parallel with 4b/4c)
 **Creates:** `src/components/LeagueRecords.vue`
 **Modifies:** `src/views/MoreView.vue`
+
+> **Back button:** Include a back button at the top of this component (e.g. inside a `.player-detail-header`) that sets `uiStore.moreView = 'home'`. `MoreView.vue` no longer provides a generic one.
 
 ### Template structure
 - Season `<select>` (`'all'` + all seasons) bound to `uiStore.recordsSeason`
@@ -589,6 +595,8 @@ const records = computed(() => getLeagueRecords(dataStore.stats, uiStore.records
 **Prerequisite:** Task 4a (can run in parallel with 4b/4c)
 **Creates:** `src/components/HeadToHead.vue`
 **Modifies:** `src/views/MoreView.vue`
+
+> **Back button:** Include a back button at the top of this component (e.g. inside a `.player-detail-header`) that sets `uiStore.moreView = 'home'`. `MoreView.vue` no longer provides a generic one.
 
 ### Template structure
 - `.h2h-controls` (CSS grid: `1fr auto 1fr`):
@@ -638,6 +646,8 @@ const h2hData = computed(() => {
 **Creates:** `src/components/Chemistry.vue`
 **Modifies:** `src/views/MoreView.vue`
 
+> **Back button:** Include a back button at the top of this component (e.g. inside a `.player-detail-header`) that sets `uiStore.moreView = 'home'`. `MoreView.vue` no longer provides a generic one.
+
 ### Template structure
 - `.chemistry-tabs`: "Pairs" / "Trios" buttons (`.chem-tab` `:class="{ active: ... }"`)
 - `v-for` over `visibleGroups`: `.chemistry-card` (CSS grid `1fr auto auto`)
@@ -682,6 +692,8 @@ const visibleGroups = computed(() =>
 **Prerequisite:** Task 4a (can run in parallel with 4b/4c)
 **Creates:** `src/components/TrashBoard.vue`
 **Modifies:** `src/views/MoreView.vue`
+
+> **Back button:** Include a back button at the top of this component (e.g. inside a `.player-detail-header`) that sets `uiStore.moreView = 'home'`. `MoreView.vue` no longer provides a generic one.
 
 ### Template structure
 - **Composer** (`.board-composer`):
@@ -732,6 +744,8 @@ async function post() {
 **Modifies:** `src/views/MoreView.vue`
 
 This is the most complex More sub-component. Mirrors `renderGenerateTeams()` + `doGenerate()` + `handleSwap()` + `confirmGenerate()` in `app.js`.
+
+> **Back button:** Include a back button at the top of this component (e.g. inside a `.player-detail-header`) that sets `uiStore.moreView = 'home'`. `MoreView.vue` no longer provides a generic one.
 
 ### Template structure
 
