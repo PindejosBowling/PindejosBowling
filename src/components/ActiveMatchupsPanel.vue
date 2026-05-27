@@ -233,6 +233,9 @@ function getTotal(teamName, gameNum) {
     const key     = `${teamName}|${p.slot}|${gameNum}`
     const pending = pendingStore.pendingScores[key]
     if (pending) return s + (parseInt(pending.score) || 0)
+    // Fill slots have no real stored score — use the same rounded league avg
+    // that PlayerScoreRow displays, so the team total stays consistent.
+    if (p.isFill) return s + (leagueAvg.value > 0 ? Math.round(leagueAvg.value) : 0)
     const raw = gameNum === 1 ? p.g1 : (gameNum === 2 ? p.g2 : p.g3)
     return s + (parseInt(raw) || 0)
   }, 0)
