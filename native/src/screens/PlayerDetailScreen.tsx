@@ -1,8 +1,9 @@
 import { useMemo } from 'react'
 import {
   View, Text, FlatList, TouchableOpacity,
-  ScrollView, RefreshControl, StyleSheet,
+  ScrollView, RefreshControl, StyleSheet, useWindowDimensions,
 } from 'react-native'
+import { LineChart } from 'react-native-gifted-charts'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { RouteProp, useRoute, useNavigation } from '@react-navigation/native'
 import { NativeStackNavigationProp } from '@react-navigation/native-stack'
@@ -27,8 +28,8 @@ export default function PlayerDetailScreen() {
   const { playerSeason, playerLogMode, expandedWeek, set } = useUiStore()
 
   const name = route.params.name
-
-  const seasons = useMemo(() => (stats ? getSeasons(stats) : []), [stats])
+  const { width: screenWidth } = useWindowDimensions()
+const seasons = useMemo(() => (stats ? getSeasons(stats) : []), [stats])
   const activeSeason = playerSeason ?? 'all'
 
   const profile = useMemo(
@@ -71,6 +72,23 @@ export default function PlayerDetailScreen() {
       return (parseInt(b.week) || 0) - (parseInt(a.week) || 0)
     })
   }, [profile, playerLogMode])
+
+  const chartData = useMemo(() => {
+    if (!profile?.games?.length) return null
+    const games = profile.games
+    const avg = profile.avg
+    const chartWidth = screenWidth - 32 - 4 - 12 - 35 // card margins(32) + paddingLeft(4) + paddingRight(12) + y-axis(35)
+    return {
+      points: games.map((g: any) => ({
+        value: g.score,
+        label: `S${g.season}W${g.week}`,
+        dataPointColor: colors.accent,
+        dataPointRadius: 3,
+      })),
+      avg,
+      chartWidth,
+    }
+  }, [profile, screenWidth])
 
   function weekKey(row: any) {
     return `${row.season}|${row.week}`
@@ -162,6 +180,49 @@ export default function PlayerDetailScreen() {
                 : undefined}
             />
           </>
+        ) : null}
+
+        {/* Score Trend chart */}
+        {chartData ? (
+          <View style={styles.chartCard}>
+            <Text style={styles.sectionHeader}>Score Trend</Text>
+            <View style={{ overflow: 'hidden' }}>
+              <LineChart
+                data={chartData.points}
+                width={chartData.chartWidth}
+                height={140}
+                color={colors.accent}
+                thickness={2}
+                curved
+                areaChart
+                startFillColor={colors.accentDim}
+                endFillColor="transparent"
+                startOpacity={0.4}
+                endOpacity={0}
+                dataPointsColor={colors.accent}
+                dataPointsRadius={3}
+                showReferenceLine1
+                referenceLine1Position={chartData.avg}
+                referenceLine1Config={{ color: colors.accent2, dashWidth: 4, dashGap: 4, thickness: 1.5 }}
+                rulesColor="rgba(255,255,255,0.05)"
+                rulesType="solid"
+                yAxisColor="transparent"
+                xAxisColor="transparent"
+                yAxisTextStyle={{ color: colors.muted, fontSize: 10, fontFamily: fonts.barlowCondensed }}
+                xAxisLabelTextStyle={{ color: colors.muted, fontSize: 9, fontFamily: fonts.barlowCondensed }}
+                hideDataPoints={false}
+                showXAxisIndices={false}
+                hideYAxisText={false}
+                noOfSections={4}
+                adjustToWidth
+                initialSpacing={8}
+                endSpacing={0}
+                backgroundColor={colors.surface}
+                xAxisLabelsVerticalShift={4}
+                rotateLabel
+              />
+            </View>
+          </View>
         ) : null}
 
         {/* Game log */}
@@ -374,6 +435,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     marginBottom: 8,
     marginTop: 4,
+  },
+
+  chartCard: {
+    marginHorizontal: 16,
+    marginBottom: 16,
+    backgroundColor: colors.surface,
+    borderRadius: radius.cardMd,
+    paddingVertical: 14,
+    paddingLeft: 4,
+    paddingRight: 12,
+    overflow: 'hidden',
   },
 
   logHeader: {
