@@ -1,0 +1,193 @@
+import React from 'react'
+import { View, Text, TextInput, StyleSheet } from 'react-native'
+import { useDataStore } from '../stores/dataStore'
+import { usePendingStore } from '../stores/pendingStore'
+import { usePrefsStore } from '../stores/prefsStore'
+import { initials } from '../utils/helpers.js'
+import { isChampion, isPlayerOut, getPlayerCurrentAvg, effectiveAvg } from '../utils/data.js'
+import { colors, fonts, radius } from '../theme'
+
+interface PlayerScoreRowProps {
+  player: { name: string; slot: number; g1: any; g2: any; g3: any; isFill?: boolean }
+  teamName: string
+  gameNum: number
+  mode: 'scores' | 'expected'
+  leagueAvg: number
+}
+
+export default function PlayerScoreRow({ player, teamName, gameNum, mode, leagueAvg }: PlayerScoreRowProps) {
+  const { champions, rsvp, stats, settings } = useDataStore()
+  const { pendingScores, set } = usePendingStore()
+  const { avgDisplay } = usePrefsStore()
+
+  const isChamp = isChampion(champions, player.name)
+  const isOut = !player.isFill && isPlayerOut(rsvp, player.name)
+
+  const playerAvg = player.isFill
+    ? leagueAvg
+    : getPlayerCurrentAvg(stats, settings, player.name, avgDisplay as any)
+
+  const expectedScore = (() => {
+    const avg = effectiveAvg(stats, settings, rsvp, player.name, !!player.isFill, leagueAvg)
+    return avg > 0 ? Math.round(avg) : '—'
+  })()
+
+  const rawScore = gameNum === 1 ? player.g1 : gameNum === 2 ? player.g2 : player.g3
+  const pendingKey = `${teamName}|${player.slot}|${gameNum}`
+  const pendingEntry = pendingScores[pendingKey]
+
+  const displayValue = pendingEntry
+    ? String(pendingEntry)
+    : rawScore === '' || rawScore == null
+    ? ''
+    : String(rawScore)
+
+  const hasValue = displayValue !== '' && displayValue != null
+  const isPending = !!pendingEntry
+  const isAbsentPrefill = isOut && rawScore !== '' && rawScore != null
+
+  function onChangeText(val: string) {
+    const initial = rawScore === '' || rawScore == null ? '' : String(rawScore)
+    if (val !== initial && val !== '') {
+      set({ pendingScores: { ...pendingScores, [pendingKey]: val } })
+    } else {
+      const next = { ...pendingScores }
+      delete next[pendingKey]
+      set({ pendingScores: next })
+    }
+  }
+
+  return (
+    <View style={[styles.row, isOut && styles.rowAbsent]}>
+      <View style={[styles.avatar, isChamp && styles.avatarChamp]}>
+        <Text style={styles.avatarText}>{player.isFill ? '∅' : initials(player.name)}</Text>
+      </View>
+      <View style={{ flex: 1 }}>
+        {player.isFill ? (
+          <Text style={[styles.playerName, { color: colors.muted, fontStyle: 'italic' }]}>League Avg Fill</Text>
+        ) : (
+          <Text style={styles.playerName}>
+            {player.name}
+            {isChamp ? ' 👑' : ''}
+            {isOut ? <Text style={styles.outTag}> OUT</Text> : null}
+          </Text>
+        )}
+        {playerAvg > 0 && !player.isFill ? (
+          <Text style={styles.subtext}>avg {playerAvg.toFixed(1)}</Text>
+        ) : player.isFill ? (
+          <Text style={styles.subtext}>fill</Text>
+        ) : null}
+      </View>
+      <View style={styles.scoreGroup}>
+        <Text style={styles.gameLabel}>G{gameNum}</Text>
+        {player.isFill ? (
+          <Text style={styles.scoreDisplay}>{Math.round(leagueAvg)}</Text>
+        ) : mode === 'expected' ? (
+          <Text style={[styles.scoreDisplay, { color: colors.muted }]}>{expectedScore}</Text>
+        ) : (
+          <TextInput
+            style={[
+              styles.scoreInput,
+              hasValue && styles.scoreInputHasValue,
+              isPending && styles.scoreInputPending,
+              isAbsentPrefill && styles.scoreInputAbsent,
+            ]}
+            keyboardType="number-pad"
+            placeholder="—"
+            placeholderTextColor={colors.muted2}
+            value={displayValue}
+            onChangeText={onChangeText}
+          />
+        )}
+      </View>
+    </View>
+  )
+}
+
+const styles = StyleSheet.create({
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+  },
+  rowAbsent: {
+    opacity: 0.5,
+  },
+  avatar: {
+    width: 32,
+    height: 32,
+    borderRadius: radius.icon,
+    backgroundColor: colors.surface3,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+  },
+  avatarChamp: {
+    borderWidth: 1,
+    borderColor: colors.gold,
+  },
+  avatarText: {
+    fontFamily: fonts.barlowCondensed,
+    fontSize: 12,
+    color: colors.text,
+    letterSpacing: 0.5,
+  },
+  playerName: {
+    fontFamily: fonts.barlow,
+    fontSize: 14,
+    color: colors.text,
+  },
+  outTag: {
+    fontFamily: fonts.barlowCondensed,
+    fontSize: 10,
+    color: colors.danger,
+    letterSpacing: 1,
+  },
+  subtext: {
+    fontFamily: fonts.barlow,
+    fontSize: 11,
+    color: colors.muted,
+    marginTop: 1,
+  },
+  scoreGroup: {
+    alignItems: 'flex-end',
+    minWidth: 56,
+  },
+  gameLabel: {
+    fontFamily: fonts.barlowCondensed,
+    fontSize: 10,
+    color: colors.muted,
+    letterSpacing: 1,
+    marginBottom: 2,
+  },
+  scoreDisplay: {
+    fontFamily: fonts.barlowCondensed,
+    fontSize: 20,
+    color: colors.text,
+    minWidth: 40,
+    textAlign: 'right',
+  },
+  scoreInput: {
+    fontFamily: fonts.barlowCondensed,
+    fontSize: 20,
+    color: colors.muted,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border2,
+    minWidth: 40,
+    textAlign: 'right',
+    paddingVertical: 0,
+    paddingHorizontal: 4,
+  },
+  scoreInputHasValue: {
+    color: colors.text,
+  },
+  scoreInputPending: {
+    color: colors.accent,
+    borderBottomColor: colors.accent,
+  },
+  scoreInputAbsent: {
+    color: colors.muted,
+    borderBottomColor: colors.border,
+  },
+})
