@@ -376,7 +376,6 @@ function switchTab(tab, opts) {
   $('section-' + tab).classList.add('active');
   $('nav-' + tab).classList.add('active');
   if (tab === 'rsvp') renderRSVP();
-  if (tab === 'standings') renderStandings();
   if (tab === 'history') renderMatchHistory();
   if (tab === 'more') {
     // Only reset to home view if the user clicked the More nav button directly (not a deep-link)

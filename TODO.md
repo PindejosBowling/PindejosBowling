@@ -23,6 +23,9 @@ Each view is migrated one at a time using Vue's **`<Teleport>`** to render into 
 2. Add `<Teleport to="#foo-content"><FooView /></Teleport>` to `src/App.vue`
 3. Remove the legacy `renderFoo()` call from `switchTab()` in `app.js` (so it no longer overwrites Vue's DOM)
 4. If `renderFoo()` is also called from `loadAll()`, remove that call too
+5. **Remove the static loading spinner from `index.html`** for the migrated section (e.g. `#foo-content`) and replace it with an empty `<div id="foo-content"></div>`. The Vue component owns the loading state via `v-if="dataStore.loading || !dataStore.stats"` — if you leave the static spinner in place, `<Teleport>` appends alongside it and the spinner never clears.
+
+> **⚠️ Loading spinner gotcha:** `index.html` pre-renders a `.loading` spinner inside each `#*-content` div. The legacy `renderFoo()` functions cleared it by replacing `innerHTML`. Vue's `<Teleport>` *appends* into the container instead of replacing it, so the spinner will persist as a sibling node unless you remove it from `index.html`. Always empty the target div in `index.html` when migrating a section to Vue.
 
 **CSS:** `styles.css` is a global stylesheet linked in `index.html`. All existing CSS classes work inside Vue templates without imports. Do NOT add `<style scoped>` unless adding net-new styles.
 
@@ -75,7 +78,7 @@ Expand `App.vue` from its current empty comment stub into a valid SFC with an em
 
 ## Task 1 — `src/views/StandingsView.vue`
 
-- [ ] **Status:** Not started
+- [x] **Status:** Complete
 
 **Prerequisite:** Task 0
 **Creates:** `src/views/StandingsView.vue`
