@@ -103,9 +103,11 @@ function ActivePanel() {
 
   const hasSavedScores = Object.values(teams).some((team: any) =>
     team.players.some((p: any) =>
-      (p.g1 !== '' && p.g1 > 0) ||
-      (p.g2 !== '' && p.g2 > 0) ||
-      (p.g3 !== '' && p.g3 > 0)
+      !p.isFill && (
+        (p.g1 !== '' && p.g1 > 0) ||
+        (p.g2 !== '' && p.g2 > 0) ||
+        (p.g3 !== '' && p.g3 > 0)
+      )
     )
   )
 
