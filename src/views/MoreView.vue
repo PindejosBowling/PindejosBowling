@@ -1,4 +1,9 @@
 <template>
+  <!-- Admin dialogs — rendered on top of everything via Teleport to body -->
+  <AdminAddPlayerDialog v-if="activeDialog === 'add-player'"  @close="activeDialog = null" />
+  <AdminArchiveDialog   v-if="activeDialog === 'archive'"     @close="activeDialog = null" />
+  <AdminEndSeasonDialog v-if="activeDialog === 'end-season'"  @close="activeDialog = null" />
+
   <!-- Home menu -->
   <div v-if="uiStore.moreView === 'home'">
     <div class="tab-title"><h2>More</h2></div>
@@ -37,22 +42,21 @@
         <div class="more-tile-icon">🎲</div>
         <div class="more-tile-label">Generate Teams</div>
       </div>
-      <div class="more-tile" @click="window.openAddPlayer && window.openAddPlayer()">
+      <div class="more-tile" @click="activeDialog = 'add-player'">
         <div class="more-tile-icon">➕</div>
         <div class="more-tile-label">Add Player</div>
       </div>
-      <div class="more-tile" @click="window.confirmArchive && window.confirmArchive()">
+      <div class="more-tile" @click="activeDialog = 'archive'">
         <div class="more-tile-icon">📦</div>
         <div class="more-tile-label">Archive & Advance</div>
       </div>
-      <div class="more-tile" @click="window.openEndSeason && window.openEndSeason()">
+      <div class="more-tile" @click="activeDialog = 'end-season'">
         <div class="more-tile-icon">🥇</div>
         <div class="more-tile-label">End Season</div>
       </div>
       <div class="more-tile" @click="uiStore.moreView = 'playoffs'">
         <div class="more-tile-icon">🏁</div>
         <div class="more-tile-label">Playoffs</div>
-        <div class="more-tile-coming">Coming</div>
       </div>
     </div>
   </div>
@@ -66,21 +70,35 @@
   <Chemistry       v-else-if="uiStore.moreView === 'chemistry'" />
   <TrashBoard      v-else-if="uiStore.moreView === 'board'" />
   <GenerateTeams   v-else-if="uiStore.moreView === 'generate'" />
+  <Playoffs        v-else-if="uiStore.moreView === 'playoffs'" />
 </template>
 
 <script setup>
-import { onMounted, onUnmounted } from 'vue'
-import { useUiStore }   from '../stores/ui.js'
-import PlayerList   from '../components/PlayerList.vue'
-import PlayerDetail   from '../components/PlayerDetail.vue'
-import SeasonHistory  from '../components/SeasonHistory.vue'
-import LeagueRecords  from '../components/LeagueRecords.vue'
-import HeadToHead     from '../components/HeadToHead.vue'
-import Chemistry      from '../components/Chemistry.vue'
-import TrashBoard     from '../components/TrashBoard.vue'
-import GenerateTeams  from '../components/GenerateTeams.vue'
+import { ref, onMounted, onUnmounted } from 'vue'
+import { useUiStore } from '../stores/ui.js'
+
+// Sub-views
+import PlayerList    from '../components/PlayerList.vue'
+import PlayerDetail  from '../components/PlayerDetail.vue'
+import SeasonHistory from '../components/SeasonHistory.vue'
+import LeagueRecords from '../components/LeagueRecords.vue'
+import HeadToHead    from '../components/HeadToHead.vue'
+import Chemistry     from '../components/Chemistry.vue'
+import TrashBoard    from '../components/TrashBoard.vue'
+import GenerateTeams from '../components/GenerateTeams.vue'
+
+// Admin dialogs
+import AdminAddPlayerDialog  from '../components/AdminAddPlayerDialog.vue'
+import AdminArchiveDialog    from '../components/AdminArchiveDialog.vue'
+import AdminEndSeasonDialog  from '../components/AdminEndSeasonDialog.vue'
+
+// Other sub-views
+import Playoffs from '../components/Playoffs.vue'
 
 const uiStore = useUiStore()
+
+/** Which admin dialog is open: 'add-player' | 'archive' | 'end-season' | null */
+const activeDialog = ref(null)
 
 // Bridge: allow legacy switchTab() to reset moreView to 'home' on direct nav clicks
 onMounted(() => {

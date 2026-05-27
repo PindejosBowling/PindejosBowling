@@ -921,7 +921,7 @@ Read-only display using `dataStore.current` (legacy Current Week sheet format). 
 
 ## Task 6 — Shell migration + cleanup
 
-- [ ] **Status:** Not started
+- [x] **Status:** Complete
 
 **Prerequisite:** Task 5 (all views migrated)
 **Creates:** `src/components/AppHeader.vue`, `src/components/AppNav.vue`, `src/components/AppModal.vue`

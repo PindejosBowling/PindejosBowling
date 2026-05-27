@@ -8,16 +8,8 @@
 </head>
 <body>
 
-<header>
-  <div class="logo-row">
-    <span class="logo-emoji">🎳</span>
-    <div class="logo"><span class="pin">PIN</span><span class="dejos">DEJOS</span></div>
-    <div class="week-badge-wrap">
-      <div class="week-badge" id="week-badge">Week 1</div>
-      <div class="season-badge" id="season-badge">Season 1</div>
-    </div>
-  </div>
-</header>
+<!-- AppHeader.vue teleports its content into this element -->
+<header></header>
 
 <div class="container">
   <div id="section-matchups" class="section active">
@@ -37,21 +29,12 @@
   </div>
 </div>
 
-<div class="modal-backdrop" id="modal-backdrop" onclick="if(event.target===this)closeModal()">
-  <div class="modal" id="modal-content"></div>
-</div>
+<!-- AppNav.vue teleports its content into this element -->
+<nav></nav>
 
-<nav>
-  <button class="nav-btn active" id="nav-matchups" onclick="switchTab('matchups')"><span class="nav-icon">🎳</span>This Week</button>
-  <button class="nav-btn" id="nav-rsvp" onclick="switchTab('rsvp')"><span class="nav-icon">📋</span>RSVP</button>
-  <button class="nav-btn" id="nav-standings" onclick="switchTab('standings')"><span class="nav-icon">📊</span>Standings</button>
-  <button class="nav-btn" id="nav-history" onclick="switchTab('history')"><span class="nav-icon">🗓️</span>Matches</button>
-  <button class="nav-btn" id="nav-more" onclick="switchTab('more')"><span class="nav-icon">⋯</span>More</button>
-</nav>
+<!-- AppModal.vue teleports the .modal-backdrop directly to <body> -->
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
-<script src="app.js"></script>
-<!-- Vue mount point — empty until migration is complete -->
+<!-- Vue mount point -->
 <div id="vue-app"></div>
 <script type="module" src="/src/main.js"></script>
 </body>
