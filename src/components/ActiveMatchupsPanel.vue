@@ -1,4 +1,6 @@
 <template>
+  <AdminArchiveDialog v-if="showArchiveDialog" @close="showArchiveDialog = false" />
+
   <div>
     <!-- Tab title + view toggle -->
     <div class="tab-title">
@@ -21,6 +23,18 @@
         <option value="current-season">This Season</option>
         <option value="all-time">All-time</option>
       </select>
+    </div>
+
+    <!-- Archive & Advance prompt — appears once any score has been saved to the active week -->
+    <div v-if="hasSavedScores" class="card-sm" style="padding:10px 14px;margin-bottom:14px;display:flex;align-items:center;gap:12px;border-color:rgba(251,191,36,0.3);background:rgba(251,191,36,0.06);">
+      <div style="font-size:20px;line-height:1;">📦</div>
+      <div style="flex:1;">
+        <div style="font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:12px;letter-spacing:1.5px;text-transform:uppercase;color:var(--gold);">Scores Saved</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:2px;">Ready to archive this week?</div>
+      </div>
+      <button class="btn sm" style="border-color:rgba(251,191,36,0.4);color:var(--gold);white-space:nowrap;" @click="showArchiveDialog = true">
+        Archive &amp; Advance
+      </button>
     </div>
 
     <!-- Game rounds -->
@@ -167,21 +181,35 @@ import { usePendingStore } from '../stores/pending.js'
 import { usePrefsStore }   from '../stores/prefs.js'
 import { readActiveWeek, getLeagueAvg, effectiveAvg } from '../utils/data.js'
 import { apiPost } from '../api.js'
-import PlayerScoreRow from './PlayerScoreRow.vue'
-import OddsBlock      from './OddsBlock.vue'
+import PlayerScoreRow    from './PlayerScoreRow.vue'
+import OddsBlock         from './OddsBlock.vue'
+import AdminArchiveDialog from './AdminArchiveDialog.vue'
 
 const dataStore    = useDataStore()
 const uiStore      = useUiStore()
 const pendingStore = usePendingStore()
 const prefsStore   = usePrefsStore()
 
-const saving = ref(false)
+const saving          = ref(false)
+const showArchiveDialog = ref(false)
 
 // ---------------------------------------------------------------------------
 // Core data
 // ---------------------------------------------------------------------------
 
 const teams = computed(() => readActiveWeek(dataStore.active))
+
+// True once at least one score has been committed to the active week sheet.
+// Drives the Archive & Advance prompt bubble.
+const hasSavedScores = computed(() =>
+  Object.values(teams.value).some(team =>
+    team.players.some(p =>
+      (p.g1 !== '' && p.g1 > 0) ||
+      (p.g2 !== '' && p.g2 > 0) ||
+      (p.g3 !== '' && p.g3 > 0)
+    )
+  )
+)
 
 const leagueAvg = computed(() =>
   getLeagueAvg(dataStore.stats, dataStore.settings, prefsStore.avgDisplay)

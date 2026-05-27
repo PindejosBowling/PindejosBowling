@@ -1,6 +1,5 @@
 <template>
   <AdminAddPlayerDialog v-if="activeDialog === 'add-player'" @close="activeDialog = null" />
-  <AdminArchiveDialog   v-if="activeDialog === 'archive'"    @close="activeDialog = null" />
   <AdminEndSeasonDialog v-if="activeDialog === 'end-season'" @close="activeDialog = null" />
 
   <div class="tab-title"><h2>More</h2></div>
@@ -43,10 +42,6 @@
       <div class="more-tile-icon">➕</div>
       <div class="more-tile-label">Add Player</div>
     </div>
-    <div class="card-md more-tile" @click="activeDialog = 'archive'">
-      <div class="more-tile-icon">📦</div>
-      <div class="more-tile-label">Archive & Advance</div>
-    </div>
     <div class="card-md more-tile" @click="activeDialog = 'end-season'">
       <div class="more-tile-icon">🥇</div>
       <div class="more-tile-label">End Season</div>
@@ -62,7 +57,6 @@
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import AdminAddPlayerDialog from '../components/AdminAddPlayerDialog.vue'
-import AdminArchiveDialog   from '../components/AdminArchiveDialog.vue'
 import AdminEndSeasonDialog from '../components/AdminEndSeasonDialog.vue'
 
 const router      = useRouter()
