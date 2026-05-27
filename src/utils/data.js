@@ -12,8 +12,6 @@
 //   const dataStore = useDataStore()
 //   const standings = computed(() => aggregateStandings(dataStore.stats, 'all'))
 //
-// Logic is identical to app.js — only the function signatures change.
-
 import { SC, AW_NAME, AW_TEAM, AW_SLOT, AW_G1, AW_G2, AW_G3,
          AW_G1_OPP, AW_G2_OPP, AW_G3_OPP, AW_IS_FILL } from './constants.js'
 import { isPresent, combinations } from './helpers.js'

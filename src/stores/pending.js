@@ -11,7 +11,7 @@ export const usePendingStore = defineStore('pending', () => {
   // Unsaved score entries — map of player/slot key → score value
   const pendingScores = ref({})
 
-  // Team generator state — matches app.js lines 24–26
+  // Team generator state
   const genFillMode   = ref('League Avg')
   const genAvgSource  = ref('last-season')
   const genTeams      = ref(null)

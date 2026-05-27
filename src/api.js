@@ -1,5 +1,4 @@
 // src/api.js — fetch wrappers for the Google Apps Script endpoint
-// Extracted from app.js; shared by Pinia stores and (later) Vue components.
 
 export const API = "https://script.google.com/macros/s/AKfycbz8sg1ZRlVaD0tXpN6GRlC1awZYu1_KhD7z5Bc88KjsTNntq1dBzAf8aHGbW0th_Tjhiw/exec";
 

@@ -9,7 +9,7 @@ export const useUiStore = defineStore('ui', () => {
   // Top-level tab router (not in legacy state — was implicit via DOM)
   const activeTab = ref('matchups')
 
-  // Navigation / view state — matches defaults from app.js lines 9–17, 22–23, 27
+  // Navigation / view state
   const selectedPlayer  = ref(null)
   const moreView        = ref('home')
   const matchupsView    = ref('scores')

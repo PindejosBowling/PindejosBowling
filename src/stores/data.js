@@ -7,7 +7,7 @@ import { ref } from 'vue'
 import { apiGet } from '../api.js'
 
 export const useDataStore = defineStore('data', () => {
-  // Server data — mirrors app.js state fields from loadAll()
+  // Server data
   const current   = ref(null)   // currentWeek from API
   const active    = ref(null)   // activeWeek from API (RSVP/scoring state)
   const roster    = ref(null)

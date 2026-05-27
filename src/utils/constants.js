@@ -1,5 +1,4 @@
 // src/utils/constants.js — sheet column indices
-// Verbatim from app.js lines 2–4; exported for ES module use.
 
 // Stats sheet (SC) columns
 export const SC = {

@@ -69,8 +69,7 @@ window.closeModal = () => modalStore.close()
 
 /**
  * Switch the visible tab.
- * Used by StandingsView (goToPlayer), GenerateTeams, and any remaining
- * legacy calls. Replaces the old app.js switchTab() DOM-manipulation version.
+ * Used by StandingsView (goToPlayer) and GenerateTeams for cross-view navigation.
  *
  * @param {string} tab - one of 'matchups' | 'rsvp' | 'standings' | 'history' | 'more'
  * @param {{ preserveView?: boolean }} [opts]

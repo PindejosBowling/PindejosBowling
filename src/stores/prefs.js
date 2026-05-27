@@ -6,10 +6,7 @@ import { defineStore } from 'pinia'
 import { ref, watch } from 'vue'
 
 export const usePrefsStore = defineStore('prefs', () => {
-  // Matches app.js line 18: localStorage.getItem('pb_myname') || ''
-  const myName = ref(localStorage.getItem('pb_myname') || '')
-
-  // Matches app.js line 21: localStorage.getItem('pb_avgdisplay') || 'last-played'
+  const myName     = ref(localStorage.getItem('pb_myname') || '')
   const avgDisplay = ref(localStorage.getItem('pb_avgdisplay') || 'last-played')
 
   // Persist changes back to localStorage automatically
