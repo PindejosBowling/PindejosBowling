@@ -380,7 +380,7 @@ function switchTab(tab, opts) {
     // Reset to home unless the caller passed preserveView (e.g. deep-link from Standings → Player Detail).
     if (!opts.preserveView && window.__resetMoreView) window.__resetMoreView();
   }
-  if (tab === 'matchups') renderMatchups();
+  // Vue now owns #matchups-content via MatchupsView.vue Teleport.
 
   // Hide the floating pending-score bar when not on Matchups (preserves staged scores in state)
   const bar = document.getElementById('pending-score-bar');
@@ -2388,7 +2388,7 @@ async function loadAll() {
     state.champions = all.champions;
     state.generated = all.generated;
     state.settings = all.settings;
-    renderMatchups();
+    // Vue now owns #matchups-content; no renderMatchups() needed here.
   } catch(e) {
     $('matchups-content').innerHTML = `<div class="error-banner">Could not load data. Check your connection or the API URL.</div>`;
   }

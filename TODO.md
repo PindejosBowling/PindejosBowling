@@ -814,7 +814,7 @@ This is the most complex More sub-component. Mirrors `renderGenerateTeams()` + `
 
 ## Task 5 — `src/views/MatchupsView.vue`
 
-- [ ] **Status:** Not started
+- [x] **Status:** Complete
 
 **Prerequisite:** All Task 4 subtasks complete (4a through 4i)
 **Creates:**
