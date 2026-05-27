@@ -33,6 +33,14 @@ export default function StandingsScreen() {
     [stats, activeSeason],
   )
 
+  const leagueAvg = useMemo(() => {
+    const totalPins = standings.reduce((s, p) => s + p.pins, 0)
+    const totalGames = standings.reduce((s, p) => s + p.games, 0)
+    return totalGames > 0 ? totalPins / totalGames : 0
+  }, [standings])
+
+  const sourceLabel = activeSeason === 'all' ? 'All-time Avg' : `Season ${activeSeason} Avg`
+
   function goToPlayer(name: string) {
     // Cross-tab navigation: switch to More tab then navigate to PlayerDetail
     ;(navigation as any).navigate('More', { screen: 'PlayerDetail', params: { name } })
@@ -66,6 +74,14 @@ export default function StandingsScreen() {
           )
         })}
       </ScrollView>
+
+      {/* League avg banner */}
+      <View style={styles.leagueBanner}>
+        <View>
+          <Text style={styles.bannerLabel}>League {sourceLabel}</Text>
+          <Text style={styles.bannerVal}>{leagueAvg > 0 ? leagueAvg.toFixed(1) : '—'}</Text>
+        </View>
+      </View>
 
       {/* Standings header */}
       <View style={styles.card}>
@@ -111,6 +127,31 @@ export default function StandingsScreen() {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.bg },
 
+  leagueBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: colors.surface,
+    borderRadius: radius.cardSm,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: 12,
+    marginHorizontal: 16,
+    marginBottom: 12,
+  },
+  bannerLabel: {
+    fontFamily: fonts.barlowCondensed,
+    fontSize: 11,
+    letterSpacing: 1.5,
+    textTransform: 'uppercase',
+    color: colors.muted,
+    marginBottom: 2,
+  },
+  bannerVal: {
+    fontFamily: fonts.barlowCondensed,
+    fontSize: 24,
+    color: colors.text,
+  },
   pillRow: {
     flexDirection: 'row',
     paddingHorizontal: 16,

@@ -46,30 +46,6 @@ function ViewToggle({ value, onChange }: { value: string; onChange: (v: string) 
   )
 }
 
-function AvgSourceToggle({ value, onChange }: { value: string; onChange: (v: string) => void }) {
-  const opts = [
-    { key: 'last-played', label: 'Last Season' },
-    { key: 'current-season', label: 'This Season' },
-    { key: 'all-time', label: 'All-time' },
-  ]
-  return (
-    <View style={sharedStyles.toggleRow}>
-      {opts.map(o => (
-        <TouchableOpacity
-          key={o.key}
-          style={[sharedStyles.toggleBtn, value === o.key && sharedStyles.toggleBtnActive]}
-          onPress={() => onChange(o.key)}
-          activeOpacity={0.7}
-        >
-          <Text style={[sharedStyles.toggleBtnText, value === o.key && sharedStyles.toggleBtnTextActive]}>
-            {o.label}
-          </Text>
-        </TouchableOpacity>
-      ))}
-    </View>
-  )
-}
-
 function VsBar() {
   return (
     <View style={sharedStyles.vsBar}>
@@ -88,18 +64,13 @@ function ActivePanel() {
   const { active, stats, settings, rsvp, loadAll } = useDataStore()
   const { matchupsView, oddsRevealed, set: setUi } = useUiStore()
   const { pendingScores, set: setPending } = usePendingStore()
-  const { avgDisplay, setAvgDisplay } = usePrefsStore()
+  const { avgDisplay } = usePrefsStore()
   const [saving, setSaving] = useState(false)
   const [showArchive, setShowArchive] = useState(false)
 
   const teams: Record<string, any> = readActiveWeek(active)
 
   const leagueAvg: number = getLeagueAvg(stats, settings, avgDisplay as any)
-
-  const sourceLabel =
-    avgDisplay === 'current-season' ? 'Season Avg' :
-    avgDisplay === 'all-time' ? 'All-time Avg' :
-    'Last Season Avg'
 
   const hasSavedScores = Object.values(teams).some((team: any) =>
     team.players.some((p: any) =>
@@ -197,15 +168,6 @@ function ActivePanel() {
       <View style={styles.titleRow}>
         <Text style={styles.screenTitle}>Matchups</Text>
         <ViewToggle value={matchupsView} onChange={v => setUi({ matchupsView: v })} />
-      </View>
-
-      {/* League avg banner */}
-      <View style={styles.leagueBanner}>
-        <View>
-          <Text style={styles.bannerLabel}>League {sourceLabel}</Text>
-          <Text style={styles.bannerVal}>{leagueAvg > 0 ? leagueAvg.toFixed(1) : '—'}</Text>
-        </View>
-        <AvgSourceToggle value={avgDisplay} onChange={setAvgDisplay} />
       </View>
 
       {/* Archive & Advance prompt */}
@@ -471,30 +433,6 @@ const styles = StyleSheet.create({
     fontSize: 22,
     color: colors.text,
     fontWeight: '700',
-  },
-  leagueBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: colors.surface,
-    borderRadius: radius.cardSm,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 12,
-    marginBottom: 12,
-  },
-  bannerLabel: {
-    fontFamily: fonts.barlowCondensed,
-    fontSize: 11,
-    letterSpacing: 1.5,
-    textTransform: 'uppercase',
-    color: colors.muted,
-    marginBottom: 2,
-  },
-  bannerVal: {
-    fontFamily: fonts.barlowCondensed,
-    fontSize: 24,
-    color: colors.text,
   },
   archivePrompt: {
     flexDirection: 'row',
