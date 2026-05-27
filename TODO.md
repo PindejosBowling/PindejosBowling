@@ -224,7 +224,7 @@ const noReply    = computed(() => roster.value.filter(r => !effectiveStatus(r[0]
 
 ## Task 3 — `src/views/HistoryView.vue` + `src/components/HistoricalTeamBlock.vue`
 
-- [ ] **Status:** Not started
+- [x] **Status:** Complete
 
 **Prerequisite:** Task 2
 **Creates:** `src/views/HistoryView.vue`, `src/components/HistoricalTeamBlock.vue`
