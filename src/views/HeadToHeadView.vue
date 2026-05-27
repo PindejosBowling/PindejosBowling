@@ -67,11 +67,11 @@
           class="score-history-row head"
           style="grid-template-columns: 60px 1fr 1fr 50px 50px;"
         >
-          <span>When</span>
-          <span>{{ uiStore.h2hP1 }} pins</span>
-          <span>{{ uiStore.h2hP2 }} pins</span>
-          <span>Team Δ</span>
-          <span>Win</span>
+          <span class="label-sm">When</span>
+          <span class="label-sm">{{ uiStore.h2hP1 }} pins</span>
+          <span class="label-sm">{{ uiStore.h2hP2 }} pins</span>
+          <span class="label-sm">Team Δ</span>
+          <span class="label-sm">Win</span>
         </div>
         <div
           v-for="(g, i) in reversedGames"

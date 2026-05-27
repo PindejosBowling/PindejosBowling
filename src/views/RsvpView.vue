@@ -32,6 +32,7 @@
         class="list-row rsvp-row"
         :class="{ pending: isPending(player[0]) }"
       >
+        <div class="icon-box sm">{{ initials(player[0]) }}</div>
         <div class="rsvp-name">
           {{ player[0] }}
           <span v-if="isPending(player[0])" class="pending-dot" title="Unsaved"></span>
@@ -70,6 +71,7 @@ import { ref, computed } from 'vue'
 import { useDataStore }    from '../stores/data.js'
 import { usePendingStore } from '../stores/pending.js'
 import { apiPost }         from '../api.js'
+import { initials }        from '../utils/helpers.js'
 
 const dataStore    = useDataStore()
 const pendingStore = usePendingStore()

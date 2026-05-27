@@ -21,27 +21,27 @@
 
   <!-- Stat tiles -->
   <div v-if="profile" class="stat-grid">
-    <div class="stat-tile">
+    <div class="card-md stat-tile">
       <div class="label-sm">Avg</div>
       <div class="stat-tile-val">{{ profile.avg > 0 ? profile.avg.toFixed(1) : '—' }}</div>
     </div>
-    <div class="stat-tile">
+    <div class="card-md stat-tile">
       <div class="label-sm">High Game</div>
       <div class="stat-tile-val">{{ profile.highGame || '—' }}</div>
     </div>
-    <div class="stat-tile">
+    <div class="card-md stat-tile">
       <div class="label-sm">W—L</div>
       <div class="stat-tile-val">{{ profile.totalWins }}–{{ profile.totalLosses }}</div>
     </div>
-    <div class="stat-tile">
+    <div class="card-md stat-tile">
       <div class="label-sm">Last 5 Avg</div>
       <div class="stat-tile-val">{{ profile.last5Avg > 0 ? profile.last5Avg.toFixed(1) : '—' }}</div>
     </div>
-    <div class="stat-tile">
+    <div class="card-md stat-tile">
       <div class="label-sm">Season Avg</div>
       <div class="stat-tile-val">{{ profile.seasonAvg > 0 ? profile.seasonAvg.toFixed(1) : '—' }}</div>
     </div>
-    <div class="stat-tile">
+    <div class="card-md stat-tile">
       <div class="label-sm">Games</div>
       <div class="stat-tile-val">{{ profile.totalGames }}</div>
     </div>
@@ -117,7 +117,7 @@
   <!-- Game log table -->
   <div v-if="weekRows.length" class="card-md">
     <div class="score-history-row head week-grouped">
-      <span>Week</span><span>Team</span><span>G1</span><span>G2</span><span>W—L</span><span></span>
+      <span class="label-sm">Week</span><span class="label-sm">Team</span><span class="label-sm">G1</span><span class="label-sm">G2</span><span class="label-sm">W—L</span><span></span>
     </div>
     <template v-for="row in weekRows" :key="row.season + '|' + row.week">
       <div
@@ -160,15 +160,17 @@
                       <div
                         v-for="p in m.a?.players"
                         :key="p.name"
-                        class="player-row"
+                        class="list-row player-row"
                         :class="{ absent: !p.present }"
                       >
                         <div class="icon-box sm player-avatar">{{ initials(p.name) }}</div>
-                        <div class="player-name">
-                          {{ p.name }}
-                          <span v-if="!p.present" class="absent-tag">absent</span>
+                        <div class="player-info">
+                          <div class="player-name">
+                            {{ p.name }}
+                            <span v-if="!p.present" class="absent-tag">OUT</span>
+                          </div>
                         </div>
-                        <div>{{ p.score || '—' }}</div>
+                        <div class="score-val">{{ p.score || '—' }}</div>
                       </div>
                       <div class="team-total-row">
                         <span class="total-label">Total</span>
@@ -183,15 +185,17 @@
                       <div
                         v-for="p in m.b.players"
                         :key="p.name"
-                        class="player-row"
+                        class="list-row player-row"
                         :class="{ absent: !p.present }"
                       >
                         <div class="icon-box sm player-avatar">{{ initials(p.name) }}</div>
-                        <div class="player-name">
-                          {{ p.name }}
-                          <span v-if="!p.present" class="absent-tag">absent</span>
+                        <div class="player-info">
+                          <div class="player-name">
+                            {{ p.name }}
+                            <span v-if="!p.present" class="absent-tag">OUT</span>
+                          </div>
                         </div>
-                        <div>{{ p.score || '—' }}</div>
+                        <div class="score-val">{{ p.score || '—' }}</div>
                       </div>
                       <div class="team-total-row">
                         <span class="total-label">Total</span>

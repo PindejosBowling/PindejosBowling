@@ -4,10 +4,10 @@
     <div
       v-for="player in players"
       :key="player.name"
-      class="player-row"
+      class="list-row player-row"
       :class="{ absent: !player.present }"
     >
-      <div class="player-avatar">{{ initials(player.name) }}</div>
+      <div class="icon-box sm player-avatar">{{ initials(player.name) }}</div>
       <div class="player-info">
         <div class="player-name">
           {{ player.name }}

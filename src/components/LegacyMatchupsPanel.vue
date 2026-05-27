@@ -11,9 +11,9 @@
     </div>
 
     <!-- League avg banner -->
-    <div class="league-avg-banner">
+    <div class="card-sm league-avg-banner">
       <div class="league-avg-info">
-        <div class="league-avg-label">League {{ sourceLabel }}</div>
+        <div class="label-sm">League {{ sourceLabel }}</div>
         <div class="league-avg-val">{{ leagueAvg > 0 ? leagueAvg.toFixed(1) : '—' }}</div>
       </div>
       <select class="avg-source-select" :value="prefsStore.avgDisplay" @change="prefsStore.avgDisplay = $event.target.value">
@@ -39,10 +39,10 @@
           <div
             v-for="player in pairing.a.players"
             :key="player.name"
-            class="player-row"
+            class="list-row player-row"
             :class="{ absent: isOut(player.name) }"
           >
-            <div class="player-avatar" :class="{ champ: isChamp(player.name) }">
+            <div class="icon-box sm player-avatar" :class="{ champ: isChamp(player.name) }">
               {{ initials(player.name) }}
             </div>
             <div class="player-info">
@@ -92,10 +92,10 @@
           <div
             v-for="player in pairing.b.players"
             :key="player.name"
-            class="player-row"
+            class="list-row player-row"
             :class="{ absent: isOut(player.name) }"
           >
-            <div class="player-avatar" :class="{ champ: isChamp(player.name) }">
+            <div class="icon-box sm player-avatar" :class="{ champ: isChamp(player.name) }">
               {{ initials(player.name) }}
             </div>
             <div class="player-info">

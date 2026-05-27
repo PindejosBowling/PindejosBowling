@@ -1,5 +1,5 @@
 <template>
-  <div class="player-row" :class="{ absent: isOut }">
+  <div class="list-row player-row" :class="{ absent: isOut }">
     <div class="icon-box sm player-avatar" :class="{ champ: isChamp }">
       {{ player.isFill ? '∅' : initials(player.name) }}
     </div>

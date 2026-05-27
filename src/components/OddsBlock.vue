@@ -3,7 +3,7 @@
     <!-- Pick-em -->
     <template v-if="odds.fav === 'tie'">
       <div class="odds-block-head">
-        <span class="odds-block-label">{{ label }}</span>
+        <span class="label">{{ label }}</span>
         <span class="odds-block-pickem">PICK 'EM ({{ expectedA }})</span>
       </div>
       <div class="odds-block-teams">
@@ -21,7 +21,7 @@
     <!-- Normal line -->
     <template v-else>
       <div class="odds-block-head">
-        <span class="odds-block-label">{{ label }}</span>
+        <span class="label">{{ label }}</span>
         <div class="odds-line-stack">
           <div class="odds-line-row">
             <span class="odds-prefix">SPREAD</span>
