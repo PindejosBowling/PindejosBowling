@@ -138,7 +138,7 @@ Import: `import StandingsView from './views/StandingsView.vue'`
 
 ## Task 2 — `src/views/RsvpView.vue`
 
-- [ ] **Status:** Not started
+- [x] **Status:** Complete
 
 **Prerequisite:** Task 1
 **Creates:** `src/views/RsvpView.vue`

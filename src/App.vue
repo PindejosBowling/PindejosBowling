@@ -3,12 +3,16 @@
   <Teleport to="#standings-content">
     <StandingsView />
   </Teleport>
+  <Teleport to="#rsvp-content">
+    <RsvpView />
+  </Teleport>
 </template>
 
 <script setup>
 import { onMounted } from 'vue'
 import { useDataStore } from './stores/data.js'
 import StandingsView from './views/StandingsView.vue'
+import RsvpView      from './views/RsvpView.vue'
 
 const dataStore = useDataStore()
 onMounted(() => dataStore.loadAll())
