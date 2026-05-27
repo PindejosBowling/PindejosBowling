@@ -542,7 +542,7 @@ const seasonData = computed(() =>
 
 ## Task 4e — `src/components/LeagueRecords.vue`
 
-- [ ] **Status:** Not started
+- [x] **Status:** Complete
 
 **Prerequisite:** Task 4a (can run in parallel with 4b/4c)
 **Creates:** `src/components/LeagueRecords.vue`
@@ -590,7 +590,7 @@ const records = computed(() => getLeagueRecords(dataStore.stats, uiStore.records
 
 ## Task 4f — `src/components/HeadToHead.vue`
 
-- [ ] **Status:** Not started
+- [x] **Status:** Complete
 
 **Prerequisite:** Task 4a (can run in parallel with 4b/4c)
 **Creates:** `src/components/HeadToHead.vue`
@@ -640,7 +640,7 @@ const h2hData = computed(() => {
 
 ## Task 4g — `src/components/Chemistry.vue`
 
-- [ ] **Status:** Not started
+- [x] **Status:** Complete
 
 **Prerequisite:** Task 4a (can run in parallel with 4b/4c)
 **Creates:** `src/components/Chemistry.vue`
@@ -687,7 +687,7 @@ const visibleGroups = computed(() =>
 
 ## Task 4h — `src/components/TrashBoard.vue`
 
-- [ ] **Status:** Not started
+- [x] **Status:** Complete
 
 **Prerequisite:** Task 4a (can run in parallel with 4b/4c)
 **Creates:** `src/components/TrashBoard.vue`
@@ -737,7 +737,7 @@ async function post() {
 
 ## Task 4i — `src/components/GenerateTeams.vue`
 
-- [ ] **Status:** Not started
+- [x] **Status:** Complete
 
 **Prerequisite:** Task 4a (can run in parallel with 4b/4c)
 **Creates:** `src/components/GenerateTeams.vue`

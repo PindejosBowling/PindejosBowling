@@ -61,11 +61,11 @@
   <PlayerList      v-else-if="uiStore.moreView === 'player-list'" />
   <PlayerDetail    v-else-if="uiStore.moreView === 'player-detail'" />
   <SeasonHistory   v-else-if="uiStore.moreView === 'season-history'" />
-  <!-- <LeagueRecords   v-else-if="uiStore.moreView === 'records'" /> -->
-  <!-- <HeadToHead      v-else-if="uiStore.moreView === 'h2h'" /> -->
-  <!-- <Chemistry       v-else-if="uiStore.moreView === 'chemistry'" /> -->
-  <!-- <TrashBoard      v-else-if="uiStore.moreView === 'board'" /> -->
-  <!-- <GenerateTeams   v-else-if="uiStore.moreView === 'generate'" /> -->
+  <LeagueRecords   v-else-if="uiStore.moreView === 'records'" />
+  <HeadToHead      v-else-if="uiStore.moreView === 'h2h'" />
+  <Chemistry       v-else-if="uiStore.moreView === 'chemistry'" />
+  <TrashBoard      v-else-if="uiStore.moreView === 'board'" />
+  <GenerateTeams   v-else-if="uiStore.moreView === 'generate'" />
 </template>
 
 <script setup>
@@ -74,6 +74,11 @@ import { useUiStore }   from '../stores/ui.js'
 import PlayerList   from '../components/PlayerList.vue'
 import PlayerDetail   from '../components/PlayerDetail.vue'
 import SeasonHistory  from '../components/SeasonHistory.vue'
+import LeagueRecords  from '../components/LeagueRecords.vue'
+import HeadToHead     from '../components/HeadToHead.vue'
+import Chemistry      from '../components/Chemistry.vue'
+import TrashBoard     from '../components/TrashBoard.vue'
+import GenerateTeams  from '../components/GenerateTeams.vue'
 
 const uiStore = useUiStore()
 
