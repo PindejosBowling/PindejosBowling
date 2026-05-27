@@ -120,7 +120,7 @@ const seasons = useMemo(() => (stats ? getSeasons(stats) : []), [stats])
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" refreshControl={<RefreshControl refreshing={loading} onRefresh={loadAll} tintColor={colors.accent} />}>
         {/* Header */}
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => navigation.navigate('PlayerList')} style={styles.backBtn}>
+          <TouchableOpacity onPress={() => { navigation.navigate('MoreHome'); (navigation as any).navigate('Standings') }} style={styles.backBtn}>
             <Text style={styles.backText}>←</Text>
           </TouchableOpacity>
           <View>

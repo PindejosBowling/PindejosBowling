@@ -4,7 +4,6 @@ import { colors } from '../theme'
 import { MoreStackParamList } from './types'
 
 import MoreHomeScreen from '../screens/MoreHomeScreen'
-import PlayerListScreen from '../screens/PlayerListScreen'
 import PlayerDetailScreen from '../screens/PlayerDetailScreen'
 import LeagueRecordsScreen from '../screens/LeagueRecordsScreen'
 import HeadToHeadScreen from '../screens/HeadToHeadScreen'
@@ -25,7 +24,6 @@ export default function MoreStackNavigator() {
       }}
     >
       <Stack.Screen name="MoreHome" component={MoreHomeScreen} />
-      <Stack.Screen name="PlayerList" component={PlayerListScreen} />
       <Stack.Screen name="PlayerDetail" component={PlayerDetailScreen} />
       <Stack.Screen name="LeagueRecords" component={LeagueRecordsScreen} />
       <Stack.Screen name="HeadToHead" component={HeadToHeadScreen} />

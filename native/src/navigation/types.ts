@@ -1,6 +1,5 @@
 export type MoreStackParamList = {
   MoreHome: undefined
-  PlayerList: undefined
   PlayerDetail: { name: string }
   LeagueRecords: undefined
   HeadToHead: undefined

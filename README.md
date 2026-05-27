@@ -11,7 +11,7 @@ The React Native app lives in `native/` and runs independently alongside the Vue
 
 ```bash
 cd native
-npx expo start
+npx expo start --ios
 ```
 
 Then press `i` to open in the iOS Simulator (requires Xcode to be installed).

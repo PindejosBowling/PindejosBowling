@@ -32,9 +32,9 @@ export default function RootNavigator() {
       }}
     >
       <Tab.Screen
-        name="Matchups"
-        component={MatchupsScreen}
-        options={{ tabBarLabel: 'This Week', tabBarIcon: tabIcon('🎳') }}
+        name="Standings"
+        component={StandingsScreen}
+        options={{ tabBarLabel: 'Standings', tabBarIcon: tabIcon('📊') }}
       />
       <Tab.Screen
         name="RSVP"
@@ -42,9 +42,9 @@ export default function RootNavigator() {
         options={{ tabBarLabel: 'RSVP', tabBarIcon: tabIcon('📋') }}
       />
       <Tab.Screen
-        name="Standings"
-        component={StandingsScreen}
-        options={{ tabBarLabel: 'Standings', tabBarIcon: tabIcon('📊') }}
+        name="Matchups"
+        component={MatchupsScreen}
+        options={{ tabBarLabel: 'This Week', tabBarIcon: tabIcon('🎳') }}
       />
       <Tab.Screen
         name="History"

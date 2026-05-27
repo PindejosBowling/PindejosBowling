@@ -27,8 +27,7 @@ export default function MoreHomeScreen() {
   const [showEndSeason, setShowEndSeason] = useState(false)
 
   const leagueToolsTiles: Tile[] = [
-    { icon: '🎳', label: 'Players',      onPress: () => navigation.navigate('PlayerList') },
-    { icon: '🏆', label: 'Records',      onPress: () => navigation.navigate('LeagueRecords') },
+{ icon: '🏆', label: 'Records',      onPress: () => navigation.navigate('LeagueRecords') },
     { icon: '⚔️',  label: 'Head to Head', onPress: () => navigation.navigate('HeadToHead') },
     { icon: '🧪', label: 'Chemistry',    onPress: () => navigation.navigate('Chemistry') },
     { icon: '📅', label: 'Past Seasons', onPress: () => navigation.navigate('SeasonHistory') },
