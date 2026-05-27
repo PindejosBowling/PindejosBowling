@@ -376,9 +376,9 @@ function switchTab(tab, opts) {
   $('section-' + tab).classList.add('active');
   $('nav-' + tab).classList.add('active');
   if (tab === 'more') {
-    // Only reset to home view if the user clicked the More nav button directly (not a deep-link)
-    if (!opts.preserveView) state.moreView = 'home';
-    renderMore();
+    // Vue now owns #more-content via MoreView.vue Teleport.
+    // Reset to home unless the caller passed preserveView (e.g. deep-link from Standings → Player Detail).
+    if (!opts.preserveView && window.__resetMoreView) window.__resetMoreView();
   }
   if (tab === 'matchups') renderMatchups();
 

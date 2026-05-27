@@ -9,6 +9,9 @@
   <Teleport to="#history-content">
     <HistoryView />
   </Teleport>
+  <Teleport to="#more-content">
+    <MoreView />
+  </Teleport>
 </template>
 
 <script setup>
@@ -17,6 +20,7 @@ import { useDataStore } from './stores/data.js'
 import StandingsView from './views/StandingsView.vue'
 import RsvpView      from './views/RsvpView.vue'
 import HistoryView   from './views/HistoryView.vue'
+import MoreView      from './views/MoreView.vue'
 
 const dataStore = useDataStore()
 onMounted(() => dataStore.loadAll())

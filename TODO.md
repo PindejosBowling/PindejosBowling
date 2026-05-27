@@ -296,7 +296,7 @@ Renders:
 
 ## Task 4a — `src/views/MoreView.vue` (home menu)
 
-- [ ] **Status:** Not started
+- [x] **Status:** Complete
 
 **Prerequisite:** Task 3
 **Creates:** `src/views/MoreView.vue`
