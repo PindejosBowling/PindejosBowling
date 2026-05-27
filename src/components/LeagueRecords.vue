@@ -1,6 +1,6 @@
 <template>
   <div class="player-detail-header">
-    <button class="back-btn" @click="uiStore.moreView = 'home'">←</button>
+    <button class="back-btn" @click="router.push('/more')">←</button>
     <div class="player-detail-name">League Records</div>
   </div>
 
@@ -136,12 +136,14 @@
 
 <script setup>
 import { computed } from 'vue'
+import { useRouter } from 'vue-router'
 import { useDataStore } from '../stores/data.js'
 import { useUiStore }   from '../stores/ui.js'
 import { getLeagueRecords, getSeasons } from '../utils/data.js'
 
 const dataStore = useDataStore()
 const uiStore   = useUiStore()
+const router    = useRouter()
 
 const seasons = computed(() => getSeasons(dataStore.stats))
 

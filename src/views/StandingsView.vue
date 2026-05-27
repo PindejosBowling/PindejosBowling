@@ -44,12 +44,14 @@
 
 <script setup>
 import { computed } from 'vue'
+import { useRouter } from 'vue-router'
 import { useDataStore } from '../stores/data.js'
 import { useUiStore }   from '../stores/ui.js'
 import { aggregateStandings, getSeasons, getDefaultViewSeason, isChampion } from '../utils/data.js'
 
 const dataStore = useDataStore()
 const uiStore   = useUiStore()
+const router    = useRouter()
 
 const seasons = computed(() => ['all', ...getSeasons(dataStore.stats)])
 
@@ -60,8 +62,6 @@ const activeSeason = computed(() =>
 const standings = computed(() => aggregateStandings(dataStore.stats, activeSeason.value))
 
 function goToPlayer(name) {
-  uiStore.selectedPlayer = name
-  uiStore.moreView = 'player-detail'
-  window.switchTab('more', { preserveView: true })
+  router.push({ name: 'player-detail', params: { name } })
 }
 </script>

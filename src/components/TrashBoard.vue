@@ -1,6 +1,6 @@
 <template>
   <div class="player-detail-header">
-    <button class="back-btn" @click="uiStore.moreView = 'home'">←</button>
+    <button class="back-btn" @click="router.push('/more')">←</button>
     <div class="player-detail-name">Trash Board</div>
   </div>
 
@@ -38,15 +38,15 @@
 
 <script setup>
 import { ref, computed } from 'vue'
+import { useRouter }     from 'vue-router'
 import { useDataStore }  from '../stores/data.js'
-import { useUiStore }    from '../stores/ui.js'
 import { usePrefsStore } from '../stores/prefs.js'
 import { isChampion }    from '../utils/data.js'
 import { timeAgo }       from '../utils/helpers.js'
 import { apiPost }       from '../api.js'
 
 const dataStore  = useDataStore()
-const uiStore    = useUiStore()
+const router     = useRouter()
 const prefsStore = usePrefsStore()
 
 const msg     = ref('')

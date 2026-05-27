@@ -1,11 +1,11 @@
 <template>
   <!-- Header -->
   <div class="player-detail-header">
-    <button class="back-btn" @click="uiStore.moreView = 'player-list'">←</button>
+    <button class="back-btn" @click="router.push('/more/players')">←</button>
     <div>
       <div class="player-detail-name">
-        {{ uiStore.selectedPlayer }}
-        <span v-if="isChampion(dataStore.champions, uiStore.selectedPlayer)" class="champ-crown">👑</span>
+        {{ route.params.name }}
+        <span v-if="isChampion(dataStore.champions, route.params.name)" class="champ-crown">👑</span>
       </div>
       <div v-if="currentTeam" class="player-detail-team">{{ currentTeam }}</div>
     </div>
@@ -213,6 +213,7 @@
 
 <script setup>
 import { ref, computed, watchEffect } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import Chart from 'chart.js/auto'
 import { useDataStore } from '../stores/data.js'
 import { useUiStore }   from '../stores/ui.js'
@@ -225,6 +226,8 @@ import { SC } from '../utils/constants.js'
 
 const dataStore = useDataStore()
 const uiStore   = useUiStore()
+const route     = useRoute()
+const router    = useRouter()
 
 const chartCanvas = ref(null)
 
@@ -236,14 +239,14 @@ const seasons = computed(() => getSeasons(dataStore.stats))
 const activeSeason = computed(() => uiStore.playerSeason ?? 'all')
 
 const profile = computed(() =>
-  uiStore.selectedPlayer
-    ? getPlayerProfile(dataStore.stats, dataStore.settings, uiStore.selectedPlayer, activeSeason.value)
+  route.params.name
+    ? getPlayerProfile(dataStore.stats, dataStore.settings, route.params.name, activeSeason.value)
     : null
 )
 
 const records = computed(() =>
-  uiStore.selectedPlayer
-    ? getPersonalRecords(dataStore.stats, uiStore.selectedPlayer)
+  route.params.name
+    ? getPersonalRecords(dataStore.stats, route.params.name)
     : null
 )
 

@@ -406,6 +406,43 @@ src/
 
 ---
 
+## Completion Checklist
+
+> Status is verified against the live `src/` tree. Each item links to the AP section with its resolution criteria.
+
+| AP | Anti-Pattern | Status | Verified |
+|---|---|:---:|---|
+| [AP-1](#ap-1--god-object-with-mixed-state-categories) | God Object with Mixed State Categories | ✅ Complete | Yes |
+| [AP-2](#ap-2--manual-render-after-mutate-coupling) | Manual Render-After-Mutate Coupling | ✅ Complete | Implied by AP-1/3 |
+| [AP-3](#ap-3--no-reactivity--renders-are-manually-triggered) | No Reactivity — Renders Are Manually Triggered | ✅ Complete | Implied by AP-5 |
+| [AP-4](#ap-4--expensive-data-derivation-on-every-render) | Expensive Data Derivation on Every Render | ✅ Complete | Yes |
+| [AP-5](#ap-5--html-built-by-string-concatenation-no-templates) | HTML Built by String Concatenation (No Templates) | ✅ Complete | Yes |
+| [AP-6](#ap-6--inline-event-handlers-embedded-in-template-strings) | Inline Event Handlers Embedded in Template Strings | ✅ Complete | Implied by AP-5 |
+| [AP-7](#ap-7--monolithic-single-file) | Monolithic Single File | ✅ Complete | Implied by AP-1–6 |
+
+### AP-1 Verification
+
+All four Pinia stores are present in `src/stores/`:
+
+- **`data.js`** — `current`, `active`, `roster`, `rsvp`, `stats`, `board`, `history`, `champions`, `generated`, `settings` refs; `loading`/`error` state; `loadAll()` action that populates all fields from `apiGet('getAll')`.
+- **`ui.js`** — navigation state (`activeTab`, `moreView`, `matchupsView`), player selection, filter controls (`standingsSeason`, `histSeason`, `histWeek`, `h2hP1`, `h2hP2`, etc.), `setTab()` action.
+- **`pending.js`** — `pendingRSVP`, `pendingScores`, and all team generator state (`genFillMode`, `genAvgSource`, `genTeams`, `genNumTeams`, `genTeamSize`, `genFillToSize`, `genSwapTarget`).
+- **`prefs.js`** — `myName` and `avgDisplay`, both initialised from `localStorage` and persisted back via `watch()`.
+
+### AP-4 Verification
+
+`src/utils/data.js` exports 15+ pure functions that accept data as explicit parameters and have no store dependencies: `aggregateStandings()`, `getPlayerProfile()`, `getPersonalRecords()`, `getPlayerCurrentAvg()`, `getLeagueAvg()`, `getChemistry()`, `getLeagueRecords()`, `getH2H()`, `getMatchupsForWeek()`, `readActiveWeek()`, `effectiveAvg()`, and season/week helpers. Views compose them with `computed()` for automatic memoisation (e.g. `StandingsView.vue:60`, `HistoryView.vue:103–114`).
+
+### AP-5 Verification
+
+All five top-level views are Vue SFCs with declarative templates and `<script setup>`:
+
+- `MatchupsView.vue`, `RsvpView.vue`, `StandingsView.vue`, `HistoryView.vue`, `MoreView.vue`
+
+All named components in the target structure exist in `src/components/` (some with evolved names: `HistoricalTeamBlock` for `TeamBlock`, `PlayerScoreRow` for `PlayerRow`, `ActiveMatchupsPanel`/`LegacyMatchupsPanel` for `MatchupCard`). A grep of `src/` for `innerHTML` and `html +=` returns zero results — the only match is a comment in `helpers.js` noting `escapeHtml()` is kept for legacy callers.
+
+---
+
 ## Refactoring Order
 
 The anti-patterns form a dependency chain. Work in this sequence to avoid rework:

@@ -1,6 +1,6 @@
 <template>
   <div class="player-detail-header">
-    <button class="back-btn" @click="uiStore.moreView = 'home'">←</button>
+    <button class="back-btn" @click="router.push('/more')">←</button>
     <div class="player-detail-name">Players</div>
   </div>
   <input
@@ -33,13 +33,13 @@
 
 <script setup>
 import { ref, computed } from 'vue'
+import { useRouter } from 'vue-router'
 import { useDataStore } from '../stores/data.js'
-import { useUiStore }   from '../stores/ui.js'
 import { aggregateStandings, isChampion } from '../utils/data.js'
 import { initials } from '../utils/helpers.js'
 
 const dataStore = useDataStore()
-const uiStore   = useUiStore()
+const router    = useRouter()
 
 const search = ref('')
 
@@ -56,7 +56,6 @@ const filteredPlayers = computed(() =>
 )
 
 function select(name) {
-  uiStore.selectedPlayer = name
-  uiStore.moreView = 'player-detail'
+  router.push({ name: 'player-detail', params: { name } })
 }
 </script>

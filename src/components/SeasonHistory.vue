@@ -1,6 +1,6 @@
 <template>
   <div class="player-detail-header">
-    <button class="back-btn" @click="uiStore.moreView = 'home'">←</button>
+    <button class="back-btn" @click="router.push('/more')">←</button>
     <div class="player-detail-name">Past Seasons</div>
   </div>
 
@@ -39,12 +39,12 @@
 
 <script setup>
 import { computed } from 'vue'
+import { useRouter } from 'vue-router'
 import { useDataStore } from '../stores/data.js'
-import { useUiStore }   from '../stores/ui.js'
 import { aggregateStandings, getSeasons, getWeeksForSeason, championsForSeason } from '../utils/data.js'
 
 const dataStore = useDataStore()
-const uiStore   = useUiStore()
+const router    = useRouter()
 
 /** Build a notes lookup map from the League History sheet keyed by season number string. */
 const notesMap = computed(() => {

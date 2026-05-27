@@ -1,6 +1,6 @@
 <template>
   <div class="player-detail-header">
-    <button class="back-btn" @click="uiStore.moreView = 'home'">←</button>
+    <button class="back-btn" @click="router.push('/more')">←</button>
     <div class="player-detail-name">Generate Teams</div>
   </div>
 
@@ -161,14 +161,14 @@
 
 <script setup>
 import { ref, computed } from 'vue'
+import { useRouter }       from 'vue-router'
 import { useDataStore }    from '../stores/data.js'
-import { useUiStore }      from '../stores/ui.js'
 import { usePendingStore } from '../stores/pending.js'
 import { isChampion }      from '../utils/data.js'
 import { apiGet, apiPost } from '../api.js'
 
 const dataStore    = useDataStore()
-const uiStore      = useUiStore()
+const router       = useRouter()
 const pendingStore = usePendingStore()
 
 const generating = ref(false)
@@ -252,8 +252,7 @@ async function useTeams() {
     await dataStore.loadAll()
     pendingStore.genTeams = null
     pendingStore.genSwapTarget = null
-    uiStore.moreView = 'home'
-    window.switchTab('matchups')
+    router.push('/')
   } catch (e) {
     console.error('confirmMatchups error:', e)
   } finally {

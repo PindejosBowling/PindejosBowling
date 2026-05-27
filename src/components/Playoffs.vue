@@ -2,7 +2,7 @@
   <div>
     <!-- Header -->
     <div class="player-detail-header">
-      <button class="back-btn" @click="uiStore.moreView = 'home'">←</button>
+      <button class="back-btn" @click="router.push('/more')">←</button>
       <div>
         <div class="player-detail-name">Playoffs</div>
         <div class="player-detail-team">Coming soon</div>
@@ -54,7 +54,7 @@
 </template>
 
 <script setup>
-import { useUiStore } from '../stores/ui.js'
+import { useRouter } from 'vue-router'
 
-const uiStore = useUiStore()
+const router = useRouter()
 </script>
