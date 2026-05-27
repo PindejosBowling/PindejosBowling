@@ -7,35 +7,35 @@ import HistoryView   from './views/HistoryView.vue'
 import MoreView      from './views/MoreView.vue'
 import MoreHomeView  from './views/MoreHomeView.vue'
 
-import PlayerList    from './components/PlayerList.vue'
-import PlayerDetail  from './components/PlayerDetail.vue'
-import LeagueRecords from './components/LeagueRecords.vue'
-import HeadToHead    from './components/HeadToHead.vue'
-import Chemistry     from './components/Chemistry.vue'
-import SeasonHistory from './components/SeasonHistory.vue'
-import TrashBoard    from './components/TrashBoard.vue'
-import GenerateTeams from './components/GenerateTeams.vue'
-import Playoffs      from './components/Playoffs.vue'
+import PlayerListView    from './views/PlayerListView.vue'
+import PlayerDetailView  from './views/PlayerDetailView.vue'
+import LeagueRecordsView from './views/LeagueRecordsView.vue'
+import HeadToHeadView    from './views/HeadToHeadView.vue'
+import ChemistryView     from './views/ChemistryView.vue'
+import SeasonHistoryView from './views/SeasonHistoryView.vue'
+import TrashBoardView    from './views/TrashBoardView.vue'
+import GenerateTeamsView from './views/GenerateTeamsView.vue'
+import PlayoffsView      from './views/PlayoffsView.vue'
 
 const routes = [
-  { path: '/',          component: MatchupsView },
-  { path: '/rsvp',      component: RsvpView },
-  { path: '/standings', component: StandingsView },
-  { path: '/history',   component: HistoryView },
+  { path: '/',          name: 'matchups',  component: MatchupsView  },
+  { path: '/rsvp',      name: 'rsvp',      component: RsvpView      },
+  { path: '/standings', name: 'standings', component: StandingsView },
+  { path: '/history',   name: 'history',   component: HistoryView   },
   {
     path: '/more',
     component: MoreView,
     children: [
       { path: '',               name: 'more-home',      component: MoreHomeView  },
-      { path: 'players',        name: 'player-list',    component: PlayerList    },
-      { path: 'players/:name',  name: 'player-detail',  component: PlayerDetail  },
-      { path: 'records',        name: 'records',        component: LeagueRecords },
-      { path: 'h2h',            name: 'h2h',            component: HeadToHead    },
-      { path: 'chemistry',      name: 'chemistry',      component: Chemistry     },
-      { path: 'season-history', name: 'season-history', component: SeasonHistory },
-      { path: 'board',          name: 'board',          component: TrashBoard    },
-      { path: 'generate',       name: 'generate',       component: GenerateTeams },
-      { path: 'playoffs',       name: 'playoffs',       component: Playoffs      },
+      { path: 'players',        name: 'player-list',    component: PlayerListView    },
+      { path: 'players/:name',  name: 'player-detail',  component: PlayerDetailView  },
+      { path: 'records',        name: 'records',        component: LeagueRecordsView },
+      { path: 'h2h',            name: 'h2h',            component: HeadToHeadView    },
+      { path: 'chemistry',      name: 'chemistry',      component: ChemistryView     },
+      { path: 'season-history', name: 'season-history', component: SeasonHistoryView },
+      { path: 'board',          name: 'board',          component: TrashBoardView    },
+      { path: 'generate',       name: 'generate',       component: GenerateTeamsView },
+      { path: 'playoffs',       name: 'playoffs',       component: PlayoffsView      },
     ],
   },
   { path: '/:pathMatch(.*)*', redirect: '/' },

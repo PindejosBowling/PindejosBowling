@@ -2,6 +2,8 @@
 
 Quick-reference for agents working in this repo. Read this before touching any file.
 
+Also read **[VUE_BEST_PRACTICES.md](VUE_BEST_PRACTICES.md)** — the style and architecture guide for all Vue work in this codebase.
+
 ---
 
 ## What this is
