@@ -7,7 +7,7 @@
         {{ route.params.name }}
         <span v-if="isChampion(dataStore.champions, route.params.name)" class="champ-crown">👑</span>
       </div>
-      <div v-if="currentTeam" class="player-detail-team">{{ currentTeam }}</div>
+      <div v-if="currentTeam" class="subtext">{{ currentTeam }}</div>
     </div>
   </div>
 
@@ -53,7 +53,7 @@
     <div class="record-card">
       <div class="record-card-head">
         <div class="icon-box lg">🎳</div>
-        <div class="record-info">
+        <div class="player-info">
           <div class="label-sm">High Game</div>
           <div class="record-value">{{ records.highGame || '—' }}</div>
         </div>
@@ -62,7 +62,7 @@
     <div class="record-card">
       <div class="record-card-head">
         <div class="icon-box lg">📈</div>
-        <div class="record-info">
+        <div class="player-info">
           <div class="label-sm">High Series (G1+G2)</div>
           <div class="record-value">{{ records.highSeries || '—' }}</div>
         </div>
@@ -71,12 +71,12 @@
     <div class="record-card">
       <div class="record-card-head">
         <div class="icon-box lg">🔥</div>
-        <div class="record-info">
+        <div class="player-info">
           <div class="label-sm">Best Streak</div>
           <div class="record-value">
             {{ records.bestStreak }} {{ records.bestStreak === 1 ? 'night' : 'nights' }}
           </div>
-          <div v-if="records.currentStreak > 0" class="record-detail">
+          <div v-if="records.currentStreak > 0" class="subtext">
             Current: {{ records.currentStreak }}
             {{ records.currentStreakType === 'W' ? 'win' : 'loss' }}{{ records.currentStreak > 1 ? (records.currentStreakType === 'W' ? 's' : 'es') : '' }}
           </div>

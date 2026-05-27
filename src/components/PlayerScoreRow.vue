@@ -15,8 +15,8 @@
           ><span v-if="player.isFill" class="fill-tag">FILL</span>
         </template>
       </div>
-      <div v-if="playerAvg > 0 && !player.isFill" class="player-avg">avg {{ playerAvg.toFixed(1) }}</div>
-      <div v-else-if="player.isFill" class="player-avg">fill</div>
+      <div v-if="playerAvg > 0 && !player.isFill" class="subtext">avg {{ playerAvg.toFixed(1) }}</div>
+      <div v-else-if="player.isFill" class="subtext">fill</div>
     </div>
     <div class="score-inputs">
       <div class="score-group">

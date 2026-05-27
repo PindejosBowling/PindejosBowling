@@ -12,7 +12,7 @@
 
     <!-- League avg banner -->
     <div class="card-sm league-avg-banner">
-      <div class="league-avg-info">
+      <div class="player-info">
         <div class="label-sm">League {{ sourceLabel }}</div>
         <div class="league-avg-val">{{ leagueAvg > 0 ? leagueAvg.toFixed(1) : '—' }}</div>
       </div>
@@ -51,7 +51,7 @@
                 }}<span v-if="isChamp(player.name)" class="champ-crown">👑</span
                 ><span v-if="isOut(player.name)" class="absent-tag">OUT</span>
               </div>
-              <div v-if="playerAvg(player.name) > 0" class="player-avg">avg {{ playerAvg(player.name).toFixed(1) }}</div>
+              <div v-if="playerAvg(player.name) > 0" class="subtext">avg {{ playerAvg(player.name).toFixed(1) }}</div>
             </div>
             <div class="score-inputs">
               <div class="score-group">
@@ -104,7 +104,7 @@
                 }}<span v-if="isChamp(player.name)" class="champ-crown">👑</span
                 ><span v-if="isOut(player.name)" class="absent-tag">OUT</span>
               </div>
-              <div v-if="playerAvg(player.name) > 0" class="player-avg">avg {{ playerAvg(player.name).toFixed(1) }}</div>
+              <div v-if="playerAvg(player.name) > 0" class="subtext">avg {{ playerAvg(player.name).toFixed(1) }}</div>
             </div>
             <div class="score-inputs">
               <div class="score-group">

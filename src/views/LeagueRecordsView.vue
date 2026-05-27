@@ -15,11 +15,11 @@
   <div class="card-md record-card">
     <div class="record-card-head">
       <div class="icon-box lg">🎳</div>
-      <div class="record-info">
+      <div class="player-info">
         <div class="label-sm">High Single Game</div>
         <template v-if="records.highGame.val">
           <div class="record-value">{{ records.highGame.by }}</div>
-          <div class="record-detail">{{ records.highGame.when }}</div>
+          <div class="subtext">{{ records.highGame.when }}</div>
         </template>
         <div v-else class="record-value" style="color:var(--muted)">No record yet</div>
       </div>
@@ -31,11 +31,11 @@
   <div class="card-md record-card">
     <div class="record-card-head">
       <div class="icon-box lg">📈</div>
-      <div class="record-info">
+      <div class="player-info">
         <div class="label-sm">High Series (G1+G2)</div>
         <template v-if="records.highSeries.val">
           <div class="record-value">{{ records.highSeries.by }}</div>
-          <div class="record-detail">{{ records.highSeries.when }}</div>
+          <div class="subtext">{{ records.highSeries.when }}</div>
         </template>
         <div v-else class="record-value" style="color:var(--muted)">No record yet</div>
       </div>
@@ -47,11 +47,11 @@
   <div class="card-md record-card">
     <div class="record-card-head">
       <div class="icon-box lg">💪</div>
-      <div class="record-info">
+      <div class="player-info">
         <div class="label-sm">High Team Game</div>
         <template v-if="records.highTeamGame.val">
           <div class="record-value">{{ records.highTeamGame.team }}</div>
-          <div class="record-detail">{{ records.highTeamGame.when }}</div>
+          <div class="subtext">{{ records.highTeamGame.when }}</div>
         </template>
         <div v-else class="record-value" style="color:var(--muted)">No record yet</div>
       </div>
@@ -73,11 +73,11 @@
   <div class="card-md record-card">
     <div class="record-card-head">
       <div class="icon-box lg">🌙</div>
-      <div class="record-info">
+      <div class="player-info">
         <div class="label-sm">High Team Night</div>
         <template v-if="records.highTeamNight.val">
           <div class="record-value">{{ records.highTeamNight.team }}</div>
-          <div class="record-detail">{{ records.highTeamNight.when }}</div>
+          <div class="subtext">{{ records.highTeamNight.when }}</div>
         </template>
         <div v-else class="record-value" style="color:var(--muted)">No record yet</div>
       </div>
@@ -119,11 +119,11 @@
   <div class="card-md record-card">
     <div class="record-card-head">
       <div class="icon-box lg">🏆</div>
-      <div class="record-info">
+      <div class="player-info">
         <div class="label-sm">Best Season Avg</div>
         <template v-if="records.bestSeasonAvg.val">
           <div class="record-value">{{ records.bestSeasonAvg.by }}</div>
-          <div class="record-detail">{{ records.bestSeasonAvg.when }}</div>
+          <div class="subtext">{{ records.bestSeasonAvg.when }}</div>
         </template>
         <div v-else class="record-value" style="color:var(--muted)">No record yet</div>
       </div>

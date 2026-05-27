@@ -19,12 +19,12 @@
       <div class="icon-box md player-avatar" :class="{ champ: isChampion(dataStore.champions, player.name) }">
         {{ initials(player.name) }}
       </div>
-      <div class="player-card-info">
+      <div class="player-info">
         <div class="player-card-name">
           {{ player.name }}
           <span v-if="isChampion(dataStore.champions, player.name)" class="champ-crown">👑</span>
         </div>
-        <div class="player-card-stats">{{ player.wins }}W {{ player.losses }}L</div>
+        <div class="subtext">{{ player.wins }}W {{ player.losses }}L</div>
       </div>
       <div class="player-card-avg">{{ player.avg > 0 ? player.avg.toFixed(1) : '—' }}</div>
     </div>

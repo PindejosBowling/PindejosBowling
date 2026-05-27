@@ -29,11 +29,11 @@
       <div
         v-for="player in roster"
         :key="player[0]"
-        class="list-row rsvp-row"
+        class="list-row player-row"
         :class="{ pending: isPending(player[0]) }"
       >
         <div class="icon-box sm">{{ initials(player[0]) }}</div>
-        <div class="rsvp-name">
+        <div class="player-info player-name">
           {{ player[0] }}
           <span v-if="isPending(player[0])" class="pending-dot" title="Unsaved"></span>
         </div>

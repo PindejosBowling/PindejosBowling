@@ -29,8 +29,8 @@
         class="list-row standing-row"
         @click="goToPlayer(player.name)"
       >
-        <span :class="['s-rank', { top: index < 3 }]">{{ index + 1 }}</span>
-        <span class="s-name">
+        <span :class="['icon-box', 'sm', { top: index < 3 }]">{{ index + 1 }}</span>
+        <span class="player-name">
           {{ player.name }}
           <span v-if="isChampion(dataStore.champions, player.name)" class="champ-crown" title="Past champion">👑</span>
         </span>

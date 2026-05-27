@@ -12,7 +12,7 @@
 
     <!-- League avg banner -->
     <div class="card-sm league-avg-banner">
-      <div class="league-avg-info">
+      <div class="player-info">
         <div class="label-sm">League {{ sourceLabel }}</div>
         <div class="league-avg-val">{{ leagueAvg > 0 ? leagueAvg.toFixed(1) : '—' }}</div>
       </div>
