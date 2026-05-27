@@ -160,12 +160,12 @@
 </template>
 
 <script setup>
-import { ref, computed, watch } from 'vue'
+import { ref, computed } from 'vue'
 import { useDataStore }    from '../stores/data.js'
 import { useUiStore }      from '../stores/ui.js'
 import { usePendingStore } from '../stores/pending.js'
 import { usePrefsStore }   from '../stores/prefs.js'
-import { readActiveWeek, getLeagueAvg, effectiveAvg, getCurrentSeason } from '../utils/data.js'
+import { readActiveWeek, getLeagueAvg, effectiveAvg } from '../utils/data.js'
 import { AW_WEEK, AW_SEASON } from '../utils/constants.js'
 import { apiPost } from '../api.js'
 import PlayerScoreRow from './PlayerScoreRow.vue'
@@ -289,28 +289,4 @@ async function saveScores() {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Keep legacy header badges in sync (Task 6 will replace with Vue components)
-// ---------------------------------------------------------------------------
-
-watch(
-  () => [dataStore.active, dataStore.stats, dataStore.settings],
-  () => {
-    if (!dataStore.active) return
-    const week       = dataStore.active[1]?.[AW_WEEK] ?? ''
-    const weekBadge  = document.getElementById('week-badge')
-    const seasonBadge = document.getElementById('season-badge')
-    if (weekBadge) {
-      weekBadge.textContent =
-        typeof week === 'number' || /^\d+$/.test(String(week))
-          ? `Week ${week}`
-          : week || 'Week 1'
-    }
-    if (seasonBadge) {
-      seasonBadge.textContent =
-        `Season ${getCurrentSeason(dataStore.stats, dataStore.settings)}`
-    }
-  },
-  { immediate: true, deep: false }
-)
 </script>

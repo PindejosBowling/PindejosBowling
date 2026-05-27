@@ -162,11 +162,11 @@
 </template>
 
 <script setup>
-import { computed, watch } from 'vue'
+import { computed } from 'vue'
 import { useDataStore }  from '../stores/data.js'
 import { useUiStore }    from '../stores/ui.js'
 import { usePrefsStore } from '../stores/prefs.js'
-import { getLeagueAvg, isChampion, isPlayerOut, getPlayerCurrentAvg, effectiveAvg, getCurrentSeason } from '../utils/data.js'
+import { getLeagueAvg, isChampion, isPlayerOut, getPlayerCurrentAvg, effectiveAvg } from '../utils/data.js'
 import { initials } from '../utils/helpers.js'
 import OddsBlock from './OddsBlock.vue'
 
@@ -273,26 +273,4 @@ function oddsTeam(team) {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Keep legacy header badges in sync (Task 6 replaces with Vue components)
-// ---------------------------------------------------------------------------
-
-watch(
-  () => [dataStore.current, dataStore.stats, dataStore.settings],
-  () => {
-    if (!dataStore.current) return
-    const weekVal    = dataStore.current[0]?.[0]
-    const weekBadge  = document.getElementById('week-badge')
-    const seasonBadge = document.getElementById('season-badge')
-    if (weekBadge && weekVal) {
-      const wStr = weekVal.toString()
-      weekBadge.textContent = wStr.toLowerCase().includes('week') ? wStr : `Week ${wStr}`
-    }
-    if (seasonBadge) {
-      seasonBadge.textContent =
-        `Season ${getCurrentSeason(dataStore.stats, dataStore.settings)}`
-    }
-  },
-  { immediate: true, deep: false }
-)
 </script>
