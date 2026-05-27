@@ -165,7 +165,7 @@ import { useRouter }       from 'vue-router'
 import { useDataStore }    from '../stores/data.js'
 import { usePendingStore } from '../stores/pending.js'
 import { isChampion }      from '../utils/data.js'
-import { apiGet, apiPost } from '../api.js'
+import { apiPost } from '../api.js'
 
 const dataStore    = useDataStore()
 const router       = useRouter()
@@ -195,11 +195,8 @@ function teamTotal(team) {
 
 async function doGenerate() {
   generating.value = true
-  // Refresh roster so latest RSVPs are reflected
-  try {
-    const fresh = await apiGet('getRoster')
-    if (Array.isArray(fresh)) dataStore.roster = fresh
-  } catch (e) { /* non-fatal, fall through */ }
+  // Refresh all store data so latest RSVPs are reflected
+  await dataStore.loadAll()
 
   try {
     const r = await apiPost('generateTeams', {
