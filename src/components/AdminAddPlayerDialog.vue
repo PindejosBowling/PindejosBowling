@@ -27,11 +27,13 @@
 <script setup>
 import { ref, nextTick, onMounted } from 'vue'
 import { useDataStore } from '../stores/data.js'
+import { useUiStore }   from '../stores/ui.js'
 import { apiPost } from '../api.js'
 
 const emit = defineEmits(['close'])
 
 const dataStore = useDataStore()
+const uiStore   = useUiStore()
 const name     = ref('')
 const saving   = ref(false)
 const inputRef = ref(null)
@@ -44,12 +46,12 @@ async function submit() {
   saving.value = true
   try {
     const r = await apiPost('addPlayer', { name: trimmed })
-    if (r.error) { window.toast?.(r.error, 'error'); saving.value = false; return }
-    window.toast?.(`Added ${trimmed}`, 'success')
+    if (r.error) { uiStore.showToast(r.error, 'error'); saving.value = false; return }
+    uiStore.showToast(`Added ${trimmed}`, 'success')
     await dataStore.loadAll()
     emit('close')
   } catch {
-    window.toast?.('Failed to add player', 'error')
+    uiStore.showToast('Failed to add player', 'error')
     saving.value = false
   }
 }

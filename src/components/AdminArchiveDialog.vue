@@ -20,23 +20,25 @@
 <script setup>
 import { ref } from 'vue'
 import { useDataStore } from '../stores/data.js'
+import { useUiStore }   from '../stores/ui.js'
 import { apiPost } from '../api.js'
 
 const emit = defineEmits(['close'])
 
 const dataStore = useDataStore()
+const uiStore   = useUiStore()
 const saving    = ref(false)
 
 async function confirm() {
   saving.value = true
   try {
     const r = await apiPost('archiveAndAdvance')
-    if (r.error) { window.toast?.(r.error, 'error'); saving.value = false; return }
-    window.toast?.(`Saved ${r.rowsAdded} rows`, 'success')
+    if (r.error) { uiStore.showToast(r.error, 'error'); saving.value = false; return }
+    uiStore.showToast(`Saved ${r.rowsAdded} rows`, 'success')
     await dataStore.loadAll()
     emit('close')
   } catch {
-    window.toast?.('Archive failed', 'error')
+    uiStore.showToast('Archive failed', 'error')
     saving.value = false
   }
 }

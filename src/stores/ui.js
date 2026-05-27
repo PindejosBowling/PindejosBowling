@@ -25,9 +25,21 @@ export const useUiStore = defineStore('ui', () => {
   const h2hP1           = ref(null)
   const h2hP2           = ref(null)
 
+  // Toast notifications
+  const toasts = ref([])
+
+  function showToast(msg, type = '') {
+    const id = Date.now() + Math.random()
+    toasts.value.push({ id, msg, type })
+    setTimeout(() => {
+      toasts.value = toasts.value.filter(t => t.id !== id)
+    }, 2400)
+  }
+
   return {
     matchupsView, expandedWeek, playerLogMode, oddsRevealed,
     standingsSeason, playerSeason, histSeason, histWeek,
     recordsSeason, chemMode, chemExpanded, h2hP1, h2hP2,
+    toasts, showToast,
   }
 })

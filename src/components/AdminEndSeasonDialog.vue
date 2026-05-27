@@ -46,12 +46,14 @@
 <script setup>
 import { ref, computed } from 'vue'
 import { useDataStore } from '../stores/data.js'
+import { useUiStore }   from '../stores/ui.js'
 import { apiPost }      from '../api.js'
 import { getCurrentSeason, aggregateStandings } from '../utils/data.js'
 
 const emit = defineEmits(['close'])
 
 const dataStore = useDataStore()
+const uiStore   = useUiStore()
 
 const champions = ref([])
 const notes     = ref('')
@@ -77,12 +79,12 @@ async function submit() {
       champions: champions.value,
       notes: notes.value.trim(),
     })
-    if (r.error) { window.toast?.(r.error, 'error'); saving.value = false; return }
-    window.toast?.(`Season ${r.season} closed`, 'success')
+    if (r.error) { uiStore.showToast(r.error, 'error'); saving.value = false; return }
+    uiStore.showToast(`Season ${r.season} closed`, 'success')
     await dataStore.loadAll()
     emit('close')
   } catch {
-    window.toast?.('Failed to end season', 'error')
+    uiStore.showToast('Failed to end season', 'error')
     saving.value = false
   }
 }
