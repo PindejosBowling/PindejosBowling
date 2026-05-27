@@ -60,7 +60,7 @@
   <!-- Sub-views wired in by Tasks 4b–4i: -->
   <PlayerList      v-else-if="uiStore.moreView === 'player-list'" />
   <PlayerDetail    v-else-if="uiStore.moreView === 'player-detail'" />
-  <!-- <SeasonHistory   v-else-if="uiStore.moreView === 'season-history'" /> -->
+  <SeasonHistory   v-else-if="uiStore.moreView === 'season-history'" />
   <!-- <LeagueRecords   v-else-if="uiStore.moreView === 'records'" /> -->
   <!-- <HeadToHead      v-else-if="uiStore.moreView === 'h2h'" /> -->
   <!-- <Chemistry       v-else-if="uiStore.moreView === 'chemistry'" /> -->
@@ -72,7 +72,8 @@
 import { onMounted, onUnmounted } from 'vue'
 import { useUiStore }   from '../stores/ui.js'
 import PlayerList   from '../components/PlayerList.vue'
-import PlayerDetail from '../components/PlayerDetail.vue'
+import PlayerDetail   from '../components/PlayerDetail.vue'
+import SeasonHistory  from '../components/SeasonHistory.vue'
 
 const uiStore = useUiStore()
 

@@ -498,7 +498,7 @@ watch(profile, () => {
 
 ## Task 4d — `src/components/SeasonHistory.vue`
 
-- [ ] **Status:** Not started
+- [x] **Status:** Complete
 
 **Prerequisite:** Task 4a (can run in parallel with 4b/4c)
 **Creates:** `src/components/SeasonHistory.vue`
