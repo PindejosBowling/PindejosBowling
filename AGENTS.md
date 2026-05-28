@@ -53,6 +53,7 @@ apiPost(action, payload) // POST { action, ...payload }, retries once on failure
 | Action | Purpose |
 |---|---|
 | `getAll` | Single call that returns all data slices at once |
+| `getActiveWeek` | Fetch only the active week sheet (used by `loadActive`) |
 
 ---
 
@@ -60,7 +61,7 @@ apiPost(action, payload) // POST { action, ...payload }, retries once on failure
 
 ### Single-fetch pattern
 
-On startup `App.tsx` calls `useDataStore.getState().loadAll()` once. This calls `apiGet('getAll')` and populates all 10 slices in one round-trip. Subsequent refreshes (pull-to-refresh on every screen) call `loadAll()` again.
+On startup `App.tsx` calls `useDataStore.getState().loadAll()` once. This calls `apiGet('getAll')` and populates all 10 slices in one round-trip. Subsequent refreshes (pull-to-refresh on every screen) call `loadAll()` again. `loadActive()` is available for lighter refreshes that only need the live scoreboard.
 
 ### Raw data format
 
@@ -100,8 +101,12 @@ Every data slice returned by the API is a **2D array of rows** mirroring the raw
 | `TEAM` | 2 | Team name |
 | `SLOT` | 3 | Player slot (sort order within team) |
 | `NAME` | 4 | Player name |
-| `G1–G3` | 5–7 | Game scores |
-| `G1_OPP–G3_OPP` | 8–10 | Opponent team per game |
+| `G1` | 5 | Game 1 score |
+| `G2` | 6 | Game 2 score |
+| `G3` | 7 | Game 3 score |
+| `G1_OPP` | 8 | Game 1 opponent team |
+| `G2_OPP` | 9 | Game 2 opponent team |
+| `G3_OPP` | 10 | Game 3 opponent team |
 | `IS_FILL` | 11 | Fill placeholder flag |
 
 ### dataStore slices
@@ -121,6 +126,10 @@ Every data slice returned by the API is a **2D array of rows** mirroring the raw
 | `generated` | Generated teams | Last server-generated team arrangement |
 | `settings` | Settings | Key-value pairs; `CurrentSeason` key drives season logic |
 
+**Actions:**
+- `loadAll()` — Calls `getAll`, populates all slices. Called on startup and pull-to-refresh.
+- `loadActive()` — Calls `getActiveWeek`, refreshes only the `active` slice.
+
 ---
 
 ## Pure Data Derivation Layer
@@ -138,7 +147,8 @@ Key functions and what they return:
 | `getCurrentSeason(stats, settings)` | Current season; prefers `settings` value, falls back to latest in stats |
 | `getDefaultViewSeason(stats, settings)` | Most recent season that has data (avoids blank new-season pages) |
 | `getWeeksForSeason(stats, season)` | Sorted week IDs for a season |
-| `aggregateStandings(stats, season)` | `[{name, team, wins, losses, pins, games, avg, weekCount}]` sorted by wins |
+| `aggregateStandings(stats, season)` | `[{name, team, wins, losses, pins, games, avg, weekCount}]` sorted by wins; pass `'all'` for all-time |
+| `getAllPlayerWeeks(stats, name)` | All stats rows for a given player |
 | `getPlayerProfile(stats, settings, name, season)` | Full profile with avg breakdowns, per-game log, records |
 | `getPersonalRecords(stats, name)` | `{highGame, highSeries, currentStreak, bestStreak, winRate}` |
 | `getPlayerCurrentAvg(stats, settings, name, source)` | Single avg number; `source` = `'last-played'`\|`'current-season'`\|`'all-time'` |
@@ -172,13 +182,13 @@ Key functions and what they return:
 Four Zustand stores — all imported as `useXxxStore` hooks:
 
 ### `useDataStore` ([src/stores/dataStore.ts](src/stores/dataStore.ts))
-Read-only from the perspective of the UI. Contains all server-fetched data and a `loadAll()` action. Screens subscribe to individual slices and call `loadAll()` to refresh.
+Read-only from the perspective of the UI. Contains all server-fetched data, a `loadAll()` action, and a `loadActive()` action. Screens subscribe to individual slices and call `loadAll()` to refresh.
 
 ### `usePendingStore` ([src/stores/pendingStore.ts](src/stores/pendingStore.ts))
 Optimistic edit buffer — not persisted. Holds:
 - `pendingRSVP: Record<playerName, 'In'|'Out'>` — staged RSVP changes before save
 - `pendingScores: Record<'teamName|slot|gameNum', scoreString>` — staged score edits before save
-- `genTeams` / `genNumTeams` / `genTeamSize` / `genAvgSource` / `genFillMode` / `genFillToSize` / `genSwapTarget` — state for the Generate Teams screen
+- `genTeams` / `genNumTeams` / `genTeamSize` / `genAvgSource` / `genFillMode` / `genFillToSize` / `genSwapTarget` — state for the Generate Teams flow
 
 ### `usePrefsStore` ([src/stores/prefsStore.ts](src/stores/prefsStore.ts))
 User preferences, persisted via AsyncStorage (`pb_myname`, `pb_avgdisplay`). Call `hydrate()` on app start (done in `App.tsx`).
@@ -190,6 +200,9 @@ Ephemeral UI state — toggles, selected seasons/weeks, selected players, toast 
 - `matchupsView` — `'scores'` | `'expected'`
 - `expandedWeek`, `histSeason`, `histWeek` — History screen navigation state
 - `standingsSeason`, `playerSeason`, `recordsSeason` — season filter selection per screen
+- `playerLogMode` — `'bowled'` | other — controls game log display in PlayerDetail
+- `chemMode` — `'pairs'` | `'trios'` — chemistry analysis group size
+- `chemExpanded` — boolean, whether chemistry rows are expanded
 - `h2hP1`, `h2hP2` — selected players for head-to-head
 - `oddsRevealed` — easter egg toggle on matchup screen
 - `toasts` — call `showToast(msg, type)` to show a 2.4s auto-dismissing toast
@@ -202,10 +215,9 @@ Ephemeral UI state — toggles, selected seasons/weeks, selected players, toast 
 
 | Tab label | Screen | Route name |
 |---|---|---|
-| This Week | MatchupsScreen | `Matchups` |
-| RSVP | RsvpScreen | `RSVP` |
 | Standings | StandingsScreen | `Standings` |
-| Matches | HistoryScreen | `History` |
+| RSVP | RsvpScreen | `RSVP` |
+| This Week | MatchupsScreen | `Matchups` |
 | More | MoreStackNavigator | `More` |
 
 **More tab** is a native stack navigator with these routes:
@@ -213,17 +225,16 @@ Ephemeral UI state — toggles, selected seasons/weeks, selected players, toast 
 | Route | Screen | Notes |
 |---|---|---|
 | `MoreHome` | MoreHomeScreen | Tile grid entry point |
-| `PlayerList` | PlayerListScreen | All players, tap → PlayerDetail |
+| `History` | HistoryScreen | Browse past weeks by season |
 | `PlayerDetail` | PlayerDetailScreen | Receives `{ name: string }` param |
 | `LeagueRecords` | LeagueRecordsScreen | High game/series/team records |
 | `HeadToHead` | HeadToHeadScreen | Pick 2 players, compare |
 | `Chemistry` | ChemistryScreen | Pair/trio win-rate analysis |
 | `SeasonHistory` | SeasonHistoryScreen | Season-by-season summary |
 | `TrashBoard` | TrashBoardScreen | Fun/trash talk leaderboard |
-| `GenerateTeams` | GenerateTeamsScreen | Admin: balanced team generator |
 | `Playoffs` | PlayoffsScreen | Admin: playoffs bracket |
 
-**Cross-tab navigation pattern** (used in StandingsScreen to jump to PlayerDetail from a different tab):
+**Cross-tab navigation pattern** (used to jump to PlayerDetail from another tab):
 ```tsx
 (navigation as any).navigate('More', { screen: 'PlayerDetail', params: { name } })
 ```
@@ -235,16 +246,30 @@ Ephemeral UI state — toggles, selected seasons/weeks, selected players, toast 
 | Component | Purpose |
 |---|---|
 | `AppHeader` | App logo + current Week/Season badge, reads from `dataStore` |
+| `ScreenHeader` | Reusable titled header for inner screens |
 | `Toast` | Absolute-positioned animated toast, reads from `uiStore.toasts` |
 | `ConfirmBar` | Sticky bottom bar for pending saves (RSVP, scores) |
 | `PlayerScoreRow` | One player row in the live matchup view — editable `TextInput` or expected avg display |
 | `OddsBlock` | Betting-style spread + moneyline card (easter egg, `Expected` mode only) |
 | `LoadingView` | Centered spinner with label |
+| `PillFilter` | Horizontal pill-style filter row for season/week selectors |
+| `ToggleGroup` | Segmented toggle control for multi-option switches |
 | `HistoricalTeamBlock` | Team block in the History screen |
 | `PlayerPickerModal` | Full-screen player search/select for H2H |
 | `AdminArchiveModal` | Confirm dialog for `archiveAndAdvance` |
 | `AdminAddPlayerModal` | Input dialog for `addPlayer` |
 | `AdminEndSeasonModal` | Confirm dialog for `endSeason` |
+| `AdminGenerateTeamsModal` | Dialog for the generate-teams admin flow |
+
+---
+
+## Hooks
+
+**File:** [src/hooks/useRefresh.ts](src/hooks/useRefresh.ts)
+
+| Hook | Purpose |
+|---|---|
+| `useRefresh()` | Returns `{ refreshing, onRefresh }` bound to `loadAll` — use with `RefreshControl` |
 
 ---
 
@@ -266,7 +291,7 @@ const standings = useMemo(
 Do not call data util functions outside of `useMemo` in render — they can be O(n²) over the full stats sheet.
 
 ### Pull-to-refresh
-Every scrollable screen wraps its scroll/list in a `RefreshControl` pointing to `loadAll`. The `loading` boolean from `dataStore` drives the refreshing indicator.
+Every scrollable screen wraps its scroll/list in a `RefreshControl`. Use the `useRefresh()` hook from `src/hooks/useRefresh.ts` to get `{ refreshing, onRefresh }` bound to `loadAll`.
 
 ---
 
@@ -277,19 +302,22 @@ Every scrollable screen wraps its scroll/list in a `RefreshControl` pointing to 
 Dark theme only. Import `colors`, `fonts`, `radius`.
 
 ```ts
-colors.bg       // #0a0a0c  — page background
-colors.surface  // #131316  — card background
-colors.surface2 // #1c1c21  — raised surface
-colors.surface3 // #25252b  — element on surface
-colors.accent   // #e8ff47  — primary accent (yellow-green)
-colors.accent2  // #ff4f6d  — secondary accent (red)
-colors.accent3  // #4fc3ff  — tertiary accent (blue)
-colors.gold     // #fbbf24  — champion gold
-colors.text     // #f0f0f0  — body text
-colors.muted    // #7a7a85  — secondary text
-colors.border   // rgba(255,255,255,0.08)
-colors.danger   // #ff4f6d
-colors.success  // #4ade80
+colors.bg        // #0a0a0c  — page background
+colors.surface   // #131316  — card background
+colors.surface2  // #1c1c21  — raised surface
+colors.surface3  // #25252b  — element on surface
+colors.accent    // #e8ff47  — primary accent (yellow-green)
+colors.accentDim // rgba(232,255,71,0.12) — translucent accent tint
+colors.accent2   // #ff4f6d  — secondary accent (red)
+colors.accent3   // #4fc3ff  — tertiary accent (blue)
+colors.gold      // #fbbf24  — champion gold
+colors.text      // #f0f0f0  — body text
+colors.muted     // #7a7a85  — secondary text
+colors.muted2    // #55555e  — tertiary / disabled text
+colors.border    // rgba(255,255,255,0.08)
+colors.border2   // rgba(255,255,255,0.14) — stronger border
+colors.danger    // #ff4f6d
+colors.success   // #4ade80
 ```
 
 Typography uses **Barlow Condensed** for labels/headings/stats (condensed, bold, letterSpacing applied) and **Barlow** for body text. All font strings are in `fonts`:
@@ -320,12 +348,14 @@ app/
 ├── src/
 │   ├── api.js                   # apiGet / apiPost wrappers
 │   ├── theme.ts                 # colors, fonts, radius
+│   ├── hooks/
+│   │   └── useRefresh.ts        # useRefresh() hook — RefreshControl bound to loadAll
 │   ├── navigation/
 │   │   ├── RootNavigator.tsx    # Bottom tab navigator
 │   │   ├── MoreStackNavigator.tsx # Stack navigator for More tab
 │   │   └── types.ts             # MoreStackParamList type
 │   ├── stores/
-│   │   ├── dataStore.ts         # Server data (read-only, refresh via loadAll)
+│   │   ├── dataStore.ts         # Server data (read-only, refresh via loadAll / loadActive)
 │   │   ├── pendingStore.ts      # Optimistic edit buffer
 │   │   ├── prefsStore.ts        # User prefs (AsyncStorage-backed)
 │   │   └── uiStore.ts           # Ephemeral UI state + toast queue
@@ -335,8 +365,11 @@ app/
 │   │   └── helpers.js           # Pure formatting/math utilities
 │   ├── components/
 │   │   ├── AppHeader.tsx
+│   │   ├── ScreenHeader.tsx
 │   │   ├── Toast.tsx
 │   │   ├── ConfirmBar.tsx
+│   │   ├── PillFilter.tsx
+│   │   ├── ToggleGroup.tsx
 │   │   ├── PlayerScoreRow.tsx
 │   │   ├── OddsBlock.tsx
 │   │   ├── LoadingView.tsx
@@ -344,21 +377,20 @@ app/
 │   │   ├── PlayerPickerModal.tsx
 │   │   ├── AdminArchiveModal.tsx
 │   │   ├── AdminAddPlayerModal.tsx
-│   │   └── AdminEndSeasonModal.tsx
+│   │   ├── AdminEndSeasonModal.tsx
+│   │   └── AdminGenerateTeamsModal.tsx
 │   └── screens/
 │       ├── MatchupsScreen.tsx   # Live scoreboard + score entry
 │       ├── RsvpScreen.tsx       # Weekly attendance management
 │       ├── StandingsScreen.tsx  # Season/all-time standings table
 │       ├── HistoryScreen.tsx    # Browse past weeks by season
 │       ├── MoreHomeScreen.tsx   # Tile grid for tools/admin
-│       ├── PlayerListScreen.tsx # All players list
 │       ├── PlayerDetailScreen.tsx # Per-player stats, game log, records
 │       ├── LeagueRecordsScreen.tsx # High game/series/team records
 │       ├── HeadToHeadScreen.tsx # 1v1 comparison
 │       ├── ChemistryScreen.tsx  # Pair/trio win-rate analysis
 │       ├── SeasonHistoryScreen.tsx # Season summaries
 │       ├── TrashBoardScreen.tsx # Fun leaderboard
-│       ├── GenerateTeamsScreen.tsx # Admin: balanced team gen + manual swap
 │       └── PlayoffsScreen.tsx   # Admin: playoffs bracket
 ```
 
