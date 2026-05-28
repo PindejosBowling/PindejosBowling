@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import {
   View, Text, FlatList, TouchableOpacity,
   ScrollView, RefreshControl, StyleSheet, useWindowDimensions,
@@ -26,6 +26,13 @@ export default function PlayerDetailScreen() {
   const navigation = useNavigation<Nav>()
   const { stats, settings, champions, loading, loadAll } = useDataStore()
   const { playerSeason, playerLogMode, expandedWeek, set } = useUiStore()
+  const [refreshing, setRefreshing] = useState(false)
+
+  async function handleRefresh() {
+    setRefreshing(true)
+    await loadAll()
+    setRefreshing(false)
+  }
 
   const name = route.params.name
   const { width: screenWidth } = useWindowDimensions()
@@ -117,7 +124,7 @@ const seasons = useMemo(() => (stats ? getSeasons(stats) : []), [stats])
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" refreshControl={<RefreshControl refreshing={loading} onRefresh={loadAll} tintColor={colors.accent} />}>
+      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.accent} />}>
         {/* Header */}
         <View style={styles.header}>
           <TouchableOpacity onPress={() => { navigation.navigate('MoreHome'); (navigation as any).navigate('Standings') }} style={styles.backBtn}>

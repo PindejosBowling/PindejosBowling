@@ -28,6 +28,13 @@ export default function TrashBoardScreen() {
   const { myName, setMyName } = usePrefsStore()
   const [msg, setMsg] = useState('')
   const [posting, setPosting] = useState(false)
+  const [refreshing, setRefreshing] = useState(false)
+
+  async function handleRefresh() {
+    setRefreshing(true)
+    await loadAll()
+    setRefreshing(false)
+  }
 
   const posts = (board ?? []).slice(1).filter((p: any[]) => p[2]).slice().reverse() as any[][]
 
@@ -61,7 +68,7 @@ export default function TrashBoardScreen() {
           keyboardShouldPersistTaps="handled"
           contentContainerStyle={styles.listContent}
           refreshControl={
-            <RefreshControl refreshing={loading} onRefresh={loadAll} tintColor={colors.accent} />
+            <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.accent} />
           }
           ListHeaderComponent={
             <>

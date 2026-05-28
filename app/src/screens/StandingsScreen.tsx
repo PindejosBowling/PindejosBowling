@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import {
   View, Text, FlatList, TouchableOpacity,
   ScrollView, RefreshControl, StyleSheet,
@@ -17,9 +17,16 @@ import LoadingView from '../components/LoadingView'
 type Nav = NativeStackNavigationProp<MoreStackParamList>
 
 export default function StandingsScreen() {
-  const { stats, settings, champions, loading, loadAll } = useDataStore()
+  const { stats, settings, champions, loadAll } = useDataStore()
   const { standingsSeason, set } = useUiStore()
   const navigation = useNavigation<Nav>()
+  const [refreshing, setRefreshing] = useState(false)
+
+  async function handleRefresh() {
+    setRefreshing(true)
+    await loadAll()
+    setRefreshing(false)
+  }
 
   const seasons = useMemo(() => (stats ? ['all', ...getSeasons(stats)] : ['all']), [stats])
 
@@ -52,7 +59,7 @@ export default function StandingsScreen() {
     <SafeAreaView style={styles.safe} edges={['top']}>
       <AppHeader />
 
-      <ScrollView refreshControl={<RefreshControl refreshing={loading} onRefresh={loadAll} tintColor={colors.accent} />}>
+      <ScrollView refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.accent} />}>
       {/* Season pill filter */}
       <ScrollView
         horizontal

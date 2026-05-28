@@ -20,9 +20,16 @@ import { initials } from '../utils/helpers.js'
 import { colors, fonts, radius } from '../theme'
 
 export default function RsvpScreen() {
-  const { loading, roster, rsvp, loadAll } = useDataStore()
+  const { roster, rsvp, loadAll } = useDataStore()
   const { pendingRSVP, set } = usePendingStore()
   const [saving, setSaving] = useState(false)
+  const [refreshing, setRefreshing] = useState(false)
+
+  async function handleRefresh() {
+    setRefreshing(true)
+    await loadAll()
+    setRefreshing(false)
+  }
 
   const players = (roster ?? []).slice(1).filter((r: any[]) => r[0]) as any[][]
 
@@ -112,7 +119,7 @@ export default function RsvpScreen() {
           keyExtractor={(item) => item[0]}
           keyboardShouldPersistTaps="handled"
           contentContainerStyle={[styles.listContent, hasPending && { paddingBottom: 80 }]}
-          refreshControl={<RefreshControl refreshing={loading} onRefresh={loadAll} tintColor={colors.accent} />}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.accent} />}
           ListHeaderComponent={
             <>
               <View style={styles.summaryRow}>

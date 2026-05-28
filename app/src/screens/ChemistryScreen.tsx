@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import {
   View, Text, FlatList, ScrollView, RefreshControl, TouchableOpacity, StyleSheet,
 } from 'react-native'
@@ -17,6 +17,13 @@ type Nav = NativeStackNavigationProp<MoreStackParamList>
 export default function ChemistryScreen() {
   const { stats, champions, loading, loadAll } = useDataStore()
   const { chemMode, chemExpanded, set } = useUiStore()
+  const [refreshing, setRefreshing] = useState(false)
+
+  async function handleRefresh() {
+    setRefreshing(true)
+    await loadAll()
+    setRefreshing(false)
+  }
   const navigation = useNavigation<Nav>()
 
   const groupSize = chemMode === 'pairs' ? 2 : 3
@@ -54,7 +61,7 @@ export default function ChemistryScreen() {
         ))}
       </View>
 
-      <ScrollView refreshControl={<RefreshControl refreshing={loading} onRefresh={loadAll} tintColor={colors.accent} />}>
+      <ScrollView refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.accent} />}>
         {allGroups.length === 0 ? (
           <Text style={styles.empty}>Not enough data yet.</Text>
         ) : (

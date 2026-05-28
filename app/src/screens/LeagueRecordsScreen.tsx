@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { View, Text, ScrollView, RefreshControl, TouchableOpacity, StyleSheet } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useNavigation } from '@react-navigation/native'
@@ -15,6 +15,13 @@ type Nav = NativeStackNavigationProp<MoreStackParamList>
 export default function LeagueRecordsScreen() {
   const { stats, loading, loadAll } = useDataStore()
   const { recordsSeason, set } = useUiStore()
+  const [refreshing, setRefreshing] = useState(false)
+
+  async function handleRefresh() {
+    setRefreshing(true)
+    await loadAll()
+    setRefreshing(false)
+  }
   const navigation = useNavigation<Nav>()
 
   const seasons = useMemo(() => (stats ? getSeasons(stats) : []), [stats])
@@ -56,7 +63,7 @@ export default function LeagueRecordsScreen() {
         })}
       </ScrollView>
 
-      <ScrollView contentContainerStyle={styles.content} refreshControl={<RefreshControl refreshing={loading} onRefresh={loadAll} tintColor={colors.accent} />}>
+      <ScrollView contentContainerStyle={styles.content} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.accent} />}>
         {records ? (
           <>
             <RecordCard

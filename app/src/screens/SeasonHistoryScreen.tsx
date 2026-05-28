@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { View, Text, ScrollView, RefreshControl, TouchableOpacity, StyleSheet } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useNavigation } from '@react-navigation/native'
@@ -16,6 +16,13 @@ type Nav = NativeStackNavigationProp<MoreStackParamList>
 export default function SeasonHistoryScreen() {
   const { stats, champions, history, loading, loadAll } = useDataStore()
   const navigation = useNavigation<Nav>()
+  const [refreshing, setRefreshing] = useState(false)
+
+  async function handleRefresh() {
+    setRefreshing(true)
+    await loadAll()
+    setRefreshing(false)
+  }
 
   const notesMap = useMemo(() => {
     const map: Record<string, string> = {}
@@ -61,7 +68,7 @@ export default function SeasonHistoryScreen() {
         <Text style={styles.title}>Past Seasons</Text>
       </View>
 
-      <ScrollView contentContainerStyle={styles.content} refreshControl={<RefreshControl refreshing={loading} onRefresh={loadAll} tintColor={colors.accent} />}>
+      <ScrollView contentContainerStyle={styles.content} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.accent} />}>
         {seasonData.length === 0 ? (
           <Text style={styles.empty}>No completed seasons yet.</Text>
         ) : (

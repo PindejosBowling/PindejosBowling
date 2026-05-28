@@ -16,6 +16,13 @@ type Nav = NativeStackNavigationProp<MoreStackParamList>
 export default function HeadToHeadScreen() {
   const { stats, loading, loadAll } = useDataStore()
   const { h2hP1, h2hP2, set } = useUiStore()
+  const [refreshing, setRefreshing] = useState(false)
+
+  async function handleRefresh() {
+    setRefreshing(true)
+    await loadAll()
+    setRefreshing(false)
+  }
   const navigation = useNavigation<Nav>()
   const [pickerOpen, setPickerOpen] = useState<'p1' | 'p2' | null>(null)
 
@@ -71,7 +78,7 @@ export default function HeadToHeadScreen() {
         <Text style={styles.title}>Head to Head</Text>
       </View>
 
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" refreshControl={<RefreshControl refreshing={loading} onRefresh={loadAll} tintColor={colors.accent} />}>
+      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.accent} />}>
         {/* Player selectors */}
         <View style={styles.pickerRow}>
           <TouchableOpacity

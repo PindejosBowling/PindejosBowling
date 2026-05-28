@@ -23,8 +23,15 @@ interface Tile {
 
 export default function MoreHomeScreen() {
   const navigation = useNavigation<Nav>()
-  const { loadAll, loading } = useDataStore()
+  const { loadAll } = useDataStore()
   const [showAddPlayer, setShowAddPlayer] = useState(false)
+  const [refreshing, setRefreshing] = useState(false)
+
+  async function handleRefresh() {
+    setRefreshing(true)
+    await loadAll()
+    setRefreshing(false)
+  }
   const [showEndSeason, setShowEndSeason] = useState(false)
   const [showGenerateTeams, setShowGenerateTeams] = useState(false)
 
@@ -47,7 +54,7 @@ export default function MoreHomeScreen() {
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <AppHeader />
-      <ScrollView contentContainerStyle={styles.content} refreshControl={<RefreshControl refreshing={loading} onRefresh={loadAll} tintColor={colors.accent} />}>
+      <ScrollView contentContainerStyle={styles.content} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.accent} />}>
         <Text style={styles.tabTitle}>More</Text>
 
         <Text style={styles.sectionHeader}>LEAGUE TOOLS</Text>

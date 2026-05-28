@@ -1,4 +1,4 @@
-import { useMemo, useEffect } from 'react'
+import { useMemo, useEffect, useState } from 'react'
 import {
   View, Text, ScrollView, RefreshControl, TouchableOpacity, StyleSheet,
 } from 'react-native'
@@ -21,6 +21,13 @@ export default function HistoryScreen() {
   const navigation = useNavigation<Nav>()
   const { stats, settings, loading, loadAll } = useDataStore()
   const { histSeason, histWeek, set } = useUiStore()
+  const [refreshing, setRefreshing] = useState(false)
+
+  async function handleRefresh() {
+    setRefreshing(true)
+    await loadAll()
+    setRefreshing(false)
+  }
 
   const seasons = useMemo(() => (stats ? getSeasons(stats) : []), [stats])
 
@@ -119,7 +126,7 @@ export default function HistoryScreen() {
         </ScrollView>
       ) : null}
 
-      <ScrollView contentContainerStyle={styles.content} refreshControl={<RefreshControl refreshing={loading} onRefresh={loadAll} tintColor={colors.accent} />}>
+      <ScrollView contentContainerStyle={styles.content} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.accent} />}>
         {pairings.length > 0 ? (
           presentGameNums.map((gameNum: any) => (
             <View key={gameNum}>

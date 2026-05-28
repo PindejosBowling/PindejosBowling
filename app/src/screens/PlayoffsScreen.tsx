@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { View, Text, ScrollView, RefreshControl, TouchableOpacity, StyleSheet } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useNavigation } from '@react-navigation/native'
@@ -10,7 +11,14 @@ type Nav = NativeStackNavigationProp<MoreStackParamList>
 
 export default function PlayoffsScreen() {
   const navigation = useNavigation<Nav>()
-  const { loadAll, loading } = useDataStore()
+  const { loadAll } = useDataStore()
+  const [refreshing, setRefreshing] = useState(false)
+
+  async function handleRefresh() {
+    setRefreshing(true)
+    await loadAll()
+    setRefreshing(false)
+  }
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
@@ -24,7 +32,7 @@ export default function PlayoffsScreen() {
         </View>
       </View>
 
-      <ScrollView contentContainerStyle={styles.content} refreshControl={<RefreshControl refreshing={loading} onRefresh={loadAll} tintColor={colors.accent} />}>
+      <ScrollView contentContainerStyle={styles.content} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.accent} />}>
         <View style={styles.card}>
           <View style={styles.cardHead}>
             <View style={styles.iconBox}>

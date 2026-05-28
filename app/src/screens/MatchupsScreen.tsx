@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState } from 'react'
 import {
   View,
   Text,
@@ -75,7 +75,13 @@ export default function MatchupsScreen() {
   const [saving, setSaving] = useState(false)
   const [showArchive, setShowArchive] = useState(false)
 
-  useEffect(() => { loadActive() }, [])
+  const [refreshing, setRefreshing] = useState(false)
+
+  async function handleRefresh() {
+    setRefreshing(true)
+    await loadActive()
+    setRefreshing(false)
+  }
 
   const isActive = hasActiveWeek(active)
   const teams: Record<string, any> = isActive ? readActiveWeek(active) : {}
@@ -187,7 +193,7 @@ export default function MatchupsScreen() {
               contentContainerStyle={[styles.scrollContent, { paddingBottom: 24 + floatingPadding, flexGrow: 1 }]}
               keyboardShouldPersistTaps="handled"
               refreshControl={
-                <RefreshControl refreshing={loading} onRefresh={loadActive} tintColor={colors.accent} />
+                <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.accent} />
               }
             >
               {isActive ? (
