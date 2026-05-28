@@ -206,6 +206,16 @@ These replace all derived data that was previously written to Google Sheets.
 
 ---
 
+## TODO
+
+> **MANDATORY — must be done before any data goes into production**
+
+- [ ] **Enable RLS on all 9 public tables.** None of the tables currently have Row Level Security enabled. Because they are in the `public` schema and exposed via the Supabase Data API, they are readable and writable by any client that has the `anon` key. Run `ALTER TABLE <name> ENABLE ROW LEVEL SECURITY;` on every table, then write policies that match the actual access model (see Auth Integration below for the intended rules).
+
+  Tables requiring RLS: `players`, `seasons`, `weeks`, `rsvp`, `team_slots`, `game_schedule`, `scores`, `board_posts`, `season_champions`
+
+---
+
 ## Auth Integration (Supabase)
 
 - Login: phone number + SMS OTP via Supabase Auth

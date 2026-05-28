@@ -23,6 +23,29 @@ Then press `i` to open in the iOS Simulator (requires Xcode to be installed).
 - [ ] From More Home, tapping back (swipe or back gesture) returns to the tab correctly
 - [ ] No red error screens on launch
 
+## Supabase Database
+
+Schema is version-controlled in `supabase/migrations/`. The CLI was installed via Homebrew (`supabase/tap/supabase`).
+
+### Apply migrations to the remote database
+
+```bash
+supabase link --project-ref lyihsvxraurjghjqxaau
+supabase db push
+```
+
+`supabase link` will prompt for the database password (Project Settings → Database in the Supabase dashboard).
+
+### Add a new migration
+
+```bash
+supabase migration new <migration_name>
+# Edit the generated file in supabase/migrations/
+supabase db push
+```
+
+---
+
 ## Deploying to TestFlight / Testers
 
 This app uses [EAS (Expo Application Services)](https://expo.dev) for building and distribution. Builds are compiled remotely — no Xcode required.
