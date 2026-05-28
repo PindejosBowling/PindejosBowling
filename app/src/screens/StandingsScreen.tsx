@@ -46,7 +46,7 @@ export default function StandingsScreen() {
     ;(navigation as any).navigate('More', { screen: 'PlayerDetail', params: { name } })
   }
 
-  if (loading || !stats) return <LoadingView label="Loading standings" />
+  if (!stats) return <LoadingView label="Loading standings" />
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>

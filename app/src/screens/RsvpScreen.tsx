@@ -94,7 +94,7 @@ export default function RsvpScreen() {
     ])
   }
 
-  if (loading || !roster) {
+  if (!roster) {
     return (
       <SafeAreaView style={styles.safeArea}>
         <AppHeader />
