@@ -1,13 +1,17 @@
 {
   "expo": {
-    "name": "PindejosBowling",
+    "name": "Pindejos",
     "slug": "pindejos-bowling",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.gsblinkhorn.pindejosbowling",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -23,6 +27,11 @@
     },
     "plugins": [
       "expo-font"
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "7ecaf340-1c50-4e12-8333-6e266d154574"
+      }
+    }
   }
 }
