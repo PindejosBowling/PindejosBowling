@@ -6,6 +6,5 @@ export type MoreStackParamList = {
   Chemistry: undefined
   SeasonHistory: undefined
   TrashBoard: undefined
-  GenerateTeams: undefined
   Playoffs: undefined
 }

@@ -9,6 +9,7 @@ import { MoreStackParamList } from '../navigation/types'
 import AppHeader from '../components/AppHeader'
 import AdminAddPlayerModal from '../components/AdminAddPlayerModal'
 import AdminEndSeasonModal from '../components/AdminEndSeasonModal'
+import AdminGenerateTeamsModal from '../components/AdminGenerateTeamsModal'
 
 type Nav = NativeStackNavigationProp<MoreStackParamList>
 
@@ -25,6 +26,7 @@ export default function MoreHomeScreen() {
   const { loadAll, loading } = useDataStore()
   const [showAddPlayer, setShowAddPlayer] = useState(false)
   const [showEndSeason, setShowEndSeason] = useState(false)
+  const [showGenerateTeams, setShowGenerateTeams] = useState(false)
 
   const leagueToolsTiles: Tile[] = [
 { icon: '🏆', label: 'Records',      onPress: () => navigation.navigate('LeagueRecords') },
@@ -35,7 +37,7 @@ export default function MoreHomeScreen() {
   ]
 
   const adminTiles: Tile[] = [
-    { icon: '🎲', label: 'Generate Teams', onPress: () => navigation.navigate('GenerateTeams') },
+    { icon: '🎲', label: 'Generate Teams', onPress: () => setShowGenerateTeams(true) },
     { icon: '➕', label: 'Add Player',     onPress: () => setShowAddPlayer(true) },
     { icon: '🥇', label: 'End Season',     onPress: () => setShowEndSeason(true) },
     { icon: '🏁', label: 'Playoffs',       onPress: () => navigation.navigate('Playoffs') },
@@ -82,6 +84,7 @@ export default function MoreHomeScreen() {
 
       <AdminAddPlayerModal visible={showAddPlayer} onClose={() => setShowAddPlayer(false)} />
       <AdminEndSeasonModal visible={showEndSeason} onClose={() => setShowEndSeason(false)} />
+      <AdminGenerateTeamsModal visible={showGenerateTeams} onClose={() => setShowGenerateTeams(false)} />
     </SafeAreaView>
   )
 }

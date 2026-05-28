@@ -66,7 +66,13 @@ export default function RsvpScreen() {
     try {
       const changes = Object.entries(pendingRSVP).map(([name, status]) => ({ name, status }))
       await apiPost('batchUpdateRSVP', { changes })
-      await loadAll()
+      const currentRsvp = useDataStore.getState().rsvp as any[][]
+      const updatedRsvp = currentRsvp.map((row: any[], i: number) => {
+        if (i === 0) return row
+        const pending = pendingRSVP[row[0]]
+        return pending !== undefined ? [row[0], pending] : row
+      })
+      useDataStore.setState({ rsvp: updatedRsvp })
       set({ pendingRSVP: {} })
     } finally {
       setSaving(false)
