@@ -184,7 +184,7 @@ export default function MatchupsScreen() {
         ) : (
           <View style={{ flex: 1 }}>
             <ScrollView
-              contentContainerStyle={[styles.scrollContent, { paddingBottom: 24 + floatingPadding }]}
+              contentContainerStyle={[styles.scrollContent, { paddingBottom: 24 + floatingPadding, flexGrow: 1 }]}
               keyboardShouldPersistTaps="handled"
               refreshControl={
                 <RefreshControl refreshing={loading} onRefresh={loadActive} tintColor={colors.accent} />
