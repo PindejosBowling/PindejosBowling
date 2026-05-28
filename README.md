@@ -7,10 +7,10 @@ Bowling hub for the Pindejos Bowling League
 `npm run dev` will start the server, accessible at http://localhost:5173/PindejosBowling/
 
 ### React Native app (iOS)
-The React Native app lives in `native/` and runs independently alongside the Vue app.
+The React Native app lives in `app/` and runs independently alongside the Vue app.
 
 ```bash
-cd native
+cd app
 npx expo start --ios
 ```
 

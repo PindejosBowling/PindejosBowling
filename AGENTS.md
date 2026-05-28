@@ -20,7 +20,7 @@ React Native / Expo app for a recreational bowling league called "Pindejos." Pla
 | Fonts | Barlow + Barlow Condensed via `@expo-google-fonts` |
 | Gradients | `react-native-linear-gradient` |
 
-Run with `expo start` from `native/`. Use `--ios`, `--android`, or `--web` flags.
+Run with `expo start` from `app/`. Use `--ios`, `--android`, or `--web` flags.
 
 ---
 
@@ -314,7 +314,7 @@ radius.icon   // 10 — avatar/icon boxes
 ## File Map
 
 ```
-native/
+app/
 ├── App.tsx                      # Root: font loading, store hydration, navigation container
 ├── index.ts                     # Expo entry point
 ├── src/
