@@ -7,4 +7,5 @@ export type MoreStackParamList = {
   SeasonHistory: undefined
   TrashBoard: undefined
   Playoffs: undefined
+  History: undefined
 }

@@ -6,7 +6,6 @@ import { colors } from '../theme'
 import MatchupsScreen from '../screens/MatchupsScreen'
 import RsvpScreen from '../screens/RsvpScreen'
 import StandingsScreen from '../screens/StandingsScreen'
-import HistoryScreen from '../screens/HistoryScreen'
 import MoreStackNavigator from './MoreStackNavigator'
 
 const Tab = createBottomTabNavigator()
@@ -45,11 +44,6 @@ export default function RootNavigator() {
         name="Matchups"
         component={MatchupsScreen}
         options={{ tabBarLabel: 'This Week', tabBarIcon: tabIcon('🎳') }}
-      />
-      <Tab.Screen
-        name="History"
-        component={HistoryScreen}
-        options={{ tabBarLabel: 'Matches', tabBarIcon: tabIcon('🗓️') }}
       />
       <Tab.Screen
         name="More"

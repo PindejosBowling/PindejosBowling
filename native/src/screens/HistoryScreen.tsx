@@ -3,17 +3,22 @@ import {
   View, Text, ScrollView, RefreshControl, TouchableOpacity, StyleSheet,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
+import { useNavigation } from '@react-navigation/native'
+import { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { colors, fonts, radius } from '../theme'
 import { useDataStore } from '../stores/dataStore'
 import { useUiStore } from '../stores/uiStore'
 import {
   getSeasons, getDefaultViewSeason, getWeeksForSeason, getMatchupsForWeek,
 } from '../utils/data.js'
-import AppHeader from '../components/AppHeader'
+import { MoreStackParamList } from '../navigation/types'
 import LoadingView from '../components/LoadingView'
 import HistoricalTeamBlock from '../components/HistoricalTeamBlock'
 
+type Nav = NativeStackNavigationProp<MoreStackParamList>
+
 export default function HistoryScreen() {
+  const navigation = useNavigation<Nav>()
   const { stats, settings, loading, loadAll } = useDataStore()
   const { histSeason, histWeek, set } = useUiStore()
 
@@ -62,7 +67,12 @@ export default function HistoryScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
-      <AppHeader />
+      <View style={styles.header}>
+        <TouchableOpacity onPress={() => navigation.navigate('MoreHome')} style={styles.backBtn}>
+          <Text style={styles.backText}>←</Text>
+        </TouchableOpacity>
+        <Text style={styles.title}>Matches</Text>
+      </View>
 
       {/* Season pills */}
       <ScrollView
@@ -155,6 +165,21 @@ export default function HistoryScreen() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.bg },
+
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  backBtn: { marginRight: 12, padding: 4 },
+  backText: { fontSize: 20, color: colors.text },
+  title: {
+    fontFamily: fonts.barlowCondensed,
+    fontSize: 22,
+    color: colors.text,
+    letterSpacing: 1,
+  },
 
   pillRow: {
     flexDirection: 'row',
