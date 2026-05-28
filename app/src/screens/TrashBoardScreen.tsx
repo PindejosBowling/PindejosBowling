@@ -9,12 +9,14 @@ import {
   KeyboardAvoidingView,
   RefreshControl,
 } from 'react-native'
+import { useRefresh } from '../hooks/useRefresh'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useNavigation } from '@react-navigation/native'
 import { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { MoreStackParamList } from '../navigation/types'
 import AppHeader from '../components/AppHeader'
 import LoadingView from '../components/LoadingView'
+import ScreenHeader from '../components/ScreenHeader'
 import { useDataStore } from '../stores/dataStore'
 import { usePrefsStore } from '../stores/prefsStore'
 import { isChampion } from '../utils/data.js'
@@ -28,13 +30,7 @@ export default function TrashBoardScreen() {
   const { myName, setMyName } = usePrefsStore()
   const [msg, setMsg] = useState('')
   const [posting, setPosting] = useState(false)
-  const [refreshing, setRefreshing] = useState(false)
-
-  async function handleRefresh() {
-    setRefreshing(true)
-    await loadAll()
-    setRefreshing(false)
-  }
+  const { refreshing, onRefresh } = useRefresh(loadAll)
 
   const posts = (board ?? []).slice(1).filter((p: any[]) => p[2]).slice().reverse() as any[][]
 
@@ -68,16 +64,11 @@ export default function TrashBoardScreen() {
           keyboardShouldPersistTaps="handled"
           contentContainerStyle={styles.listContent}
           refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.accent} />
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent} />
           }
           ListHeaderComponent={
             <>
-              <View style={styles.backRow}>
-                <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn} activeOpacity={0.7}>
-                  <Text style={styles.backBtnText}>←</Text>
-                </TouchableOpacity>
-                <Text style={styles.screenTitle}>Trash Board</Text>
-              </View>
+              <ScreenHeader title="Trash Board" onBack={() => navigation.goBack()} />
 
               <View style={styles.composer}>
                 <TextInput
@@ -134,31 +125,6 @@ export default function TrashBoardScreen() {
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: colors.bg },
   listContent: { paddingHorizontal: 16, paddingBottom: 24 },
-  backRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    paddingVertical: 12,
-  },
-  backBtn: {
-    width: 34,
-    height: 34,
-    borderRadius: radius.cardSm,
-    backgroundColor: colors.surface2,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  backBtnText: {
-    fontFamily: fonts.barlowCondensed,
-    fontSize: 18,
-    color: colors.text,
-  },
-  screenTitle: {
-    fontFamily: fonts.barlowCondensed,
-    fontSize: 22,
-    color: colors.text,
-    fontWeight: '700',
-  },
   composer: {
     backgroundColor: colors.surface,
     borderRadius: radius.cardMd,

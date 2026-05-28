@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { View, Text, ScrollView, RefreshControl, TouchableOpacity, StyleSheet, Dimensions } from 'react-native'
+import { useRefresh } from '../hooks/useRefresh'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useNavigation } from '@react-navigation/native'
 import { NativeStackNavigationProp } from '@react-navigation/native-stack'
@@ -25,13 +26,7 @@ export default function MoreHomeScreen() {
   const navigation = useNavigation<Nav>()
   const { loadAll } = useDataStore()
   const [showAddPlayer, setShowAddPlayer] = useState(false)
-  const [refreshing, setRefreshing] = useState(false)
-
-  async function handleRefresh() {
-    setRefreshing(true)
-    await loadAll()
-    setRefreshing(false)
-  }
+  const { refreshing, onRefresh } = useRefresh(loadAll)
   const [showEndSeason, setShowEndSeason] = useState(false)
   const [showGenerateTeams, setShowGenerateTeams] = useState(false)
 
@@ -54,7 +49,7 @@ export default function MoreHomeScreen() {
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <AppHeader />
-      <ScrollView contentContainerStyle={styles.content} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.accent} />}>
+      <ScrollView contentContainerStyle={styles.content} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent} />}>
         <Text style={styles.tabTitle}>More</Text>
 
         <Text style={styles.sectionHeader}>LEAGUE TOOLS</Text>

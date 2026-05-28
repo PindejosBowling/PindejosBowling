@@ -1,5 +1,6 @@
-import { useMemo, useState } from 'react'
-import { View, Text, ScrollView, RefreshControl, TouchableOpacity, StyleSheet } from 'react-native'
+import { useMemo } from 'react'
+import { View, Text, ScrollView, RefreshControl, StyleSheet } from 'react-native'
+import { useRefresh } from '../hooks/useRefresh'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useNavigation } from '@react-navigation/native'
 import { NativeStackNavigationProp } from '@react-navigation/native-stack'
@@ -10,19 +11,14 @@ import {
 } from '../utils/data.js'
 import { MoreStackParamList } from '../navigation/types'
 import LoadingView from '../components/LoadingView'
+import ScreenHeader from '../components/ScreenHeader'
 
 type Nav = NativeStackNavigationProp<MoreStackParamList>
 
 export default function SeasonHistoryScreen() {
   const { stats, champions, history, loading, loadAll } = useDataStore()
   const navigation = useNavigation<Nav>()
-  const [refreshing, setRefreshing] = useState(false)
-
-  async function handleRefresh() {
-    setRefreshing(true)
-    await loadAll()
-    setRefreshing(false)
-  }
+  const { refreshing, onRefresh } = useRefresh(loadAll)
 
   const notesMap = useMemo(() => {
     const map: Record<string, string> = {}
@@ -61,14 +57,9 @@ export default function SeasonHistoryScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.navigate('MoreHome')} style={styles.backBtn}>
-          <Text style={styles.backText}>←</Text>
-        </TouchableOpacity>
-        <Text style={styles.title}>Past Seasons</Text>
-      </View>
+      <ScreenHeader title="Past Seasons" onBack={() => navigation.navigate('MoreHome')} />
 
-      <ScrollView contentContainerStyle={styles.content} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.accent} />}>
+      <ScrollView contentContainerStyle={styles.content} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent} />}>
         {seasonData.length === 0 ? (
           <Text style={styles.empty}>No completed seasons yet.</Text>
         ) : (
@@ -108,20 +99,6 @@ function StatRow({ label, value }: { label: string; value: string }) {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.bg },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-  },
-  backBtn: { marginRight: 12, padding: 4 },
-  backText: { fontSize: 20, color: colors.text },
-  title: {
-    fontFamily: fonts.barlowCondensed,
-    fontSize: 22,
-    color: colors.text,
-    letterSpacing: 1,
-  },
   content: { padding: 16, paddingBottom: 40 },
   card: {
     backgroundColor: colors.surface,

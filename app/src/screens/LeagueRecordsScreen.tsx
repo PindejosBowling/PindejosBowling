@@ -1,5 +1,6 @@
-import { useMemo, useState } from 'react'
-import { View, Text, ScrollView, RefreshControl, TouchableOpacity, StyleSheet } from 'react-native'
+import { useMemo } from 'react'
+import { View, Text, ScrollView, RefreshControl, StyleSheet } from 'react-native'
+import { useRefresh } from '../hooks/useRefresh'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useNavigation } from '@react-navigation/native'
 import { NativeStackNavigationProp } from '@react-navigation/native-stack'
@@ -9,19 +10,15 @@ import { useUiStore } from '../stores/uiStore'
 import { getLeagueRecords, getSeasons } from '../utils/data.js'
 import { MoreStackParamList } from '../navigation/types'
 import LoadingView from '../components/LoadingView'
+import PillFilter from '../components/PillFilter'
+import ScreenHeader from '../components/ScreenHeader'
 
 type Nav = NativeStackNavigationProp<MoreStackParamList>
 
 export default function LeagueRecordsScreen() {
   const { stats, loading, loadAll } = useDataStore()
   const { recordsSeason, set } = useUiStore()
-  const [refreshing, setRefreshing] = useState(false)
-
-  async function handleRefresh() {
-    setRefreshing(true)
-    await loadAll()
-    setRefreshing(false)
-  }
+  const { refreshing, onRefresh } = useRefresh(loadAll)
   const navigation = useNavigation<Nav>()
 
   const seasons = useMemo(() => (stats ? getSeasons(stats) : []), [stats])
@@ -34,36 +31,16 @@ export default function LeagueRecordsScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.navigate('MoreHome')} style={styles.backBtn}>
-          <Text style={styles.backText}>←</Text>
-        </TouchableOpacity>
-        <Text style={styles.title}>League Records</Text>
-      </View>
+      <ScreenHeader title="League Records" onBack={() => navigation.navigate('MoreHome')} />
 
-      {/* Season pill filter */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.pillRow}
-      >
-        {(['all', ...seasons] as string[]).map((s) => {
-          const active = s === recordsSeason
-          return (
-            <TouchableOpacity
-              key={s}
-              style={[styles.pill, active && styles.pillActive]}
-              onPress={() => set({ recordsSeason: s })}
-            >
-              <Text style={[styles.pillText, active && styles.pillTextActive]}>
-                {s === 'all' ? 'All-time' : `Season ${s}`}
-              </Text>
-            </TouchableOpacity>
-          )
-        })}
-      </ScrollView>
+      <PillFilter
+        items={['all', ...seasons]}
+        value={recordsSeason ?? ''}
+        onChange={(s) => set({ recordsSeason: s })}
+        renderLabel={(s) => s === 'all' ? 'All-time' : `Season ${s}`}
+      />
 
-      <ScrollView contentContainerStyle={styles.content} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.accent} />}>
+      <ScrollView contentContainerStyle={styles.content} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent} />}>
         {records ? (
           <>
             <RecordCard
@@ -196,37 +173,6 @@ function GameBlock({ label, total, players }: { label: string; total?: number; p
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.bg },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-  },
-  backBtn: { marginRight: 12, padding: 4 },
-  backText: { fontSize: 20, color: colors.text },
-  title: {
-    fontFamily: fonts.barlowCondensed,
-    fontSize: 22,
-    color: colors.text,
-    letterSpacing: 1,
-  },
-  pillRow: {
-    flexDirection: 'row',
-    paddingHorizontal: 16,
-    paddingBottom: 10,
-    gap: 8,
-  },
-  pill: {
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: colors.border2,
-    backgroundColor: colors.surface,
-  },
-  pillActive: { backgroundColor: colors.accentDim, borderColor: colors.accent },
-  pillText: { fontFamily: fonts.barlowCondensed, fontSize: 13, color: colors.muted, letterSpacing: 0.5 },
-  pillTextActive: { color: colors.accent },
   content: { padding: 16, paddingBottom: 40 },
 })
 

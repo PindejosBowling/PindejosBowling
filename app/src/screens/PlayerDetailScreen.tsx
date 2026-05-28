@@ -1,8 +1,9 @@
-import { useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import {
   View, Text, FlatList, TouchableOpacity,
   ScrollView, RefreshControl, StyleSheet, useWindowDimensions,
 } from 'react-native'
+import { useRefresh } from '../hooks/useRefresh'
 import { LineChart } from 'react-native-gifted-charts'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { RouteProp, useRoute, useNavigation } from '@react-navigation/native'
@@ -18,6 +19,9 @@ import { initials, isPresent } from '../utils/helpers.js'
 import { SC } from '../utils/constants.js'
 import { MoreStackParamList } from '../navigation/types'
 import LoadingView from '../components/LoadingView'
+import PillFilter from '../components/PillFilter'
+import ScreenHeader from '../components/ScreenHeader'
+import ToggleGroup from '../components/ToggleGroup'
 
 type Nav = NativeStackNavigationProp<MoreStackParamList>
 
@@ -26,13 +30,7 @@ export default function PlayerDetailScreen() {
   const navigation = useNavigation<Nav>()
   const { stats, settings, champions, loading, loadAll } = useDataStore()
   const { playerSeason, playerLogMode, expandedWeek, set } = useUiStore()
-  const [refreshing, setRefreshing] = useState(false)
-
-  async function handleRefresh() {
-    setRefreshing(true)
-    await loadAll()
-    setRefreshing(false)
-  }
+  const { refreshing, onRefresh } = useRefresh(loadAll)
 
   const name = route.params.name
   const { width: screenWidth } = useWindowDimensions()
@@ -124,41 +122,19 @@ const seasons = useMemo(() => (stats ? getSeasons(stats) : []), [stats])
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.accent} />}>
-        {/* Header */}
-        <View style={styles.header}>
-          <TouchableOpacity onPress={() => { navigation.navigate('MoreHome'); (navigation as any).navigate('Standings') }} style={styles.backBtn}>
-            <Text style={styles.backText}>←</Text>
-          </TouchableOpacity>
-          <View>
-            <Text style={styles.playerName}>
-              {name}{champ ? ' 👑' : ''}
-            </Text>
-            {currentTeam ? <Text style={styles.subtext}>{currentTeam}</Text> : null}
-          </View>
-        </View>
+      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent} />}>
+        <ScreenHeader
+          title={`${name}${champ ? ' 👑' : ''}`}
+          subtitle={currentTeam ?? undefined}
+          onBack={() => { navigation.navigate('MoreHome'); (navigation as any).navigate('Standings') }}
+        />
 
-        {/* Season pill filter */}
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.pillRow}
-        >
-          {(['all', ...seasons] as string[]).map((s) => {
-            const active = s === activeSeason
-            return (
-              <TouchableOpacity
-                key={s}
-                style={[styles.pill, active && styles.pillActive]}
-                onPress={() => set({ playerSeason: s })}
-              >
-                <Text style={[styles.pillText, active && styles.pillTextActive]}>
-                  {s === 'all' ? 'All-time' : `Season ${s}`}
-                </Text>
-              </TouchableOpacity>
-            )
-          })}
-        </ScrollView>
+        <PillFilter
+          items={['all', ...seasons]}
+          value={activeSeason}
+          onChange={(s) => set({ playerSeason: s })}
+          renderLabel={(s) => s === 'all' ? 'All-time' : `Season ${s}`}
+        />
 
         {/* Stat tiles */}
         {profile ? (
@@ -235,19 +211,11 @@ const seasons = useMemo(() => (stats ? getSeasons(stats) : []), [stats])
         {/* Game log */}
         <View style={styles.logHeader}>
           <Text style={styles.sectionHeader}>Game Log</Text>
-          <View style={styles.toggleGroup}>
-            {(['bowled', 'all'] as const).map((mode) => (
-              <TouchableOpacity
-                key={mode}
-                style={[styles.toggleBtn, playerLogMode === mode && styles.toggleBtnActive]}
-                onPress={() => set({ playerLogMode: mode })}
-              >
-                <Text style={[styles.toggleBtnText, playerLogMode === mode && styles.toggleBtnTextActive]}>
-                  {mode === 'bowled' ? 'Bowled' : 'All Weeks'}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
+          <ToggleGroup
+            options={[{ key: 'bowled', label: 'Bowled' }, { key: 'all', label: 'All Weeks' }]}
+            value={playerLogMode}
+            onChange={(mode) => set({ playerLogMode: mode })}
+          />
         </View>
 
         {weekRows.length ? (
@@ -385,46 +353,6 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.bg },
   content: { paddingBottom: 40 },
 
-  header: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-  },
-  backBtn: { marginRight: 12, padding: 4, marginTop: 2 },
-  backText: { fontSize: 20, color: colors.text },
-  playerName: {
-    fontFamily: fonts.barlowCondensed,
-    fontSize: 24,
-    color: colors.text,
-    letterSpacing: 0.5,
-  },
-  subtext: {
-    fontFamily: fonts.barlowCondensed,
-    fontSize: 13,
-    color: colors.muted,
-    letterSpacing: 0.5,
-    marginTop: 2,
-  },
-
-  pillRow: {
-    flexDirection: 'row',
-    paddingHorizontal: 16,
-    paddingBottom: 10,
-    gap: 8,
-  },
-  pill: {
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: colors.border2,
-    backgroundColor: colors.surface,
-  },
-  pillActive: { backgroundColor: colors.accentDim, borderColor: colors.accent },
-  pillText: { fontFamily: fonts.barlowCondensed, fontSize: 13, color: colors.muted, letterSpacing: 0.5 },
-  pillTextActive: { color: colors.accent },
-
   statGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -463,18 +391,6 @@ const styles = StyleSheet.create({
     marginTop: 4,
     marginBottom: 8,
   },
-  toggleGroup: { flexDirection: 'row', gap: 4 },
-  toggleBtn: {
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 8,
-    backgroundColor: colors.surface2,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  toggleBtnActive: { backgroundColor: colors.accentDim, borderColor: colors.accent },
-  toggleBtnText: { fontFamily: fonts.barlowCondensed, fontSize: 11, color: colors.muted },
-  toggleBtnTextActive: { color: colors.accent },
 
   logCard: {
     marginHorizontal: 16,

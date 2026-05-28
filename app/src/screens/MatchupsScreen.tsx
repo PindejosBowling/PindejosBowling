@@ -8,6 +8,7 @@ import {
   KeyboardAvoidingView,
   RefreshControl,
 } from 'react-native'
+import { useRefresh } from '../hooks/useRefresh'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import AppHeader from '../components/AppHeader'
 import LoadingView from '../components/LoadingView'
@@ -15,6 +16,7 @@ import PlayerScoreRow from '../components/PlayerScoreRow'
 import OddsBlock from '../components/OddsBlock'
 import ConfirmBar from '../components/ConfirmBar'
 import AdminArchiveModal from '../components/AdminArchiveModal'
+import ToggleGroup from '../components/ToggleGroup'
 import { useDataStore } from '../stores/dataStore'
 import { useUiStore } from '../stores/uiStore'
 import { usePendingStore } from '../stores/pendingStore'
@@ -27,24 +29,6 @@ import { colors, fonts, radius } from '../theme'
 // Shared helpers
 // ---------------------------------------------------------------------------
 
-function ViewToggle({ value, onChange }: { value: string; onChange: (v: string) => void }) {
-  return (
-    <View style={sharedStyles.toggleRow}>
-      {(['scores', 'expected'] as const).map(v => (
-        <TouchableOpacity
-          key={v}
-          style={[sharedStyles.toggleBtn, value === v && sharedStyles.toggleBtnActive]}
-          onPress={() => onChange(v)}
-          activeOpacity={0.7}
-        >
-          <Text style={[sharedStyles.toggleBtnText, value === v && sharedStyles.toggleBtnTextActive]}>
-            {v === 'scores' ? 'Live' : 'Expected'}
-          </Text>
-        </TouchableOpacity>
-      ))}
-    </View>
-  )
-}
 
 function VsBar() {
   return (
@@ -74,14 +58,7 @@ export default function MatchupsScreen() {
   const { avgDisplay } = usePrefsStore()
   const [saving, setSaving] = useState(false)
   const [showArchive, setShowArchive] = useState(false)
-
-  const [refreshing, setRefreshing] = useState(false)
-
-  async function handleRefresh() {
-    setRefreshing(true)
-    await loadActive()
-    setRefreshing(false)
-  }
+  const { refreshing, onRefresh } = useRefresh(loadActive)
 
   const isActive = hasActiveWeek(active)
   const teams: Record<string, any> = isActive ? readActiveWeek(active) : {}
@@ -193,7 +170,7 @@ export default function MatchupsScreen() {
               contentContainerStyle={[styles.scrollContent, { paddingBottom: 24 + floatingPadding, flexGrow: 1 }]}
               keyboardShouldPersistTaps="handled"
               refreshControl={
-                <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.accent} />
+                <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent} />
               }
             >
               {isActive ? (
@@ -201,7 +178,11 @@ export default function MatchupsScreen() {
                   {/* Title + view toggle */}
                   <View style={styles.titleRow}>
                     <Text style={styles.screenTitle}>Matchups</Text>
-                    <ViewToggle value={matchupsView} onChange={v => setUi({ matchupsView: v })} />
+                    <ToggleGroup
+                      options={[{ key: 'scores', label: 'Live' }, { key: 'expected', label: 'Expected' }]}
+                      value={matchupsView}
+                      onChange={(v) => setUi({ matchupsView: v })}
+                    />
                   </View>
 
                   {/* Rounds */}
@@ -379,30 +360,6 @@ export default function MatchupsScreen() {
 // ---------------------------------------------------------------------------
 
 const sharedStyles = StyleSheet.create({
-  toggleRow: {
-    flexDirection: 'row',
-    gap: 4,
-  },
-  toggleBtn: {
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: colors.border2,
-  },
-  toggleBtnActive: {
-    backgroundColor: colors.accentDim,
-    borderColor: colors.accent,
-  },
-  toggleBtnText: {
-    fontFamily: fonts.barlowCondensed,
-    fontSize: 12,
-    color: colors.muted,
-    letterSpacing: 0.5,
-  },
-  toggleBtnTextActive: {
-    color: colors.accent,
-  },
   vsBar: {
     flexDirection: 'row',
     alignItems: 'center',

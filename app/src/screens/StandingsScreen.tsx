@@ -1,8 +1,9 @@
-import { useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import {
   View, Text, FlatList, TouchableOpacity,
   ScrollView, RefreshControl, StyleSheet,
 } from 'react-native'
+import { useRefresh } from '../hooks/useRefresh'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useNavigation } from '@react-navigation/native'
 import { NativeStackNavigationProp } from '@react-navigation/native-stack'
@@ -13,6 +14,7 @@ import { aggregateStandings, getSeasons, getDefaultViewSeason, isChampion } from
 import { MoreStackParamList } from '../navigation/types'
 import AppHeader from '../components/AppHeader'
 import LoadingView from '../components/LoadingView'
+import PillFilter from '../components/PillFilter'
 
 type Nav = NativeStackNavigationProp<MoreStackParamList>
 
@@ -20,13 +22,7 @@ export default function StandingsScreen() {
   const { stats, settings, champions, loadAll } = useDataStore()
   const { standingsSeason, set } = useUiStore()
   const navigation = useNavigation<Nav>()
-  const [refreshing, setRefreshing] = useState(false)
-
-  async function handleRefresh() {
-    setRefreshing(true)
-    await loadAll()
-    setRefreshing(false)
-  }
+  const { refreshing, onRefresh } = useRefresh(loadAll)
 
   const seasons = useMemo(() => (stats ? ['all', ...getSeasons(stats)] : ['all']), [stats])
 
@@ -59,28 +55,13 @@ export default function StandingsScreen() {
     <SafeAreaView style={styles.safe} edges={['top']}>
       <AppHeader />
 
-      <ScrollView refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.accent} />}>
-      {/* Season pill filter */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.pillRow}
-      >
-        {seasons.map((s) => {
-          const active = s === activeSeason || (s === 'all' && activeSeason === 'all')
-          return (
-            <TouchableOpacity
-              key={s}
-              style={[styles.pill, active && styles.pillActive]}
-              onPress={() => set({ standingsSeason: s })}
-            >
-              <Text style={[styles.pillText, active && styles.pillTextActive]}>
-                {s === 'all' ? 'All-time' : `Season ${s}`}
-              </Text>
-            </TouchableOpacity>
-          )
-        })}
-      </ScrollView>
+      <ScrollView refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent} />}>
+      <PillFilter
+        items={seasons}
+        value={activeSeason}
+        onChange={(s) => set({ standingsSeason: s })}
+        renderLabel={(s) => s === 'all' ? 'All-time' : `Season ${s}`}
+      />
 
       {/* League avg banner */}
       <View style={styles.leagueBanner}>
@@ -159,34 +140,6 @@ const styles = StyleSheet.create({
     fontSize: 24,
     color: colors.text,
   },
-  pillRow: {
-    flexDirection: 'row',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    gap: 8,
-  },
-  pill: {
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: colors.border2,
-    backgroundColor: colors.surface,
-  },
-  pillActive: {
-    backgroundColor: colors.accentDim,
-    borderColor: colors.accent,
-  },
-  pillText: {
-    fontFamily: fonts.barlowCondensed,
-    fontSize: 13,
-    color: colors.muted,
-    letterSpacing: 0.5,
-  },
-  pillTextActive: {
-    color: colors.accent,
-  },
-
   card: {
     marginHorizontal: 16,
     backgroundColor: colors.surface,

@@ -1,38 +1,25 @@
-import { useState } from 'react'
-import { View, Text, ScrollView, RefreshControl, TouchableOpacity, StyleSheet } from 'react-native'
+import { View, Text, ScrollView, RefreshControl, StyleSheet } from 'react-native'
+import { useRefresh } from '../hooks/useRefresh'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useNavigation } from '@react-navigation/native'
 import { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { colors, fonts, radius } from '../theme'
 import { useDataStore } from '../stores/dataStore'
 import { MoreStackParamList } from '../navigation/types'
+import ScreenHeader from '../components/ScreenHeader'
 
 type Nav = NativeStackNavigationProp<MoreStackParamList>
 
 export default function PlayoffsScreen() {
   const navigation = useNavigation<Nav>()
   const { loadAll } = useDataStore()
-  const [refreshing, setRefreshing] = useState(false)
-
-  async function handleRefresh() {
-    setRefreshing(true)
-    await loadAll()
-    setRefreshing(false)
-  }
+  const { refreshing, onRefresh } = useRefresh(loadAll)
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.navigate('MoreHome')} style={styles.backBtn}>
-          <Text style={styles.backText}>←</Text>
-        </TouchableOpacity>
-        <View>
-          <Text style={styles.title}>Playoffs</Text>
-          <Text style={styles.subtitle}>Coming soon</Text>
-        </View>
-      </View>
+      <ScreenHeader title="Playoffs" subtitle="Coming soon" onBack={() => navigation.navigate('MoreHome')} />
 
-      <ScrollView contentContainerStyle={styles.content} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.accent} />}>
+      <ScrollView contentContainerStyle={styles.content} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent} />}>
         <View style={styles.card}>
           <View style={styles.cardHead}>
             <View style={styles.iconBox}>
@@ -85,27 +72,6 @@ export default function PlayoffsScreen() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.bg },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-  },
-  backBtn: { marginRight: 12, padding: 4 },
-  backText: { fontSize: 20, color: colors.text },
-  title: {
-    fontFamily: fonts.barlowCondensed,
-    fontSize: 22,
-    color: colors.text,
-    letterSpacing: 1,
-  },
-  subtitle: {
-    fontFamily: fonts.barlow,
-    fontSize: 13,
-    color: colors.muted,
-    marginTop: 1,
-  },
-
   content: { paddingHorizontal: 16, paddingBottom: 32 },
 
   card: {

@@ -1,11 +1,12 @@
-import { useMemo, useEffect, useState } from 'react'
+import { useMemo, useEffect } from 'react'
 import {
-  View, Text, ScrollView, RefreshControl, TouchableOpacity, StyleSheet,
+  View, Text, ScrollView, RefreshControl, StyleSheet,
 } from 'react-native'
+import { useRefresh } from '../hooks/useRefresh'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useNavigation } from '@react-navigation/native'
 import { NativeStackNavigationProp } from '@react-navigation/native-stack'
-import { colors, fonts, radius } from '../theme'
+import { colors, fonts } from '../theme'
 import { useDataStore } from '../stores/dataStore'
 import { useUiStore } from '../stores/uiStore'
 import {
@@ -14,6 +15,8 @@ import {
 import { MoreStackParamList } from '../navigation/types'
 import LoadingView from '../components/LoadingView'
 import HistoricalTeamBlock from '../components/HistoricalTeamBlock'
+import PillFilter from '../components/PillFilter'
+import ScreenHeader from '../components/ScreenHeader'
 
 type Nav = NativeStackNavigationProp<MoreStackParamList>
 
@@ -21,13 +24,7 @@ export default function HistoryScreen() {
   const navigation = useNavigation<Nav>()
   const { stats, settings, loading, loadAll } = useDataStore()
   const { histSeason, histWeek, set } = useUiStore()
-  const [refreshing, setRefreshing] = useState(false)
-
-  async function handleRefresh() {
-    setRefreshing(true)
-    await loadAll()
-    setRefreshing(false)
-  }
+  const { refreshing, onRefresh } = useRefresh(loadAll)
 
   const seasons = useMemo(() => (stats ? getSeasons(stats) : []), [stats])
 
@@ -74,59 +71,26 @@ export default function HistoryScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.navigate('MoreHome')} style={styles.backBtn}>
-          <Text style={styles.backText}>←</Text>
-        </TouchableOpacity>
-        <Text style={styles.title}>Matches</Text>
-      </View>
+      <ScreenHeader title="Matches" onBack={() => navigation.navigate('MoreHome')} />
 
-      {/* Season pills */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.pillRow}
-      >
-        {seasons.map((s: any) => {
-          const active = s === histSeason
-          return (
-            <TouchableOpacity
-              key={s}
-              style={[styles.pill, active && styles.pillActive]}
-              onPress={() => set({ histSeason: s, histWeek: null })}
-            >
-              <Text style={[styles.pillText, active && styles.pillTextActive]}>
-                Season {s}
-              </Text>
-            </TouchableOpacity>
-          )
-        })}
-      </ScrollView>
+      <PillFilter
+        items={seasons}
+        value={histSeason ?? ''}
+        onChange={(s) => set({ histSeason: s, histWeek: null })}
+        renderLabel={(s) => `Season ${s}`}
+      />
 
-      {/* Week pills */}
       {weeks.length > 0 ? (
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={[styles.pillRow, styles.weekPillRow]}
-        >
-          {weeks.map((w: any) => {
-            const active = w === histWeek
-            const label = isNaN(parseInt(w)) ? w : `Week ${w}`
-            return (
-              <TouchableOpacity
-                key={w}
-                style={[styles.pill, styles.weekPill, active && styles.pillActive]}
-                onPress={() => set({ histWeek: w })}
-              >
-                <Text style={[styles.pillText, active && styles.pillTextActive]}>{label}</Text>
-              </TouchableOpacity>
-            )
-          })}
-        </ScrollView>
+        <PillFilter
+          items={weeks}
+          value={histWeek ?? ''}
+          onChange={(w) => set({ histWeek: w })}
+          renderLabel={(w) => isNaN(parseInt(w)) ? w : `Week ${w}`}
+          style={{ paddingTop: 0 }}
+        />
       ) : null}
 
-      <ScrollView contentContainerStyle={styles.content} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.accent} />}>
+      <ScrollView contentContainerStyle={styles.content} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent} />}>
         {pairings.length > 0 ? (
           presentGameNums.map((gameNum: any) => (
             <View key={gameNum}>
@@ -172,42 +136,6 @@ export default function HistoryScreen() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.bg },
-
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-  },
-  backBtn: { marginRight: 12, padding: 4 },
-  backText: { fontSize: 20, color: colors.text },
-  title: {
-    fontFamily: fonts.barlowCondensed,
-    fontSize: 22,
-    color: colors.text,
-    letterSpacing: 1,
-  },
-
-  pillRow: {
-    flexDirection: 'row',
-    paddingHorizontal: 16,
-    paddingTop: 4,
-    paddingBottom: 8,
-    gap: 8,
-  },
-  weekPillRow: { paddingTop: 0 },
-  pill: {
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: colors.border2,
-    backgroundColor: colors.surface,
-  },
-  weekPill: { paddingHorizontal: 10, paddingVertical: 5 },
-  pillActive: { backgroundColor: colors.accentDim, borderColor: colors.accent },
-  pillText: { fontFamily: fonts.barlowCondensed, fontSize: 13, color: colors.muted, letterSpacing: 0.5 },
-  pillTextActive: { color: colors.accent },
 
   content: { padding: 16, paddingBottom: 40 },
 

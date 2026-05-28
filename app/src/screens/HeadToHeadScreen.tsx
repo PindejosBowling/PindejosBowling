@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react'
 import { View, Text, ScrollView, RefreshControl, TouchableOpacity, StyleSheet } from 'react-native'
+import { useRefresh } from '../hooks/useRefresh'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useNavigation } from '@react-navigation/native'
 import { NativeStackNavigationProp } from '@react-navigation/native-stack'
@@ -10,19 +11,14 @@ import { aggregateStandings, getH2H } from '../utils/data.js'
 import { MoreStackParamList } from '../navigation/types'
 import LoadingView from '../components/LoadingView'
 import PlayerPickerModal from '../components/PlayerPickerModal'
+import ScreenHeader from '../components/ScreenHeader'
 
 type Nav = NativeStackNavigationProp<MoreStackParamList>
 
 export default function HeadToHeadScreen() {
   const { stats, loading, loadAll } = useDataStore()
   const { h2hP1, h2hP2, set } = useUiStore()
-  const [refreshing, setRefreshing] = useState(false)
-
-  async function handleRefresh() {
-    setRefreshing(true)
-    await loadAll()
-    setRefreshing(false)
-  }
+  const { refreshing, onRefresh } = useRefresh(loadAll)
   const navigation = useNavigation<Nav>()
   const [pickerOpen, setPickerOpen] = useState<'p1' | 'p2' | null>(null)
 
@@ -71,14 +67,9 @@ export default function HeadToHeadScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.navigate('MoreHome')} style={styles.backBtn}>
-          <Text style={styles.backText}>←</Text>
-        </TouchableOpacity>
-        <Text style={styles.title}>Head to Head</Text>
-      </View>
+      <ScreenHeader title="Head to Head" onBack={() => navigation.navigate('MoreHome')} />
 
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.accent} />}>
+      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent} />}>
         {/* Player selectors */}
         <View style={styles.pickerRow}>
           <TouchableOpacity
@@ -222,21 +213,6 @@ export default function HeadToHeadScreen() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.bg },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-  },
-  backBtn: { marginRight: 12, padding: 4 },
-  backText: { fontSize: 20, color: colors.text },
-  title: {
-    fontFamily: fonts.barlowCondensed,
-    fontSize: 22,
-    color: colors.text,
-    letterSpacing: 1,
-  },
-
   content: { paddingHorizontal: 16, paddingBottom: 32 },
 
   pickerRow: {

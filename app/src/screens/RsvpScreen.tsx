@@ -9,6 +9,7 @@ import {
   StyleSheet,
   KeyboardAvoidingView,
 } from 'react-native'
+import { useRefresh } from '../hooks/useRefresh'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import AppHeader from '../components/AppHeader'
 import ConfirmBar from '../components/ConfirmBar'
@@ -23,13 +24,7 @@ export default function RsvpScreen() {
   const { roster, rsvp, loadAll } = useDataStore()
   const { pendingRSVP, set } = usePendingStore()
   const [saving, setSaving] = useState(false)
-  const [refreshing, setRefreshing] = useState(false)
-
-  async function handleRefresh() {
-    setRefreshing(true)
-    await loadAll()
-    setRefreshing(false)
-  }
+  const { refreshing, onRefresh } = useRefresh(loadAll)
 
   const players = (roster ?? []).slice(1).filter((r: any[]) => r[0]) as any[][]
 
@@ -119,7 +114,7 @@ export default function RsvpScreen() {
           keyExtractor={(item) => item[0]}
           keyboardShouldPersistTaps="handled"
           contentContainerStyle={[styles.listContent, hasPending && { paddingBottom: 80 }]}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.accent} />}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent} />}
           ListHeaderComponent={
             <>
               <View style={styles.summaryRow}>
