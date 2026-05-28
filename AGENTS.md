@@ -1,262 +1,383 @@
-# AGENTS.md — Pindejos Bowling
+# PindejosBowling Native — Agent Reference
 
-Quick-reference for agents working in this repo. Read this before touching any file.
+## Project Overview
 
-Also read **[VUE_BEST_PRACTICES.md](VUE_BEST_PRACTICES.md)** — the style and architecture guide for all Vue work in this codebase.
-
----
-
-## What this is
-
-A **bowling league management app** for a friend group. Deployed as a static GitHub Pages site at `https://jordanreticker.github.io/PindejosBowling/`. All persistent data lives in a Google Sheet; the front-end talks to it through a published **Google Apps Script** endpoint.
+React Native / Expo app for a recreational bowling league called "Pindejos." Players track weekly matchups, scores, standings, RSVPs, and historical stats. All persistent data lives in Google Sheets and is accessed via a Google Apps Script (GAS) web-app endpoint. There is no dedicated server — GAS is the backend.
 
 ---
 
-## Architecture overview
+## Tech Stack
 
-The app has been fully migrated from a monolithic `app.js` + `innerHTML` approach to a **Vue 3 SFC** application built with **Vite**, using **Vue Router 4** (hash mode) for navigation. The main branch still contains the legacy `app.js` file, but on `implement-view-components` (and any branch based on it) all rendering is done by Vue components. `app.js` is no longer referenced by `index.html` and is effectively dead code.
-
-**Stack:**
-- Vue 3 (Composition API / `<script setup>`)
-- Vue Router 4 (hash mode — `createWebHashHistory`)
-- Pinia (state management)
-- Chart.js (npm, not CDN — imported in `PlayerDetail.vue`)
-- Vite (build tool, dev server, base path: `/PindejosBowling/`)
-- Global `styles.css` (no CSS-in-JS, no scoped styles)
-
----
-
-## File structure
-
-```
-index.html          — Minimal skeleton: only #vue-app mount point + module script.
-styles.css          — All CSS. Global stylesheet; do not import it in components.
-app.js              — DEAD CODE. No longer loaded by index.html. Do not edit or rely on it.
-vite.config.js      — plugins: [vue()], base: '/PindejosBowling/'
-package.json        — vue, vue-router, pinia, chart.js, vite, @vitejs/plugin-vue
-src/
-  main.js           — createApp + createPinia + router + mount('#vue-app')
-  router.js         — All routes; exports the configured router instance (hash mode)
-  App.vue           — Layout shell: <header><AppHeader/>, <main><RouterView/>, <nav><AppNav/>, <AppModal/>
-  api.js            — apiGet(action), apiPost(action, payload), API endpoint URL
-  stores/
-    data.js         — Server data: current, active, roster, rsvp, stats, board, champions, generated, settings + loadAll()
-    ui.js           — Per-view filter/UI state only (no routing fields): matchupsView, expandedWeek,
-                      playerLogMode, oddsRevealed, standingsSeason, playerSeason, histSeason,
-                      histWeek, recordsSeason, chemMode, chemExpanded, h2hP1, h2hP2
-    pending.js      — Unsaved changes: pendingRSVP, pendingScores, all gen* team-generator fields
-    prefs.js        — localStorage-backed: myName, avgDisplay (auto-persisted via watch)
-    modal.js        — Modal content: content ref, open(html), close()
-  utils/
-    data.js         — Pure data derivation (no side effects): aggregateStandings, getPlayerProfile,
-                      getChemistry, getLeagueRecords, getH2H, getMatchupsForWeek, getCurrentSeason,
-                      getPlayerCurrentAvg, readActiveWeek, hasActiveWeek, effectiveAvg, isChampion,
-                      championsForSeason, isPlayerOut, getLeagueAvg, getSeasons, getWeeksForSeason, etc.
-    helpers.js      — Pure utils: initials(name), timeAgo(date), escapeHtml(s), isPresent(v),
-                      combinations(arr, k), spreadAndML(t1, t2)
-    constants.js    — SC (stats sheet column indices), AW_* (active week sheet column indices)
-  views/
-    MatchupsView.vue      — Dispatcher: ActiveMatchupsPanel or LegacyMatchupsPanel
-    StandingsView.vue     — Season-filtered standings table; click row → router.push player-detail route
-    RsvpView.vue          — RSVP roster; pending changes + Save/Discard flow
-    HistoryView.vue       — Season + week pickers → HistoricalTeamBlock matchup cards
-    MoreView.vue          — Layout shell: <RouterView /> outlet for all /more/* child routes
-    MoreHomeView.vue      — More home menu grid; tiles call router.push(); hosts admin dialog v-ifs
-  components/
-    AppHeader.vue         — Logo + week/season badge (rendered inside <header> in App.vue)
-    AppNav.vue            — Bottom nav; derives active state from useRoute(); calls router.push()
-    AppModal.vue          — .modal-backdrop; shows modalStore.content via v-html
-    ActiveMatchupsPanel.vue   — Live scoring: score inputs, expected view, odds, confirm bar
-    LegacyMatchupsPanel.vue   — Read-only historical current-week display
-    PlayerScoreRow.vue    — Single player row used inside matchup panels
-    OddsBlock.vue         — Spread + moneyline block for a pairing
-    HistoricalTeamBlock.vue   — Team + player rows used in HistoryView matchup cards
-    PlayerList.vue        — Searchable player roster list
-    PlayerDetail.vue      — Full player profile: stat tiles, Chart.js chart, game log; reads player name from route.params.name
-    SeasonHistory.vue     — Past seasons overview cards
-    LeagueRecords.vue     — League records (high game, series, team, avg) with season filter
-    HeadToHead.vue        — Two-player H2H comparison with game log
-    Chemistry.vue         — Pair/trio win-rate table
-    TrashBoard.vue        — Message board; post + feed
-    GenerateTeams.vue     — Team generator: controls, generated cards, swap UI
-    Playoffs.vue          — Playoffs format info + coming-soon note
-    AdminAddPlayerDialog.vue  — Dialog component rendered via v-if in MoreHomeView.vue
-    AdminArchiveDialog.vue    — Dialog component rendered via v-if in MoreHomeView.vue
-    AdminEndSeasonDialog.vue  — Dialog component rendered via v-if in MoreHomeView.vue
-```
-
----
-
-## Build
-
-```bash
-npm run dev      # Vite dev server (hot reload)
-npm run build    # Produces dist/ — deploy this to GitHub Pages
-npm run preview  # Serve dist/ locally
-```
-
-`dist/` contains only `index.html`, `assets/index-[hash].js`, and `assets/index-[hash].css`. There is no `dist/app.js`.
-
----
-
-## State management (Pinia)
-
-Four stores replace the legacy `state` object. Import only what you need:
-
-```js
-import { useDataStore }    from '../stores/data.js'   // server data + loadAll()
-import { useUiStore }      from '../stores/ui.js'      // per-view filter state (no routing)
-import { usePendingStore } from '../stores/pending.js' // unsaved edits
-import { usePrefsStore }   from '../stores/prefs.js'   // localStorage prefs
-import { useModalStore }   from '../stores/modal.js'   // modal overlay
-```
-
-State is reactive — components update automatically when store values change. Never call a manual `render*()` function; there are none.
-
-`uiStore` no longer holds any routing state. It contains only per-view filter/UI refs (`standingsSeason`, `playerSeason`, `histSeason`, `histWeek`, `recordsSeason`, `chemMode`, `chemExpanded`, `h2hP1`, `h2hP2`, `expandedWeek`, `playerLogMode`, `matchupsView`, `oddsRevealed`). Do not add `activeTab`, `moreView`, `selectedPlayer`, or `setTab` back — those are handled by Vue Router.
-
----
-
-## Data flow
-
-```
-App.vue onMounted → dataStore.loadAll()
-  → GET /exec?action=getAll  (Google Apps Script)
-  → populates dataStore.* refs
-  → Vue computed properties re-derive everything reactively
-
-User taps nav button (AppNav.vue)
-  → router.push(path)
-  → Vue Router updates route
-  → AppNav.vue useRoute() reactive active state updates automatically
-  → RouterView renders the correct top-level view
-
-Writes (RSVP, scores, board posts, admin actions)
-  → apiPost(action, payload)  →  await dataStore.loadAll()
-  → reactive stores update  →  components re-render automatically
-```
-
----
-
-## Navigation
-
-All navigation uses Vue Router. There is no manual DOM tab-switching.
-
-```js
-import { useRouter, useRoute } from 'vue-router'
-const router = useRouter()
-const route  = useRoute()
-
-// Navigate to a top-level view
-router.push('/')
-router.push('/standings')
-router.push('/more')
-
-// Navigate to a named More sub-view
-router.push({ name: 'player-detail', params: { name: playerName } })
-router.push({ name: 'player-list' })
-
-// Read the current player from params (in PlayerDetail.vue)
-route.params.name   // plain string, already URL-decoded by Vue Router
-```
-
-### Route map
-
-```
-Hash path                    Route name        Component
-─────────────────────────    ───────────────   ──────────────────────────────
-#/                           —                 MatchupsView
-#/rsvp                       —                 RsvpView
-#/standings                  —                 StandingsView
-#/history                    —                 HistoryView
-#/more                       more-home         MoreView → MoreHomeView (default child)
-#/more/players               player-list       MoreView → PlayerList
-#/more/players/:name         player-detail     MoreView → PlayerDetail
-#/more/records               records           MoreView → LeagueRecords
-#/more/h2h                   h2h               MoreView → HeadToHead
-#/more/chemistry             chemistry         MoreView → Chemistry
-#/more/season-history        season-history    MoreView → SeasonHistory
-#/more/board                 board             MoreView → TrashBoard
-#/more/generate              generate          MoreView → GenerateTeams
-#/more/playoffs              playoffs          MoreView → Playoffs
-#/:pathMatch(.*)             —                 redirect → /
-```
-
-### Why hash mode
-
-GitHub Pages serves only files that exist on disk. A direct request to `/PindejosBowling/standings` returns 404. With hash mode every URL starts with `/PindejosBowling/` — GitHub Pages always returns `index.html`, Vue Router reads the fragment, and renders the correct component. No server configuration required.
-
----
-
-## CSS
-
-`styles.css` is a global stylesheet linked in `index.html`. All existing class names work inside Vue templates without any import. **Do not add `<style scoped>` blocks** unless adding genuinely new styles that do not exist in `styles.css`. Inline `style=` attributes are acceptable for one-off layout tweaks.
-
-The `.section` / `.section.active` display rules have been removed — those divs no longer exist. Do not reference `#section-matchups` / `#section-rsvp` / `#section-standings` / `#section-history` / `#section-more` by ID; they are gone.
-
----
-
-## Modal system
-
-`AppModal.vue` renders `modalStore.content` via `v-html`. Use it for simple HTML-string dialogs:
-
-```js
-import { useModalStore } from '../stores/modal.js'
-const modalStore = useModalStore()
-modalStore.open('<div class="modal-title">…</div><div class="btn-row">…</div>')
-// buttons inside the HTML can call window.closeModal()
-```
-
-For interactive forms that need Vue reactivity (checkboxes, bound inputs, async submission), create a dedicated dialog component instead — see `AdminAddPlayerDialog.vue` as the minimal template. Dialog components are rendered with `v-if` in `MoreHomeView.vue` (not via Teleport) and use the `.modal-backdrop.active` + `.modal` CSS classes directly.
-
----
-
-## Common utility imports
-
-```js
-import { aggregateStandings, getSeasons, getDefaultViewSeason, getCurrentSeason,
-         getPlayerProfile, getLeagueRecords, getPersonalRecords, getChemistry,
-         getH2H, getMatchupsForWeek, getWeeksForSeason, isChampion,
-         championsForSeason, isPlayerOut, hasActiveWeek, readActiveWeek,
-         getLeagueAvg, getPlayerCurrentAvg, effectiveAvg } from '../utils/data.js'
-
-import { initials, timeAgo, escapeHtml, spreadAndML } from '../utils/helpers.js'
-
-import { apiPost, apiGet } from '../api.js'
-```
-
----
-
-## Global window APIs (set by App.vue)
-
-These exist for use from admin modal HTML strings that lack Vue scope. Do not add new ones.
-
-| Symbol | What it does |
+| Layer | Library / Version |
 |---|---|
-| `window.openModal(html)` | Opens AppModal with an HTML string |
-| `window.closeModal()` | Closes AppModal |
-| `window.toast(msg, type)` | Shows an ephemeral toast (type: `'success'` / `'error'` / `''`) |
+| Runtime | React Native 0.85 via Expo SDK 56 |
+| UI framework | React 19.2 |
+| Language | TypeScript (strict enough; some `any` in data layer) |
+| State | Zustand 5 |
+| Navigation | React Navigation 7 (bottom tabs + native stack) |
+| Storage (prefs) | `@react-native-async-storage/async-storage` |
+| Charts | `react-native-gifted-charts` |
+| Fonts | Barlow + Barlow Condensed via `@expo-google-fonts` |
+| Gradients | `react-native-linear-gradient` |
 
-`window.switchTab` and `window.__resetMoreView` have been removed. Use `router.push()` instead.
-
----
-
-## GitHub Pages deployment
-
-- **Static files only.** The build output in `dist/` is what gets served.
-- **Base path is `/PindejosBowling/`** — already set in `vite.config.js`.
-- Deploy by copying `dist/` contents to the `gh-pages` branch, or via a GitHub Actions workflow that runs `npm run build`.
+Run with `expo start` from `native/`. Use `--ios`, `--android`, or `--web` flags.
 
 ---
 
-## Key patterns
+## Backend / API Layer
 
-**Back button in More sub-views:** Every component rendered as a child of `/more` is responsible for its own back navigation. Use `router.push('/more')` to return to the More home menu, or `router.push('/more/players')` to return to the player list from PlayerDetail. Import `useRouter` and call `router.push()` — never set `uiStore.moreView`.
+**File:** [src/api.js](src/api.js)
 
-**Player identity in PlayerDetail:** The selected player's name comes from `route.params.name` (already URL-decoded by Vue Router), not from a store field. Navigate to a player with `router.push({ name: 'player-detail', params: { name } })`.
+All data reads and writes go through a single Google Apps Script URL (`API` constant in `api.js`). Two wrappers:
 
-**Admin dialogs:** Rendered via `v-if` in `MoreHomeView.vue` using a local `activeDialog = ref(null)`. Set `activeDialog.value = 'add-player'` / `'archive'` / `'end-season'` to open; the dialog emits `close` to reset it. Do not wire new admin actions through `window.*`.
+```js
+apiGet(action)           // GET  ?action=<action>
+apiPost(action, payload) // POST { action, ...payload }, retries once on failure
+```
 
-**Loading state:** `dataStore.loading` is `true` during `loadAll()`. Use `v-if="dataStore.loading || !dataStore.stats"` to gate components that need data.
+`apiPost` does one automatic retry with a 1.2s backoff — GAS has occasional transient failures.
 
-**Chart.js:** Import `Chart from 'chart.js/auto'` (npm, not CDN). Destroy the previous instance before creating a new one in a `watchEffect` with `onCleanup`. See `PlayerDetail.vue`.
+### Known action names (POST)
+| Action | Purpose |
+|---|---|
+| `batchUpdateScores` | Save score entries from the active week board |
+| `batchUpdateRSVP` | Save RSVP status changes |
+| `resetRSVP` | Clear all RSVP statuses for the upcoming week |
+| `archiveAndAdvance` | Archive current week scores → stats sheet, increment week |
+| `addPlayer` | Add a new player to the roster |
+| `generateTeams` | Server-side balanced team generation |
+| `confirmMatchups` | Write generated teams to the active week sheet |
+| `endSeason` | End-of-season admin action |
+
+### Known action names (GET)
+| Action | Purpose |
+|---|---|
+| `getAll` | Single call that returns all data slices at once |
+
+---
+
+## Data Architecture
+
+### Single-fetch pattern
+
+On startup `App.tsx` calls `useDataStore.getState().loadAll()` once. This calls `apiGet('getAll')` and populates all 10 slices in one round-trip. Subsequent refreshes (pull-to-refresh on every screen) call `loadAll()` again.
+
+### Raw data format
+
+Every data slice returned by the API is a **2D array of rows** mirroring the raw Google Sheet values:
+- Row 0 is always a header row — skip it with `stats.slice(1)` or `statsRows(stats)`.
+- Cell values may be booleans, numbers, strings, or empty strings — not null.
+- The boolean `PRESENT` column stores `true`, `'TRUE'`, `1`, or `'1'` — use `isPresent()` from `helpers.js`.
+
+### Column index constants
+
+**File:** [src/utils/constants.js](src/utils/constants.js)
+
+`SC` — Stats sheet columns:
+
+| Key | Index | Meaning |
+|---|---|---|
+| `SEASON` | 0 | Season number |
+| `WEEK` | 1 | Week number |
+| `PLAYER` | 2 | Player full name |
+| `TEAM` | 3 | Team name |
+| `G1` | 4 | Game 1 score |
+| `G1_OPP` | 5 | Game 1 opponent team |
+| `G2` | 6 | Game 2 score |
+| `G2_OPP` | 7 | Game 2 opponent team |
+| `PINS` | 8 | Total pins |
+| `WINS` | 9 | Win count |
+| `LOSSES` | 10 | Loss count |
+| `GAMES` | 11 | Games played |
+| `PRESENT` | 12 | Attendance flag |
+
+`AW` — Active week sheet columns (supports up to 3 games per night):
+
+| Key | Index | Meaning |
+|---|---|---|
+| `SEASON` | 0 | Season number |
+| `WEEK` | 1 | Week number |
+| `TEAM` | 2 | Team name |
+| `SLOT` | 3 | Player slot (sort order within team) |
+| `NAME` | 4 | Player name |
+| `G1–G3` | 5–7 | Game scores |
+| `G1_OPP–G3_OPP` | 8–10 | Opponent team per game |
+| `IS_FILL` | 11 | Fill placeholder flag |
+
+### dataStore slices
+
+**File:** [src/stores/dataStore.ts](src/stores/dataStore.ts)
+
+| Store key | Google Sheet | Description |
+|---|---|---|
+| `stats` | Stats sheet | All historical per-player per-week rows |
+| `active` | Active week sheet | Live scoreboard for the current week |
+| `current` | Current week info | Week/season identifiers |
+| `roster` | Roster sheet | All player names + availability status |
+| `rsvp` | RSVP sheet | Per-player RSVP status (`'In'` / `'Out'` / `''`) |
+| `board` | Leaderboard | Pre-computed board (used by TrashBoard screen) |
+| `history` | History | Archived season data |
+| `champions` | Champions | Season champion records (`[seasonNum, playerName]`) |
+| `generated` | Generated teams | Last server-generated team arrangement |
+| `settings` | Settings | Key-value pairs; `CurrentSeason` key drives season logic |
+
+---
+
+## Pure Data Derivation Layer
+
+**File:** [src/utils/data.js](src/utils/data.js)
+
+All business logic for deriving UI data lives here as **pure functions** — they accept store slices as arguments and return computed values. Screens call these inside `useMemo()` for memoized derivation.
+
+Key functions and what they return:
+
+| Function | Returns |
+|---|---|
+| `statsRows(stats)` | Filtered rows (no header, no blank player name) — base for everything |
+| `getSeasons(stats)` | Sorted array of season identifiers |
+| `getCurrentSeason(stats, settings)` | Current season; prefers `settings` value, falls back to latest in stats |
+| `getDefaultViewSeason(stats, settings)` | Most recent season that has data (avoids blank new-season pages) |
+| `getWeeksForSeason(stats, season)` | Sorted week IDs for a season |
+| `aggregateStandings(stats, season)` | `[{name, team, wins, losses, pins, games, avg, weekCount}]` sorted by wins |
+| `getPlayerProfile(stats, settings, name, season)` | Full profile with avg breakdowns, per-game log, records |
+| `getPersonalRecords(stats, name)` | `{highGame, highSeries, currentStreak, bestStreak, winRate}` |
+| `getPlayerCurrentAvg(stats, settings, name, source)` | Single avg number; `source` = `'last-played'`\|`'current-season'`\|`'all-time'` |
+| `getLeagueAvg(stats, settings, source)` | League-wide weighted avg for a source |
+| `isChampion(champions, name)` | Boolean — player appears in champions sheet |
+| `championsForSeason(champions, seasonNum)` | Array of champion names for a season |
+| `isPlayerOut(rsvp, name)` | Boolean — player has RSVP'd Out |
+| `getMatchupsForWeek(stats, season, week)` | Paired game matchup objects from historical data |
+| `getH2H(stats, p1, p2)` | Head-to-head record between two players |
+| `getChemistry(stats, groupSize)` | Win-rate stats for all player pairs/trios |
+| `getLeagueRecords(stats, season)` | `{highGame, highSeries, highTeamGame, highTeamNight, bestSeasonAvg}` |
+| `hasActiveWeek(active)` | Boolean — active sheet has at least one player row |
+| `readActiveWeek(active)` | `{[teamName]: {players, opponents}}` structured map |
+| `effectiveAvg(stats, settings, rsvp, name, isFill, leagueAvg)` | Returns leagueAvg for fill/Out players, else player's own avg |
+
+**File:** [src/utils/helpers.js](src/utils/helpers.js)
+
+| Function | Purpose |
+|---|---|
+| `isPresent(v)` | Normalizes `true`/`'TRUE'`/`1`/`'1'` → boolean |
+| `initials(name)` | 2-char initials from full name |
+| `escapeHtml(s)` | HTML escape (legacy; not needed in React Native) |
+| `timeAgo(date)` | Human relative time string |
+| `combinations(arr, k)` | k-length combinations for chemistry calculations |
+| `spreadAndML(t1, t2)` | Bowling spread + moneyline odds from two expected totals |
+
+---
+
+## State Management
+
+Four Zustand stores — all imported as `useXxxStore` hooks:
+
+### `useDataStore` ([src/stores/dataStore.ts](src/stores/dataStore.ts))
+Read-only from the perspective of the UI. Contains all server-fetched data and a `loadAll()` action. Screens subscribe to individual slices and call `loadAll()` to refresh.
+
+### `usePendingStore` ([src/stores/pendingStore.ts](src/stores/pendingStore.ts))
+Optimistic edit buffer — not persisted. Holds:
+- `pendingRSVP: Record<playerName, 'In'|'Out'>` — staged RSVP changes before save
+- `pendingScores: Record<'teamName|slot|gameNum', scoreString>` — staged score edits before save
+- `genTeams` / `genNumTeams` / `genTeamSize` / `genAvgSource` / `genFillMode` / `genFillToSize` / `genSwapTarget` — state for the Generate Teams screen
+
+### `usePrefsStore` ([src/stores/prefsStore.ts](src/stores/prefsStore.ts))
+User preferences, persisted via AsyncStorage (`pb_myname`, `pb_avgdisplay`). Call `hydrate()` on app start (done in `App.tsx`).
+- `myName` — player's own name for personalization
+- `avgDisplay` — `'last-played'` | `'current-season'` | `'all-time'` — controls which avg is shown everywhere
+
+### `uiStore` ([src/stores/uiStore.ts](src/stores/uiStore.ts))
+Ephemeral UI state — toggles, selected seasons/weeks, selected players, toast queue. All fields have a single `set(partial)` action. Key fields:
+- `matchupsView` — `'scores'` | `'expected'`
+- `expandedWeek`, `histSeason`, `histWeek` — History screen navigation state
+- `standingsSeason`, `playerSeason`, `recordsSeason` — season filter selection per screen
+- `h2hP1`, `h2hP2` — selected players for head-to-head
+- `oddsRevealed` — easter egg toggle on matchup screen
+- `toasts` — call `showToast(msg, type)` to show a 2.4s auto-dismissing toast
+
+---
+
+## Navigation Architecture
+
+**Root:** Bottom tabs (`@react-navigation/bottom-tabs`)
+
+| Tab label | Screen | Route name |
+|---|---|---|
+| This Week | MatchupsScreen | `Matchups` |
+| RSVP | RsvpScreen | `RSVP` |
+| Standings | StandingsScreen | `Standings` |
+| Matches | HistoryScreen | `History` |
+| More | MoreStackNavigator | `More` |
+
+**More tab** is a native stack navigator with these routes:
+
+| Route | Screen | Notes |
+|---|---|---|
+| `MoreHome` | MoreHomeScreen | Tile grid entry point |
+| `PlayerList` | PlayerListScreen | All players, tap → PlayerDetail |
+| `PlayerDetail` | PlayerDetailScreen | Receives `{ name: string }` param |
+| `LeagueRecords` | LeagueRecordsScreen | High game/series/team records |
+| `HeadToHead` | HeadToHeadScreen | Pick 2 players, compare |
+| `Chemistry` | ChemistryScreen | Pair/trio win-rate analysis |
+| `SeasonHistory` | SeasonHistoryScreen | Season-by-season summary |
+| `TrashBoard` | TrashBoardScreen | Fun/trash talk leaderboard |
+| `GenerateTeams` | GenerateTeamsScreen | Admin: balanced team generator |
+| `Playoffs` | PlayoffsScreen | Admin: playoffs bracket |
+
+**Cross-tab navigation pattern** (used in StandingsScreen to jump to PlayerDetail from a different tab):
+```tsx
+(navigation as any).navigate('More', { screen: 'PlayerDetail', params: { name } })
+```
+
+---
+
+## Component Inventory
+
+| Component | Purpose |
+|---|---|
+| `AppHeader` | App logo + current Week/Season badge, reads from `dataStore` |
+| `Toast` | Absolute-positioned animated toast, reads from `uiStore.toasts` |
+| `ConfirmBar` | Sticky bottom bar for pending saves (RSVP, scores) |
+| `PlayerScoreRow` | One player row in the live matchup view — editable `TextInput` or expected avg display |
+| `OddsBlock` | Betting-style spread + moneyline card (easter egg, `Expected` mode only) |
+| `LoadingView` | Centered spinner with label |
+| `HistoricalTeamBlock` | Team block in the History screen |
+| `PlayerPickerModal` | Full-screen player search/select for H2H |
+| `AdminArchiveModal` | Confirm dialog for `archiveAndAdvance` |
+| `AdminAddPlayerModal` | Input dialog for `addPlayer` |
+| `AdminEndSeasonModal` | Confirm dialog for `endSeason` |
+
+---
+
+## Key Patterns
+
+### Pending / optimistic edits
+The `usePendingStore` holds unsaved changes client-side. Screens show changes immediately and display a `ConfirmBar`. On save, `apiPost` is called, then `loadAll()` refreshes ground truth, then the pending buffer is cleared. On discard, pending is just cleared with no API call.
+
+Pending score key format: `"${teamName}|${slot}|${gameNum}"`
+
+### useMemo for derived data
+Every screen derives its display data with `useMemo`. The canonical pattern:
+```tsx
+const standings = useMemo(
+  () => stats ? aggregateStandings(stats, activeSeason) : [],
+  [stats, activeSeason],
+)
+```
+Do not call data util functions outside of `useMemo` in render — they can be O(n²) over the full stats sheet.
+
+### Pull-to-refresh
+Every scrollable screen wraps its scroll/list in a `RefreshControl` pointing to `loadAll`. The `loading` boolean from `dataStore` drives the refreshing indicator.
+
+---
+
+## Theme System
+
+**File:** [src/theme.ts](src/theme.ts)
+
+Dark theme only. Import `colors`, `fonts`, `radius`.
+
+```ts
+colors.bg       // #0a0a0c  — page background
+colors.surface  // #131316  — card background
+colors.surface2 // #1c1c21  — raised surface
+colors.surface3 // #25252b  — element on surface
+colors.accent   // #e8ff47  — primary accent (yellow-green)
+colors.accent2  // #ff4f6d  — secondary accent (red)
+colors.accent3  // #4fc3ff  — tertiary accent (blue)
+colors.gold     // #fbbf24  — champion gold
+colors.text     // #f0f0f0  — body text
+colors.muted    // #7a7a85  — secondary text
+colors.border   // rgba(255,255,255,0.08)
+colors.danger   // #ff4f6d
+colors.success  // #4ade80
+```
+
+Typography uses **Barlow Condensed** for labels/headings/stats (condensed, bold, letterSpacing applied) and **Barlow** for body text. All font strings are in `fonts`:
+```ts
+fonts.barlow               // body text
+fonts.barlowMedium         // medium body
+fonts.barlowSemiBold       // semi-bold body
+fonts.barlowCondensed      // BarlowCondensed_700Bold — primary heading font
+fonts.barlowCondensedHeavy // BarlowCondensed_900Black — logo/hero
+```
+
+Border radii:
+```ts
+radius.card   // 18 — large cards
+radius.cardMd // 14 — medium cards
+radius.cardSm // 12 — buttons, inputs
+radius.icon   // 10 — avatar/icon boxes
+```
+
+---
+
+## File Map
+
+```
+native/
+├── App.tsx                      # Root: font loading, store hydration, navigation container
+├── index.ts                     # Expo entry point
+├── src/
+│   ├── api.js                   # apiGet / apiPost wrappers
+│   ├── theme.ts                 # colors, fonts, radius
+│   ├── navigation/
+│   │   ├── RootNavigator.tsx    # Bottom tab navigator
+│   │   ├── MoreStackNavigator.tsx # Stack navigator for More tab
+│   │   └── types.ts             # MoreStackParamList type
+│   ├── stores/
+│   │   ├── dataStore.ts         # Server data (read-only, refresh via loadAll)
+│   │   ├── pendingStore.ts      # Optimistic edit buffer
+│   │   ├── prefsStore.ts        # User prefs (AsyncStorage-backed)
+│   │   └── uiStore.ts           # Ephemeral UI state + toast queue
+│   ├── utils/
+│   │   ├── constants.js         # SC and AW column index maps
+│   │   ├── data.js              # Pure data derivation functions
+│   │   └── helpers.js           # Pure formatting/math utilities
+│   ├── components/
+│   │   ├── AppHeader.tsx
+│   │   ├── Toast.tsx
+│   │   ├── ConfirmBar.tsx
+│   │   ├── PlayerScoreRow.tsx
+│   │   ├── OddsBlock.tsx
+│   │   ├── LoadingView.tsx
+│   │   ├── HistoricalTeamBlock.tsx
+│   │   ├── PlayerPickerModal.tsx
+│   │   ├── AdminArchiveModal.tsx
+│   │   ├── AdminAddPlayerModal.tsx
+│   │   └── AdminEndSeasonModal.tsx
+│   └── screens/
+│       ├── MatchupsScreen.tsx   # Live scoreboard + score entry
+│       ├── RsvpScreen.tsx       # Weekly attendance management
+│       ├── StandingsScreen.tsx  # Season/all-time standings table
+│       ├── HistoryScreen.tsx    # Browse past weeks by season
+│       ├── MoreHomeScreen.tsx   # Tile grid for tools/admin
+│       ├── PlayerListScreen.tsx # All players list
+│       ├── PlayerDetailScreen.tsx # Per-player stats, game log, records
+│       ├── LeagueRecordsScreen.tsx # High game/series/team records
+│       ├── HeadToHeadScreen.tsx # 1v1 comparison
+│       ├── ChemistryScreen.tsx  # Pair/trio win-rate analysis
+│       ├── SeasonHistoryScreen.tsx # Season summaries
+│       ├── TrashBoardScreen.tsx # Fun leaderboard
+│       ├── GenerateTeamsScreen.tsx # Admin: balanced team gen + manual swap
+│       └── PlayoffsScreen.tsx   # Admin: playoffs bracket
+```
+
+---
+
+## Important Notes for Agents
+
+1. **Data is stale until `loadAll()` is called.** Screens show `<LoadingView>` while `loading && !data`. After mutations, always call `await loadAll()` before clearing the pending buffer.
+
+2. **All sheet data is 0-indexed 2D arrays.** Row 0 is headers. Use `SC.*` and `AW.*` constants — never hardcode column numbers.
+
+3. **`data.js` functions are Vue-documented but used in React.** The JSDoc at the top of `data.js` describes Vue `computed()` usage — ignore that. In React, wrap these calls in `useMemo()`.
+
+4. **No memoization inside `data.js`.** The functions are pure with no caching. Heavy calls like `getChemistry`, `getLeagueRecords`, and `aggregateStandings` scan the entire stats array on every call — always guard with `useMemo`.
+
+5. **The `avgDisplay` preference in `prefsStore` controls avg display everywhere** — `PlayerScoreRow`, `getLeagueAvg`, and `getPlayerCurrentAvg` all accept a `source` parameter that should be driven by `avgDisplay`.
+
+6. **No auth layer.** Any user can call any API action. Admin actions (`archiveAndAdvance`, `addPlayer`, `endSeason`) are gated only by UI accessibility, not server-side permissions.
+
+7. **TypeScript coverage is partial.** Screens and components are `.tsx` with typed props. Stores have interfaces. Utility files (`api.js`, `data.js`, `helpers.js`, `constants.js`) are plain `.js` with JSDoc. Do not convert them to TS without confirming it's wanted.
+
+8. **No test suite.** There are no unit or integration tests. Verify behavior manually via the Expo dev server.
