@@ -7,9 +7,9 @@ import {
   TouchableOpacity,
   Alert,
   StyleSheet,
-  SafeAreaView,
   KeyboardAvoidingView,
 } from 'react-native'
+import { SafeAreaView } from 'react-native-safe-area-context'
 import AppHeader from '../components/AppHeader'
 import ConfirmBar from '../components/ConfirmBar'
 import LoadingView from '../components/LoadingView'
