@@ -5,10 +5,8 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { useNavigation } from '@react-navigation/native'
 import { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { colors, fonts, radius } from '../theme'
-import { useDataStore } from '../stores/dataStore'
-import {
-  aggregateStandings, getSeasons, getWeeksForSeason, championsForSeason,
-} from '../utils/data.js'
+import { useSeasonHistoryData } from '../hooks/useSeasonHistoryData'
+import { computeStandingsFromSupabase } from '../hooks/useStandingsData'
 import { MoreStackParamList } from '../navigation/types'
 import LoadingView from '../components/LoadingView'
 import ScreenHeader from '../components/ScreenHeader'
@@ -16,44 +14,36 @@ import ScreenHeader from '../components/ScreenHeader'
 type Nav = NativeStackNavigationProp<MoreStackParamList>
 
 export default function SeasonHistoryScreen() {
-  const { stats, champions, history, loading, loadAll } = useDataStore()
+  const { loading, seasonList, rawScores, rawSchedule, champsBySeason, reload } = useSeasonHistoryData()
   const navigation = useNavigation<Nav>()
-  const { refreshing, onRefresh } = useRefresh(loadAll)
-
-  const notesMap = useMemo(() => {
-    const map: Record<string, string> = {}
-    if (!history || history.length < 2) return map
-    const headers = history[0].map((h: any) => String(h).toLowerCase())
-    const seasonCol = headers.indexOf('season') !== -1 ? headers.indexOf('season') : 0
-    const notesCol = headers.indexOf('notes')
-    if (notesCol === -1) return map
-    for (let i = 1; i < history.length; i++) {
-      const cell = String(history[i][seasonCol] || '').trim()
-      const key = cell.replace(/season\s*/i, '').trim()
-      if (key && history[i][notesCol]) map[key] = history[i][notesCol]
-    }
-    return map
-  }, [history])
+  const { refreshing, onRefresh } = useRefresh(reload)
 
   const seasonData = useMemo(() => {
-    if (!stats) return []
-    return getSeasons(stats)
+    return seasonList
       .slice()
-      .sort((a: any, b: any) => parseInt(b) - parseInt(a))
-      .map((s: any) => {
-        const standings = aggregateStandings(stats, s)
+      .sort((a, b) => b.number - a.number)
+      .map(season => {
+        const standings = computeStandingsFromSupabase(rawScores, rawSchedule, season.id)
         const top = standings[0] ?? null
-        const champs = championsForSeason(champions, s)
-        const weeks = getWeeksForSeason(stats, s).length
-        const totalPins = standings.reduce((sum: number, p: any) => sum + p.pins, 0)
-        const totalGames = standings.reduce((sum: number, p: any) => sum + p.games, 0)
-        const leagueAvg = totalGames ? totalPins / totalGames : 0
-        const notes = notesMap[String(s)] || ''
-        return { season: s, top, champs, playerCount: standings.length, weeks, leagueAvg, notes }
-      })
-  }, [stats, champions, notesMap])
+        const champs = champsBySeason.get(season.id) ?? []
 
-  if (loading || !stats) return <LoadingView label="Loading seasons" />
+        const weekIds = new Set<string>()
+        for (const row of rawScores) {
+          const slot = row.team_slots
+          if (slot?.weeks?.season_id === season.id && slot?.weeks?.is_archived) {
+            weekIds.add(slot.week_id)
+          }
+        }
+
+        const totalPins = standings.reduce((s, p) => s + p.pins, 0)
+        const totalGames = standings.reduce((s, p) => s + p.games, 0)
+        const leagueAvg = totalGames > 0 ? totalPins / totalGames : 0
+
+        return { season: season.number, top, champs, playerCount: standings.length, weeks: weekIds.size, leagueAvg }
+      })
+  }, [seasonList, rawScores, rawSchedule, champsBySeason])
+
+  if (loading && seasonList.length === 0) return <LoadingView label="Loading seasons" />
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
@@ -71,10 +61,6 @@ export default function SeasonHistoryScreen() {
                   <Text style={styles.champion}>👑 {item.champs.join(', ')}</Text>
                 ) : null}
               </View>
-
-              {item.notes ? (
-                <Text style={styles.notes}>{item.notes}</Text>
-              ) : null}
 
               <StatRow label="Top Bowler" value={item.top ? `${item.top.name} (${item.top.avg.toFixed(1)})` : '—'} />
               <StatRow label="League Avg" value={item.leagueAvg.toFixed(1)} />
@@ -125,13 +111,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: colors.gold,
     letterSpacing: 0.5,
-  },
-  notes: {
-    fontFamily: fonts.barlow,
-    fontSize: 13,
-    color: colors.muted,
-    marginBottom: 10,
-    lineHeight: 18,
   },
   empty: {
     fontFamily: fonts.barlow,

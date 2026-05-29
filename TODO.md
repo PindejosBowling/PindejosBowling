@@ -39,7 +39,7 @@ reads for that screen are covered.
 - [x] `MatchupsScreen` — `weeks`, `team_slots`, `game_schedule`, `scores` r/w; `players` r
 - [x] `StandingsScreen` — `seasons`, `weeks`, `team_slots`, `players`, `scores` r
 - [x] `PlayerDetailScreen` — `players`, `weeks`, `team_slots`, `scores`, `season_champions` r
-- [ ] `SeasonHistoryScreen` — `seasons`, `weeks`, `team_slots`, `scores`, `season_champions` r
+- [x] `SeasonHistoryScreen` — `seasons`, `weeks`, `team_slots`, `scores`, `season_champions` r
 - [ ] `HistoryScreen` — `seasons`, `weeks`, `team_slots`, `scores` r
 - [ ] `ChemistryScreen` — `players`, `team_slots`, `scores`, `season_champions` r
 - [ ] `HeadToHeadScreen` — `players`, `team_slots`, `scores`, `weeks` r
