@@ -55,6 +55,15 @@ export default function TrashBoardScreen() {
     setRefreshing(false)
   }, [fetchPosts])
 
+  async function deletePost(id: string) {
+    setPosts((prev) => prev.filter((p) => p.id !== id))
+    const { error } = await supabase.from('board_posts').delete().eq('id', id)
+    if (error) {
+      showToast('Failed to delete post', 'error')
+      await fetchPosts()
+    }
+  }
+
   async function post() {
     if (!myName.trim() || !msg.trim()) return
     setPosting(true)
@@ -146,8 +155,13 @@ export default function TrashBoardScreen() {
           renderItem={({ item }) => (
             <View style={styles.postCard}>
               <View style={styles.postHead}>
-                <Text style={styles.postAuthor}>{item.players?.name ?? 'Unknown'}</Text>
-                <Text style={styles.postTime}>{timeAgo(item.created_at)}</Text>
+                <View style={styles.postMeta}>
+                  <Text style={styles.postAuthor}>{item.players?.name ?? 'Unknown'}</Text>
+                  <Text style={styles.postTime}>{timeAgo(item.created_at)}</Text>
+                </View>
+                <TouchableOpacity onPress={() => deletePost(item.id)} hitSlop={8}>
+                  <Text style={styles.deleteBtn}>✕</Text>
+                </TouchableOpacity>
               </View>
               <Text style={styles.postMsg}>{item.message}</Text>
             </View>
@@ -232,6 +246,16 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 8,
+  },
+  postMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  deleteBtn: {
+    fontFamily: fonts.barlow,
+    fontSize: 13,
+    color: colors.muted,
   },
   postAuthor: {
     fontFamily: fonts.barlowCondensed,
