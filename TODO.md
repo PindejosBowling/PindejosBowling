@@ -36,8 +36,8 @@ reads for that screen are covered.
 
 - [x] `TrashBoardScreen` — `board_posts` r/w
 - [x] `RsvpScreen` — `players`, `rsvp`, `weeks` r/w
-- [ ] `MatchupsScreen` — `weeks`, `team_slots`, `game_schedule`, `scores` r/w; `players` r
-- [ ] `StandingsScreen` — `seasons`, `weeks`, `team_slots`, `players`, `scores` r
+- [x] `MatchupsScreen` — `weeks`, `team_slots`, `game_schedule`, `scores` r/w; `players` r
+- [x] `StandingsScreen` — `seasons`, `weeks`, `team_slots`, `players`, `scores` r
 - [ ] `PlayerDetailScreen` — `players`, `weeks`, `team_slots`, `scores`, `season_champions` r
 - [ ] `SeasonHistoryScreen` — `seasons`, `weeks`, `team_slots`, `scores`, `season_champions` r
 - [ ] `HistoryScreen` — `seasons`, `weeks`, `team_slots`, `scores` r
@@ -56,7 +56,7 @@ These components write through `apiPost` today; migrate to `db.*` writes.
 - [ ] `AdminAddPlayerModal` — `players.insert`
 - [ ] `AdminArchiveModal` — `weeks.update` (flip `is_archived`)
 - [ ] `AdminEndSeasonModal` — `seasons.update` (set `ended_at`)
-- [ ] `AdminGenerateTeamsModal` — `team_slots` insert/replace by week
+- [x] `AdminGenerateTeamsModal` — `team_slots` insert/replace by week
 
 ---
 

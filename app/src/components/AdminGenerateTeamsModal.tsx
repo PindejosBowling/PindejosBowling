@@ -9,16 +9,58 @@ import {
   ActivityIndicator,
   StyleSheet,
 } from 'react-native'
-import { useDataStore } from '../stores/dataStore'
 import { usePendingStore } from '../stores/pendingStore'
 import { useUiStore } from '../stores/uiStore'
-import { isChampion } from '../utils/data.js'
-import { apiPost } from '../api.js'
+import { weeks, rsvp, players, teamSlots, gameSchedule, scores, seasons } from '../utils/supabase/db'
+import type { TablesInsert } from '../utils/supabase/database.types'
 import { colors, fonts, radius } from '../theme'
 
 interface Props {
   visible: boolean
   onClose: () => void
+}
+
+interface GenPlayer {
+  id: string | null
+  name: string
+  avg: number
+  isFill: boolean
+  status: 'in' | 'out' | 'fill'
+}
+
+function buildSchedule(numTeams: number): Omit<TablesInsert<'game_schedule'>, 'week_id'>[] {
+  if (numTeams === 2) return [
+    { game_number: 1, team_a: 1, team_b: 2 },
+    { game_number: 2, team_a: 1, team_b: 2 },
+  ]
+  if (numTeams === 3) return [
+    { game_number: 1, team_a: 1, team_b: 2 },
+    { game_number: 2, team_a: 1, team_b: 3 },
+    { game_number: 3, team_a: 2, team_b: 3 },
+  ]
+  if (numTeams === 4) return [
+    { game_number: 1, team_a: 1, team_b: 3 },
+    { game_number: 1, team_a: 2, team_b: 4 },
+    { game_number: 2, team_a: 4, team_b: 1 },
+    { game_number: 2, team_a: 3, team_b: 2 },
+  ]
+  if (numTeams === 5) return [
+    { game_number: 1, team_a: 1, team_b: 2 },
+    { game_number: 1, team_a: 3, team_b: 4 },
+    { game_number: 2, team_a: 1, team_b: 5 },
+    { game_number: 2, team_a: 2, team_b: 4 },
+    { game_number: 3, team_a: 2, team_b: 3 },
+    { game_number: 3, team_a: 4, team_b: 5 },
+  ]
+  if (numTeams === 6) return [
+    { game_number: 1, team_a: 1, team_b: 2 },
+    { game_number: 1, team_a: 3, team_b: 4 },
+    { game_number: 1, team_a: 5, team_b: 6 },
+    { game_number: 2, team_a: 2, team_b: 3 },
+    { game_number: 2, team_a: 4, team_b: 5 },
+    { game_number: 2, team_a: 6, team_b: 1 },
+  ]
+  return []
 }
 
 function ToggleGroup<T extends string>({
@@ -49,7 +91,6 @@ function ToggleGroup<T extends string>({
 }
 
 export default function AdminGenerateTeamsModal({ visible, onClose }: Props) {
-  const { roster, champions, loadAll } = useDataStore()
   const { showToast } = useUiStore()
   const {
     genNumTeams, genTeamSize, genAvgSource, genFillMode, genFillToSize,
@@ -59,19 +100,37 @@ export default function AdminGenerateTeamsModal({ visible, onClose }: Props) {
   const [rsvpLoading, setRsvpLoading] = useState(false)
   const [generating, setGenerating] = useState(false)
   const [confirming, setConfirming] = useState(false)
+  const [weekId, setWeekId] = useState<string | null>(null)
+  const [weekRsvps, setWeekRsvps] = useState<any[]>([])
+  const [activePlayers, setActivePlayers] = useState<any[]>([])
+  const [allSeasons, setAllSeasons] = useState<any[]>([])
 
   useEffect(() => {
     if (!visible) return
     setRsvpLoading(true)
-    loadAll().finally(() => setRsvpLoading(false))
+    async function load() {
+      const [weekRes, seasonsRes, playersRes] = await Promise.all([
+        weeks.getActive(),
+        seasons.list(),
+        players.listActive(),
+      ])
+      const week = weekRes.data
+      setAllSeasons(seasonsRes.data ?? [])
+      setActivePlayers(playersRes.data ?? [])
+      if (week) {
+        setWeekId(week.id)
+        const rsvpRes = await rsvp.listByWeek(week.id)
+        setWeekRsvps(rsvpRes.data ?? [])
+      } else {
+        setWeekId(null)
+        setWeekRsvps([])
+      }
+    }
+    load().finally(() => setRsvpLoading(false))
   }, [visible])
 
-  const availCount = (roster ?? []).slice(1).filter((r: any[]) => r[0] && r[1] === 'Available').length
+  const availCount = weekRsvps.filter((r: any) => r.status === 'in').length
   const requiredCount = genNumTeams * genTeamSize
-
-  function isFill(player: any) {
-    return player.isFill || player.status === 'Fill'
-  }
 
   function isSwapTarget(tIdx: number, pIdx: number) {
     return genSwapTarget?.team === tIdx && genSwapTarget?.idx === pIdx
@@ -82,21 +141,79 @@ export default function AdminGenerateTeamsModal({ visible, onClose }: Props) {
   }
 
   async function doGenerate() {
+    if (!weekId) { showToast('No active week', 'error'); return }
     setGenerating(true)
-    await loadAll()
     try {
-      const r = await apiPost('generateTeams', {
-        fillMode: genFillMode,
-        avgSource: genAvgSource,
-        numTeams: genNumTeams,
-        teamSize: genTeamSize,
-        fillToSize: genFillToSize,
-      })
-      if (!r || r.error || !Array.isArray(r.teams)) {
-        showToast(r?.error ?? 'Failed to generate teams', 'error')
+      // Fetch scores for the selected avg source
+      const prevSeason = allSeasons.length >= 2 ? allSeasons[allSeasons.length - 2] : allSeasons[0]
+      const currentSeason = allSeasons[allSeasons.length - 1]
+      let scoreRows: any[] = []
+      if (genAvgSource === 'last-season' && prevSeason) {
+        scoreRows = (await scores.listBySeason(prevSeason.id)).data ?? []
+      } else if (genAvgSource === 'current-season' && currentSeason) {
+        scoreRows = (await scores.listBySeason(currentSeason.id)).data ?? []
       } else {
-        set({ genTeams: r.teams, genSwapTarget: null })
+        scoreRows = (await scores.listAllArchived()).data ?? []
       }
+
+      // Aggregate per-player averages
+      const byPlayer: Record<string, { pins: number; games: number }> = {}
+      for (const row of scoreRows) {
+        const pid = row.team_slots?.player_id
+        if (!pid) continue
+        if (!byPlayer[pid]) byPlayer[pid] = { pins: 0, games: 0 }
+        byPlayer[pid].pins += row.score ?? 0
+        byPlayer[pid].games += 1
+      }
+      const playerAvgById: Record<string, number> = Object.fromEntries(
+        Object.entries(byPlayer).map(([pid, { pins, games }]) => [pid, games > 0 ? pins / games : 0])
+      )
+      const avgVals = Object.values(playerAvgById)
+      const leagueAvg = avgVals.length > 0 ? avgVals.reduce((a, b) => a + b, 0) / avgVals.length : 130
+
+      // Split roster into available (in) and MIA
+      const inIds = new Set(weekRsvps.filter((r: any) => r.status === 'in').map((r: any) => r.player_id))
+      const realPlayers: GenPlayer[] = []
+      const miaPlayers: GenPlayer[] = []
+
+      for (const player of activePlayers) {
+        const sourceAvg = playerAvgById[player.id]
+        if (inIds.has(player.id)) {
+          realPlayers.push({ id: player.id, name: player.name, avg: sourceAvg ?? leagueAvg, isFill: false, status: 'in' })
+        } else {
+          const miaAvg = genFillMode === 'League Avg' ? leagueAvg : (sourceAvg ?? leagueAvg)
+          miaPlayers.push({ id: player.id, name: player.name, avg: miaAvg, isFill: false, status: 'out' })
+        }
+      }
+
+      realPlayers.sort((a, b) => b.avg - a.avg)
+      miaPlayers.sort((a, b) => b.avg - a.avg)
+
+      // Snake draft
+      const teamsArr: { players: GenPlayer[] }[] = Array.from({ length: genNumTeams }, () => ({ players: [] }))
+      let forward = true, tIdx = 0
+      const totalSlots = genNumTeams * genTeamSize
+
+      function distribute(p: GenPlayer) {
+        teamsArr[tIdx].players.push(p)
+        if (forward) { tIdx++; if (tIdx === genNumTeams) { tIdx = genNumTeams - 1; forward = false } }
+        else { tIdx--; if (tIdx < 0) { tIdx = 0; forward = true } }
+      }
+
+      const useReal = realPlayers.slice(0, totalSlots)
+      useReal.forEach(distribute)
+      if (useReal.length < totalSlots && !genFillToSize) {
+        miaPlayers.slice(0, totalSlots - useReal.length).forEach(distribute)
+      }
+      if (genFillToSize) {
+        teamsArr.forEach(t => {
+          while (t.players.length < genTeamSize) {
+            t.players.push({ id: null, name: 'League Avg Fill', avg: leagueAvg, isFill: true, status: 'fill' })
+          }
+        })
+      }
+
+      set({ genTeams: teamsArr, genSwapTarget: null })
     } catch {
       showToast('Failed to generate teams', 'error')
     } finally {
@@ -120,20 +237,48 @@ export default function AdminGenerateTeamsModal({ visible, onClose }: Props) {
   }
 
   async function useTeams() {
-    if (!genTeams) return
+    if (!genTeams || !weekId) return
     setConfirming(true)
     try {
-      const r = await apiPost('confirmMatchups', {
-        teams: genTeams.map((t: any) => t.players),
-        avgSource: genAvgSource,
-      })
-      if (r?.error) { showToast(r.error, 'error'); setConfirming(false); return }
-      await loadAll()
+      const slotRows: TablesInsert<'team_slots'>[] = (genTeams as any[]).flatMap((team, tIdx) =>
+        team.players.map((player: GenPlayer, pIdx: number) => ({
+          week_id: weekId,
+          player_id: player.isFill ? null : player.id,
+          team_number: tIdx + 1,
+          slot: pIdx,
+          is_fill: player.isFill,
+        }))
+      )
+
+      const scheduleRows: TablesInsert<'game_schedule'>[] = buildSchedule((genTeams as any[]).length).map(s => ({
+        ...s,
+        week_id: weekId,
+      }))
+
+      const { data: existingSlots } = await teamSlots.listByWeek(weekId)
+      const existingSlotIds = (existingSlots ?? []).map((s: any) => s.id)
+      if (existingSlotIds.length > 0) {
+        const { error: e0 } = await scores.removeBySlotIds(existingSlotIds)
+        if (e0) throw e0
+      }
+
+      const { error: e1 } = await teamSlots.removeByWeek(weekId)
+      if (e1) throw e1
+      const { error: e2 } = await teamSlots.insert(slotRows)
+      if (e2) throw e2
+      const { error: e3 } = await gameSchedule.removeByWeek(weekId)
+      if (e3) throw e3
+      if (scheduleRows.length) {
+        const { error: e4 } = await gameSchedule.insert(scheduleRows)
+        if (e4) throw e4
+      }
+
       showToast('Teams saved', 'success')
       set({ genTeams: null, genSwapTarget: null })
       onClose()
     } catch {
       showToast('Failed to save teams', 'error')
+    } finally {
       setConfirming(false)
     }
   }
@@ -147,7 +292,7 @@ export default function AdminGenerateTeamsModal({ visible, onClose }: Props) {
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={handleClose}>
       <View style={styles.backdrop}>
-        <TouchableOpacity style={StyleSheet.absoluteFillObject} onPress={handleClose} activeOpacity={1} />
+        <TouchableOpacity style={StyleSheet.absoluteFill} onPress={handleClose} activeOpacity={1} />
         <View style={styles.sheet}>
           <Text style={styles.title}>Generate Teams</Text>
 
@@ -244,29 +389,28 @@ export default function AdminGenerateTeamsModal({ visible, onClose }: Props) {
                   </Text>
                 </View>
 
-                {genTeams.map((team: any, tIdx: number) => (
+                {(genTeams as any[]).map((team, tIdx) => (
                   <View key={tIdx} style={styles.teamCard}>
                     <View style={styles.teamHead}>
                       <Text style={styles.teamName}>Team {tIdx + 1}</Text>
                       <Text style={styles.teamTotal}>{teamTotal(team)}</Text>
                     </View>
-                    {team.players.map((player: any, pIdx: number) => (
+                    {team.players.map((player: GenPlayer, pIdx: number) => (
                       <View key={pIdx} style={styles.playerRow}>
                         <View style={{ flex: 1 }}>
-                          {isFill(player) ? (
+                          {player.isFill ? (
                             <Text style={[styles.playerName, { color: colors.muted, fontStyle: 'italic' }]}>
                               League Avg Fill<Text style={styles.fillTag}> FILL</Text>
                             </Text>
                           ) : (
                             <Text style={styles.playerName}>
                               {player.name}
-                              {isChampion(champions, player.name) ? ' 👑' : ''}
-                              {player.status === 'Unavailable' ? <Text style={styles.outTag}> OUT</Text> : null}
+                              {player.status === 'out' ? <Text style={styles.outTag}> OUT</Text> : null}
                             </Text>
                           )}
                         </View>
                         <Text style={styles.playerAvg}>{player.avg.toFixed(1)}</Text>
-                        {!isFill(player) && (
+                        {!player.isFill && (
                           <TouchableOpacity
                             style={[styles.swapBtn, isSwapTarget(tIdx, pIdx) && styles.swapBtnActive]}
                             onPress={() => handleSwap(tIdx, pIdx)}

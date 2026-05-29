@@ -8,9 +8,8 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { useNavigation } from '@react-navigation/native'
 import { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { colors, fonts, radius } from '../theme'
-import { useDataStore } from '../stores/dataStore'
 import { useUiStore } from '../stores/uiStore'
-import { aggregateStandings, getSeasons, getDefaultViewSeason, isChampion } from '../utils/data.js'
+import { useStandingsData, computeStandingsFromSupabase } from '../hooks/useStandingsData'
 import { MoreStackParamList } from '../navigation/types'
 import AppHeader from '../components/AppHeader'
 import LoadingView from '../components/LoadingView'
@@ -19,21 +18,31 @@ import PillFilter from '../components/PillFilter'
 type Nav = NativeStackNavigationProp<MoreStackParamList>
 
 export default function StandingsScreen() {
-  const { stats, settings, champions, loadAll } = useDataStore()
+  const { loading, seasonList, championPlayerIds, rawScores, rawSchedule, reload } = useStandingsData()
   const { standingsSeason, set } = useUiStore()
   const navigation = useNavigation<Nav>()
-  const { refreshing, onRefresh } = useRefresh(loadAll)
+  const { refreshing, onRefresh } = useRefresh(reload)
 
-  const seasons = useMemo(() => (stats ? ['all', ...getSeasons(stats)] : ['all']), [stats])
+  const seasonNumbers = useMemo(
+    () => ['all', ...seasonList.map(s => String(s.number))],
+    [seasonList],
+  )
 
   const activeSeason = useMemo(
-    () => standingsSeason ?? getDefaultViewSeason(stats, settings),
-    [standingsSeason, stats, settings],
+    () => standingsSeason ?? (seasonList.length ? String(seasonList[seasonList.length - 1].number) : 'all'),
+    [standingsSeason, seasonList],
+  )
+
+  const activeSeasonId = useMemo(
+    () => activeSeason === 'all'
+      ? null
+      : (seasonList.find(s => String(s.number) === activeSeason)?.id ?? null),
+    [activeSeason, seasonList],
   )
 
   const standings = useMemo(
-    () => (stats ? aggregateStandings(stats, activeSeason) : []),
-    [stats, activeSeason],
+    () => computeStandingsFromSupabase(rawScores, rawSchedule, activeSeasonId),
+    [rawScores, rawSchedule, activeSeasonId],
   )
 
   const leagueAvg = useMemo(() => {
@@ -45,11 +54,10 @@ export default function StandingsScreen() {
   const sourceLabel = activeSeason === 'all' ? 'All-time Avg' : `Season ${activeSeason} Avg`
 
   function goToPlayer(name: string) {
-    // Cross-tab navigation: switch to More tab then navigate to PlayerDetail
     ;(navigation as any).navigate('More', { screen: 'PlayerDetail', params: { name } })
   }
 
-  if (!stats) return <LoadingView label="Loading standings" />
+  if (loading && rawScores.length === 0) return <LoadingView label="Loading standings" />
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
@@ -57,7 +65,7 @@ export default function StandingsScreen() {
 
       <ScrollView refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent} />}>
       <PillFilter
-        items={seasons}
+        items={seasonNumbers}
         value={activeSeason}
         onChange={(s) => set({ standingsSeason: s })}
         renderLabel={(s) => s === 'all' ? 'All-time' : `Season ${s}`}
@@ -83,7 +91,7 @@ export default function StandingsScreen() {
 
         <FlatList
           data={standings}
-          keyExtractor={(item) => item.name}
+          keyExtractor={(item) => item.playerId}
           scrollEnabled={false}
           renderItem={({ item, index }) => (
             <TouchableOpacity
@@ -98,7 +106,7 @@ export default function StandingsScreen() {
               </View>
               <Text style={styles.playerName} numberOfLines={1}>
                 {item.name}
-                {isChampion(champions, item.name) ? ' 👑' : ''}
+                {championPlayerIds.has(item.playerId) ? ' 👑' : ''}
               </Text>
               <Text style={styles.wlText}>{item.wins}–{item.losses}</Text>
               <Text style={styles.pinsText}>{item.pins}</Text>

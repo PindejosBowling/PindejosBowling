@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import { useState } from 'react'
 import {
   View,
   Text,
@@ -17,12 +17,10 @@ import OddsBlock from '../components/OddsBlock'
 import ConfirmBar from '../components/ConfirmBar'
 import AdminArchiveModal from '../components/AdminArchiveModal'
 import ToggleGroup from '../components/ToggleGroup'
-import { useDataStore } from '../stores/dataStore'
+import { useMatchupsData } from '../hooks/useMatchupsData'
 import { useUiStore } from '../stores/uiStore'
 import { usePendingStore } from '../stores/pendingStore'
-import { usePrefsStore } from '../stores/prefsStore'
-import { hasActiveWeek, readActiveWeek, getLeagueAvg, effectiveAvg } from '../utils/data.js'
-import { apiPost } from '../api.js'
+import { scores } from '../utils/supabase/db'
 import { colors, fonts, radius } from '../theme'
 
 // ---------------------------------------------------------------------------
@@ -52,17 +50,17 @@ const ARCHIVE_BAR_HEIGHT = 57
 // ---------------------------------------------------------------------------
 
 export default function MatchupsScreen() {
-  const { loading, active, stats, settings, rsvp, loadAll, loadActive } = useDataStore()
+  const { loading, derived, reload } = useMatchupsData()
   const { matchupsView, oddsRevealed, set: setUi } = useUiStore()
   const { pendingScores, set: setPending } = usePendingStore()
-  const { avgDisplay } = usePrefsStore()
   const [saving, setSaving] = useState(false)
   const [showArchive, setShowArchive] = useState(false)
-  const { refreshing, onRefresh } = useRefresh(loadActive)
+  const { refreshing, onRefresh } = useRefresh(reload)
 
-  const isActive = hasActiveWeek(active)
-  const teams: Record<string, any> = isActive ? readActiveWeek(active) : {}
-  const leagueAvg: number = getLeagueAvg(stats, settings, avgDisplay as any)
+  const isActive = !!derived
+  const teams = derived?.teams ?? {}
+  const rounds = derived?.rounds ?? []
+  const leagueAvg = derived?.leagueAvg ?? 0
 
   const hasSavedScores = isActive && Object.values(teams).some((team: any) =>
     team.players.some((p: any) =>
@@ -74,38 +72,14 @@ export default function MatchupsScreen() {
     )
   )
 
-  function buildPairings(teamsMap: Record<string, any>, gameNum: number) {
-    const names = Object.keys(teamsMap).sort()
-    const seen = new Set<string>()
-    const pairings: { a: any; b: any }[] = []
-    names.forEach(t => {
-      if (seen.has(t)) return
-      const opp = teamsMap[t]?.opponents?.[gameNum]
-      if (opp && teamsMap[opp] && teamsMap[opp].opponents?.[gameNum] === t) {
-        seen.add(t); seen.add(opp)
-        pairings.push({ a: teamsMap[t], b: teamsMap[opp] })
-      }
-    })
-    return pairings
-  }
-
-  const rounds = (() => {
-    const result: { num: number; pairings: { a: any; b: any }[] }[] = []
-    for (let g = 1; g <= 3; g++) {
-      const pairings = buildPairings(teams, g)
-      if (pairings.length) result.push({ num: g, pairings })
-    }
-    return result
-  })()
-
   function getTotal(teamName: string, gameNum: number): number {
     const team = teams[teamName]
     if (!team) return 0
     return team.players.reduce((s: number, p: any) => {
-      const key = `${teamName}|${p.slot}|${gameNum}`
+      const key = `${p.teamSlotId}|${gameNum}`
       const pending = pendingScores[key]
       if (pending) return s + (parseInt(pending) || 0)
-      if (p.isFill) return s + (leagueAvg > 0 ? Math.round(leagueAvg) : 0)
+      if (p.isFill) return s + (p.effectiveAvg > 0 ? Math.round(p.effectiveAvg) : 0)
       const raw = gameNum === 1 ? p.g1 : gameNum === 2 ? p.g2 : p.g3
       return s + (parseInt(raw) || 0)
     }, 0)
@@ -122,13 +96,6 @@ export default function MatchupsScreen() {
     return b > 0 && b > a
   }
 
-  function expectedTotal(team: any): number {
-    return team.players.reduce((s: number, p: any) => {
-      const avg = effectiveAvg(stats, settings, rsvp, p.name, p.isFill, leagueAvg)
-      return s + (avg > 0 ? Math.round(avg) : 0)
-    }, 0)
-  }
-
   const hasPendingScores = Object.keys(pendingScores).length > 0
   const pendingCount = Object.keys(pendingScores).length
 
@@ -140,14 +107,20 @@ export default function MatchupsScreen() {
     const keys = Object.keys(pendingScores)
     if (!keys.length) return
     setSaving(true)
-    const batchScores = keys.map(k => {
-      const score = pendingScores[k]
-      const [team, slot, gameNum] = k.split('|')
-      return { team, slot: parseInt(slot), gameNum: parseInt(gameNum), score }
-    })
     try {
-      await apiPost('batchUpdateScores', { scores: batchScores })
-      await loadAll()
+      const toUpsert = keys
+        .filter(k => pendingScores[k] !== '')
+        .map(k => {
+          const [teamSlotId, gameNum] = k.split('|')
+          return { team_slot_id: teamSlotId, game_number: parseInt(gameNum), score: parseInt(pendingScores[k]) }
+        })
+      const toDelete = keys
+        .filter(k => pendingScores[k] === '')
+        .map(k => { const [teamSlotId, gameNum] = k.split('|'); return { teamSlotId, gameNum: parseInt(gameNum) } })
+
+      if (toUpsert.length) await scores.upsert(toUpsert)
+      await Promise.all(toDelete.map(({ teamSlotId, gameNum }) => scores.remove(teamSlotId, gameNum)))
+      await reload()
       setPending({ pendingScores: {} })
     } finally {
       setSaving(false)
@@ -162,7 +135,7 @@ export default function MatchupsScreen() {
     <SafeAreaView style={styles.safeArea}>
       <AppHeader />
       <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
-        {loading && !active ? (
+        {loading && !derived ? (
           <LoadingView label="Loading matchups" />
         ) : (
           <View style={{ flex: 1 }}>
@@ -201,7 +174,6 @@ export default function MatchupsScreen() {
                                   <PlayerScoreRow
                                     key={player.slot}
                                     player={player}
-                                    teamName={pairing.a.name}
                                     gameNum={round.num}
                                     mode={matchupsView as 'scores' | 'expected'}
                                     leagueAvg={leagueAvg}
@@ -220,7 +192,6 @@ export default function MatchupsScreen() {
                                   <PlayerScoreRow
                                     key={player.slot}
                                     player={player}
-                                    teamName={pairing.a.name}
                                     gameNum={round.num}
                                     mode={matchupsView as 'scores' | 'expected'}
                                     leagueAvg={leagueAvg}
@@ -229,7 +200,7 @@ export default function MatchupsScreen() {
                                 {matchupsView === 'expected' ? (
                                   <View style={styles.totalRow}>
                                     <Text style={styles.totalLabel}>Expected total</Text>
-                                    <Text style={[styles.totalVal, styles.totalLosing]}>{expectedTotal(pairing.a)}</Text>
+                                    <Text style={[styles.totalVal, styles.totalLosing]}>{pairing.a.expectedTotal}</Text>
                                   </View>
                                 ) : getTotal(pairing.a.name, round.num) > 0 ? (
                                   <View style={styles.totalRow}>
@@ -251,7 +222,6 @@ export default function MatchupsScreen() {
                                   <PlayerScoreRow
                                     key={player.slot}
                                     player={player}
-                                    teamName={pairing.b.name}
                                     gameNum={round.num}
                                     mode={matchupsView as 'scores' | 'expected'}
                                     leagueAvg={leagueAvg}
@@ -260,7 +230,7 @@ export default function MatchupsScreen() {
                                 {matchupsView === 'expected' ? (
                                   <View style={styles.totalRow}>
                                     <Text style={styles.totalLabel}>Expected total</Text>
-                                    <Text style={[styles.totalVal, styles.totalLosing]}>{expectedTotal(pairing.b)}</Text>
+                                    <Text style={[styles.totalVal, styles.totalLosing]}>{pairing.b.expectedTotal}</Text>
                                   </View>
                                 ) : getTotal(pairing.b.name, round.num) > 0 ? (
                                   <View style={styles.totalRow}>
@@ -298,9 +268,9 @@ export default function MatchupsScreen() {
                                 <OddsBlock
                                   key={`${round.num}-${pi}`}
                                   teamA={pairing.a}
-                                  teamB={pairing.b}
+                                  teamB={pairing.b!}
                                   leagueAvg={leagueAvg}
-                                  label={`Game ${round.num} · ${pairing.a.name} vs ${pairing.b.name}`}
+                                  label={`Game ${round.num} · ${pairing.a.name} vs ${pairing.b!.name}`}
                                 />
                               ))
                           )}

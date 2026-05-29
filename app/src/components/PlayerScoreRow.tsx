@@ -1,65 +1,60 @@
-import React from 'react'
 import { View, Text, TextInput, StyleSheet } from 'react-native'
-import { useDataStore } from '../stores/dataStore'
 import { usePendingStore } from '../stores/pendingStore'
-import { usePrefsStore } from '../stores/prefsStore'
 import { initials } from '../utils/helpers.js'
-import { isChampion, isPlayerOut, getPlayerCurrentAvg, effectiveAvg } from '../utils/data.js'
 import { colors, fonts, radius } from '../theme'
 
 interface PlayerScoreRowProps {
-  player: { name: string; slot: number; g1: any; g2: any; g3: any; isFill?: boolean }
-  teamName: string
+  player: {
+    name: string
+    slot: number
+    g1: any
+    g2: any
+    g3: any
+    isFill?: boolean
+    teamSlotId: string
+    isOut: boolean
+    isChampion: boolean
+    effectiveAvg: number
+  }
   gameNum: number
   mode: 'scores' | 'expected'
   leagueAvg: number
 }
 
-export default function PlayerScoreRow({ player, teamName, gameNum, mode, leagueAvg }: PlayerScoreRowProps) {
-  const { champions, rsvp, stats, settings } = useDataStore()
+export default function PlayerScoreRow({ player, gameNum, mode, leagueAvg }: PlayerScoreRowProps) {
   const { pendingScores, set } = usePendingStore()
-  const { avgDisplay } = usePrefsStore()
 
-  const isChamp = isChampion(champions, player.name)
-  const isOut = !player.isFill && isPlayerOut(rsvp, player.name)
-
-  const playerAvg = player.isFill
-    ? leagueAvg
-    : getPlayerCurrentAvg(stats, settings, player.name, avgDisplay as any)
-
-  const expectedScore = (() => {
-    const avg = effectiveAvg(stats, settings, rsvp, player.name, !!player.isFill, leagueAvg)
-    return avg > 0 ? Math.round(avg) : '—'
-  })()
+  const expectedScore = player.effectiveAvg > 0 ? Math.round(player.effectiveAvg) : '—'
 
   const rawScore = gameNum === 1 ? player.g1 : gameNum === 2 ? player.g2 : player.g3
-  const pendingKey = `${teamName}|${player.slot}|${gameNum}`
+  const pendingKey = `${player.teamSlotId}|${gameNum}`
   const pendingEntry = pendingScores[pendingKey]
 
-  const displayValue = pendingEntry
-    ? String(pendingEntry)
+  const hasPending = pendingEntry !== undefined
+  const displayValue = hasPending
+    ? pendingEntry
     : rawScore === '' || rawScore == null
     ? ''
     : String(rawScore)
 
   const hasValue = displayValue !== '' && displayValue != null
-  const isPending = !!pendingEntry
-  const isAbsentPrefill = isOut && rawScore !== '' && rawScore != null
+  const isPending = hasPending
+  const isAbsentPrefill = player.isOut && rawScore !== '' && rawScore != null
 
   function onChangeText(val: string) {
     const initial = rawScore === '' || rawScore == null ? '' : String(rawScore)
-    if (val !== initial && val !== '') {
-      set({ pendingScores: { ...pendingScores, [pendingKey]: val } })
-    } else {
+    if (val === initial) {
       const next = { ...pendingScores }
       delete next[pendingKey]
       set({ pendingScores: next })
+    } else {
+      set({ pendingScores: { ...pendingScores, [pendingKey]: val } })
     }
   }
 
   return (
-    <View style={[styles.row, isOut && styles.rowAbsent]}>
-      <View style={[styles.avatar, isChamp && styles.avatarChamp]}>
+    <View style={[styles.row, player.isOut && styles.rowAbsent]}>
+      <View style={[styles.avatar, player.isChampion && styles.avatarChamp]}>
         <Text style={styles.avatarText}>{player.isFill ? '∅' : initials(player.name)}</Text>
       </View>
       <View style={{ flex: 1 }}>
@@ -68,12 +63,12 @@ export default function PlayerScoreRow({ player, teamName, gameNum, mode, league
         ) : (
           <Text style={styles.playerName}>
             {player.name}
-            {isChamp ? ' 👑' : ''}
-            {isOut ? <Text style={styles.outTag}> OUT</Text> : null}
+            {player.isChampion ? ' 👑' : ''}
+            {player.isOut ? <Text style={styles.outTag}> OUT</Text> : null}
           </Text>
         )}
-        {playerAvg > 0 && !player.isFill ? (
-          <Text style={styles.subtext}>avg {playerAvg.toFixed(1)}</Text>
+        {player.effectiveAvg > 0 && !player.isFill ? (
+          <Text style={styles.subtext}>avg {player.effectiveAvg.toFixed(1)}</Text>
         ) : player.isFill ? (
           <Text style={styles.subtext}>fill</Text>
         ) : null}
