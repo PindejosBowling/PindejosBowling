@@ -13,8 +13,6 @@ interface UiStore {
   oddsRevealed: boolean
   standingsSeason: string | null
   playerSeason: string | null
-  histSeason: string | null
-  histWeek: string | null
   recordsSeason: string
   chemMode: string
   chemExpanded: boolean
@@ -32,8 +30,6 @@ export const useUiStore = create<UiStore>((set, get) => ({
   oddsRevealed: false,
   standingsSeason: null,
   playerSeason: null,
-  histSeason: null,
-  histWeek: null,
   recordsSeason: 'all',
   chemMode: 'pairs',
   chemExpanded: false,
