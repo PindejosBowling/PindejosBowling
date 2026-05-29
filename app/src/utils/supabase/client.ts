@@ -5,8 +5,11 @@ import type { Database } from './database.types'
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL
 const supabaseKey = process.env.EXPO_PUBLIC_SUPABASE_API_KEY
 
-console.log('[supabase] EXPO_PUBLIC_SUPABASE_URL:', supabaseUrl ?? '(undefined)')
-console.log('[supabase] EXPO_PUBLIC_SUPABASE_API_KEY:', supabaseKey ? '(set)' : '(undefined)')
+if (!supabaseUrl || !supabaseKey) {
+  throw new Error(
+    `Supabase env vars missing. URL: ${supabaseUrl ?? '(undefined)'}, KEY: ${supabaseKey ? '(set)' : '(undefined)'}`,
+  )
+}
 
 export const supabase = createClient<Database>(supabaseUrl, supabaseKey, {
   auth: {

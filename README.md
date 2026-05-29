@@ -81,6 +81,30 @@ TestFlight builds don't require device registration but go through Apple's proce
 2. Once processed, go to [App Store Connect](https://appstoreconnect.apple.com) → your app → **TestFlight** and add the tester under Internal Testing.
 3. The tester installs the **TestFlight** app from the App Store, accepts the email invite, and installs the build.
 
+### Environment variables
+
+Environment variables are stored as EAS project secrets — never in the repo. To add or update a variable:
+
+```bash
+cd app
+
+# Public vars (embedded in JS bundle, visible to end-users)
+eas env:create --scope project --name EXPO_PUBLIC_SUPABASE_URL \
+  --value "<value>" --visibility plaintext --environment preview
+
+# Sensitive vars (encrypted, redacted in build logs)
+eas env:create --scope project --name EXPO_PUBLIC_SUPABASE_API_KEY \
+  --value "<value>" --visibility sensitive --environment preview
+```
+
+Repeat with `--environment production` for production builds. View and manage existing vars at [expo.dev](https://expo.dev) → Projects → pindejos-bowling → Environment Variables.
+
+**Current variables required:**
+| Variable | Visibility | Environments |
+|---|---|---|
+| `EXPO_PUBLIC_SUPABASE_URL` | plaintext | preview, production |
+| `EXPO_PUBLIC_SUPABASE_API_KEY` | sensitive | preview, production |
+
 ### EAS project info
 
 - EAS project ID: `7ecaf340-1c50-4e12-8333-6e266d154574`
