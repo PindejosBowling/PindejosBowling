@@ -7,8 +7,6 @@ export const colors = {
   border2:   'rgba(255,255,255,0.14)',
   accent:    '#e8ff47',
   accentDim: 'rgba(232,255,71,0.12)',
-  accent2:   '#ff4f6d',
-  accent3:   '#4fc3ff',
   gold:      '#fbbf24',
   text:      '#f0f0f0',
   muted:     '#7a7a85',
@@ -19,7 +17,6 @@ export const colors = {
 
 export const fonts = {
   barlow:               'Barlow_400Regular',
-  barlowMedium:         'Barlow_500Medium',
   barlowSemiBold:       'Barlow_600SemiBold',
   barlowCondensed:      'BarlowCondensed_700Bold',
   barlowCondensedHeavy: 'BarlowCondensed_900Black',

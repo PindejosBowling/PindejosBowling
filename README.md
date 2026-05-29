@@ -63,6 +63,7 @@ Preview builds are distributed ad-hoc (no App Store queue) but require each test
    eas device:create
    ```
 2. Share the generated URL or QR code with the tester — they open it on their iPhone and install the registration profile.
+
 3. After their device is registered, build and share the preview:
    ```bash
    eas build --platform ios --profile preview

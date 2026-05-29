@@ -12,7 +12,6 @@ import {
 } from '@expo-google-fonts/barlow-condensed'
 import {
   Barlow_400Regular,
-  Barlow_500Medium,
   Barlow_600SemiBold,
 } from '@expo-google-fonts/barlow'
 
@@ -28,7 +27,6 @@ export default function App() {
     BarlowCondensed_800ExtraBold,
     BarlowCondensed_900Black,
     Barlow_400Regular,
-    Barlow_500Medium,
     Barlow_600SemiBold,
   })
 

@@ -166,7 +166,7 @@ export default function PlayerDetailScreen() {
                 dataPointsRadius={3}
                 showReferenceLine1
                 referenceLine1Position={chartData.avg}
-                referenceLine1Config={{ color: colors.accent2, dashWidth: 4, dashGap: 4, thickness: 1.5 }}
+                referenceLine1Config={{ color: colors.danger, dashWidth: 4, dashGap: 4, thickness: 1.5 }}
                 rulesColor="rgba(255,255,255,0.05)"
                 rulesType="solid"
                 yAxisColor="transparent"

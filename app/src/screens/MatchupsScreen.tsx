@@ -514,7 +514,7 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     letterSpacing: 2,
     textTransform: 'uppercase',
-    color: colors.accent2,
+    color: colors.danger,
     marginBottom: 10,
   },
   oddsDisclaimer: {
