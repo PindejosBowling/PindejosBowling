@@ -4,6 +4,7 @@ import {
   Text,
   ScrollView,
   TouchableOpacity,
+  Alert,
   StyleSheet,
   KeyboardAvoidingView,
   RefreshControl,
@@ -20,7 +21,7 @@ import ToggleGroup from '../components/ToggleGroup'
 import { useMatchupsData } from '../hooks/useMatchupsData'
 import { useUiStore } from '../stores/uiStore'
 import { usePendingStore } from '../stores/pendingStore'
-import { scores } from '../utils/supabase/db'
+import { scores, teamSlots, gameSchedule, weeks } from '../utils/supabase/db'
 import { colors, fonts, radius } from '../theme'
 
 // ---------------------------------------------------------------------------
@@ -50,7 +51,7 @@ const ARCHIVE_BAR_HEIGHT = 57
 // ---------------------------------------------------------------------------
 
 export default function MatchupsScreen() {
-  const { loading, derived, reload } = useMatchupsData()
+  const { loading, weekId, derived, reload } = useMatchupsData()
   const { matchupsView, oddsRevealed, set: setUi } = useUiStore()
   const { pendingScores, set: setPending } = usePendingStore()
   const [saving, setSaving] = useState(false)
@@ -103,6 +104,32 @@ export default function MatchupsScreen() {
     setPending({ pendingScores: {} })
   }
 
+  function confirmClearMatchups() {
+    Alert.alert(
+      'Clear Matchups?',
+      'This will remove all teams, game schedule, and any saved scores for this week. This cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Clear',
+          style: 'destructive',
+          onPress: async () => {
+            if (!weekId) return
+            const slotIds = Object.values(teams).flatMap((team: any) =>
+              team.players.map((p: any) => p.teamSlotId)
+            )
+            if (slotIds.length) await scores.removeBySlotIds(slotIds)
+            await teamSlots.removeByWeek(weekId)
+            await gameSchedule.removeByWeek(weekId)
+            await weeks.update(weekId, { is_confirmed: false })
+            setPending({ pendingScores: {} })
+            await reload()
+          },
+        },
+      ]
+    )
+  }
+
   async function saveScores() {
     const keys = Object.keys(pendingScores)
     if (!keys.length) return
@@ -151,11 +178,16 @@ export default function MatchupsScreen() {
                   {/* Title + view toggle */}
                   <View style={styles.titleRow}>
                     <Text style={styles.screenTitle}>Matchups</Text>
-                    <ToggleGroup
-                      options={[{ key: 'scores', label: 'Live' }, { key: 'expected', label: 'Expected' }]}
-                      value={matchupsView}
-                      onChange={(v) => setUi({ matchupsView: v })}
-                    />
+                    <View style={styles.titleActions}>
+                      <TouchableOpacity onPress={confirmClearMatchups} style={styles.resetBtn} activeOpacity={0.7}>
+                        <Text style={styles.resetBtnText}>Reset</Text>
+                      </TouchableOpacity>
+                      <ToggleGroup
+                        options={[{ key: 'scores', label: 'Live' }, { key: 'expected', label: 'Expected' }]}
+                        value={matchupsView}
+                        onChange={(v) => setUi({ matchupsView: v })}
+                      />
+                    </View>
                   </View>
 
                   {/* Rounds */}
@@ -370,6 +402,24 @@ const styles = StyleSheet.create({
     fontSize: 22,
     color: colors.text,
     fontWeight: '700',
+  },
+  titleActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  resetBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: radius.cardSm,
+    borderWidth: 1,
+    borderColor: 'rgba(255,79,109,0.4)',
+  },
+  resetBtnText: {
+    fontFamily: fonts.barlowCondensed,
+    fontSize: 12,
+    color: colors.danger,
+    letterSpacing: 0.5,
   },
   matchHeader: {
     paddingVertical: 6,

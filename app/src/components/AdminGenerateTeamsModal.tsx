@@ -110,7 +110,7 @@ export default function AdminGenerateTeamsModal({ visible, onClose }: Props) {
     setRsvpLoading(true)
     async function load() {
       const [weekRes, seasonsRes, playersRes] = await Promise.all([
-        weeks.getActive(),
+        weeks.getCurrent(),
         seasons.list(),
         players.listActive(),
       ])
@@ -272,6 +272,9 @@ export default function AdminGenerateTeamsModal({ visible, onClose }: Props) {
         const { error: e4 } = await gameSchedule.insert(scheduleRows)
         if (e4) throw e4
       }
+
+      const { error: e5 } = await weeks.update(weekId, { is_confirmed: true })
+      if (e5) throw e5
 
       showToast('Teams saved', 'success')
       set({ genTeams: null, genSwapTarget: null })

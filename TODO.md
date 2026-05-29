@@ -54,7 +54,7 @@ reads for that screen are covered.
 These components write through `apiPost` today; migrate to `db.*` writes.
 
 - [ ] `AdminAddPlayerModal` — `players.insert`
-- [ ] `AdminArchiveModal` — `weeks.update` (flip `is_archived`)
+- [x] `AdminArchiveModal` — `weeks.update` (flip `is_archived`)
 - [ ] `AdminEndSeasonModal` — `seasons.update` (set `ended_at`)
 - [x] `AdminGenerateTeamsModal` — `team_slots` insert/replace by week
 
