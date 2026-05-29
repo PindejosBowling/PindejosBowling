@@ -1,29 +1,21 @@
-import React from 'react'
+import React, { useEffect, useState } from 'react'
 import { View, Text, StyleSheet } from 'react-native'
 import { colors, fonts } from '../theme'
-import { useDataStore } from '../stores/dataStore'
-import { getCurrentSeason, hasActiveWeek } from '../utils/data.js'
-import { AW } from '../utils/constants.js'
+import { weeks, seasons } from '../utils/supabase/db'
 
 export default function AppHeader() {
-  const { stats, settings, active, current } = useDataStore()
+  const [weekNumber, setWeekNumber] = useState<number | null>(null)
+  const [seasonNumber, setSeasonNumber] = useState<number | null>(null)
 
-  const currentSeason = getCurrentSeason(stats, settings)
+  useEffect(() => {
+    Promise.all([weeks.getCurrent(), seasons.getLatest()]).then(([weekRes, seasonRes]) => {
+      setWeekNumber(weekRes.data?.week_number ?? null)
+      setSeasonNumber(seasonRes.data?.number ?? null)
+    })
+  }, [])
 
-  let weekLabel = 'Week 1'
-  if (hasActiveWeek(active)) {
-    const week = active?.[1]?.[AW.WEEK] ?? ''
-    weekLabel = (typeof week === 'number' || /^\d+$/.test(String(week)))
-      ? `Week ${week}`
-      : (week || 'Week 1')
-  } else if (current) {
-    const wStr = String(current[0]?.[0] ?? '')
-    if (!wStr) {
-      weekLabel = 'Week 1'
-    } else {
-      weekLabel = wStr.toLowerCase().includes('week') ? wStr : `Week ${wStr}`
-    }
-  }
+  const weekLabel = weekNumber != null ? `Week ${weekNumber}` : 'Week 1'
+  const seasonLabel = seasonNumber != null ? `Season ${seasonNumber}` : ''
 
   return (
     <View style={styles.row}>
@@ -34,7 +26,7 @@ export default function AppHeader() {
       </View>
       <View style={styles.badge}>
         <Text style={styles.weekLabel}>{weekLabel}</Text>
-        <Text style={styles.seasonLabel}>Season {currentSeason}</Text>
+        {seasonLabel ? <Text style={styles.seasonLabel}>{seasonLabel}</Text> : null}
       </View>
     </View>
   )

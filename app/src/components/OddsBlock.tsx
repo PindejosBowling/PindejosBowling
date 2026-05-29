@@ -1,13 +1,11 @@
 import React from 'react'
 import { View, Text, StyleSheet } from 'react-native'
-import { useDataStore } from '../stores/dataStore'
-import { effectiveAvg } from '../utils/data.js'
 import { spreadAndML } from '../utils/helpers.js'
 import { colors, fonts, radius } from '../theme'
 
 interface TeamForOdds {
   name: string
-  players: { name: string; isFill?: boolean }[]
+  players: { name: string; isFill?: boolean; effectiveAvg?: number }[]
 }
 
 interface OddsBlockProps {
@@ -18,15 +16,13 @@ interface OddsBlockProps {
 }
 
 export default function OddsBlock({ teamA, teamB, leagueAvg, label }: OddsBlockProps) {
-  const { stats, settings, rsvp } = useDataStore()
-
   const expectedA = teamA.players.reduce((s, p) => {
-    const avg = effectiveAvg(stats, settings, rsvp, p.name, !!p.isFill, leagueAvg)
+    const avg = p.effectiveAvg ?? leagueAvg
     return s + (avg > 0 ? Math.round(avg) : 0)
   }, 0)
 
   const expectedB = teamB.players.reduce((s, p) => {
-    const avg = effectiveAvg(stats, settings, rsvp, p.name, !!p.isFill, leagueAvg)
+    const avg = p.effectiveAvg ?? leagueAvg
     return s + (avg > 0 ? Math.round(avg) : 0)
   }, 0)
 

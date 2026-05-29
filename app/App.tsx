@@ -18,7 +18,6 @@ import {
 
 import RootNavigator from './src/navigation/RootNavigator'
 import Toast from './src/components/Toast'
-import { useDataStore } from './src/stores/dataStore'
 import { usePrefsStore } from './src/stores/prefsStore'
 
 export default function App() {
@@ -35,7 +34,6 @@ export default function App() {
 
   useEffect(() => {
     usePrefsStore.getState().hydrate()
-    useDataStore.getState().loadAll()
   }, [])
 
   if (!fontsLoaded) return null

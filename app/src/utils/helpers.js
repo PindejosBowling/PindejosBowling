@@ -1,26 +1,9 @@
 // src/utils/helpers.js — pure formatting and utility functions
-// No state dependency. Safe to use anywhere: Vue components, stores, utils.
-
-/**
- * Interpret a presence flag value from the stats sheet.
- * The sheet stores TRUE as a boolean, string 'TRUE', 1, or '1'.
- */
-export function isPresent(v) {
-  return v === true || v === 'TRUE' || v === 1 || v === '1'
-}
 
 /** Convert a full name to 2-character initials. */
 export function initials(name) {
   if (!name) return '?'
   return name.split(' ').map(w => w[0]).join('').substring(0, 2).toUpperCase()
-}
-
-/** HTML-escape a value for safe insertion into innerHTML (legacy use; Vue templates don't need this). */
-export function escapeHtml(s) {
-  if (s == null) return ''
-  return s.toString().replace(/[&<>"']/g, c => ({
-    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
-  })[c])
 }
 
 /** Convert a date to a human-readable relative string ("2h ago", "3d ago", etc.). */
