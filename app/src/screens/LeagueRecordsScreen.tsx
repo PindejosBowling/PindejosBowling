@@ -5,9 +5,8 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { useNavigation } from '@react-navigation/native'
 import { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { colors, fonts, radius } from '../theme'
-import { useDataStore } from '../stores/dataStore'
 import { useUiStore } from '../stores/uiStore'
-import { getLeagueRecords, getSeasons } from '../utils/data.js'
+import { useLeagueRecordsData, computeLeagueRecordsFromSupabase } from '../hooks/useLeagueRecordsData'
 import { MoreStackParamList } from '../navigation/types'
 import LoadingView from '../components/LoadingView'
 import PillFilter from '../components/PillFilter'
@@ -16,75 +15,86 @@ import ScreenHeader from '../components/ScreenHeader'
 type Nav = NativeStackNavigationProp<MoreStackParamList>
 
 export default function LeagueRecordsScreen() {
-  const { stats, loading, loadAll } = useDataStore()
+  const { loading, seasonList, rawScores, reload } = useLeagueRecordsData()
   const { recordsSeason, set } = useUiStore()
-  const { refreshing, onRefresh } = useRefresh(loadAll)
+  const { refreshing, onRefresh } = useRefresh(reload)
   const navigation = useNavigation<Nav>()
 
-  const seasons = useMemo(() => (stats ? getSeasons(stats) : []), [stats])
-  const records = useMemo(
-    () => (stats ? getLeagueRecords(stats, recordsSeason) : null),
-    [stats, recordsSeason],
+  const seasonNumbers = useMemo(
+    () => ['all', ...seasonList.map(s => String(s.number))],
+    [seasonList],
   )
 
-  if (loading || !stats) return <LoadingView label="Loading records" />
+  const activeSeason = useMemo(
+    () => recordsSeason ?? (seasonList.length ? String(seasonList[seasonList.length - 1].number) : 'all'),
+    [recordsSeason, seasonList],
+  )
+
+  const activeSeasonId = useMemo(
+    () => activeSeason === 'all'
+      ? null
+      : (seasonList.find(s => String(s.number) === activeSeason)?.id ?? null),
+    [activeSeason, seasonList],
+  )
+
+  const records = useMemo(
+    () => computeLeagueRecordsFromSupabase(rawScores, activeSeasonId),
+    [rawScores, activeSeasonId],
+  )
+
+  if (loading && rawScores.length === 0) return <LoadingView label="Loading records" />
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <ScreenHeader title="League Records" onBack={() => navigation.navigate('MoreHome')} />
 
-      <PillFilter
-        items={['all', ...seasons]}
-        value={recordsSeason ?? ''}
-        onChange={(s) => set({ recordsSeason: s })}
-        renderLabel={(s) => s === 'all' ? 'All-time' : `Season ${s}`}
-      />
-
       <ScrollView contentContainerStyle={styles.content} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent} />}>
-        {records ? (
-          <>
-            <RecordCard
-              icon="🎳"
-              label="High Single Game"
-              by={records.highGame?.by}
-              when={records.highGame?.when}
-              value={records.highGame?.val}
-            />
-            <RecordCard
-              icon="📈"
-              label="High Series (G1+G2)"
-              by={records.highSeries?.by}
-              when={records.highSeries?.when}
-              value={records.highSeries?.val}
-            />
-            <RecordCard
-              icon="💪"
-              label="High Team Game"
-              by={records.highTeamGame?.team}
-              when={records.highTeamGame?.when}
-              value={records.highTeamGame?.val}
-              roster={records.highTeamGame?.roster}
-            />
-            <RecordCard
-              icon="🌙"
-              label="High Team Night"
-              by={records.highTeamNight?.team}
-              when={records.highTeamNight?.when}
-              value={records.highTeamNight?.val}
-              g1Roster={records.highTeamNight?.g1Roster}
-              g2Roster={records.highTeamNight?.g2Roster}
-              g1Total={records.highTeamNight?.g1Total}
-              g2Total={records.highTeamNight?.g2Total}
-            />
-            <RecordCard
-              icon="🏆"
-              label="Best Season Avg"
-              by={records.bestSeasonAvg?.by}
-              when={records.bestSeasonAvg?.when}
-              value={records.bestSeasonAvg?.val != null ? records.bestSeasonAvg.val.toFixed(1) : undefined}
-            />
-          </>
-        ) : null}
+        <PillFilter
+          items={seasonNumbers}
+          value={activeSeason}
+          onChange={(s) => set({ recordsSeason: s })}
+          renderLabel={(s) => s === 'all' ? 'All-time' : `Season ${s}`}
+        />
+        <RecordCard
+          icon="🎳"
+          label="High Single Game"
+          by={records.highGame.by}
+          when={records.highGame.when}
+          value={records.highGame.val}
+        />
+        <RecordCard
+          icon="📈"
+          label="High Series (G1+G2)"
+          by={records.highSeries.by}
+          when={records.highSeries.when}
+          value={records.highSeries.val}
+        />
+        <RecordCard
+          icon="💪"
+          label="High Team Game"
+          by={records.highTeamGame.team}
+          when={records.highTeamGame.when}
+          value={records.highTeamGame.val}
+          roster={records.highTeamGame.roster}
+        />
+        <RecordCard
+          icon="🌙"
+          label="High Team Night"
+          by={records.highTeamNight.team}
+          when={records.highTeamNight.when}
+          value={records.highTeamNight.val}
+          g1Roster={records.highTeamNight.g1Roster}
+          g2Roster={records.highTeamNight.g2Roster}
+          g1Total={records.highTeamNight.g1Total}
+          g2Total={records.highTeamNight.g2Total}
+        />
+        <RecordCard
+          icon="🏆"
+          label="Best Season Avg"
+          by={records.bestSeasonAvg.by}
+          when={records.bestSeasonAvg.when}
+          value={records.bestSeasonAvg.val !== 0 ? records.bestSeasonAvg.val.toFixed(1) : undefined}
+        />
       </ScrollView>
     </SafeAreaView>
   )
@@ -104,7 +114,7 @@ interface RecordCardProps {
 }
 
 function RecordCard({ icon, label, by, when, value, roster, g1Roster, g2Roster, g1Total, g2Total }: RecordCardProps) {
-  const hasValue = value != null && value !== ''
+  const hasValue = value != null && value !== '' && value !== 0
   return (
     <View style={cardStyles.card}>
       <View style={cardStyles.head}>
@@ -173,7 +183,7 @@ function GameBlock({ label, total, players }: { label: string; total?: number; p
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.bg },
-  content: { padding: 16, paddingBottom: 40 },
+  content: { paddingBottom: 40 },
 })
 
 const cardStyles = StyleSheet.create({
@@ -181,6 +191,7 @@ const cardStyles = StyleSheet.create({
     backgroundColor: colors.surface,
     borderRadius: radius.cardMd,
     padding: 14,
+    marginHorizontal: 16,
     marginBottom: 10,
   },
   head: {
