@@ -1,18 +1,15 @@
-import { useState, useMemo } from 'react'
+import { useState, useEffect } from 'react'
 import {
   Modal,
   View,
   Text,
-  TextInput,
   TouchableOpacity,
   ScrollView,
   StyleSheet,
   ActivityIndicator,
 } from 'react-native'
-import { useDataStore } from '../stores/dataStore'
 import { useUiStore } from '../stores/uiStore'
-import { apiPost } from '../api.js'
-import { getCurrentSeason, aggregateStandings } from '../utils/data.js'
+import { players, seasons, seasonChampions } from '../utils/supabase/db'
 import { colors, fonts, radius } from '../theme'
 
 interface Props {
@@ -21,40 +18,38 @@ interface Props {
 }
 
 export default function AdminEndSeasonModal({ visible, onClose }: Props) {
-  const [champions, setChampions] = useState<string[]>([])
-  const [notes, setNotes] = useState('')
+  const [championIds, setChampionIds] = useState<string[]>([])
   const [saving, setSaving] = useState(false)
-  const { loadAll, stats, settings, roster } = useDataStore()
+  const [playerList, setPlayerList] = useState<{ id: string; name: string }[]>([])
+  const [season, setSeason] = useState<{ id: number; number: number } | null>(null)
   const { showToast } = useUiStore()
 
-  const seasonNum = useMemo(() => {
-    return parseInt(getCurrentSeason(stats, settings)) || 1
-  }, [stats, settings])
+  useEffect(() => {
+    if (!visible) return
+    Promise.all([players.listActive(), seasons.getLatest()]).then(([pRes, sRes]) => {
+      setPlayerList(pRes.data ?? [])
+      setSeason(sRes.data ? { id: sRes.data.id, number: sRes.data.number } : null)
+    })
+  }, [visible])
 
-  const allPlayers = useMemo(() => {
-    const standings = aggregateStandings(stats, String(seasonNum))
-    const fromStandings = standings.map((p: any) => p.name)
-    const fromRoster = roster
-      ? roster.slice(1).filter((r: any) => r[0]).map((r: any) => r[0])
-      : []
-    return Array.from(new Set([...fromStandings, ...fromRoster])).sort() as string[]
-  }, [stats, settings, roster, seasonNum])
-
-  function toggleChampion(name: string) {
-    setChampions(prev =>
-      prev.includes(name) ? prev.filter(n => n !== name) : [...prev, name]
-    )
+  function toggleChampion(id: string) {
+    setChampionIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
   }
 
   async function submit() {
+    if (!season) return
     setSaving(true)
     try {
-      const r = await apiPost('endSeason', { champions, notes: notes.trim() })
-      if (r.error) { showToast(r.error, 'error'); setSaving(false); return }
-      showToast(`Season ${r.season} closed`, 'success')
-      await loadAll()
-      setChampions([])
-      setNotes('')
+      const { error: seasonError } = await seasons.update(season.id, { ended_at: new Date().toISOString() })
+      if (seasonError) { showToast(seasonError.message, 'error'); setSaving(false); return }
+
+      for (const playerId of championIds) {
+        const { error } = await seasonChampions.insert({ player_id: playerId, season_id: season.id })
+        if (error) { showToast(error.message, 'error'); setSaving(false); return }
+      }
+
+      showToast(`Season ${season.number} closed`, 'success')
+      setChampionIds([])
       onClose()
     } catch {
       showToast('Failed to end season', 'error')
@@ -64,8 +59,7 @@ export default function AdminEndSeasonModal({ visible, onClose }: Props) {
 
   function handleClose() {
     if (saving) return
-    setChampions([])
-    setNotes('')
+    setChampionIds([])
     onClose()
   }
 
@@ -73,43 +67,32 @@ export default function AdminEndSeasonModal({ visible, onClose }: Props) {
     <Modal visible={visible} transparent animationType="fade" onRequestClose={handleClose}>
       <TouchableOpacity style={styles.backdrop} activeOpacity={1} onPress={handleClose}>
         <TouchableOpacity style={styles.sheet} activeOpacity={1} onPress={() => {}}>
-          <Text style={styles.title}>End Season {seasonNum}</Text>
+          <Text style={styles.title}>End Season {season?.number ?? '…'}</Text>
           <Text style={styles.subtitle}>
             Choose champion(s). For team championships, select all members.{'\n'}
-            Season will roll over to {seasonNum + 1} and current week resets to 1.
+            Season will be marked as ended.
           </Text>
 
           <ScrollView style={styles.playerList} contentContainerStyle={{ paddingVertical: 4 }}>
-            {allPlayers.map(player => {
-              const selected = champions.includes(player)
+            {playerList.map(player => {
+              const selected = championIds.includes(player.id)
               return (
                 <TouchableOpacity
-                  key={player}
+                  key={player.id}
                   style={styles.playerRow}
-                  onPress={() => toggleChampion(player)}
+                  onPress={() => toggleChampion(player.id)}
                   activeOpacity={0.7}
                 >
                   <View style={[styles.checkbox, selected && styles.checkboxSelected]}>
                     {selected && <Text style={styles.checkmark}>✓</Text>}
                   </View>
                   <Text style={[styles.playerName, selected && styles.playerNameSelected]}>
-                    {player}
+                    {player.name}
                   </Text>
                 </TouchableOpacity>
               )
             })}
           </ScrollView>
-
-          <TextInput
-            style={[styles.input, styles.notesInput]}
-            placeholder="Notes (optional)"
-            placeholderTextColor={colors.muted}
-            value={notes}
-            onChangeText={setNotes}
-            multiline
-            numberOfLines={3}
-            textAlignVertical="top"
-          />
 
           <View style={styles.btnRow}>
             <TouchableOpacity
@@ -172,7 +155,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: radius.cardSm,
-    marginBottom: 12,
+    marginBottom: 16,
     maxHeight: 220,
   },
   playerRow: {
@@ -210,21 +193,6 @@ const styles = StyleSheet.create({
   playerNameSelected: {
     color: colors.gold,
     fontWeight: '700',
-  },
-  input: {
-    backgroundColor: colors.surface2,
-    borderRadius: radius.cardSm,
-    borderWidth: 1,
-    borderColor: colors.border2,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontFamily: fonts.barlow,
-    fontSize: 14,
-    color: colors.text,
-    marginBottom: 16,
-  },
-  notesInput: {
-    minHeight: 64,
   },
   btnRow: {
     flexDirection: 'row',

@@ -1,10 +1,8 @@
-import { View, Text, ScrollView, RefreshControl, StyleSheet } from 'react-native'
-import { useRefresh } from '../hooks/useRefresh'
+import { View, Text, ScrollView, StyleSheet } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useNavigation } from '@react-navigation/native'
 import { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { colors, fonts, radius } from '../theme'
-import { useDataStore } from '../stores/dataStore'
 import { MoreStackParamList } from '../navigation/types'
 import ScreenHeader from '../components/ScreenHeader'
 
@@ -12,14 +10,12 @@ type Nav = NativeStackNavigationProp<MoreStackParamList>
 
 export default function PlayoffsScreen() {
   const navigation = useNavigation<Nav>()
-  const { loadAll } = useDataStore()
-  const { refreshing, onRefresh } = useRefresh(loadAll)
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <ScreenHeader title="Playoffs" subtitle="Coming soon" onBack={() => navigation.navigate('MoreHome')} />
 
-      <ScrollView contentContainerStyle={styles.content} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent} />}>
+      <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.card}>
           <View style={styles.cardHead}>
             <View style={styles.iconBox}>

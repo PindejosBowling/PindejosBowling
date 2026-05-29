@@ -8,9 +8,8 @@ import {
   StyleSheet,
   ActivityIndicator,
 } from 'react-native'
-import { useDataStore } from '../stores/dataStore'
 import { useUiStore } from '../stores/uiStore'
-import { apiPost } from '../api.js'
+import { players } from '../utils/supabase/db'
 import { colors, fonts, radius } from '../theme'
 
 interface Props {
@@ -21,7 +20,6 @@ interface Props {
 export default function AdminAddPlayerModal({ visible, onClose }: Props) {
   const [name, setName] = useState('')
   const [saving, setSaving] = useState(false)
-  const { loadAll } = useDataStore()
   const { showToast } = useUiStore()
   const inputRef = useRef<TextInput>(null)
 
@@ -30,10 +28,9 @@ export default function AdminAddPlayerModal({ visible, onClose }: Props) {
     if (!trimmed) return
     setSaving(true)
     try {
-      const r = await apiPost('addPlayer', { name: trimmed })
-      if (r.error) { showToast(r.error, 'error'); setSaving(false); return }
+      const { error } = await players.insert({ id: crypto.randomUUID(), name: trimmed, phone: '' })
+      if (error) { showToast(error.message, 'error'); setSaving(false); return }
       showToast(`Added ${trimmed}`, 'success')
-      await loadAll()
       setName('')
       onClose()
     } catch {

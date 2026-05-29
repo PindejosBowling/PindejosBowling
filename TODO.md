@@ -43,8 +43,8 @@ reads for that screen are covered.
 - [x] `ChemistryScreen` — `players`, `team_slots`, `scores`, `season_champions` r
 - [x] `HeadToHeadScreen` — `players`, `team_slots`, `scores`, `weeks` r
 - [x] `LeagueRecordsScreen` — `players`, `scores`, `weeks` r
-- [ ] `PlayoffsScreen` — `weeks`, `team_slots`, `players`, `scores` r
-- [ ] `MoreHomeScreen` — `seasons`, `weeks` r
+- [x] `PlayoffsScreen` — `weeks`, `team_slots`, `players`, `scores` r
+- [x] `MoreHomeScreen` — `seasons`, `weeks` r
 
 ---
 
@@ -52,9 +52,9 @@ reads for that screen are covered.
 
 These components write through `apiPost` today; migrate to `db.*` writes.
 
-- [ ] `AdminAddPlayerModal` — `players.insert`
+- [x] `AdminAddPlayerModal` — `players.insert`
 - [x] `AdminArchiveModal` — `weeks.update` (flip `is_archived`)
-- [ ] `AdminEndSeasonModal` — `seasons.update` (set `ended_at`)
+- [x] `AdminEndSeasonModal` — `seasons.update` (set `ended_at`)
 - [x] `AdminGenerateTeamsModal` — `team_slots` insert/replace by week
 
 ---

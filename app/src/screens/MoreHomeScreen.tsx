@@ -1,11 +1,9 @@
 import { useState } from 'react'
-import { View, Text, ScrollView, RefreshControl, TouchableOpacity, StyleSheet, Dimensions } from 'react-native'
-import { useRefresh } from '../hooks/useRefresh'
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Dimensions } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useNavigation } from '@react-navigation/native'
 import { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { colors, fonts, radius } from '../theme'
-import { useDataStore } from '../stores/dataStore'
 import { MoreStackParamList } from '../navigation/types'
 import AppHeader from '../components/AppHeader'
 import AdminAddPlayerModal from '../components/AdminAddPlayerModal'
@@ -24,9 +22,7 @@ interface Tile {
 
 export default function MoreHomeScreen() {
   const navigation = useNavigation<Nav>()
-  const { loadAll } = useDataStore()
   const [showAddPlayer, setShowAddPlayer] = useState(false)
-  const { refreshing, onRefresh } = useRefresh(loadAll)
   const [showEndSeason, setShowEndSeason] = useState(false)
   const [showGenerateTeams, setShowGenerateTeams] = useState(false)
 
@@ -48,7 +44,7 @@ export default function MoreHomeScreen() {
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <AppHeader />
-      <ScrollView contentContainerStyle={styles.content} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent} />}>
+      <ScrollView contentContainerStyle={styles.content}>
         <Text style={styles.tabTitle}>More</Text>
 
         <Text style={styles.sectionHeader}>LEAGUE TOOLS</Text>
