@@ -16,7 +16,6 @@ import { MoreStackParamList } from '../navigation/types'
 import AppHeader from '../components/AppHeader'
 import LoadingView from '../components/LoadingView'
 import ScreenHeader from '../components/ScreenHeader'
-import { usePrefsStore } from '../stores/prefsStore'
 import { useUiStore } from '../stores/uiStore'
 import { timeAgo } from '../utils/helpers.js'
 import { colors, fonts, radius } from '../theme'
@@ -29,8 +28,8 @@ type Post = Tables<'board_posts'> & {
 
 export default function TrashBoardScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<MoreStackParamList>>()
-  const { myName, setMyName } = usePrefsStore()
   const { showToast } = useUiStore()
+  const [authorName, setAuthorName] = useState('')
   const [msg, setMsg] = useState('')
   const [posting, setPosting] = useState(false)
   const [posts, setPosts] = useState<Post[]>([])
@@ -62,13 +61,13 @@ export default function TrashBoardScreen() {
   }
 
   async function post() {
-    if (!myName.trim() || !msg.trim()) return
+    if (!authorName.trim() || !msg.trim()) return
     setPosting(true)
     try {
-      const { data: player } = await playersDb.getByName(myName)
+      const { data: player } = await playersDb.getByName(authorName)
 
       if (!player) {
-        showToast(`No player found named "${myName}"`, 'error')
+        showToast(`No player found named "${authorName}"`, 'error')
         return
       }
 
@@ -114,8 +113,8 @@ export default function TrashBoardScreen() {
                   style={styles.authorInput}
                   placeholder="Your name"
                   placeholderTextColor={colors.muted2}
-                  value={myName}
-                  onChangeText={setMyName}
+                  value={authorName}
+                  onChangeText={setAuthorName}
                 />
                 <TextInput
                   style={styles.msgInput}
@@ -127,9 +126,9 @@ export default function TrashBoardScreen() {
                   numberOfLines={3}
                 />
                 <TouchableOpacity
-                  style={[styles.postBtn, (!myName.trim() || !msg.trim()) && styles.postBtnDisabled]}
+                  style={[styles.postBtn, (!authorName.trim() || !msg.trim()) && styles.postBtnDisabled]}
                   onPress={post}
-                  disabled={posting || !myName.trim() || !msg.trim()}
+                  disabled={posting || !authorName.trim() || !msg.trim()}
                   activeOpacity={0.7}
                 >
                   <Text style={styles.postBtnText}>{posting ? 'Posting…' : 'Post'}</Text>
