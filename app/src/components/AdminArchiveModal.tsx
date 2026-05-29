@@ -7,9 +7,8 @@ import {
   StyleSheet,
   ActivityIndicator,
 } from 'react-native'
-import { useDataStore } from '../stores/dataStore'
 import { useUiStore } from '../stores/uiStore'
-import { apiPost } from '../api.js'
+import { weeks } from '../utils/supabase/db'
 import { colors, fonts, radius } from '../theme'
 
 interface Props {
@@ -19,16 +18,35 @@ interface Props {
 
 export default function AdminArchiveModal({ visible, onClose }: Props) {
   const [saving, setSaving] = useState(false)
-  const { loadAll } = useDataStore()
   const { showToast } = useUiStore()
 
   async function confirm() {
     setSaving(true)
     try {
-      const r = await apiPost('archiveAndAdvance')
-      if (r.error) { showToast(r.error, 'error'); setSaving(false); return }
-      showToast(`Saved ${r.rowsAdded} rows`, 'success')
-      await loadAll()
+      const { data: activeWeek, error: weekErr } = await weeks.getActive()
+      if (weekErr || !activeWeek) {
+        showToast('No active week found', 'error')
+        setSaving(false)
+        return
+      }
+
+      const { error: archiveErr } = await weeks.update(activeWeek.id, { is_archived: true })
+      if (archiveErr) {
+        showToast('Failed to archive week', 'error')
+        setSaving(false)
+        return
+      }
+
+      const { error: insertErr } = await weeks.insert({
+        season_id: activeWeek.season_id,
+        week_number: activeWeek.week_number + 1,
+      })
+      if (insertErr) {
+        showToast(`Week ${activeWeek.week_number} archived — failed to create next week`, 'error')
+      } else {
+        showToast(`Week ${activeWeek.week_number} archived`, 'success')
+      }
+
       onClose()
     } catch {
       showToast('Archive failed', 'error')
@@ -47,7 +65,7 @@ export default function AdminArchiveModal({ visible, onClose }: Props) {
         <TouchableOpacity style={styles.sheet} activeOpacity={1} onPress={() => {}}>
           <Text style={styles.title}>Archive &amp; Advance Week?</Text>
           <Text style={styles.subtitle}>
-            Saves this week's scores to your archive, increments the week, and clears the scoreboard.
+            Locks this week's scores into the standings and creates a new week for team generation.
           </Text>
           <View style={styles.btnRow}>
             <TouchableOpacity

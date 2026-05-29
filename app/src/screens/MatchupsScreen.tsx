@@ -320,7 +320,7 @@ export default function MatchupsScreen() {
         )}
       </KeyboardAvoidingView>
 
-      <AdminArchiveModal visible={showArchive} onClose={() => setShowArchive(false)} />
+      <AdminArchiveModal visible={showArchive} onClose={() => { setShowArchive(false); reload() }} />
     </SafeAreaView>
   )
 }
