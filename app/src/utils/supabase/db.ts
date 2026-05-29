@@ -110,6 +110,20 @@ export const scores = {
       )
       .eq('team_slots.weeks.is_archived', true)
       .not('score', 'is', null),
+  listForH2H: () =>
+    supabase
+      .from('scores')
+      .select(
+        'game_number, score,' +
+        'team_slots!inner(player_id, team_number, is_fill, week_id,' +
+          'players(name),' +
+          'weeks!inner(week_number, is_archived,' +
+            'seasons!inner(number)' +
+          ')' +
+        ')'
+      )
+      .eq('team_slots.weeks.is_archived', true)
+      .not('score', 'is', null),
   insert: (data: TablesInsert<'scores'> | TablesInsert<'scores'>[]) =>
     supabase.from('scores').insert(data),
   upsert: (data: TablesInsert<'scores'> | TablesInsert<'scores'>[]) =>

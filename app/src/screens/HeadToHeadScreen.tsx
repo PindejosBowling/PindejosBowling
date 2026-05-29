@@ -5,9 +5,8 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { useNavigation } from '@react-navigation/native'
 import { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { colors, fonts, radius } from '../theme'
-import { useDataStore } from '../stores/dataStore'
 import { useUiStore } from '../stores/uiStore'
-import { aggregateStandings, getH2H } from '../utils/data.js'
+import { useH2HData, computeH2HFromSupabase } from '../hooks/useH2HData'
 import { MoreStackParamList } from '../navigation/types'
 import LoadingView from '../components/LoadingView'
 import PlayerPickerModal from '../components/PlayerPickerModal'
@@ -16,20 +15,17 @@ import ScreenHeader from '../components/ScreenHeader'
 type Nav = NativeStackNavigationProp<MoreStackParamList>
 
 export default function HeadToHeadScreen() {
-  const { stats, loading, loadAll } = useDataStore()
+  const { loading, playerNames, rawScores, rawSchedule, reload } = useH2HData()
   const { h2hP1, h2hP2, set } = useUiStore()
-  const { refreshing, onRefresh } = useRefresh(loadAll)
+  const { refreshing, onRefresh } = useRefresh(reload)
   const navigation = useNavigation<Nav>()
   const [pickerOpen, setPickerOpen] = useState<'p1' | 'p2' | null>(null)
 
-  const allPlayerNames: string[] = useMemo(
-    () => (stats ? aggregateStandings(stats, 'all').map((p: any) => p.name) : []),
-    [stats],
-  )
-
   const h2hData = useMemo(
-    () => (stats && h2hP1 && h2hP2 ? getH2H(stats, h2hP1, h2hP2) : null),
-    [stats, h2hP1, h2hP2],
+    () => (h2hP1 && h2hP2 && rawScores.length > 0
+      ? computeH2HFromSupabase(h2hP1, h2hP2, rawScores, rawSchedule)
+      : null),
+    [h2hP1, h2hP2, rawScores, rawSchedule],
   )
 
   const teamLead = useMemo(() => {
@@ -59,7 +55,7 @@ export default function HeadToHeadScreen() {
     return diff > 0 ? 'P1' : 'P2'
   }
 
-  if (loading || !stats) return <LoadingView label="Loading head-to-head" />
+  if (loading && rawScores.length === 0) return <LoadingView label="Loading head-to-head" />
 
   const noSelection = !h2hP1 || !h2hP2 || h2hP1 === h2hP2
   const p1Short = (h2hP1 || '').split(' ')[0]
@@ -195,14 +191,14 @@ export default function HeadToHeadScreen() {
 
       <PlayerPickerModal
         visible={pickerOpen === 'p1'}
-        players={allPlayerNames.filter((n) => n !== h2hP2)}
+        players={playerNames.filter((n) => n !== h2hP2)}
         title="Select Bowler 1"
         onSelect={(name) => { set({ h2hP1: name }); setPickerOpen(null) }}
         onClose={() => setPickerOpen(null)}
       />
       <PlayerPickerModal
         visible={pickerOpen === 'p2'}
-        players={allPlayerNames.filter((n) => n !== h2hP1)}
+        players={playerNames.filter((n) => n !== h2hP1)}
         title="Select Bowler 2"
         onSelect={(name) => { set({ h2hP2: name }); setPickerOpen(null) }}
         onClose={() => setPickerOpen(null)}

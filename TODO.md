@@ -41,7 +41,7 @@ reads for that screen are covered.
 - [x] `PlayerDetailScreen` — `players`, `weeks`, `team_slots`, `scores`, `season_champions` r
 - [x] `SeasonHistoryScreen` — `seasons`, `weeks`, `team_slots`, `scores`, `season_champions` r
 - [x] `ChemistryScreen` — `players`, `team_slots`, `scores`, `season_champions` r
-- [ ] `HeadToHeadScreen` — `players`, `team_slots`, `scores`, `weeks` r
+- [x] `HeadToHeadScreen` — `players`, `team_slots`, `scores`, `weeks` r
 - [ ] `LeagueRecordsScreen` — `players`, `scores`, `weeks` r
 - [ ] `PlayoffsScreen` — `weeks`, `team_slots`, `players`, `scores` r
 - [ ] `MoreHomeScreen` — `seasons`, `weeks` r
