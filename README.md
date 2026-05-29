@@ -9,12 +9,15 @@ Bowling hub for the Pindejos Bowling League
 ### React Native app (iOS)
 The React Native app lives in `app/` and runs independently alongside the Vue app.
 
+One-time installation of `node`
+```bash
+brew install node
+```
+
 ```bash
 cd app
 npx expo start --ios
 ```
-
-Then press `i` to open in the iOS Simulator (requires Xcode to be installed).
 
 **Phase 1 verification checklist:**
 - [ ] App launches without errors in the simulator

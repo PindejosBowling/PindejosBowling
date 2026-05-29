@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-React Native / Expo app for a recreational bowling league called "Pindejos." Players track weekly matchups, scores, standings, RSVPs, and historical stats. All persistent data lives in Google Sheets and is accessed via a Google Apps Script (GAS) web-app endpoint. There is no dedicated server — GAS is the backend.
+React Native / Expo app for a recreational bowling league called "Pindejos." Players track weekly matchups, scores, standings, RSVPs, and historical stats. Two backends: a Google Apps Script (GAS) web-app endpoint reading from Google Sheets (primary source for all historical stats and score archival), and a Supabase Postgres database (used by RSVP and TrashBoard screens).
 
 ---
 
@@ -19,6 +19,7 @@ React Native / Expo app for a recreational bowling league called "Pindejos." Pla
 | Charts | `react-native-gifted-charts` |
 | Fonts | Barlow + Barlow Condensed via `@expo-google-fonts` |
 | Gradients | `react-native-linear-gradient` |
+| Database | Supabase (Postgres) via `@supabase/supabase-js` |
 
 Run with `expo start` from `app/`. Use `--ios`, `--android`, or `--web` flags.
 
@@ -57,7 +58,59 @@ apiPost(action, payload) // POST { action, ...payload }, retries once on failure
 
 ---
 
+## Supabase Layer
+
+A second backend runs alongside GAS for features that need a proper relational database. The client is configured via Expo environment variables (`EXPO_PUBLIC_SUPABASE_URL`, `EXPO_PUBLIC_SUPABASE_API_KEY`) and uses AsyncStorage for session persistence.
+
+**Files:**
+
+| File | Purpose |
+|---|---|
+| [src/utils/supabase/client.ts](src/utils/supabase/client.ts) | `createClient<Database>()` — import `supabase` from here for raw queries |
+| [src/utils/supabase/database.types.ts](src/utils/supabase/database.types.ts) | Auto-generated Postgres types: `Database`, `Tables<T>`, `TablesInsert<T>`, `TablesUpdate<T>` |
+| [src/utils/supabase/db.ts](src/utils/supabase/db.ts) | Typed CRUD query objects, one per table — **prefer these over raw client calls** |
+
+### Database schema (8 tables)
+
+| Table | Key columns |
+|---|---|
+| `players` | `id`, `name`, `phone`, `is_active`, `created_at` |
+| `seasons` | `id`, `number`, `league_name`, `bowling_night`, `started_at`, `ended_at` |
+| `weeks` | `id`, `season_id`, `week_number`, `is_archived`, `is_confirmed`, `bowled_at` |
+| `rsvp` | `id`, `player_id`, `week_id`, `status`, `note`, `updated_at` |
+| `team_slots` | `id`, `week_id`, `team_number`, `slot`, `player_id`, `is_fill` |
+| `game_schedule` | `id`, `week_id`, `game_number`, `team_a`, `team_b` |
+| `scores` | `id`, `team_slot_id`, `game_number`, `score`, `updated_at` |
+| `board_posts` | `id`, `player_id`, `message`, `created_at` |
+
+### db.ts query objects
+
+| Export | Table | Key methods |
+|---|---|---|
+| `boardPosts` | `board_posts` | `list()`, `insert(data)`, `remove(id)` |
+| `gameSchedule` | `game_schedule` | `listByWeek(weekId)`, `insert(data)`, `remove(id)`, `removeByWeek(weekId)` |
+| `players` | `players` | `list()`, `listActive()`, `getById(id)`, `getByName(name)`, `insert(data)`, `update(id, data)` |
+| `rsvp` | `rsvp` | `listByWeek(weekId)`, `upsert(data)`, `remove(id)`, `removeByWeek(weekId)` |
+| `scores` | `scores` | `listByWeek(weekId)`, `insert(data)`, `upsert(data)`, `update(id, data)` |
+| `seasonChampions` | `season_champions` | `list()`, `listBySeason(id)`, `insert(data)`, `remove(id)` |
+| `seasons` | `seasons` | `list()`, `getLatest()`, `getById(id)`, `insert(data)`, `update(id, data)` |
+| `teamSlots` | `team_slots` | `listByWeek(weekId)`, `insert(data)`, `update(id, data)`, `remove(id)`, `removeByWeek(weekId)` |
+| `weeks` | `weeks` | `list()`, `listBySeason(id)`, `getCurrent()`, `getActive()`, `getById(id)`, `insert(data)`, `update(id, data)` |
+
+**Which screens use Supabase:**
+- `RsvpScreen` — reads `players`, `rsvp`, `weeks`
+- `TrashBoardScreen` — reads/writes `board_posts`, `players`
+
+All other screens still read from GAS via the `dataStore`.
+
+---
+
 ## Data Architecture
+
+### Backend split
+
+- **GAS (apiGet / apiPost):** all historical stats, standings, active week scoreboard, score entry, team generation, archival, roster management
+- **Supabase (db.ts):** RsvpScreen (players/rsvp/weeks), TrashBoardScreen (board_posts/players). GAS remains the source of truth for stats history.
 
 ### Single-fetch pattern
 
@@ -125,6 +178,10 @@ Every data slice returned by the API is a **2D array of rows** mirroring the raw
 | `champions` | Champions | Season champion records (`[seasonNum, playerName]`) |
 | `generated` | Generated teams | Last server-generated team arrangement |
 | `settings` | Settings | Key-value pairs; `CurrentSeason` key drives season logic |
+
+**Loading state:**
+- `loading: boolean` — `true` during any `loadAll()` or `loadActive()` call
+- `error: string | null` — last error message if a load failed; `null` on success
 
 **Actions:**
 - `loadAll()` — Calls `getAll`, populates all slices. Called on startup and pull-to-refresh.
@@ -362,7 +419,11 @@ app/
 │   ├── utils/
 │   │   ├── constants.js         # SC and AW column index maps
 │   │   ├── data.js              # Pure data derivation functions
-│   │   └── helpers.js           # Pure formatting/math utilities
+│   │   ├── helpers.js           # Pure formatting/math utilities
+│   │   └── supabase/
+│   │       ├── client.ts        # Supabase client (env-var configured)
+│   │       ├── database.types.ts # Auto-generated Postgres types
+│   │       └── db.ts            # Typed CRUD query objects per table
 │   ├── components/
 │   │   ├── AppHeader.tsx
 │   │   ├── ScreenHeader.tsx
@@ -413,3 +474,5 @@ app/
 7. **TypeScript coverage is partial.** Screens and components are `.tsx` with typed props. Stores have interfaces. Utility files (`api.js`, `data.js`, `helpers.js`, `constants.js`) are plain `.js` with JSDoc. Do not convert them to TS without confirming it's wanted.
 
 8. **No test suite.** There are no unit or integration tests. Verify behavior manually via the Expo dev server.
+
+9. **Supabase is the second backend.** Some features bypass GAS entirely and call Supabase directly via `src/utils/supabase/db.ts`. Currently: `RsvpScreen` (players, rsvp, weeks) and `TrashBoardScreen` (board_posts, players). GAS remains the source of truth for all historical stats and score archival. When adding features that need structured relational data, prefer Supabase over GAS.
