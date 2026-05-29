@@ -23,7 +23,9 @@ import { colors, fonts, radius } from '../theme'
 import { supabase } from '../utils/supabase/client'
 import type { Tables } from '../utils/supabase/database.types'
 
-type Post = Tables<'board_posts'>
+type Post = Tables<'board_posts'> & {
+  players: Pick<Tables<'players'>, 'name'> | null
+}
 
 export default function TrashBoardScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<MoreStackParamList>>()
@@ -38,9 +40,9 @@ export default function TrashBoardScreen() {
   const fetchPosts = useCallback(async () => {
     const { data } = await supabase
       .from('board_posts')
-      .select('*')
+      .select('*, players(name)')
       .order('created_at', { ascending: false })
-    if (data) setPosts(data)
+    if (data) setPosts(data as Post[])
   }, [])
 
   useEffect(() => {
@@ -144,7 +146,7 @@ export default function TrashBoardScreen() {
           renderItem={({ item }) => (
             <View style={styles.postCard}>
               <View style={styles.postHead}>
-                <Text style={styles.postAuthor}>Bowler</Text>
+                <Text style={styles.postAuthor}>{item.players?.name ?? 'Unknown'}</Text>
                 <Text style={styles.postTime}>{timeAgo(item.created_at)}</Text>
               </View>
               <Text style={styles.postMsg}>{item.message}</Text>

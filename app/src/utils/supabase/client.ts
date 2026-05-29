@@ -3,10 +3,10 @@ import { createClient } from '@supabase/supabase-js'
 import type { Database } from './database.types'
 
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL
-const supabaseKey = process.env.EXPO_PUBLIC_SUPABASE_ACCESS_KEY
+const supabaseKey = process.env.EXPO_PUBLIC_SUPABASE_API_KEY
 
 console.log('[supabase] EXPO_PUBLIC_SUPABASE_URL:', supabaseUrl ?? '(undefined)')
-console.log('[supabase] EXPO_PUBLIC_SUPABASE_ACCESS_KEY:', supabaseKey ? '(set)' : '(undefined)')
+console.log('[supabase] EXPO_PUBLIC_SUPABASE_API_KEY:', supabaseKey ? '(set)' : '(undefined)')
 
 export const supabase = createClient<Database>(supabaseUrl, supabaseKey, {
   auth: {
