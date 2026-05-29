@@ -31,7 +31,8 @@
     "start": "expo start",
     "android": "expo start --android",
     "ios": "expo start --ios",
-    "web": "expo start --web"
+    "web": "expo start --web",
+    "gen:types": "supabase gen types typescript --linked > src/utils/supabase/database.types.ts"
   },
   "private": true
 }

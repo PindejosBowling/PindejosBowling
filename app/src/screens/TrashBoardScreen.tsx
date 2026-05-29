@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import {
   View,
   Text,
@@ -9,7 +9,6 @@ import {
   KeyboardAvoidingView,
   RefreshControl,
 } from 'react-native'
-import { useRefresh } from '../hooks/useRefresh'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useNavigation } from '@react-navigation/native'
 import { NativeStackNavigationProp } from '@react-navigation/native-stack'
@@ -17,36 +16,74 @@ import { MoreStackParamList } from '../navigation/types'
 import AppHeader from '../components/AppHeader'
 import LoadingView from '../components/LoadingView'
 import ScreenHeader from '../components/ScreenHeader'
-import { useDataStore } from '../stores/dataStore'
 import { usePrefsStore } from '../stores/prefsStore'
-import { isChampion } from '../utils/data.js'
+import { useUiStore } from '../stores/uiStore'
 import { timeAgo } from '../utils/helpers.js'
-import { apiPost } from '../api.js'
 import { colors, fonts, radius } from '../theme'
+import { supabase } from '../utils/supabase/client'
+import type { Tables } from '../utils/supabase/database.types'
+
+type Post = Tables<'board_posts'>
 
 export default function TrashBoardScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<MoreStackParamList>>()
-  const { loading, board, champions, loadAll } = useDataStore()
   const { myName, setMyName } = usePrefsStore()
+  const { showToast } = useUiStore()
   const [msg, setMsg] = useState('')
   const [posting, setPosting] = useState(false)
-  const { refreshing, onRefresh } = useRefresh(loadAll)
+  const [posts, setPosts] = useState<Post[]>([])
+  const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
 
-  const posts = (board ?? []).slice(1).filter((p: any[]) => p[2]).slice().reverse() as any[][]
+  const fetchPosts = useCallback(async () => {
+    const { data } = await supabase
+      .from('board_posts')
+      .select('*')
+      .order('created_at', { ascending: false })
+    if (data) setPosts(data)
+  }, [])
+
+  useEffect(() => {
+    fetchPosts().finally(() => setLoading(false))
+  }, [fetchPosts])
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true)
+    await fetchPosts()
+    setRefreshing(false)
+  }, [fetchPosts])
 
   async function post() {
     if (!myName.trim() || !msg.trim()) return
     setPosting(true)
     try {
-      await apiPost('postToBoard', { author: myName, message: msg })
-      await loadAll()
-      setMsg('')
+      const { data: player } = await supabase
+        .from('players')
+        .select('id')
+        .ilike('name', myName.trim())
+        .single()
+
+      if (!player) {
+        showToast(`No player found named "${myName}"`, 'error')
+        return
+      }
+
+      const { error } = await supabase
+        .from('board_posts')
+        .insert({ message: msg.trim(), player_id: player.id })
+
+      if (error) {
+        showToast('Failed to post', 'error')
+      } else {
+        await fetchPosts()
+        setMsg('')
+      }
     } finally {
       setPosting(false)
     }
   }
 
-  if (loading && !board) {
+  if (loading) {
     return (
       <SafeAreaView style={styles.safeArea}>
         <AppHeader />
@@ -60,7 +97,7 @@ export default function TrashBoardScreen() {
       <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
         <FlatList
           data={posts}
-          keyExtractor={(_, i) => String(i)}
+          keyExtractor={(item) => item.id}
           keyboardShouldPersistTaps="handled"
           contentContainerStyle={styles.listContent}
           refreshControl={
@@ -107,13 +144,10 @@ export default function TrashBoardScreen() {
           renderItem={({ item }) => (
             <View style={styles.postCard}>
               <View style={styles.postHead}>
-                <Text style={styles.postAuthor}>
-                  {item[1] || 'Anon'}
-                  {isChampion(champions, item[1]) ? ' 👑' : ''}
-                </Text>
-                <Text style={styles.postTime}>{timeAgo(item[0])}</Text>
+                <Text style={styles.postAuthor}>Bowler</Text>
+                <Text style={styles.postTime}>{timeAgo(item.created_at)}</Text>
               </View>
-              <Text style={styles.postMsg}>{item[2]}</Text>
+              <Text style={styles.postMsg}>{item.message}</Text>
             </View>
           )}
         />
