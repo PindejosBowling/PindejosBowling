@@ -10,12 +10,12 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { colors, fonts, radius } from '../theme'
 import { useUiStore } from '../stores/uiStore'
 import { useStandingsData, computeStandingsFromSupabase } from '../hooks/useStandingsData'
-import { MoreStackParamList } from '../navigation/types'
+import { StandingsStackParamList } from '../navigation/types'
 import AppHeader from '../components/AppHeader'
 import LoadingView from '../components/LoadingView'
 import PillFilter from '../components/PillFilter'
 
-type Nav = NativeStackNavigationProp<MoreStackParamList>
+type Nav = NativeStackNavigationProp<StandingsStackParamList>
 
 export default function StandingsScreen() {
   const { loading, seasonList, championPlayerIds, rawScores, rawSchedule, reload } = useStandingsData()
@@ -54,7 +54,7 @@ export default function StandingsScreen() {
   const sourceLabel = activeSeason === 'all' ? 'All-time Avg' : `Season ${activeSeason} Avg`
 
   function goToPlayer(name: string) {
-    ;(navigation as any).navigate('More', { screen: 'PlayerDetail', params: { name } })
+    navigation.navigate('PlayerDetail', { name })
   }
 
   if (loading && rawScores.length === 0) return <LoadingView label="Loading standings" />

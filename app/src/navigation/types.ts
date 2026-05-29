@@ -1,6 +1,5 @@
 export type MoreStackParamList = {
   MoreHome: undefined
-  PlayerDetail: { name: string }
   LeagueRecords: undefined
   HeadToHead: undefined
   Chemistry: undefined
@@ -8,4 +7,9 @@ export type MoreStackParamList = {
   TrashBoard: undefined
   Playoffs: undefined
   History: undefined
+}
+
+export type StandingsStackParamList = {
+  StandingsList: undefined
+  PlayerDetail: { name: string }
 }

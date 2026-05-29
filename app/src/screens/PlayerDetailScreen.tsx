@@ -7,7 +7,6 @@ import { useRefresh } from '../hooks/useRefresh'
 import { LineChart } from 'react-native-gifted-charts'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { RouteProp, useRoute, useNavigation } from '@react-navigation/native'
-import { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { colors, fonts, radius } from '../theme'
 import { useDataStore } from '../stores/dataStore'
 import { useUiStore } from '../stores/uiStore'
@@ -17,17 +16,16 @@ import {
 } from '../utils/data.js'
 import { initials, isPresent } from '../utils/helpers.js'
 import { SC } from '../utils/constants.js'
-import { MoreStackParamList } from '../navigation/types'
 import LoadingView from '../components/LoadingView'
 import PillFilter from '../components/PillFilter'
 import ScreenHeader from '../components/ScreenHeader'
 import ToggleGroup from '../components/ToggleGroup'
 
-type Nav = NativeStackNavigationProp<MoreStackParamList>
+type PlayerDetailRoute = RouteProp<{ PlayerDetail: { name: string } }, 'PlayerDetail'>
 
 export default function PlayerDetailScreen() {
-  const route = useRoute<RouteProp<MoreStackParamList, 'PlayerDetail'>>()
-  const navigation = useNavigation<Nav>()
+  const route = useRoute<PlayerDetailRoute>()
+  const navigation = useNavigation()
   const { stats, settings, champions, loading, loadAll } = useDataStore()
   const { playerSeason, playerLogMode, expandedWeek, set } = useUiStore()
   const { refreshing, onRefresh } = useRefresh(loadAll)
@@ -126,7 +124,7 @@ const seasons = useMemo(() => (stats ? getSeasons(stats) : []), [stats])
         <ScreenHeader
           title={`${name}${champ ? ' 👑' : ''}`}
           subtitle={currentTeam ?? undefined}
-          onBack={() => { navigation.navigate('MoreHome'); (navigation as any).navigate('Standings') }}
+          onBack={() => navigation.goBack()}
         />
 
         <PillFilter

@@ -5,7 +5,6 @@ import { MoreStackParamList } from './types'
 
 import MoreHomeScreen from '../screens/MoreHomeScreen'
 import HistoryScreen from '../screens/HistoryScreen'
-import PlayerDetailScreen from '../screens/PlayerDetailScreen'
 import LeagueRecordsScreen from '../screens/LeagueRecordsScreen'
 import HeadToHeadScreen from '../screens/HeadToHeadScreen'
 import ChemistryScreen from '../screens/ChemistryScreen'
@@ -25,7 +24,6 @@ export default function MoreStackNavigator() {
     >
       <Stack.Screen name="MoreHome" component={MoreHomeScreen} />
       <Stack.Screen name="History" component={HistoryScreen} />
-      <Stack.Screen name="PlayerDetail" component={PlayerDetailScreen} />
       <Stack.Screen name="LeagueRecords" component={LeagueRecordsScreen} />
       <Stack.Screen name="HeadToHead" component={HeadToHeadScreen} />
       <Stack.Screen name="Chemistry" component={ChemistryScreen} />
