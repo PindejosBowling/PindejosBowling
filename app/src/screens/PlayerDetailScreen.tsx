@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import {
-  View, Text, FlatList, TouchableOpacity,
+  View, Text, TouchableOpacity,
   ScrollView, RefreshControl, StyleSheet, useWindowDimensions,
 } from 'react-native'
 import { useRefresh } from '../hooks/useRefresh'
@@ -8,127 +8,109 @@ import { LineChart } from 'react-native-gifted-charts'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { RouteProp, useRoute, useNavigation } from '@react-navigation/native'
 import { colors, fonts, radius } from '../theme'
-import { useDataStore } from '../stores/dataStore'
 import { useUiStore } from '../stores/uiStore'
 import {
-  getPlayerProfile, getPersonalRecords, isChampion,
-  getSeasons, getMatchupsForWeek,
-} from '../utils/data.js'
-import { initials, isPresent } from '../utils/helpers.js'
-import { SC } from '../utils/constants.js'
+  usePlayerDetailData,
+  computePlayerSeasons,
+  computePlayerProfile,
+  computePersonalRecords,
+  computeCurrentTeam,
+  computeWeekRows,
+  computeChartPoints,
+  computeExpandedMatchups,
+} from '../hooks/usePlayerDetailData'
+import { initials } from '../utils/helpers.js'
 import LoadingView from '../components/LoadingView'
 import PillFilter from '../components/PillFilter'
 import ScreenHeader from '../components/ScreenHeader'
-import ToggleGroup from '../components/ToggleGroup'
 
 type PlayerDetailRoute = RouteProp<{ PlayerDetail: { name: string } }, 'PlayerDetail'>
 
 export default function PlayerDetailScreen() {
   const route = useRoute<PlayerDetailRoute>()
   const navigation = useNavigation()
-  const { stats, settings, champions, loading, loadAll } = useDataStore()
-  const { playerSeason, playerLogMode, expandedWeek, set } = useUiStore()
-  const { refreshing, onRefresh } = useRefresh(loadAll)
-
   const name = route.params.name
+
+  const {
+    loading, playerId, isChampion, seasonList,
+    allScores, allSchedule, playerSlots, reload,
+  } = usePlayerDetailData(name)
+
+  const { playerSeason, expandedWeek, set } = useUiStore()
+  const { refreshing, onRefresh } = useRefresh(reload)
   const { width: screenWidth } = useWindowDimensions()
-const seasons = useMemo(() => (stats ? getSeasons(stats) : []), [stats])
+
+  const playerSeasons = useMemo(
+    () => playerId ? computePlayerSeasons(playerId, allScores, seasonList) : [],
+    [playerId, allScores, seasonList],
+  )
+
   const activeSeason = playerSeason ?? 'all'
+  const activeSeasonId = useMemo(
+    () => activeSeason === 'all'
+      ? null
+      : (playerSeasons.find(s => String(s.number) === activeSeason)?.id ?? null),
+    [activeSeason, playerSeasons],
+  )
+  const currentSeasonId = useMemo(
+    () => seasonList.length ? seasonList[seasonList.length - 1].id : null,
+    [seasonList],
+  )
 
   const profile = useMemo(
-    () => (stats ? getPlayerProfile(stats, settings, name, activeSeason) : null),
-    [stats, settings, name, activeSeason],
+    () => playerId
+      ? computePlayerProfile(playerId, allScores, allSchedule, activeSeasonId, currentSeasonId)
+      : null,
+    [playerId, allScores, allSchedule, activeSeasonId, currentSeasonId],
   )
 
   const records = useMemo(
-    () => (stats ? getPersonalRecords(stats, name) : null),
-    [stats, name],
+    () => playerId
+      ? computePersonalRecords(playerId, playerSlots, allScores, allSchedule)
+      : null,
+    [playerId, playerSlots, allScores, allSchedule],
   )
 
-  const currentTeam = useMemo(() => {
-    const rows = profile?.rows
-    if (!rows?.length) return null
-    return rows[rows.length - 1][SC.TEAM] || null
-  }, [profile])
+  const currentTeam = useMemo(
+    () => computeCurrentTeam(playerSlots),
+    [playerSlots],
+  )
 
   const weekRows = useMemo(() => {
-    const rows = profile?.rows
-    if (!rows) return []
-    const result: any[] = []
-    rows.forEach((r: any) => {
-      const present = isPresent(r[SC.PRESENT])
-      if (playerLogMode === 'bowled' && !present) return
-      result.push({
-        season: r[SC.SEASON],
-        week: r[SC.WEEK],
-        team: r[SC.TEAM],
-        g1: parseInt(r[SC.G1]) || 0,
-        g2: parseInt(r[SC.G2]) || 0,
-        w: parseInt(r[SC.WINS]) || 0,
-        l: parseInt(r[SC.LOSSES]) || 0,
-        present,
-      })
-    })
-    return result.sort((a, b) => {
-      const sa = parseInt(a.season) || 0, sb = parseInt(b.season) || 0
-      if (sa !== sb) return sb - sa
-      return (parseInt(b.week) || 0) - (parseInt(a.week) || 0)
-    })
-  }, [profile, playerLogMode])
+    if (!playerId) return []
+    return computeWeekRows(playerId, playerSlots, allScores, allSchedule, activeSeasonId).filter(r => r.present)
+  }, [playerId, playerSlots, allScores, allSchedule, activeSeasonId])
 
   const chartData = useMemo(() => {
-    if (!profile?.games?.length) return null
-    const games = profile.games
-    const avg = profile.avg
-    const chartWidth = screenWidth - 32 - 4 - 12 - 35 // card margins(32) + paddingLeft(4) + paddingRight(12) + y-axis(35)
-    return {
-      points: games.map((g: any) => ({
-        value: g.score,
-        label: `S${g.season}W${g.week}`,
-        dataPointColor: colors.accent,
-        dataPointRadius: 3,
-      })),
-      avg,
-      chartWidth,
-    }
-  }, [profile, screenWidth])
-
-  function weekKey(row: any) {
-    return `${row.season}|${row.week}`
-  }
-
-  function weekLabel(row: any) {
-    return isNaN(parseInt(row.week)) ? row.week : `S${row.season}W${row.week}`
-  }
+    if (!playerId) return null
+    const points = computeChartPoints(playerId, allScores, activeSeasonId)
+    if (!points.length) return null
+    const avg = profile?.avg ?? 0
+    const chartWidth = screenWidth - 32 - 4 - 12 - 35
+    return { points, avg, chartWidth }
+  }, [playerId, allScores, activeSeasonId, profile, screenWidth])
 
   function toggleWeek(key: string) {
     set({ expandedWeek: expandedWeek === key ? null : key })
   }
 
-  function expandedMatchups(row: any) {
-    if (!stats) return []
-    const all = getMatchupsForWeek(stats, row.season, row.week)
-    const team = row.team
-    if (!team) return all
-    const mine = all.filter((m: any) => m.a?.team === team || m.b?.team === team)
-    return mine.length ? mine : all
-  }
-
-  if (loading || !stats) return <LoadingView label="Loading player" />
-
-  const champ = isChampion(champions, name)
+  if (loading || !playerId) return <LoadingView label="Loading player" />
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent} />}>
+      <ScrollView
+        contentContainerStyle={styles.content}
+        keyboardShouldPersistTaps="handled"
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent} />}
+      >
         <ScreenHeader
-          title={`${name}${champ ? ' 👑' : ''}`}
+          title={`${name}${isChampion ? ' 👑' : ''}`}
           subtitle={currentTeam ?? undefined}
           onBack={() => navigation.goBack()}
         />
 
         <PillFilter
-          items={['all', ...seasons]}
+          items={['all', ...playerSeasons.map(s => String(s.number))]}
           value={activeSeason}
           onChange={(s) => set({ playerSeason: s })}
           renderLabel={(s) => s === 'all' ? 'All-time' : `Season ${s}`}
@@ -207,18 +189,10 @@ const seasons = useMemo(() => (stats ? getSeasons(stats) : []), [stats])
         ) : null}
 
         {/* Game log */}
-        <View style={styles.logHeader}>
-          <Text style={styles.sectionHeader}>Game Log</Text>
-          <ToggleGroup
-            options={[{ key: 'bowled', label: 'Bowled' }, { key: 'all', label: 'All Weeks' }]}
-            value={playerLogMode}
-            onChange={(mode) => set({ playerLogMode: mode })}
-          />
-        </View>
+        <Text style={styles.sectionHeader}>Game Log</Text>
 
         {weekRows.length ? (
           <View style={styles.logCard}>
-            {/* Log header row */}
             <View style={styles.logRow}>
               <Text style={[styles.logCell, styles.logWeekCell, styles.logHeaderText]}>Week</Text>
               <Text style={[styles.logCell, styles.logTeamCell, styles.logHeaderText]}>Team</Text>
@@ -229,20 +203,23 @@ const seasons = useMemo(() => (stats ? getSeasons(stats) : []), [stats])
             </View>
 
             {weekRows.map((row) => {
-              const key = weekKey(row)
-              const expanded = expandedWeek === key
+              const expanded = expandedWeek === row.weekId
+              const matchups = expanded
+                ? computeExpandedMatchups(row.weekId, allScores, allSchedule)
+                : []
+
               return (
-                <View key={key}>
+                <View key={row.weekId}>
                   <TouchableOpacity
                     style={[styles.logRow, styles.logRowBorder]}
-                    onPress={() => toggleWeek(key)}
+                    onPress={() => toggleWeek(row.weekId)}
                     activeOpacity={0.7}
                   >
                     <Text style={[styles.logCell, styles.logWeekCell, styles.logText]}>
-                      {weekLabel(row)}
+                      {`S${row.seasonNumber}W${row.weekNumber}`}
                     </Text>
                     <Text style={[styles.logCell, styles.logTeamCell, styles.logMuted]} numberOfLines={1}>
-                      {row.team || ''}
+                      {`Team ${row.teamNumber}`}
                     </Text>
                     {!row.present ? (
                       <Text style={[styles.logCell, styles.logAbsent]}>absent</Text>
@@ -256,9 +233,9 @@ const seasons = useMemo(() => (stats ? getSeasons(stats) : []), [stats])
                         </Text>
                         <Text style={[
                           styles.logCell, styles.logWlCell,
-                          row.w > row.l ? styles.logWin : row.l > row.w ? styles.logLoss : styles.logMuted,
+                          row.wins > row.losses ? styles.logWin : row.losses > row.wins ? styles.logLoss : styles.logMuted,
                         ]}>
-                          {(row.w || row.l) ? `${row.w}—${row.l}` : '—'}
+                          {(row.wins || row.losses) ? `${row.wins}—${row.losses}` : '—'}
                         </Text>
                       </>
                     )}
@@ -267,9 +244,9 @@ const seasons = useMemo(() => (stats ? getSeasons(stats) : []), [stats])
 
                   {expanded ? (
                     <View style={styles.expandedBlock}>
-                      {expandedMatchups(row).length ? (
-                        expandedMatchups(row).map((m: any) => (
-                          <View key={`${m.gameNum}-${m.a?.team}`} style={styles.expandedMatchup}>
+                      {matchups.length ? (
+                        matchups.map((m) => (
+                          <View key={`${m.gameNum}-${m.a.team}`} style={styles.expandedMatchup}>
                             <Text style={styles.expandedGameLabel}>Game {m.gameNum}</Text>
                             <ExpandedTeam team={m.a} />
                             {m.b ? (
@@ -299,11 +276,11 @@ const seasons = useMemo(() => (stats ? getSeasons(stats) : []), [stats])
   )
 }
 
-function StatTile({ label, value }: { label: string; value: string }) {
+function StatTile({ label, value }: { label: string; value: string | number }) {
   return (
     <View style={statStyles.tile}>
       <Text style={statStyles.label}>{label}</Text>
-      <Text style={statStyles.value}>{value}</Text>
+      <Text style={statStyles.value}>{String(value)}</Text>
     </View>
   )
 }
@@ -323,13 +300,12 @@ function RecordCard({ icon, label, value, sub }: { icon: string; label: string; 
   )
 }
 
-function ExpandedTeam({ team }: { team: any }) {
-  if (!team) return null
+function ExpandedTeam({ team }: { team: { team: string; players: { name: string; score: number; present: boolean }[]; total: number } }) {
   return (
     <View style={expandStyles.teamBlock}>
       <Text style={expandStyles.teamName}>{team.team}</Text>
-      {team.players?.map((p: any) => (
-        <View key={p.name} style={expandStyles.playerRow}>
+      {team.players.map((p, i) => (
+        <View key={`${p.name}-${i}`} style={expandStyles.playerRow}>
           <View style={expandStyles.avatar}>
             <Text style={expandStyles.avatarText}>{initials(p.name)}</Text>
           </View>

@@ -96,6 +96,20 @@ export const scores = {
       )
       .eq('team_slots.weeks.is_archived', true)
       .not('score', 'is', null),
+  listForPlayerDetail: () =>
+    supabase
+      .from('scores')
+      .select(
+        'game_number, score,' +
+        'team_slots!inner(id, player_id, team_number, slot, is_fill, week_id,' +
+          'players(id, name),' +
+          'weeks!inner(id, season_id, week_number, is_archived,' +
+            'seasons!inner(id, number)' +
+          ')' +
+        ')'
+      )
+      .eq('team_slots.weeks.is_archived', true)
+      .not('score', 'is', null),
   insert: (data: TablesInsert<'scores'> | TablesInsert<'scores'>[]) =>
     supabase.from('scores').insert(data),
   upsert: (data: TablesInsert<'scores'> | TablesInsert<'scores'>[]) =>
@@ -150,6 +164,17 @@ export const teamSlots = {
       .eq('week_id', weekId)
       .order('team_number')
       .order('slot'),
+  listByPlayer: (playerId: string) =>
+    supabase
+      .from('team_slots')
+      .select(
+        'id, team_number, slot, is_fill, week_id,' +
+        'weeks!inner(id, season_id, week_number, is_archived,' +
+          'seasons!inner(id, number)' +
+        ')'
+      )
+      .eq('player_id', playerId)
+      .eq('weeks.is_archived', true),
   insert: (data: TablesInsert<'team_slots'> | TablesInsert<'team_slots'>[]) =>
     supabase.from('team_slots').insert(data),
   update: (id: string, data: TablesUpdate<'team_slots'>) =>
