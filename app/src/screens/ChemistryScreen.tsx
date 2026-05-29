@@ -7,9 +7,8 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { useNavigation } from '@react-navigation/native'
 import { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { colors, fonts, radius } from '../theme'
-import { useDataStore } from '../stores/dataStore'
 import { useUiStore } from '../stores/uiStore'
-import { getChemistry, isChampion } from '../utils/data.js'
+import { useChemistryData, computeChemistryFromSupabase } from '../hooks/useChemistryData'
 import { MoreStackParamList } from '../navigation/types'
 import LoadingView from '../components/LoadingView'
 import ScreenHeader from '../components/ScreenHeader'
@@ -18,21 +17,21 @@ import ToggleGroup from '../components/ToggleGroup'
 type Nav = NativeStackNavigationProp<MoreStackParamList>
 
 export default function ChemistryScreen() {
-  const { stats, champions, loading, loadAll } = useDataStore()
+  const { loading, rawScores, rawSchedule, championNames, reload } = useChemistryData()
   const { chemMode, chemExpanded, set } = useUiStore()
-  const { refreshing, onRefresh } = useRefresh(loadAll)
+  const { refreshing, onRefresh } = useRefresh(reload)
   const navigation = useNavigation<Nav>()
 
   const groupSize = chemMode === 'pairs' ? 2 : 3
 
   const allGroups = useMemo(
-    () => (stats ? getChemistry(stats, groupSize) : []),
-    [stats, groupSize],
+    () => computeChemistryFromSupabase(rawScores, rawSchedule, groupSize as 2 | 3),
+    [rawScores, rawSchedule, groupSize],
   )
 
   const visibleGroups = chemExpanded ? allGroups : allGroups.slice(0, 10)
 
-  if (loading || !stats) return <LoadingView label="Loading chemistry" />
+  if (loading && rawScores.length === 0) return <LoadingView label="Loading chemistry" />
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
@@ -52,15 +51,15 @@ export default function ChemistryScreen() {
           <>
             <FlatList
               data={visibleGroups}
-              keyExtractor={(item: any) => item.names.join('|')}
+              keyExtractor={(item) => item.names.join('|')}
               contentContainerStyle={styles.list}
               scrollEnabled={false}
-              renderItem={({ item }: { item: any }) => (
+              renderItem={({ item }) => (
                 <View style={styles.card}>
                   <View style={{ flex: 1 }}>
                     <Text style={styles.names}>
-                      {item.names.map((name: string, i: number) => (
-                        `${i > 0 ? ' + ' : ''}${name}${isChampion(champions, name) ? ' 👑' : ''}`
+                      {item.names.map((name, i) => (
+                        `${i > 0 ? ' + ' : ''}${name}${championNames.has(name) ? ' 👑' : ''}`
                       )).join('')}
                     </Text>
                     <Text style={styles.games}>{item.wins}—{item.losses} · {item.weeks}wk</Text>
