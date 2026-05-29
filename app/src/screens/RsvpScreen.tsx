@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import {
   View,
   Text,
@@ -14,48 +14,71 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import AppHeader from '../components/AppHeader'
 import ConfirmBar from '../components/ConfirmBar'
 import LoadingView from '../components/LoadingView'
-import { useDataStore } from '../stores/dataStore'
 import { usePendingStore } from '../stores/pendingStore'
-import { apiPost } from '../api.js'
+import { players as dbPlayers, rsvp as dbRsvp, weeks as dbWeeks } from '../utils/supabase/db'
+import type { Tables } from '../utils/supabase/database.types'
 import { initials } from '../utils/helpers.js'
 import { colors, fonts, radius } from '../theme'
 
+type Player = Tables<'players'>
+type RsvpRow = Tables<'rsvp'>
+
 export default function RsvpScreen() {
-  const { roster, rsvp, loadAll } = useDataStore()
+  const [playerList, setPlayerList] = useState<Player[]>([])
+  const [rsvpRows, setRsvpRows] = useState<RsvpRow[]>([])
+  const [weekId, setWeekId] = useState<string | null>(null)
+  const [loading, setLoading] = useState(true)
   const { pendingRSVP, set } = usePendingStore()
   const [saving, setSaving] = useState(false)
-  const { refreshing, onRefresh } = useRefresh(loadAll)
 
-  const players = (roster ?? []).slice(1).filter((r: any[]) => r[0]) as any[][]
+  const load = useCallback(async () => {
+    const [weekRes, playersRes] = await Promise.all([
+      dbWeeks.getCurrent(),
+      dbPlayers.listActive(),
+    ])
+    if (playersRes.data) setPlayerList(playersRes.data)
+    if (weekRes.data) {
+      const wid = weekRes.data.id
+      setWeekId(wid)
+      const rsvpRes = await dbRsvp.listByWeek(wid)
+      if (rsvpRes.data) setRsvpRows(rsvpRes.data)
+    } else {
+      console.warn('RsvpScreen: no current week found', weekRes.error?.message)
+    }
+    setLoading(false)
+  }, [])
 
-  function currentStatus(name: string): string {
-    const row = (rsvp ?? []).slice(1).find((r: any[]) => r[0] === name)
-    return row ? row[1] : ''
+  useEffect(() => { load() }, [load])
+
+  const { refreshing, onRefresh } = useRefresh(load)
+
+  function currentStatus(playerId: string): string {
+    return rsvpRows.find(r => r.player_id === playerId)?.status ?? ''
   }
 
-  function effectiveStatus(name: string): string {
-    return pendingRSVP[name] ?? currentStatus(name)
+  function effectiveStatus(playerId: string): string {
+    return pendingRSVP[playerId] ?? currentStatus(playerId)
   }
 
-  function isPending(name: string): boolean {
-    return pendingRSVP[name] !== undefined
+  function isPending(playerId: string): boolean {
+    return pendingRSVP[playerId] !== undefined
   }
 
-  const inCount = players.filter(r => effectiveStatus(r[0]) === 'In').length
-  const outCount = players.filter(r => effectiveStatus(r[0]) === 'Out').length
-  const noReply = players.filter(r => !effectiveStatus(r[0])).length
+  const inCount = playerList.filter(p => currentStatus(p.id) === 'in').length
+  const outCount = playerList.filter(p => currentStatus(p.id) === 'out').length
+  const noReply = playerList.filter(p => !currentStatus(p.id)).length
   const pendingCount = Object.keys(pendingRSVP).length
   const hasPending = pendingCount > 0
 
-  function stageRSVP(name: string, status: string) {
-    const alreadyStaged = pendingRSVP[name] === status
-    const alreadyCurrent = pendingRSVP[name] === undefined && currentStatus(name) === status
+  function stageRSVP(playerId: string, status: string) {
+    const alreadyStaged = pendingRSVP[playerId] === status
+    const alreadyCurrent = pendingRSVP[playerId] === undefined && currentStatus(playerId) === status
     if (alreadyStaged || alreadyCurrent) {
       const next = { ...pendingRSVP }
-      delete next[name]
+      delete next[playerId]
       set({ pendingRSVP: next })
     } else {
-      set({ pendingRSVP: { ...pendingRSVP, [name]: status } })
+      set({ pendingRSVP: { ...pendingRSVP, [playerId]: status } })
     }
   }
 
@@ -64,17 +87,34 @@ export default function RsvpScreen() {
   }
 
   async function saveChanges() {
+    if (!weekId) {
+      Alert.alert('Error', 'No active week found. Cannot save RSVPs.')
+      return
+    }
     setSaving(true)
     try {
-      const changes = Object.entries(pendingRSVP).map(([name, status]) => ({ name, status }))
-      await apiPost('batchUpdateRSVP', { changes })
-      const currentRsvp = useDataStore.getState().rsvp as any[][]
-      const updatedRsvp = currentRsvp.map((row: any[], i: number) => {
-        if (i === 0) return row
-        const pending = pendingRSVP[row[0]]
-        return pending !== undefined ? [row[0], pending] : row
+      const upsertData = Object.entries(pendingRSVP).map(([player_id, status]) => ({
+        week_id: weekId,
+        player_id,
+        status,
+      }))
+      const { error } = await dbRsvp.upsert(upsertData)
+      if (error) {
+        Alert.alert('Save failed', error.message)
+        return
+      }
+      setRsvpRows(prev => {
+        const next = [...prev]
+        for (const { player_id, status } of upsertData) {
+          const idx = next.findIndex(r => r.player_id === player_id)
+          if (idx >= 0) {
+            next[idx] = { ...next[idx], status }
+          } else {
+            next.push({ id: '', week_id: weekId, player_id, status, note: null, updated_at: new Date().toISOString() })
+          }
+        }
+        return next
       })
-      useDataStore.setState({ rsvp: updatedRsvp })
       set({ pendingRSVP: {} })
     } finally {
       setSaving(false)
@@ -88,15 +128,16 @@ export default function RsvpScreen() {
         text: 'Reset',
         style: 'destructive',
         onPress: async () => {
-          await apiPost('resetRSVP')
-          await loadAll()
+          if (!weekId) return
+          await dbRsvp.removeByWeek(weekId)
+          setRsvpRows([])
           set({ pendingRSVP: {} })
         },
       },
     ])
   }
 
-  if (!roster) {
+  if (loading) {
     return (
       <SafeAreaView style={styles.safeArea}>
         <AppHeader />
@@ -110,8 +151,8 @@ export default function RsvpScreen() {
       <AppHeader />
       <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
         <FlatList
-          data={players}
-          keyExtractor={(item) => item[0]}
+          data={playerList}
+          keyExtractor={(item) => item.id}
           keyboardShouldPersistTaps="handled"
           contentContainerStyle={[styles.listContent, hasPending && { paddingBottom: 80 }]}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent} />}
@@ -140,31 +181,30 @@ export default function RsvpScreen() {
             </>
           }
           renderItem={({ item }) => {
-            const name = item[0]
-            const status = effectiveStatus(name)
-            const pending = isPending(name)
+            const status = effectiveStatus(item.id)
+            const pending = isPending(item.id)
             return (
               <View style={[styles.playerRow, pending && styles.playerRowPending]}>
                 <View style={styles.avatar}>
-                  <Text style={styles.avatarText}>{initials(name)}</Text>
+                  <Text style={styles.avatarText}>{initials(item.name)}</Text>
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.playerName}>{name}</Text>
+                  <Text style={styles.playerName}>{item.name}</Text>
                 </View>
                 <View style={styles.rsvpButtons}>
                   <TouchableOpacity
-                    style={[styles.rsvpBtn, status === 'In' && styles.rsvpBtnInActive]}
-                    onPress={() => stageRSVP(name, 'In')}
+                    style={[styles.rsvpBtn, status === 'in' && styles.rsvpBtnInActive]}
+                    onPress={() => stageRSVP(item.id, 'in')}
                     activeOpacity={0.7}
                   >
-                    <Text style={[styles.rsvpBtnText, status === 'In' && styles.rsvpBtnTextActive]}>In</Text>
+                    <Text style={[styles.rsvpBtnText, status === 'in' && styles.rsvpBtnTextActive]}>In</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
-                    style={[styles.rsvpBtn, status === 'Out' && styles.rsvpBtnOutActive]}
-                    onPress={() => stageRSVP(name, 'Out')}
+                    style={[styles.rsvpBtn, status === 'out' && styles.rsvpBtnOutActive]}
+                    onPress={() => stageRSVP(item.id, 'out')}
                     activeOpacity={0.7}
                   >
-                    <Text style={[styles.rsvpBtnText, status === 'Out' && styles.rsvpBtnTextActive]}>Out</Text>
+                    <Text style={[styles.rsvpBtnText, status === 'out' && styles.rsvpBtnTextActive]}>Out</Text>
                   </TouchableOpacity>
                 </View>
               </View>

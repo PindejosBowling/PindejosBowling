@@ -17,14 +17,14 @@ the typed primitives.
 ## Tables
 
 - [x] `board_posts` — `boardPosts.list`, `.insert`, `.remove`
-- [ ] `game_schedule` — `gameSchedule.listByWeek`, `.insert`, `.remove`, `.removeByWeek`
-- [ ] `players` — `players.list`, `.listActive`, `.getById`, `.getByName`, `.insert`, `.update`
-- [ ] `rsvp` — `rsvp.listByWeek`, `.upsert`, `.remove`, `.removeByWeek`
-- [ ] `scores` — `scores.listByWeek`, `.insert`, `.upsert`, `.update`
-- [ ] `season_champions` — `seasonChampions.list`, `.listBySeason`, `.insert`, `.remove`
-- [ ] `seasons` — `seasons.list`, `.getLatest`, `.getById`, `.insert`, `.update`
-- [ ] `team_slots` — `teamSlots.listByWeek`, `.insert`, `.update`, `.remove`, `.removeByWeek`
-- [ ] `weeks` — `weeks.list`, `.listBySeason`, `.getCurrent`, `.getActive`, `.getById`, `.insert`, `.update`
+- [x] `game_schedule` — `gameSchedule.listByWeek`, `.insert`, `.remove`, `.removeByWeek`
+- [x] `players` — `players.list`, `.listActive`, `.getById`, `.getByName`, `.insert`, `.update`
+- [x] `rsvp` — `rsvp.listByWeek`, `.upsert`, `.remove`, `.removeByWeek`
+- [x] `scores` — `scores.listByWeek`, `.insert`, `.upsert`, `.update`
+- [x] `season_champions` — `seasonChampions.list`, `.listBySeason`, `.insert`, `.remove`
+- [x] `seasons` — `seasons.list`, `.getLatest`, `.getById`, `.insert`, `.update`
+- [x] `team_slots` — `teamSlots.listByWeek`, `.insert`, `.update`, `.remove`, `.removeByWeek`
+- [x] `weeks` — `weeks.list`, `.listBySeason`, `.getCurrent`, `.getActive`, `.getById`, `.insert`, `.update`
 
 ---
 
@@ -35,7 +35,7 @@ Replace with direct `db.*` calls and drop the `useDataStore` dependency once all
 reads for that screen are covered.
 
 - [x] `TrashBoardScreen` — `board_posts` r/w
-- [ ] `RsvpScreen` — `players`, `rsvp`, `weeks` r/w
+- [x] `RsvpScreen` — `players`, `rsvp`, `weeks` r/w
 - [ ] `MatchupsScreen` — `weeks`, `team_slots`, `game_schedule`, `scores` r/w; `players` r
 - [ ] `StandingsScreen` — `seasons`, `weeks`, `team_slots`, `players`, `scores` r
 - [ ] `PlayerDetailScreen` — `players`, `weeks`, `team_slots`, `scores`, `season_champions` r
