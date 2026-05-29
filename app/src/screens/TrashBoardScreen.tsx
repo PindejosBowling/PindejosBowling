@@ -20,7 +20,7 @@ import { usePrefsStore } from '../stores/prefsStore'
 import { useUiStore } from '../stores/uiStore'
 import { timeAgo } from '../utils/helpers.js'
 import { colors, fonts, radius } from '../theme'
-import { supabase } from '../utils/supabase/client'
+import { boardPosts, players as playersDb } from '../utils/supabase/db'
 import type { Tables } from '../utils/supabase/database.types'
 
 type Post = Tables<'board_posts'> & {
@@ -38,10 +38,7 @@ export default function TrashBoardScreen() {
   const [refreshing, setRefreshing] = useState(false)
 
   const fetchPosts = useCallback(async () => {
-    const { data } = await supabase
-      .from('board_posts')
-      .select('*, players(name)')
-      .order('created_at', { ascending: false })
+    const { data } = await boardPosts.list()
     if (data) setPosts(data as Post[])
   }, [])
 
@@ -57,7 +54,7 @@ export default function TrashBoardScreen() {
 
   async function deletePost(id: string) {
     setPosts((prev) => prev.filter((p) => p.id !== id))
-    const { error } = await supabase.from('board_posts').delete().eq('id', id)
+    const { error } = await boardPosts.remove(id)
     if (error) {
       showToast('Failed to delete post', 'error')
       await fetchPosts()
@@ -68,20 +65,14 @@ export default function TrashBoardScreen() {
     if (!myName.trim() || !msg.trim()) return
     setPosting(true)
     try {
-      const { data: player } = await supabase
-        .from('players')
-        .select('id')
-        .ilike('name', myName.trim())
-        .single()
+      const { data: player } = await playersDb.getByName(myName)
 
       if (!player) {
         showToast(`No player found named "${myName}"`, 'error')
         return
       }
 
-      const { error } = await supabase
-        .from('board_posts')
-        .insert({ message: msg.trim(), player_id: player.id })
+      const { error } = await boardPosts.insert({ message: msg.trim(), player_id: player.id })
 
       if (error) {
         showToast('Failed to post', 'error')
