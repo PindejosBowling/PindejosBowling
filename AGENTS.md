@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-React Native / Expo app for a recreational bowling league called "Pindejos." Players track weekly matchups, scores, standings, RSVPs, and historical stats. Two backends: a Google Apps Script (GAS) web-app endpoint reading from Google Sheets (primary source for all historical stats and score archival), and a Supabase Postgres database (used by RSVP and TrashBoard screens).
+React Native / Expo app for a recreational bowling league called "Pindejos." Players track weekly matchups, scores, standings, RSVPs, and historical stats. The sole backend is a Supabase Postgres database accessed via typed query objects in `src/utils/supabase/db.ts`.
 
 ---
 
@@ -25,42 +25,9 @@ Run with `expo start` from `app/`. Use `--ios`, `--android`, or `--web` flags.
 
 ---
 
-## Backend / API Layer
+## Backend / Data Layer
 
-**File:** [src/api.js](src/api.js)
-
-All data reads and writes go through a single Google Apps Script URL (`API` constant in `api.js`). Two wrappers:
-
-```js
-apiGet(action)           // GET  ?action=<action>
-apiPost(action, payload) // POST { action, ...payload }, retries once on failure
-```
-
-`apiPost` does one automatic retry with a 1.2s backoff — GAS has occasional transient failures.
-
-### Known action names (POST)
-| Action | Purpose |
-|---|---|
-| `batchUpdateScores` | Save score entries from the active week board |
-| `batchUpdateRSVP` | Save RSVP status changes |
-| `resetRSVP` | Clear all RSVP statuses for the upcoming week |
-| `archiveAndAdvance` | Archive current week scores → stats sheet, increment week |
-| `addPlayer` | Add a new player to the roster |
-| `generateTeams` | Server-side balanced team generation |
-| `confirmMatchups` | Write generated teams to the active week sheet |
-| `endSeason` | End-of-season admin action |
-
-### Known action names (GET)
-| Action | Purpose |
-|---|---|
-| `getAll` | Single call that returns all data slices at once |
-| `getActiveWeek` | Fetch only the active week sheet (used by `loadActive`) |
-
----
-
-## Supabase Layer
-
-A second backend runs alongside GAS for features that need a proper relational database. The client is configured via Expo environment variables (`EXPO_PUBLIC_SUPABASE_URL`, `EXPO_PUBLIC_SUPABASE_API_KEY`) and uses AsyncStorage for session persistence.
+All data reads and writes go through Supabase via the typed query objects in `src/utils/supabase/db.ts`.
 
 **Files:**
 
@@ -68,9 +35,13 @@ A second backend runs alongside GAS for features that need a proper relational d
 |---|---|
 | [src/utils/supabase/client.ts](src/utils/supabase/client.ts) | `createClient<Database>()` — import `supabase` from here for raw queries |
 | [src/utils/supabase/database.types.ts](src/utils/supabase/database.types.ts) | Auto-generated Postgres types: `Database`, `Tables<T>`, `TablesInsert<T>`, `TablesUpdate<T>` |
-| [src/utils/supabase/db.ts](src/utils/supabase/db.ts) | Typed CRUD query objects, one per table — **prefer these over raw client calls** |
+| [src/utils/supabase/db.ts](src/utils/supabase/db.ts) | Typed query objects, one per table — **always use these over raw client calls** |
 
-### Database schema (8 tables)
+The client is configured via Expo environment variables that are set in `.env.local` (`EXPO_PUBLIC_SUPABASE_URL`, `EXPO_PUBLIC_SUPABASE_API_KEY`) and uses AsyncStorage for session persistence.
+
+---
+
+## Database Schema (9 tables)
 
 | Table | Key columns |
 |---|---|
@@ -81,186 +52,219 @@ A second backend runs alongside GAS for features that need a proper relational d
 | `team_slots` | `id`, `week_id`, `team_number`, `slot`, `player_id`, `is_fill` |
 | `game_schedule` | `id`, `week_id`, `game_number`, `team_a`, `team_b` |
 | `scores` | `id`, `team_slot_id`, `game_number`, `score`, `updated_at` |
+| `season_champions` | `id`, `player_id`, `season_id` |
 | `board_posts` | `id`, `player_id`, `message`, `created_at` |
 
-### db.ts query objects
+**Key distinctions:**
+- `weeks.is_archived` — `true` once the week has been bowled and scores are final. All historical queries filter to archived weeks.
+- `weeks.is_confirmed` — `true` once teams have been generated and locked for the week. Used to distinguish an active (live-scoring) week from a pending one.
+- `team_slots.is_fill` — `true` for league-avg fill placeholders. Excluded from personal stats but included in team totals.
 
-| Export | Table | Key methods |
-|---|---|---|
-| `boardPosts` | `board_posts` | `list()`, `insert(data)`, `remove(id)` |
-| `gameSchedule` | `game_schedule` | `listByWeek(weekId)`, `insert(data)`, `remove(id)`, `removeByWeek(weekId)` |
-| `players` | `players` | `list()`, `listActive()`, `getById(id)`, `getByName(name)`, `insert(data)`, `update(id, data)` |
-| `rsvp` | `rsvp` | `listByWeek(weekId)`, `upsert(data)`, `remove(id)`, `removeByWeek(weekId)` |
-| `scores` | `scores` | `listByWeek(weekId)`, `insert(data)`, `upsert(data)`, `update(id, data)` |
-| `seasonChampions` | `season_champions` | `list()`, `listBySeason(id)`, `insert(data)`, `remove(id)` |
-| `seasons` | `seasons` | `list()`, `getLatest()`, `getById(id)`, `insert(data)`, `update(id, data)` |
-| `teamSlots` | `team_slots` | `listByWeek(weekId)`, `insert(data)`, `update(id, data)`, `remove(id)`, `removeByWeek(weekId)` |
-| `weeks` | `weeks` | `list()`, `listBySeason(id)`, `getCurrent()`, `getActive()`, `getById(id)`, `insert(data)`, `update(id, data)` |
+---
 
-**Which screens use Supabase:**
-- `RsvpScreen` — reads `players`, `rsvp`, `weeks`
-- `TrashBoardScreen` — reads/writes `board_posts`, `players`
+## db.ts Query Objects
 
-All other screens still read from GAS via the `dataStore`.
+### `boardPosts`
+| Method | Description |
+|---|---|
+| `list()` | All posts with joined player name, newest first |
+| `insert(data)` | Insert a new post |
+| `remove(id)` | Delete a post by id |
+
+### `gameSchedule`
+| Method | Description |
+|---|---|
+| `listByWeek(weekId)` | Schedule rows for one week |
+| `listForArchivedWeeks()` | All schedule rows for archived weeks (used by standings/chemistry/H2H) |
+| `insert(data)` | Insert one or many schedule rows |
+| `remove(id)` | Delete by id |
+| `removeByWeek(weekId)` | Delete all schedule rows for a week |
+
+### `players`
+| Method | Description |
+|---|---|
+| `list()` | All players, ordered by name |
+| `listActive()` | Active players only |
+| `getById(id)` | Single player by id |
+| `getByName(name)` | Case-insensitive name match (single) |
+| `insert(data)` | Add a player |
+| `update(id, data)` | Update player fields |
+
+### `rsvp`
+| Method | Description |
+|---|---|
+| `listByWeek(weekId)` | All RSVPs for a week with joined player name |
+| `upsert(data)` | Insert or update on `player_id, week_id` conflict |
+| `remove(id)` | Delete by id |
+| `removeByWeek(weekId)` | Clear all RSVPs for a week |
+
+### `scores`
+| Method | Description |
+|---|---|
+| `listByWeek(weekId)` | Scores for a live week (joins team_slots) |
+| `listBySeason(seasonId)` | Archived, non-fill scores for a season (for avg calc) |
+| `listAllArchived()` | All archived non-fill scores |
+| `listForStandings()` | Archived scores with full player/week/season join (standings, chemistry, season history) |
+| `listForPlayerDetail()` | Archived scores with slot/week/season join (player detail screen) |
+| `listForH2H()` | Archived scores with player/week/season join (head-to-head) |
+| `listForLeagueRecords()` | Archived scores with player/week/season join (league records) |
+| `insert(data)` | Insert one or many scores |
+| `upsert(data)` | Upsert on `team_slot_id, game_number` conflict |
+| `update(id, data)` | Update a score by id |
+| `removeBySlotIds(ids)` | Delete scores for a list of slot ids |
+| `remove(teamSlotId, gameNumber)` | Delete a specific score |
+
+### `seasonChampions`
+| Method | Description |
+|---|---|
+| `list()` | All champions with joined player name and season |
+| `listBySeason(seasonId)` | Champions for one season |
+| `insert(data)` | Record a champion |
+| `remove(id)` | Delete a champion record |
+
+### `seasons`
+| Method | Description |
+|---|---|
+| `list()` | All seasons, ordered by number |
+| `getLatest()` | Most recent season (single) |
+| `getById(id)` | Single season by id |
+| `insert(data)` | Create a season |
+| `update(id, data)` | Update season fields |
+
+### `teamSlots`
+| Method | Description |
+|---|---|
+| `listByWeek(weekId)` | All slots for a week with joined player name |
+| `listByPlayer(playerId)` | All archived slots for a player with week/season join |
+| `insert(data)` | Insert one or many slots |
+| `update(id, data)` | Update a slot |
+| `remove(id)` | Delete a slot |
+| `removeByWeek(weekId)` | Delete all slots for a week |
+
+### `weeks`
+| Method | Description |
+|---|---|
+| `list()` | All weeks, ordered by week_number |
+| `listBySeason(seasonId)` | Weeks for a season |
+| `getCurrent()` | Most recent non-archived week (current/upcoming) |
+| `getActive()` | Most recent non-archived, confirmed week (live-scoring) |
+| `getById(id)` | Single week by id |
+| `insert(data)` | Create a week |
+| `update(id, data)` | Update week fields |
 
 ---
 
 ## Data Architecture
 
-### Backend split
+### Hook-based data pattern
 
-- **GAS (apiGet / apiPost):** all historical stats, standings, active week scoreboard, score entry, team generation, archival, roster management
-- **Supabase (db.ts):** RsvpScreen (players/rsvp/weeks), TrashBoardScreen (board_posts/players). GAS remains the source of truth for stats history.
+Each screen (or group of screens) has a corresponding hook in `src/hooks/`. The hook fetches raw Supabase data, exposes it alongside a `reload` function, and the screen derives display data via `useMemo`. Many hook files also export standalone **compute functions** — pure functions that accept raw data and return derived UI data.
 
-### Single-fetch pattern
+```
+┌─────────────┐      ┌──────────────┐      ┌────────────────────────┐
+│   Screen    │ uses │     Hook     │ uses │      db.ts / Supabase  │
+│  (useMemo)  │◄─────│ rawScores,   │◄─────│  scores.listForXxx()  │
+│             │      │ rawSchedule, │      │  gameSchedule.list...  │
+│             │      │ loading,     │      │  seasons.list()        │
+│             │      │ reload       │      └────────────────────────┘
+└─────────────┘      └──────────────┘
+        │
+        ▼
+   computeXxx(rawScores, rawSchedule, ...)
+   (pure, exported from hook file)
+```
 
-On startup `App.tsx` calls `useDataStore.getState().loadAll()` once. This calls `apiGet('getAll')` and populates all 10 slices in one round-trip. Subsequent refreshes (pull-to-refresh on every screen) call `loadAll()` again. `loadActive()` is available for lighter refreshes that only need the live scoreboard.
+### Archived vs. live data
 
-### Raw data format
+- **Archived weeks** (`is_archived = true`): all historical stats, standings, records, chemistry. Always filtered in the specialized `scores.listForXxx()` queries.
+- **Active week** (`is_archived = false, is_confirmed = true`): the live scoreboard used by `MatchupsScreen`. Fetched by `weeks.getActive()`.
 
-Every data slice returned by the API is a **2D array of rows** mirroring the raw Google Sheet values:
-- Row 0 is always a header row — skip it with `stats.slice(1)` or `statsRows(stats)`.
-- Cell values may be booleans, numbers, strings, or empty strings — not null.
-- The boolean `PRESENT` column stores `true`, `'TRUE'`, `1`, or `'1'` — use `isPresent()` from `helpers.js`.
+### Standings computation
 
-### Column index constants
+Win/loss is determined by comparing **team totals** (all players on a team including fill) per game. The schedule (`game_schedule`) defines which team-number faced which. The `computeStandingsFromSupabase` function (exported from `useStandingsData.ts`) implements this and is reused by multiple screens.
 
-**File:** [src/utils/constants.js](src/utils/constants.js)
+### Effective avg for matchups
 
-`SC` — Stats sheet columns:
-
-| Key | Index | Meaning |
-|---|---|---|
-| `SEASON` | 0 | Season number |
-| `WEEK` | 1 | Week number |
-| `PLAYER` | 2 | Player full name |
-| `TEAM` | 3 | Team name |
-| `G1` | 4 | Game 1 score |
-| `G1_OPP` | 5 | Game 1 opponent team |
-| `G2` | 6 | Game 2 score |
-| `G2_OPP` | 7 | Game 2 opponent team |
-| `PINS` | 8 | Total pins |
-| `WINS` | 9 | Win count |
-| `LOSSES` | 10 | Loss count |
-| `GAMES` | 11 | Games played |
-| `PRESENT` | 12 | Attendance flag |
-
-`AW` — Active week sheet columns (supports up to 3 games per night):
-
-| Key | Index | Meaning |
-|---|---|---|
-| `SEASON` | 0 | Season number |
-| `WEEK` | 1 | Week number |
-| `TEAM` | 2 | Team name |
-| `SLOT` | 3 | Player slot (sort order within team) |
-| `NAME` | 4 | Player name |
-| `G1` | 5 | Game 1 score |
-| `G2` | 6 | Game 2 score |
-| `G3` | 7 | Game 3 score |
-| `G1_OPP` | 8 | Game 1 opponent team |
-| `G2_OPP` | 9 | Game 2 opponent team |
-| `G3_OPP` | 10 | Game 3 opponent team |
-| `IS_FILL` | 11 | Fill placeholder flag |
-
-### dataStore slices
-
-**File:** [src/stores/dataStore.ts](src/stores/dataStore.ts)
-
-| Store key | Google Sheet | Description |
-|---|---|---|
-| `stats` | Stats sheet | All historical per-player per-week rows |
-| `active` | Active week sheet | Live scoreboard for the current week |
-| `current` | Current week info | Week/season identifiers |
-| `roster` | Roster sheet | All player names + availability status |
-| `rsvp` | RSVP sheet | Per-player RSVP status (`'In'` / `'Out'` / `''`) |
-| `board` | Leaderboard | Pre-computed board (used by TrashBoard screen) |
-| `history` | History | Archived season data |
-| `champions` | Champions | Season champion records (`[seasonNum, playerName]`) |
-| `generated` | Generated teams | Last server-generated team arrangement |
-| `settings` | Settings | Key-value pairs; `CurrentSeason` key drives season logic |
-
-**Loading state:**
-- `loading: boolean` — `true` during any `loadAll()` or `loadActive()` call
-- `error: string | null` — last error message if a load failed; `null` on success
-
-**Actions:**
-- `loadAll()` — Calls `getAll`, populates all slices. Called on startup and pull-to-refresh.
-- `loadActive()` — Calls `getActiveWeek`, refreshes only the `active` slice.
+`useMatchupsData` computes a per-player avg from the previous season's archived scores. Fill slots and Out-RSVP'd players are assigned the league avg. This is not configurable via `prefsStore.avgDisplay`.
 
 ---
 
-## Pure Data Derivation Layer
+## Hooks
 
-**File:** [src/utils/data.js](src/utils/data.js)
+**File:** `src/hooks/`
 
-All business logic for deriving UI data lives here as **pure functions** — they accept store slices as arguments and return computed values. Screens call these inside `useMemo()` for memoized derivation.
+| Hook file | Exported hook | Exported compute functions | Used by |
+|---|---|---|---|
+| `useStandingsData.ts` | `useStandingsData` | `computeStandingsFromSupabase(rawScores, rawSchedule, seasonId)` | StandingsScreen, SeasonHistoryScreen |
+| `useMatchupsData.ts` | `useMatchupsData` | — | MatchupsScreen |
+| `usePlayerDetailData.ts` | `usePlayerDetailData(name)` | `computePlayerProfile`, `computePersonalRecords`, `computeCurrentTeam`, `computeWeekRows`, `computeChartPoints`, `computeExpandedMatchups`, `computePlayerSeasons` | PlayerDetailScreen |
+| `useChemistryData.ts` | `useChemistryData` | `computeChemistryFromSupabase(rawScores, rawSchedule, groupSize)` | ChemistryScreen |
+| `useH2HData.ts` | `useH2HData` | `computeH2HFromSupabase(p1Name, p2Name, rawScores, rawSchedule)` | HeadToHeadScreen |
+| `useLeagueRecordsData.ts` | `useLeagueRecordsData` | `computeLeagueRecordsFromSupabase(rawScores, filterSeasonId)` | LeagueRecordsScreen |
+| `useSeasonHistoryData.ts` | `useSeasonHistoryData` | — (uses `computeStandingsFromSupabase`) | SeasonHistoryScreen |
+| `useRefresh.ts` | `useRefresh(fn)` | — | All screens with pull-to-refresh |
 
-Key functions and what they return:
+### Hook return shapes
 
-| Function | Returns |
-|---|---|
-| `statsRows(stats)` | Filtered rows (no header, no blank player name) — base for everything |
-| `getSeasons(stats)` | Sorted array of season identifiers |
-| `getCurrentSeason(stats, settings)` | Current season; prefers `settings` value, falls back to latest in stats |
-| `getDefaultViewSeason(stats, settings)` | Most recent season that has data (avoids blank new-season pages) |
-| `getWeeksForSeason(stats, season)` | Sorted week IDs for a season |
-| `aggregateStandings(stats, season)` | `[{name, team, wins, losses, pins, games, avg, weekCount}]` sorted by wins; pass `'all'` for all-time |
-| `getAllPlayerWeeks(stats, name)` | All stats rows for a given player |
-| `getPlayerProfile(stats, settings, name, season)` | Full profile with avg breakdowns, per-game log, records |
-| `getPersonalRecords(stats, name)` | `{highGame, highSeries, currentStreak, bestStreak, winRate}` |
-| `getPlayerCurrentAvg(stats, settings, name, source)` | Single avg number; `source` = `'last-played'`\|`'current-season'`\|`'all-time'` |
-| `getLeagueAvg(stats, settings, source)` | League-wide weighted avg for a source |
-| `isChampion(champions, name)` | Boolean — player appears in champions sheet |
-| `championsForSeason(champions, seasonNum)` | Array of champion names for a season |
-| `isPlayerOut(rsvp, name)` | Boolean — player has RSVP'd Out |
-| `getMatchupsForWeek(stats, season, week)` | Paired game matchup objects from historical data |
-| `getH2H(stats, p1, p2)` | Head-to-head record between two players |
-| `getChemistry(stats, groupSize)` | Win-rate stats for all player pairs/trios |
-| `getLeagueRecords(stats, season)` | `{highGame, highSeries, highTeamGame, highTeamNight, bestSeasonAvg}` |
-| `hasActiveWeek(active)` | Boolean — active sheet has at least one player row |
-| `readActiveWeek(active)` | `{[teamName]: {players, opponents}}` structured map |
-| `effectiveAvg(stats, settings, rsvp, name, isFill, leagueAvg)` | Returns leagueAvg for fill/Out players, else player's own avg |
+All data hooks return at minimum:
+```ts
+{ loading: boolean, reload: () => Promise<void> }
+```
+Plus raw data slices specific to that hook (`rawScores`, `rawSchedule`, `seasonList`, `playerNames`, etc.).
+
+### `useRefresh(fn)`
+
+Accepts any async function and returns `{ refreshing, onRefresh }` for use with `RefreshControl`. Pass the hook's own `reload`:
+
+```tsx
+const { reload } = useMatchupsData()
+const { refreshing, onRefresh } = useRefresh(reload)
+```
+
+---
+
+## Pure Data Utilities
 
 **File:** [src/utils/helpers.js](src/utils/helpers.js)
 
 | Function | Purpose |
 |---|---|
-| `isPresent(v)` | Normalizes `true`/`'TRUE'`/`1`/`'1'` → boolean |
-| `initials(name)` | 2-char initials from full name |
-| `escapeHtml(s)` | HTML escape (legacy; not needed in React Native) |
-| `timeAgo(date)` | Human relative time string |
-| `combinations(arr, k)` | k-length combinations for chemistry calculations |
-| `spreadAndML(t1, t2)` | Bowling spread + moneyline odds from two expected totals |
+| `initials(name)` | 2-char initials from a full name |
+| `timeAgo(date)` | Human-readable relative time string ("2h ago", "3d ago") |
+| `combinations(arr, k)` | All k-length combinations of an array — used by chemistry calculation |
+| `spreadAndML(t1, t2)` | Bowling spread + moneyline odds from two expected team totals |
 
 ---
 
 ## State Management
 
-Four Zustand stores — all imported as `useXxxStore` hooks:
-
-### `useDataStore` ([src/stores/dataStore.ts](src/stores/dataStore.ts))
-Read-only from the perspective of the UI. Contains all server-fetched data, a `loadAll()` action, and a `loadActive()` action. Screens subscribe to individual slices and call `loadAll()` to refresh.
-
-### `usePendingStore` ([src/stores/pendingStore.ts](src/stores/pendingStore.ts))
-Optimistic edit buffer — not persisted. Holds:
-- `pendingRSVP: Record<playerName, 'In'|'Out'>` — staged RSVP changes before save
-- `pendingScores: Record<'teamName|slot|gameNum', scoreString>` — staged score edits before save
-- `genTeams` / `genNumTeams` / `genTeamSize` / `genAvgSource` / `genFillMode` / `genFillToSize` / `genSwapTarget` — state for the Generate Teams flow
+Three Zustand stores — all imported as `useXxxStore` hooks:
 
 ### `usePrefsStore` ([src/stores/prefsStore.ts](src/stores/prefsStore.ts))
-User preferences, persisted via AsyncStorage (`pb_myname`, `pb_avgdisplay`). Call `hydrate()` on app start (done in `App.tsx`).
+User preferences, persisted via AsyncStorage. Call `hydrate()` on app start (done in `App.tsx`).
 - `myName` — player's own name for personalization
-- `avgDisplay` — `'last-played'` | `'current-season'` | `'all-time'` — controls which avg is shown everywhere
+- `avgDisplay` — `'last-played'` | `'current-season'` | `'all-time'` — user preference for avg display mode
+- `setMyName(val)` / `setAvgDisplay(val)` — setters that persist to AsyncStorage
 
-### `uiStore` ([src/stores/uiStore.ts](src/stores/uiStore.ts))
-Ephemeral UI state — toggles, selected seasons/weeks, selected players, toast queue. All fields have a single `set(partial)` action. Key fields:
+### `usePendingStore` ([src/stores/pendingStore.ts](src/stores/pendingStore.ts))
+Optimistic edit buffer — not persisted. Holds staged changes before save.
+- `pendingRSVP: Record<playerName, 'In'|'Out'>` — staged RSVP changes
+- `pendingScores: Record<'teamName|slot|gameNum', scoreString>` — staged score edits
+- `genTeams` / `genNumTeams` / `genTeamSize` / `genAvgSource` / `genFillMode` / `genFillToSize` / `genSwapTarget` — state for the Generate Teams admin flow
+
+Pending score key format: `"${teamName}|${slot}|${gameNum}"`
+
+### `useUiStore` ([src/stores/uiStore.ts](src/stores/uiStore.ts))
+Ephemeral UI state — toggles, selections, toast queue. All fields via `set(partial)`. Key fields:
 - `matchupsView` — `'scores'` | `'expected'`
-- `expandedWeek`, `histSeason`, `histWeek` — History screen navigation state
-- `standingsSeason`, `playerSeason`, `recordsSeason` — season filter selection per screen
-- `playerLogMode` — `'bowled'` | other — controls game log display in PlayerDetail
-- `chemMode` — `'pairs'` | `'trios'` — chemistry analysis group size
+- `expandedWeek` — week id for expanded row in season history
+- `standingsSeason` — season filter for StandingsScreen
+- `playerSeason` — season filter for PlayerDetailScreen
+- `recordsSeason` — season filter for LeagueRecordsScreen (`'all'` or season id string)
+- `playerLogMode` — `'bowled'` | other — controls game log display in PlayerDetailScreen
+- `chemMode` — `'pairs'` | `'trios'`
 - `chemExpanded` — boolean, whether chemistry rows are expanded
-- `h2hP1`, `h2hP2` — selected players for head-to-head
+- `h2hP1`, `h2hP2` — selected player names for head-to-head
 - `oddsRevealed` — easter egg toggle on matchup screen
 - `toasts` — call `showToast(msg, type)` to show a 2.4s auto-dismissing toast
 
@@ -270,30 +274,35 @@ Ephemeral UI state — toggles, selected seasons/weeks, selected players, toast 
 
 **Root:** Bottom tabs (`@react-navigation/bottom-tabs`)
 
-| Tab label | Screen | Route name |
+| Tab label | Navigator / Screen | Route name |
 |---|---|---|
-| Standings | StandingsScreen | `Standings` |
+| Standings | StandingsStackNavigator | `Standings` |
 | RSVP | RsvpScreen | `RSVP` |
 | This Week | MatchupsScreen | `Matchups` |
 | More | MoreStackNavigator | `More` |
 
-**More tab** is a native stack navigator with these routes:
+**Standings tab** is a native stack navigator:
 
-| Route | Screen | Notes |
-|---|---|---|
-| `MoreHome` | MoreHomeScreen | Tile grid entry point |
-| `History` | HistoryScreen | Browse past weeks by season |
-| `PlayerDetail` | PlayerDetailScreen | Receives `{ name: string }` param |
-| `LeagueRecords` | LeagueRecordsScreen | High game/series/team records |
-| `HeadToHead` | HeadToHeadScreen | Pick 2 players, compare |
-| `Chemistry` | ChemistryScreen | Pair/trio win-rate analysis |
-| `SeasonHistory` | SeasonHistoryScreen | Season-by-season summary |
-| `TrashBoard` | TrashBoardScreen | Fun/trash talk leaderboard |
-| `Playoffs` | PlayoffsScreen | Admin: playoffs bracket |
+| Route | Screen |
+|---|---|
+| `StandingsList` | StandingsScreen |
+| `PlayerDetail` | PlayerDetailScreen — receives `{ name: string }` param |
 
-**Cross-tab navigation pattern** (used to jump to PlayerDetail from another tab):
+**More tab** is a native stack navigator:
+
+| Route | Screen |
+|---|---|
+| `MoreHome` | MoreHomeScreen — tile grid entry point |
+| `LeagueRecords` | LeagueRecordsScreen |
+| `HeadToHead` | HeadToHeadScreen |
+| `Chemistry` | ChemistryScreen |
+| `SeasonHistory` | SeasonHistoryScreen |
+| `TrashBoard` | TrashBoardScreen |
+| `Playoffs` | PlayoffsScreen |
+
+**Cross-tab navigation to PlayerDetail** (e.g. from More tab):
 ```tsx
-(navigation as any).navigate('More', { screen: 'PlayerDetail', params: { name } })
+(navigation as any).navigate('Standings', { screen: 'PlayerDetail', params: { name } })
 ```
 
 ---
@@ -302,53 +311,58 @@ Ephemeral UI state — toggles, selected seasons/weeks, selected players, toast 
 
 | Component | Purpose |
 |---|---|
-| `AppHeader` | App logo + current Week/Season badge, reads from `dataStore` |
+| `AppHeader` | App logo + current Week/Season badge, reads from Supabase (`weeks.getCurrent`, `seasons.getLatest`) |
 | `ScreenHeader` | Reusable titled header for inner screens |
 | `Toast` | Absolute-positioned animated toast, reads from `uiStore.toasts` |
 | `ConfirmBar` | Sticky bottom bar for pending saves (RSVP, scores) |
-| `PlayerScoreRow` | One player row in the live matchup view — editable `TextInput` or expected avg display |
+| `PlayerScoreRow` | One player row in the live matchup view — editable score input or expected avg display |
 | `OddsBlock` | Betting-style spread + moneyline card (easter egg, `Expected` mode only) |
 | `LoadingView` | Centered spinner with label |
 | `PillFilter` | Horizontal pill-style filter row for season/week selectors |
 | `ToggleGroup` | Segmented toggle control for multi-option switches |
-| `HistoricalTeamBlock` | Team block in the History screen |
+| `HistoricalTeamBlock` | Team block for displaying archived week rosters |
 | `PlayerPickerModal` | Full-screen player search/select for H2H |
-| `AdminArchiveModal` | Confirm dialog for `archiveAndAdvance` |
-| `AdminAddPlayerModal` | Input dialog for `addPlayer` |
-| `AdminEndSeasonModal` | Confirm dialog for `endSeason` |
-| `AdminGenerateTeamsModal` | Dialog for the generate-teams admin flow |
-
----
-
-## Hooks
-
-**File:** [src/hooks/useRefresh.ts](src/hooks/useRefresh.ts)
-
-| Hook | Purpose |
-|---|---|
-| `useRefresh()` | Returns `{ refreshing, onRefresh }` bound to `loadAll` — use with `RefreshControl` |
+| `AdminArchiveModal` | Confirm dialog — archives active week (sets `is_archived = true`, creates next week row) |
+| `AdminAddPlayerModal` | Input dialog — inserts a new player via `players.insert` |
+| `AdminEndSeasonModal` | Confirm dialog — records season champions and creates new season row |
+| `AdminGenerateTeamsModal` | Generate balanced teams from RSVP list, preview swaps, write slots/schedule to Supabase |
 
 ---
 
 ## Key Patterns
 
-### Pending / optimistic edits
-The `usePendingStore` holds unsaved changes client-side. Screens show changes immediately and display a `ConfirmBar`. On save, `apiPost` is called, then `loadAll()` refreshes ground truth, then the pending buffer is cleared. On discard, pending is just cleared with no API call.
-
-Pending score key format: `"${teamName}|${slot}|${gameNum}"`
-
 ### useMemo for derived data
-Every screen derives its display data with `useMemo`. The canonical pattern:
+Every screen derives display data with `useMemo`. The canonical pattern:
+
 ```tsx
+const { loading, rawScores, rawSchedule, seasonList } = useStandingsData()
+const activeSeason = useUiStore(s => s.standingsSeason)
+
 const standings = useMemo(
-  () => stats ? aggregateStandings(stats, activeSeason) : [],
-  [stats, activeSeason],
+  () => computeStandingsFromSupabase(rawScores, rawSchedule, activeSeason),
+  [rawScores, rawSchedule, activeSeason],
 )
 ```
-Do not call data util functions outside of `useMemo` in render — they can be O(n²) over the full stats sheet.
+
+Do not call compute functions outside of `useMemo` in render — they scan full data sets on every call.
 
 ### Pull-to-refresh
-Every scrollable screen wraps its scroll/list in a `RefreshControl`. Use the `useRefresh()` hook from `src/hooks/useRefresh.ts` to get `{ refreshing, onRefresh }` bound to `loadAll`.
+Every scrollable screen uses `useRefresh(reload)` from `src/hooks/useRefresh.ts`, passing the hook's own `reload` function:
+
+```tsx
+const { loading, rawScores, reload } = useStandingsData()
+const { refreshing, onRefresh } = useRefresh(reload)
+// pass refreshing/onRefresh to RefreshControl
+```
+
+### Pending / optimistic score edits
+`usePendingStore.pendingScores` holds unsaved score changes. `MatchupsScreen` renders them immediately and shows a `ConfirmBar`. On save, `scores.upsert` is called, then `reload()` refreshes from Supabase, then the pending buffer is cleared. On discard, pending is just cleared.
+
+### Admin flows (all Supabase direct)
+- **Archive week** (`AdminArchiveModal`) — sets `weeks.update(id, { is_archived: true })`, then inserts a new week row for the next week number
+- **Add player** (`AdminAddPlayerModal`) — calls `players.insert`
+- **End season** (`AdminEndSeasonModal`) — writes `season_champions.insert` for selected champions, then calls `seasons.insert` for the new season
+- **Generate teams** (`AdminGenerateTeamsModal`) — reads RSVP + player avgs, computes balanced teams client-side, previews swaps, then writes `team_slots.insert` + `gameSchedule.insert` + `weeks.update(..., { is_confirmed: true })`
 
 ---
 
@@ -377,13 +391,13 @@ colors.danger    // #ff4f6d
 colors.success   // #4ade80
 ```
 
-Typography uses **Barlow Condensed** for labels/headings/stats (condensed, bold, letterSpacing applied) and **Barlow** for body text. All font strings are in `fonts`:
+Typography uses **Barlow Condensed** for labels/headings/stats and **Barlow** for body text:
 ```ts
-fonts.barlow               // body text
-fonts.barlowMedium         // medium body
-fonts.barlowSemiBold       // semi-bold body
-fonts.barlowCondensed      // BarlowCondensed_700Bold — primary heading font
-fonts.barlowCondensedHeavy // BarlowCondensed_900Black — logo/hero
+fonts.barlow               // Barlow_400Regular
+fonts.barlowMedium         // Barlow_500Medium
+fonts.barlowSemiBold       // Barlow_600SemiBold
+fonts.barlowCondensed      // BarlowCondensed_700Bold
+fonts.barlowCondensedHeavy // BarlowCondensed_900Black
 ```
 
 Border radii:
@@ -400,30 +414,34 @@ radius.icon   // 10 — avatar/icon boxes
 
 ```
 app/
-├── App.tsx                      # Root: font loading, store hydration, navigation container
+├── App.tsx                      # Root: font loading, prefs hydration, navigation container
 ├── index.ts                     # Expo entry point
 ├── src/
-│   ├── api.js                   # apiGet / apiPost wrappers
 │   ├── theme.ts                 # colors, fonts, radius
 │   ├── hooks/
-│   │   └── useRefresh.ts        # useRefresh() hook — RefreshControl bound to loadAll
+│   │   ├── useChemistryData.ts  # Chemistry data + computeChemistryFromSupabase
+│   │   ├── useH2HData.ts        # H2H data + computeH2HFromSupabase
+│   │   ├── useLeagueRecordsData.ts  # League records + computeLeagueRecordsFromSupabase
+│   │   ├── useMatchupsData.ts   # Active week matchup data (full derivation in hook)
+│   │   ├── usePlayerDetailData.ts   # Player data + many compute* functions
+│   │   ├── useRefresh.ts        # useRefresh(fn) — RefreshControl helper
+│   │   ├── useSeasonHistoryData.ts  # Past seasons raw data
+│   │   └── useStandingsData.ts  # Standings data + computeStandingsFromSupabase
 │   ├── navigation/
 │   │   ├── RootNavigator.tsx    # Bottom tab navigator
-│   │   ├── MoreStackNavigator.tsx # Stack navigator for More tab
-│   │   └── types.ts             # MoreStackParamList type
+│   │   ├── StandingsStackNavigator.tsx  # Stack: StandingsList → PlayerDetail
+│   │   ├── MoreStackNavigator.tsx       # Stack: MoreHome + tools
+│   │   └── types.ts             # MoreStackParamList, StandingsStackParamList
 │   ├── stores/
-│   │   ├── dataStore.ts         # Server data (read-only, refresh via loadAll / loadActive)
-│   │   ├── pendingStore.ts      # Optimistic edit buffer
+│   │   ├── pendingStore.ts      # Optimistic edit buffer (scores, RSVPs, team gen state)
 │   │   ├── prefsStore.ts        # User prefs (AsyncStorage-backed)
 │   │   └── uiStore.ts           # Ephemeral UI state + toast queue
 │   ├── utils/
-│   │   ├── constants.js         # SC and AW column index maps
-│   │   ├── data.js              # Pure data derivation functions
-│   │   ├── helpers.js           # Pure formatting/math utilities
+│   │   ├── helpers.js           # initials, timeAgo, combinations, spreadAndML
 │   │   └── supabase/
 │   │       ├── client.ts        # Supabase client (env-var configured)
 │   │       ├── database.types.ts # Auto-generated Postgres types
-│   │       └── db.ts            # Typed CRUD query objects per table
+│   │       └── db.ts            # Typed query objects per table
 │   ├── components/
 │   │   ├── AppHeader.tsx
 │   │   ├── ScreenHeader.tsx
@@ -444,35 +462,44 @@ app/
 │       ├── MatchupsScreen.tsx   # Live scoreboard + score entry
 │       ├── RsvpScreen.tsx       # Weekly attendance management
 │       ├── StandingsScreen.tsx  # Season/all-time standings table
-│       ├── HistoryScreen.tsx    # Browse past weeks by season
 │       ├── MoreHomeScreen.tsx   # Tile grid for tools/admin
-│       ├── PlayerDetailScreen.tsx # Per-player stats, game log, records
-│       ├── LeagueRecordsScreen.tsx # High game/series/team records
-│       ├── HeadToHeadScreen.tsx # 1v1 comparison
-│       ├── ChemistryScreen.tsx  # Pair/trio win-rate analysis
-│       ├── SeasonHistoryScreen.tsx # Season summaries
-│       ├── TrashBoardScreen.tsx # Fun leaderboard
-│       └── PlayoffsScreen.tsx   # Admin: playoffs bracket
+│       ├── PlayerDetailScreen.tsx   # Per-player stats, game log, records
+│       ├── LeagueRecordsScreen.tsx  # High game/series/team records
+│       ├── HeadToHeadScreen.tsx     # 1v1 player comparison
+│       ├── ChemistryScreen.tsx      # Pair/trio win-rate analysis
+│       ├── SeasonHistoryScreen.tsx  # Season-by-season summary
+│       ├── TrashBoardScreen.tsx     # Fun message board
+│       └── PlayoffsScreen.tsx       # Admin: playoffs bracket
 ```
 
 ---
 
 ## Important Notes for Agents
 
-1. **Data is stale until `loadAll()` is called.** Screens show `<LoadingView>` while `loading && !data`. After mutations, always call `await loadAll()` before clearing the pending buffer.
+1. **All data comes from Supabase.** There is no Google Apps Script backend. Do not reference `api.js`, `apiGet`, `apiPost`, `dataStore`, `data.js`, or `constants.js` — they no longer exist.
 
-2. **All sheet data is 0-indexed 2D arrays.** Row 0 is headers. Use `SC.*` and `AW.*` constants — never hardcode column numbers.
+2. **Use specialized query methods in `db.ts`.** Queries like `scores.listForStandings()` join the right tables in one round-trip. Avoid building ad-hoc joins from raw `supabase` client calls; add a new method to `db.ts` if needed.
 
-3. **`data.js` functions are Vue-documented but used in React.** The JSDoc at the top of `data.js` describes Vue `computed()` usage — ignore that. In React, wrap these calls in `useMemo()`.
+3. **Archived = historical.** All stat computation queries filter `is_archived = true`. The current/active week is identified by `is_archived = false` (and `is_confirmed = true` for live scoring).
 
-4. **No memoization inside `data.js`.** The functions are pure with no caching. Heavy calls like `getChemistry`, `getLeagueRecords`, and `aggregateStandings` scan the entire stats array on every call — always guard with `useMemo`.
+4. **Compute functions are pure.** Functions like `computeStandingsFromSupabase` scan full data arrays on every call with no caching. Always wrap in `useMemo` at the screen level.
 
-5. **The `avgDisplay` preference in `prefsStore` controls avg display everywhere** — `PlayerScoreRow`, `getLeagueAvg`, and `getPlayerCurrentAvg` all accept a `source` parameter that should be driven by `avgDisplay`.
+5. **Hook files export both the hook and compute functions.** If you need the derived data type shape, import it from the hook file (e.g. `StandingsRow` from `useStandingsData.ts`).
 
-6. **No auth layer.** Any user can call any API action. Admin actions (`archiveAndAdvance`, `addPlayer`, `endSeason`) are gated only by UI accessibility, not server-side permissions.
+6. **No memoization inside hooks or compute functions.** Caching is the screen's responsibility via `useMemo`.
 
-7. **TypeScript coverage is partial.** Screens and components are `.tsx` with typed props. Stores have interfaces. Utility files (`api.js`, `data.js`, `helpers.js`, `constants.js`) are plain `.js` with JSDoc. Do not convert them to TS without confirming it's wanted.
+7. **TypeScript coverage is partial.** Screens and hooks are `.tsx`/`.ts` with typed interfaces. `helpers.js` is plain `.js` with JSDoc. Do not convert it to TS without confirming it's wanted.
 
-8. **No test suite.** There are no unit or integration tests. Verify behavior manually via the Expo dev server.
+8. **No test suite.** Verify behavior manually via the Expo dev server (`expo start`).
 
-9. **Supabase is the second backend.** Some features bypass GAS entirely and call Supabase directly via `src/utils/supabase/db.ts`. Currently: `RsvpScreen` (players, rsvp, weeks) and `TrashBoardScreen` (board_posts, players). GAS remains the source of truth for all historical stats and score archival. When adding features that need structured relational data, prefer Supabase over GAS.
+9. **No auth layer.** Any user can read or write. Admin actions (archive, add player, end season, generate teams) are gated only by UI accessibility.
+
+10. **`useRefresh` requires a function argument.** Pass the `reload` from the screen's data hook: `useRefresh(reload)`. It is not bound to a global store refresh.
+
+11. **Supabase CLI requires `SUPABASE_ACCESS_TOKEN` — no MCP server is configured.** Always load the token from `app/.env.local` and use `--linked` with `--workdir` pointing to the repo root. Never run `supabase` commands without this setup or they will fail with 401.
+    ```bash
+    SUPABASE_ACCESS_TOKEN=$SUPABASE_ACCESS_TOKEN \
+      supabase db query --linked --workdir /Users/garrett/Code/PindejosBowling \
+      "SELECT ..."
+    ```
+    Project ref: `lyihsvxraurjghjqxaau` — URL: `https://lyihsvxraurjghjqxaau.supabase.co`
