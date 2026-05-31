@@ -1,6 +1,15 @@
 import { supabase } from './client'
 import type { TablesInsert, TablesUpdate } from './database.types'
 
+export const credentials = {
+  getByHash: (hash: string) =>
+    (supabase as any)
+      .from('app_credentials')
+      .select('role')
+      .eq('password_hash', hash)
+      .single() as Promise<{ data: { role: string } | null; error: unknown }>,
+}
+
 export const boardPosts = {
   list: () =>
     supabase

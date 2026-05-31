@@ -22,6 +22,7 @@ import ToggleGroup from '../components/ToggleGroup'
 import { useMatchupsData } from '../hooks/useMatchupsData'
 import { useUiStore } from '../stores/uiStore'
 import { usePendingStore } from '../stores/pendingStore'
+import { useAuthStore } from '../stores/authStore'
 import { scores, teamSlots, gameSchedule, weeks } from '../utils/supabase/db'
 import { colors, fonts, radius } from '../theme'
 
@@ -55,6 +56,7 @@ export default function MatchupsScreen() {
   const { loading, weekId, derived, reload } = useMatchupsData()
   const { matchupsView, oddsRevealed, set: setUi } = useUiStore()
   const { pendingScores, set: setPending } = usePendingStore()
+  const isAdmin = useAuthStore(s => s.role) === 'admin'
   const [saving, setSaving] = useState(false)
   const [showArchive, setShowArchive] = useState(false)
   const { refreshing, onRefresh } = useRefresh(reload)
@@ -157,8 +159,8 @@ export default function MatchupsScreen() {
   }
 
   const floatingPadding =
-    (hasSavedScores ? ARCHIVE_BAR_HEIGHT : 0) +
-    (hasPendingScores ? CONFIRM_BAR_HEIGHT : 0)
+    (isAdmin && hasSavedScores ? ARCHIVE_BAR_HEIGHT : 0) +
+    (isAdmin && hasPendingScores ? CONFIRM_BAR_HEIGHT : 0)
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -181,9 +183,16 @@ export default function MatchupsScreen() {
                   <View style={styles.titleRow}>
                     <Text style={styles.screenTitle}>Matchups</Text>
                     <View style={styles.titleActions}>
-                      <TouchableOpacity onPress={confirmClearMatchups} style={styles.resetBtn} activeOpacity={0.7}>
-                        <Text style={styles.resetBtnText}>Reset</Text>
-                      </TouchableOpacity>
+                      {isAdmin && (
+                        <TouchableOpacity onPress={confirmClearMatchups} style={styles.resetBtn} activeOpacity={0.7}>
+                          <Text style={styles.resetBtnText}>Reset</Text>
+                        </TouchableOpacity>
+                      )}
+                      {hasPendingScores && (
+                        <TouchableOpacity onPress={discardScores} style={styles.clearBtn} activeOpacity={0.7}>
+                          <Text style={styles.clearBtnText}>Clear</Text>
+                        </TouchableOpacity>
+                      )}
                       <ToggleGroup
                         options={[{ key: 'scores', label: 'Live' }, { key: 'expected', label: 'Expected' }]}
                         value={matchupsView}
@@ -322,7 +331,7 @@ export default function MatchupsScreen() {
             </ScrollView>
 
             {/* Floating archive bar — shifts up when ConfirmBar is also visible */}
-            {hasSavedScores && (
+            {isAdmin && hasSavedScores && (
               <View style={[styles.archiveFloatBar, hasPendingScores && { bottom: CONFIRM_BAR_HEIGHT }]}>
                 <Text style={styles.archiveBarIcon}>📦</Text>
                 <View style={{ flex: 1 }}>
@@ -340,7 +349,7 @@ export default function MatchupsScreen() {
             )}
 
             {/* Floating save/discard bar */}
-            {hasPendingScores && (
+            {isAdmin && hasPendingScores && (
               <ConfirmBar
                 icon="✏️"
                 title={saving ? `Saving ${pendingCount} score${pendingCount !== 1 ? 's' : ''}...` : `${pendingCount} unsaved score${pendingCount !== 1 ? 's' : ''}`}
@@ -421,6 +430,19 @@ const styles = StyleSheet.create({
     fontFamily: fonts.barlowCondensed,
     fontSize: 12,
     color: colors.danger,
+    letterSpacing: 0.5,
+  },
+  clearBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: radius.cardSm,
+    borderWidth: 1,
+    borderColor: colors.border2,
+  },
+  clearBtnText: {
+    fontFamily: fonts.barlowCondensed,
+    fontSize: 12,
+    color: colors.muted,
     letterSpacing: 0.5,
   },
   matchHeader: {
