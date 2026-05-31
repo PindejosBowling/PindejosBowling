@@ -19,27 +19,29 @@ import RootNavigator from './src/navigation/RootNavigator'
 import Toast from './src/components/Toast'
 import { usePrefsStore } from './src/stores/prefsStore'
 
+const BASE = 'PindejosBowling'
+
 const linking = {
   prefixes: [typeof window !== 'undefined' ? window.location.origin : ''],
   config: {
     screens: {
       Standings: {
         screens: {
-          StandingsList: 'standings',
-          PlayerDetail: 'standings/player/:name',
+          StandingsList: `${BASE}/standings`,
+          PlayerDetail: `${BASE}/standings/player/:name`,
         },
       },
-      RSVP: 'rsvp',
-      Matchups: 'matchups',
+      RSVP: `${BASE}/rsvp`,
+      Matchups: `${BASE}/matchups`,
       More: {
         screens: {
-          MoreHome: 'more',
-          LeagueRecords: 'more/records',
-          HeadToHead: 'more/head-to-head',
-          Chemistry: 'more/chemistry',
-          SeasonHistory: 'more/season-history',
-          TrashBoard: 'more/trash-board',
-          Playoffs: 'more/playoffs',
+          MoreHome: `${BASE}/more`,
+          LeagueRecords: `${BASE}/more/records`,
+          HeadToHead: `${BASE}/more/head-to-head`,
+          Chemistry: `${BASE}/more/chemistry`,
+          SeasonHistory: `${BASE}/more/season-history`,
+          TrashBoard: `${BASE}/more/trash-board`,
+          Playoffs: `${BASE}/more/playoffs`,
         },
       },
     },
@@ -65,7 +67,7 @@ export default function App() {
 
   return (
     <SafeAreaProvider>
-      <NavigationContainer linking={linking}>
+      <NavigationContainer linking={linking as any}>
         <View style={{ flex: 1 }}>
           <RootNavigator />
           <Toast />
