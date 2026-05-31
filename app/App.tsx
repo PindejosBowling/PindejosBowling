@@ -1,7 +1,6 @@
 import React, { useEffect } from 'react'
 import { View } from 'react-native'
 import { NavigationContainer } from '@react-navigation/native'
-import * as Linking from 'expo-linking'
 import { SafeAreaProvider } from 'react-native-safe-area-context'
 import { useFonts } from 'expo-font'
 import {
@@ -21,7 +20,7 @@ import Toast from './src/components/Toast'
 import { usePrefsStore } from './src/stores/prefsStore'
 
 const linking = {
-  prefixes: [Linking.createURL('/')],
+  prefixes: [typeof window !== 'undefined' ? window.location.origin : ''],
   config: {
     screens: {
       Standings: {
