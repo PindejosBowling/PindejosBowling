@@ -6,6 +6,11 @@
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0a0a0c"
+    },
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.gsblinkhorn.pindejosbowling",
