@@ -10,6 +10,7 @@ import ChemistryScreen from '../screens/ChemistryScreen'
 import SeasonHistoryScreen from '../screens/SeasonHistoryScreen'
 import TrashBoardScreen from '../screens/TrashBoardScreen'
 import PlayoffsScreen from '../screens/PlayoffsScreen'
+import PlayerManagementScreen from '../screens/PlayerManagementScreen'
 
 const Stack = createNativeStackNavigator<MoreStackParamList>()
 
@@ -28,6 +29,7 @@ export default function MoreStackNavigator() {
       <Stack.Screen name="SeasonHistory" component={SeasonHistoryScreen} options={{ title: 'Season History' }} />
       <Stack.Screen name="TrashBoard" component={TrashBoardScreen} options={{ title: 'Trash Board' }} />
       <Stack.Screen name="Playoffs" component={PlayoffsScreen} options={{ title: 'Playoffs' }} />
+      <Stack.Screen name="PlayerManagement" component={PlayerManagementScreen} options={{ title: 'Player Management' }} />
     </Stack.Navigator>
   )
 }

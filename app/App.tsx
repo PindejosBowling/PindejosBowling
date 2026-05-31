@@ -22,7 +22,7 @@ import { usePrefsStore } from './src/stores/prefsStore'
 const BASE = 'PindejosBowling'
 
 const linking = {
-  prefixes: [typeof window !== 'undefined' ? window.location.origin : ''],
+  prefixes: [typeof window !== 'undefined' && window.location ? window.location.origin : ''],
   config: {
     screens: {
       Standings: {
