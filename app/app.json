@@ -28,8 +28,10 @@
       "predictiveBackGestureEnabled": false
     },
     "web": {
-      "favicon": "./assets/favicon.png",
-      "publicPath": "/PindejosBowling/"
+      "favicon": "./assets/favicon.png"
+    },
+    "experiments": {
+      "baseUrl": "/PindejosBowling"
     },
     "plugins": [
       "expo-font"
