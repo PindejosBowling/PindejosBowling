@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react'
 import { View } from 'react-native'
 import { NavigationContainer } from '@react-navigation/native'
+import * as Linking from 'expo-linking'
 import { SafeAreaProvider } from 'react-native-safe-area-context'
 import { useFonts } from 'expo-font'
 import {
@@ -18,6 +19,33 @@ import {
 import RootNavigator from './src/navigation/RootNavigator'
 import Toast from './src/components/Toast'
 import { usePrefsStore } from './src/stores/prefsStore'
+
+const linking = {
+  prefixes: [Linking.createURL('/')],
+  config: {
+    screens: {
+      Standings: {
+        screens: {
+          StandingsList: 'standings',
+          PlayerDetail: 'standings/player/:name',
+        },
+      },
+      RSVP: 'rsvp',
+      Matchups: 'matchups',
+      More: {
+        screens: {
+          MoreHome: 'more',
+          LeagueRecords: 'more/records',
+          HeadToHead: 'more/head-to-head',
+          Chemistry: 'more/chemistry',
+          SeasonHistory: 'more/season-history',
+          TrashBoard: 'more/trash-board',
+          Playoffs: 'more/playoffs',
+        },
+      },
+    },
+  },
+}
 
 export default function App() {
   const [fontsLoaded] = useFonts({
@@ -38,7 +66,7 @@ export default function App() {
 
   return (
     <SafeAreaProvider>
-      <NavigationContainer>
+      <NavigationContainer linking={linking}>
         <View style={{ flex: 1 }}>
           <RootNavigator />
           <Toast />
