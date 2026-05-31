@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, useEffect } from 'react'
 import {
   View, Text, TouchableOpacity,
   ScrollView, RefreshControl, StyleSheet, useWindowDimensions,
@@ -30,6 +30,8 @@ export default function PlayerDetailScreen() {
   const route = useRoute<PlayerDetailRoute>()
   const navigation = useNavigation()
   const name = route.params.name
+
+  useEffect(() => { navigation.setOptions({ title: name }) }, [name, navigation])
 
   const {
     loading, playerId, isChampion, seasonList,

@@ -21,13 +21,13 @@ export default function MoreStackNavigator() {
         contentStyle: { backgroundColor: colors.bg },
       }}
     >
-      <Stack.Screen name="MoreHome" component={MoreHomeScreen} />
-<Stack.Screen name="LeagueRecords" component={LeagueRecordsScreen} />
-      <Stack.Screen name="HeadToHead" component={HeadToHeadScreen} />
-      <Stack.Screen name="Chemistry" component={ChemistryScreen} />
-      <Stack.Screen name="SeasonHistory" component={SeasonHistoryScreen} />
-      <Stack.Screen name="TrashBoard" component={TrashBoardScreen} />
-      <Stack.Screen name="Playoffs" component={PlayoffsScreen} />
+      <Stack.Screen name="MoreHome" component={MoreHomeScreen} options={{ title: 'More' }} />
+      <Stack.Screen name="LeagueRecords" component={LeagueRecordsScreen} options={{ title: 'League Records' }} />
+      <Stack.Screen name="HeadToHead" component={HeadToHeadScreen} options={{ title: 'Head to Head' }} />
+      <Stack.Screen name="Chemistry" component={ChemistryScreen} options={{ title: 'Chemistry' }} />
+      <Stack.Screen name="SeasonHistory" component={SeasonHistoryScreen} options={{ title: 'Season History' }} />
+      <Stack.Screen name="TrashBoard" component={TrashBoardScreen} options={{ title: 'Trash Board' }} />
+      <Stack.Screen name="Playoffs" component={PlayoffsScreen} options={{ title: 'Playoffs' }} />
     </Stack.Navigator>
   )
 }

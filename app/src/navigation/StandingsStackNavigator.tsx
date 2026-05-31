@@ -16,8 +16,8 @@ export default function StandingsStackNavigator() {
         contentStyle: { backgroundColor: colors.bg },
       }}
     >
-      <Stack.Screen name="StandingsList" component={StandingsScreen} />
-      <Stack.Screen name="PlayerDetail" component={PlayerDetailScreen} />
+      <Stack.Screen name="StandingsList" component={StandingsScreen} options={{ title: 'Standings' }} />
+      <Stack.Screen name="PlayerDetail" component={PlayerDetailScreen} options={{ title: 'Player' }} />
     </Stack.Navigator>
   )
 }
