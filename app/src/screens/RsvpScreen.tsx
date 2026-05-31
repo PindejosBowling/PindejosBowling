@@ -6,6 +6,7 @@ import {
   RefreshControl,
   TouchableOpacity,
   Alert,
+  Platform,
   StyleSheet,
   KeyboardAvoidingView,
 } from 'react-native'
@@ -122,19 +123,20 @@ export default function RsvpScreen() {
   }
 
   function resetRSVP() {
-    Alert.alert('Reset RSVPs?', 'This will clear all RSVPs for the upcoming week.', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Reset',
-        style: 'destructive',
-        onPress: async () => {
-          if (!weekId) return
-          await dbRsvp.removeByWeek(weekId)
-          setRsvpRows([])
-          set({ pendingRSVP: {} })
-        },
-      },
-    ])
+    const doReset = async () => {
+      if (!weekId) return
+      await dbRsvp.removeByWeek(weekId)
+      setRsvpRows([])
+      set({ pendingRSVP: {} })
+    }
+    if (Platform.OS === 'web') {
+      if (window.confirm('Reset RSVPs? This will clear all RSVPs for the upcoming week.')) doReset()
+    } else {
+      Alert.alert('Reset RSVPs?', 'This will clear all RSVPs for the upcoming week.', [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Reset', style: 'destructive', onPress: doReset },
+      ])
+    }
   }
 
   if (loading) {

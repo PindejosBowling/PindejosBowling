@@ -5,6 +5,7 @@ import {
   ScrollView,
   TouchableOpacity,
   Alert,
+  Platform,
   StyleSheet,
   KeyboardAvoidingView,
   RefreshControl,
@@ -105,29 +106,30 @@ export default function MatchupsScreen() {
   }
 
   function confirmClearMatchups() {
-    Alert.alert(
-      'Clear Matchups?',
-      'This will remove all teams, game schedule, and any saved scores for this week. This cannot be undone.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Clear',
-          style: 'destructive',
-          onPress: async () => {
-            if (!weekId) return
-            const slotIds = Object.values(teams).flatMap((team: any) =>
-              team.players.map((p: any) => p.teamSlotId)
-            )
-            if (slotIds.length) await scores.removeBySlotIds(slotIds)
-            await teamSlots.removeByWeek(weekId)
-            await gameSchedule.removeByWeek(weekId)
-            await weeks.update(weekId, { is_confirmed: false })
-            setPending({ pendingScores: {} })
-            await reload()
-          },
-        },
-      ]
-    )
+    const doClear = async () => {
+      if (!weekId) return
+      const slotIds = Object.values(teams).flatMap((team: any) =>
+        team.players.map((p: any) => p.teamSlotId)
+      )
+      if (slotIds.length) await scores.removeBySlotIds(slotIds)
+      await teamSlots.removeByWeek(weekId)
+      await gameSchedule.removeByWeek(weekId)
+      await weeks.update(weekId, { is_confirmed: false })
+      setPending({ pendingScores: {} })
+      await reload()
+    }
+    if (Platform.OS === 'web') {
+      if (window.confirm('Clear Matchups? This will remove all teams, game schedule, and any saved scores for this week. This cannot be undone.')) doClear()
+    } else {
+      Alert.alert(
+        'Clear Matchups?',
+        'This will remove all teams, game schedule, and any saved scores for this week. This cannot be undone.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Clear', style: 'destructive', onPress: doClear },
+        ]
+      )
+    }
   }
 
   async function saveScores() {
