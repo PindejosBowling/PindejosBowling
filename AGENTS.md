@@ -474,6 +474,12 @@ app/
 
 ---
 
+## Page Creation
+
+See [PAGE_CREATION.md](PAGE_CREATION.md) for the full blueprint: hook patterns, screen skeleton, navigation wiring, database migration workflow, and type regeneration. Follow it when adding any new screen or making schema changes.
+
+---
+
 ## Important Notes for Agents
 
 1. **All data comes from Supabase.** There is no Google Apps Script backend. Do not reference `api.js`, `apiGet`, `apiPost`, `dataStore`, `data.js`, or `constants.js` — they no longer exist.

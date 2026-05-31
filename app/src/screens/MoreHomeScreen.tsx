@@ -6,9 +6,10 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { colors, fonts, radius } from '../theme'
 import { MoreStackParamList } from '../navigation/types'
 import AppHeader from '../components/AppHeader'
-import AdminAddPlayerModal from '../components/AdminAddPlayerModal'
 import AdminEndSeasonModal from '../components/AdminEndSeasonModal'
 import AdminGenerateTeamsModal from '../components/AdminGenerateTeamsModal'
+import LogoutModal from '../components/LogoutModal'
+import { useAuthStore } from '../stores/authStore'
 
 type Nav = NativeStackNavigationProp<MoreStackParamList>
 
@@ -22,21 +23,23 @@ interface Tile {
 
 export default function MoreHomeScreen() {
   const navigation = useNavigation<Nav>()
-  const [showAddPlayer, setShowAddPlayer] = useState(false)
   const [showEndSeason, setShowEndSeason] = useState(false)
   const [showGenerateTeams, setShowGenerateTeams] = useState(false)
+  const [showLogout, setShowLogout] = useState(false)
+  const isAdmin = useAuthStore(s => s.role) === 'admin'
 
   const leagueToolsTiles: Tile[] = [
-{ icon: '🏆', label: 'Records',      onPress: () => navigation.navigate('LeagueRecords') },
+    { icon: '🏆', label: 'Records',      onPress: () => navigation.navigate('LeagueRecords') },
     { icon: '⚔️',  label: 'Head to Head', onPress: () => navigation.navigate('HeadToHead') },
     { icon: '🧪', label: 'Chemistry',    onPress: () => navigation.navigate('Chemistry') },
     { icon: '📅', label: 'Past Seasons', onPress: () => navigation.navigate('SeasonHistory') },
     { icon: '🗑️', label: 'Trash Board',  onPress: () => navigation.navigate('TrashBoard') },
+    { icon: '🚪', label: 'Log Out',      onPress: () => setShowLogout(true) },
   ]
 
   const adminTiles: Tile[] = [
     { icon: '🎲', label: 'Generate Teams', onPress: () => setShowGenerateTeams(true) },
-    { icon: '➕', label: 'Add Player',     onPress: () => setShowAddPlayer(true) },
+    { icon: '👥', label: 'Players',         onPress: () => navigation.navigate('PlayerManagement') },
     { icon: '🥇', label: 'End Season',     onPress: () => setShowEndSeason(true) },
     { icon: '🏁', label: 'Playoffs',       onPress: () => navigation.navigate('Playoffs') },
   ]
@@ -62,27 +65,35 @@ export default function MoreHomeScreen() {
           ))}
         </View>
 
-        <Text style={styles.sectionHeader}>LEAGUE ADMIN</Text>
-        <View style={styles.grid}>
-          {adminTiles.map((tile) => (
-            <TouchableOpacity
-              key={tile.label}
-              style={[styles.tile, !tile.onPress && styles.tileDisabled]}
-              onPress={tile.onPress}
-              activeOpacity={tile.onPress ? 0.7 : 1}
-            >
-              <Text style={styles.tileIcon}>{tile.icon}</Text>
-              <Text style={[styles.tileLabel, !tile.onPress && styles.tileLabelDisabled]}>
-                {tile.label}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
+        {isAdmin && (
+          <>
+            <Text style={styles.sectionHeader}>LEAGUE ADMIN</Text>
+            <View style={styles.grid}>
+              {adminTiles.map((tile) => (
+                <TouchableOpacity
+                  key={tile.label}
+                  style={[styles.tile, !tile.onPress && styles.tileDisabled]}
+                  onPress={tile.onPress}
+                  activeOpacity={tile.onPress ? 0.7 : 1}
+                >
+                  <Text style={styles.tileIcon}>{tile.icon}</Text>
+                  <Text style={[styles.tileLabel, !tile.onPress && styles.tileLabelDisabled]}>
+                    {tile.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </>
+        )}
       </ScrollView>
 
-      <AdminAddPlayerModal visible={showAddPlayer} onClose={() => setShowAddPlayer(false)} />
-      <AdminEndSeasonModal visible={showEndSeason} onClose={() => setShowEndSeason(false)} />
-      <AdminGenerateTeamsModal visible={showGenerateTeams} onClose={() => setShowGenerateTeams(false)} />
+      {isAdmin && (
+        <>
+          <AdminEndSeasonModal visible={showEndSeason} onClose={() => setShowEndSeason(false)} />
+          <AdminGenerateTeamsModal visible={showGenerateTeams} onClose={() => setShowGenerateTeams(false)} />
+        </>
+      )}
+      <LogoutModal visible={showLogout} onClose={() => setShowLogout(false)} />
     </SafeAreaView>
   )
 }

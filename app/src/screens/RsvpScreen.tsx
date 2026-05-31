@@ -16,6 +16,7 @@ import AppHeader from '../components/AppHeader'
 import ConfirmBar from '../components/ConfirmBar'
 import LoadingView from '../components/LoadingView'
 import { usePendingStore } from '../stores/pendingStore'
+import { useAuthStore } from '../stores/authStore'
 import { players as dbPlayers, rsvp as dbRsvp, weeks as dbWeeks } from '../utils/supabase/db'
 import type { Tables } from '../utils/supabase/database.types'
 import { initials } from '../utils/helpers.js'
@@ -31,6 +32,7 @@ export default function RsvpScreen() {
   const [loading, setLoading] = useState(true)
   const { pendingRSVP, set } = usePendingStore()
   const [saving, setSaving] = useState(false)
+  const isAdmin = useAuthStore(s => s.role) === 'admin'
 
   const load = useCallback(async () => {
     const [weekRes, playersRes] = await Promise.all([
@@ -176,9 +178,11 @@ export default function RsvpScreen() {
               </View>
               <View style={styles.sectionHeader}>
                 <Text style={styles.sectionLabel}>THIS WEEK</Text>
-                <TouchableOpacity onPress={resetRSVP} style={styles.resetBtn} activeOpacity={0.7}>
-                  <Text style={styles.resetBtnText}>Reset</Text>
-                </TouchableOpacity>
+                {isAdmin && (
+                  <TouchableOpacity onPress={resetRSVP} style={styles.resetBtn} activeOpacity={0.7}>
+                    <Text style={styles.resetBtnText}>Reset</Text>
+                  </TouchableOpacity>
+                )}
               </View>
             </>
           }
@@ -195,16 +199,16 @@ export default function RsvpScreen() {
                 </View>
                 <View style={styles.rsvpButtons}>
                   <TouchableOpacity
-                    style={[styles.rsvpBtn, status === 'in' && styles.rsvpBtnInActive]}
-                    onPress={() => stageRSVP(item.id, 'in')}
-                    activeOpacity={0.7}
+                    style={[styles.rsvpBtn, status === 'in' && styles.rsvpBtnInActive, !isAdmin && styles.rsvpBtnReadOnly]}
+                    onPress={isAdmin ? () => stageRSVP(item.id, 'in') : undefined}
+                    activeOpacity={isAdmin ? 0.7 : 1}
                   >
                     <Text style={[styles.rsvpBtnText, status === 'in' && styles.rsvpBtnTextActive]}>In</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
-                    style={[styles.rsvpBtn, status === 'out' && styles.rsvpBtnOutActive]}
-                    onPress={() => stageRSVP(item.id, 'out')}
-                    activeOpacity={0.7}
+                    style={[styles.rsvpBtn, status === 'out' && styles.rsvpBtnOutActive, !isAdmin && styles.rsvpBtnReadOnly]}
+                    onPress={isAdmin ? () => stageRSVP(item.id, 'out') : undefined}
+                    activeOpacity={isAdmin ? 0.7 : 1}
                   >
                     <Text style={[styles.rsvpBtnText, status === 'out' && styles.rsvpBtnTextActive]}>Out</Text>
                   </TouchableOpacity>
@@ -214,7 +218,7 @@ export default function RsvpScreen() {
           }}
           ItemSeparatorComponent={() => <View style={styles.separator} />}
         />
-        {hasPending && (
+        {isAdmin && hasPending && (
           <ConfirmBar
             icon="✏️"
             title={saving ? `Saving ${pendingCount} change${pendingCount !== 1 ? 's' : ''}...` : `${pendingCount} unsaved change${pendingCount !== 1 ? 's' : ''}`}
@@ -346,6 +350,9 @@ const styles = StyleSheet.create({
   },
   rsvpBtnTextActive: {
     color: colors.text,
+  },
+  rsvpBtnReadOnly: {
+    opacity: 0.4,
   },
   separator: {
     height: 1,

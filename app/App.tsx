@@ -16,13 +16,15 @@ import {
 } from '@expo-google-fonts/barlow'
 
 import RootNavigator from './src/navigation/RootNavigator'
+import LoginScreen from './src/screens/LoginScreen'
 import Toast from './src/components/Toast'
 import { usePrefsStore } from './src/stores/prefsStore'
+import { useAuthStore } from './src/stores/authStore'
 
 const BASE = 'PindejosBowling'
 
 const linking = {
-  prefixes: [typeof window !== 'undefined' ? window.location.origin : ''],
+  prefixes: [typeof window !== 'undefined' && window.location ? window.location.origin : ''],
   config: {
     screens: {
       Standings: {
@@ -59,11 +61,23 @@ export default function App() {
     Barlow_600SemiBold,
   })
 
+  const role = useAuthStore(s => s.role)
+  const isHydrated = useAuthStore(s => s.isHydrated)
+
   useEffect(() => {
     usePrefsStore.getState().hydrate()
+    useAuthStore.getState().hydrate()
   }, [])
 
-  if (!fontsLoaded) return null
+  if (!fontsLoaded || !isHydrated) return null
+
+  if (!role) {
+    return (
+      <SafeAreaProvider>
+        <LoginScreen />
+      </SafeAreaProvider>
+    )
+  }
 
   return (
     <SafeAreaProvider>
