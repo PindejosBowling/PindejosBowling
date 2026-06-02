@@ -145,9 +145,9 @@ export default function LoginScreen() {
                 {!!error && <Text style={styles.error}>{error}</Text>}
 
                 <TouchableOpacity
-                  style={[styles.button, loading && styles.buttonDisabled]}
+                  style={[styles.button, (loading || otp.length < 6) && styles.buttonDisabled]}
                   onPress={handleVerify}
-                  disabled={loading}
+                  disabled={loading || otp.length < 6}
                   activeOpacity={0.8}
                 >
                   {loading ? (
