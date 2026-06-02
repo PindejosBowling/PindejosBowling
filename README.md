@@ -3,7 +3,7 @@ Bowling hub for the Pindejos Bowling League
 
 ## Local Development
 
-One-time installation of 'brew' (MacOS Package Manager) if needed:
+One-time installation of `brew` (MacOS Package Manager) if needed:
 ```bash
 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
 ```
