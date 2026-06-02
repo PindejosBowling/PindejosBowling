@@ -1,6 +1,6 @@
 import { View, Text, TextInput, StyleSheet } from 'react-native'
 import { usePendingStore } from '../stores/pendingStore'
-import { initials } from '../utils/helpers.js'
+import { initials } from '../utils/helpers'
 import { colors, fonts, radius } from '../theme'
 
 interface PlayerScoreRowProps {

@@ -19,7 +19,7 @@ import {
   computeChartPoints,
   computeExpandedMatchups,
 } from '../hooks/usePlayerDetailData'
-import { initials } from '../utils/helpers.js'
+import { initials } from '../utils/helpers'
 import LoadingView from '../components/LoadingView'
 import PillFilter from '../components/PillFilter'
 import ScreenHeader from '../components/ScreenHeader'

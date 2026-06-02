@@ -19,7 +19,7 @@ import { usePendingStore } from '../stores/pendingStore'
 import { useAuthStore } from '../stores/authStore'
 import { players as dbPlayers, rsvp as dbRsvp, weeks as dbWeeks } from '../utils/supabase/db'
 import type { Tables } from '../utils/supabase/database.types'
-import { initials } from '../utils/helpers.js'
+import { initials } from '../utils/helpers'
 import { colors, fonts, radius } from '../theme'
 
 type Player = Tables<'players'>

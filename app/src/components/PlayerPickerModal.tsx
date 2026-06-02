@@ -5,7 +5,7 @@ import {
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { colors, fonts, radius } from '../theme'
-import { initials } from '../utils/helpers.js'
+import { initials } from '../utils/helpers'
 
 interface Props {
   visible: boolean

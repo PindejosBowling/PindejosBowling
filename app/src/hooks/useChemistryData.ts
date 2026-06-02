@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect } from 'react'
 import { scores, gameSchedule, seasonChampions } from '../utils/supabase/db'
-import { combinations } from '../utils/helpers.js'
+import { combinations } from '../utils/helpers'
 
 export interface ChemistryRow {
   names: string[]

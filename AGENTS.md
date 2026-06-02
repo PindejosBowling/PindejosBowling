@@ -41,11 +41,12 @@ The client is configured via Expo environment variables that are set in `.env.lo
 
 ---
 
-## Database Schema (9 tables)
+## Database Schema (10 tables)
 
 | Table | Key columns |
 |---|---|
-| `players` | `id`, `name`, `phone`, `is_active`, `created_at` |
+| `app_credentials` | `role`, `password_hash` |
+| `players` | `id`, `first_name`, `last_name`, `name`, `phone`, `role`, `user_id`, `is_active`, `created_at` |
 | `seasons` | `id`, `number`, `league_name`, `bowling_night`, `started_at`, `ended_at` |
 | `weeks` | `id`, `season_id`, `week_number`, `is_archived`, `is_confirmed`, `bowled_at` |
 | `rsvp` | `id`, `player_id`, `week_id`, `status`, `note`, `updated_at` |
@@ -227,7 +228,7 @@ const { refreshing, onRefresh } = useRefresh(reload)
 
 ## Pure Data Utilities
 
-**File:** [src/utils/helpers.js](src/utils/helpers.js)
+**File:** [src/utils/helpers.ts](src/utils/helpers.ts)
 
 | Function | Purpose |
 |---|---|
@@ -436,7 +437,7 @@ app/
 │   │   ├── pendingStore.ts      # Optimistic edit buffer (scores, RSVPs, team gen state)
 │   │   └── uiStore.ts           # Ephemeral UI state + toast queue
 │   ├── utils/
-│   │   ├── helpers.js           # initials, timeAgo, combinations, spreadAndML
+│   │   ├── helpers.ts           # initials, timeAgo, combinations, spreadAndML
 │   │   └── supabase/
 │   │       ├── client.ts        # Supabase client (env-var configured)
 │   │       ├── database.types.ts # Auto-generated Postgres types
@@ -478,15 +479,17 @@ app/
 
 ## Page Creation
 
-See [PAGE_CREATION.md](PAGE_CREATION.md) for the full blueprint: hook patterns, screen skeleton, navigation wiring, database migration workflow, and type regeneration. Follow it when adding any new screen or making schema changes.
+You must ALWAYS reference [PAGE_CREATION.md](PAGE_CREATION.md) when working on new pages or editing existing pages.
+
+It contains hook patterns, screen skeleton, navigation wiring, database migration workflow, and type regeneration. Follow it when adding any new screen or making schema changes.
 
 ---
 
 ## Important Notes for Agents
 
-1. **All data comes from Supabase.** There is no Google Apps Script backend. Do not reference `api.js`, `apiGet`, `apiPost`, `dataStore`, `data.js`, or `constants.js` — they no longer exist.
+1. **All data comes from Supabase.** 
 
-2. **Use specialized query methods in `db.ts`.** Queries like `scores.listForStandings()` join the right tables in one round-trip. Avoid building ad-hoc joins from raw `supabase` client calls; add a new method to `db.ts` if needed.
+2. **All database queries MUST be implemented in `db.ts`.** Queries like `scores.listForStandings()` join the right tables in one round-trip. Avoid building ad-hoc joins from raw `supabase` client calls; add a new method to `db.ts` if needed.
 
 3. **Archived = historical.** All stat computation queries filter `is_archived = true`. The current/active week is identified by `is_archived = false` (and `is_confirmed = true` for live scoring).
 
@@ -496,7 +499,7 @@ See [PAGE_CREATION.md](PAGE_CREATION.md) for the full blueprint: hook patterns, 
 
 6. **No memoization inside hooks or compute functions.** Caching is the screen's responsibility via `useMemo`.
 
-7. **TypeScript coverage is partial.** Screens and hooks are `.tsx`/`.ts` with typed interfaces. `helpers.js` is plain `.js` with JSDoc. Do not convert it to TS without confirming it's wanted.
+7. **All source files are TypeScript.** Screens, hooks, and utilities are fully typed `.ts`/`.tsx`.
 
 8. **No test suite.** Verify behavior manually via the Expo dev server (`expo start`).
 
@@ -505,9 +508,10 @@ See [PAGE_CREATION.md](PAGE_CREATION.md) for the full blueprint: hook patterns, 
 10. **`useRefresh` requires a function argument.** Pass the `reload` from the screen's data hook: `useRefresh(reload)`. It is not bound to a global store refresh.
 
 11. **Supabase CLI requires `SUPABASE_ACCESS_TOKEN` — no MCP server is configured.** Always load the token from `app/.env.local` and use `--linked` with `--workdir` pointing to the repo root. Never run `supabase` commands without this setup or they will fail with 401.
-    ```bash
-    SUPABASE_ACCESS_TOKEN=$SUPABASE_ACCESS_TOKEN \
-      supabase db query --linked --workdir /Users/garrett/Code/PindejosBowling \
-      "SELECT ..."
-    ```
-    Project ref: `lyihsvxraurjghjqxaau` — URL: `https://lyihsvxraurjghjqxaau.supabase.co`
+
+  ```bash
+  SUPABASE_ACCESS_TOKEN=$SUPABASE_ACCESS_TOKEN \
+    supabase db query --linked --workdir /Users/garrett/Code/PindejosBowling \
+    "SELECT ..."
+  ```
+  Project ref: `lyihsvxraurjghjqxaau` — URL: `https://lyihsvxraurjghjqxaau.supabase.co`

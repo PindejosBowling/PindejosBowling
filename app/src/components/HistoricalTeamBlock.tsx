@@ -1,6 +1,6 @@
 import { View, Text, StyleSheet } from 'react-native'
 import { colors, fonts, radius } from '../theme'
-import { initials } from '../utils/helpers.js'
+import { initials } from '../utils/helpers'
 
 interface Player {
   name: string

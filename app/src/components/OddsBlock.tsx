@@ -1,6 +1,6 @@
 import React from 'react'
 import { View, Text, StyleSheet } from 'react-native'
-import { spreadAndML } from '../utils/helpers.js'
+import { spreadAndML } from '../utils/helpers'
 import { colors, fonts, radius } from '../theme'
 
 interface TeamForOdds {
