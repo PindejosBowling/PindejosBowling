@@ -185,7 +185,7 @@ Win/loss is determined by comparing **team totals** (all players on a team inclu
 
 ### Effective avg for matchups
 
-`useMatchupsData` computes a per-player avg from the previous season's archived scores. Fill slots and Out-RSVP'd players are assigned the league avg. This is not configurable via `prefsStore.avgDisplay`.
+`useMatchupsData` computes a per-player avg from the previous season's archived scores. Fill slots and Out-RSVP'd players are assigned the league avg. This is not user-configurable.
 
 ---
 
@@ -239,12 +239,6 @@ const { refreshing, onRefresh } = useRefresh(reload)
 ## State Management
 
 Three Zustand stores — all imported as `useXxxStore` hooks:
-
-### `usePrefsStore` ([src/stores/prefsStore.ts](src/stores/prefsStore.ts))
-User preferences, persisted via AsyncStorage. Call `hydrate()` on app start (done in `App.tsx`).
-- `myName` — player's own name for personalization
-- `avgDisplay` — `'last-played'` | `'current-season'` | `'all-time'` — user preference for avg display mode
-- `setMyName(val)` / `setAvgDisplay(val)` — setters that persist to AsyncStorage
 
 ### `usePendingStore` ([src/stores/pendingStore.ts](src/stores/pendingStore.ts))
 Optimistic edit buffer — not persisted. Holds staged changes before save.
@@ -321,6 +315,7 @@ Ephemeral UI state — toggles, selections, toast queue. All fields via `set(par
 | `PillFilter` | Horizontal pill-style filter row for season/week selectors |
 | `ToggleGroup` | Segmented toggle control for multi-option switches |
 | `HistoricalTeamBlock` | Team block for displaying archived week rosters |
+| `ProfileMenuModal` | Bottom sheet opened from the avatar in `AppHeader` — shows player identity and per-user actions (My Profile, Log Out) |
 | `PlayerPickerModal` | Full-screen player search/select for H2H |
 | `AdminArchiveModal` | Confirm dialog — archives active week (sets `is_archived = true`, creates next week row) |
 | `AdminAddPlayerModal` | Input dialog — inserts a new player via `players.insert` |
@@ -434,7 +429,6 @@ app/
 │   │   └── types.ts             # MoreStackParamList, StandingsStackParamList
 │   ├── stores/
 │   │   ├── pendingStore.ts      # Optimistic edit buffer (scores, RSVPs, team gen state)
-│   │   ├── prefsStore.ts        # User prefs (AsyncStorage-backed)
 │   │   └── uiStore.ts           # Ephemeral UI state + toast queue
 │   ├── utils/
 │   │   ├── helpers.js           # initials, timeAgo, combinations, spreadAndML
@@ -453,6 +447,7 @@ app/
 │   │   ├── OddsBlock.tsx
 │   │   ├── LoadingView.tsx
 │   │   ├── HistoricalTeamBlock.tsx
+│   │   ├── ProfileMenuModal.tsx
 │   │   ├── PlayerPickerModal.tsx
 │   │   ├── AdminArchiveModal.tsx
 │   │   ├── AdminAddPlayerModal.tsx

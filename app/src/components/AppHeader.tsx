@@ -1,13 +1,15 @@
 import React, { useEffect, useState } from 'react'
-import { View, Text, StyleSheet } from 'react-native'
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native'
 import { colors, fonts, radius } from '../theme'
 import { weeks, seasons } from '../utils/supabase/db'
 import { useAuthStore } from '../stores/authStore'
 import { initials } from '../utils/helpers'
+import ProfileMenuModal from './ProfileMenuModal'
 
 export default function AppHeader() {
   const [weekNumber, setWeekNumber] = useState<number | null>(null)
   const [seasonNumber, setSeasonNumber] = useState<number | null>(null)
+  const [showProfile, setShowProfile] = useState(false)
   const playerName = useAuthStore(s => s.playerName)
 
   useEffect(() => {
@@ -31,11 +33,12 @@ export default function AppHeader() {
         </View>
         <Text style={styles.subline}>{subline}</Text>
       </View>
-      <View style={styles.avatar}>
+      <TouchableOpacity style={styles.avatar} onPress={() => setShowProfile(true)} activeOpacity={0.7}>
         <Text style={styles.avatarText}>
           {playerName ? initials(playerName) : '?'}
         </Text>
-      </View>
+      </TouchableOpacity>
+      <ProfileMenuModal visible={showProfile} onClose={() => setShowProfile(false)} />
     </View>
   )
 }
