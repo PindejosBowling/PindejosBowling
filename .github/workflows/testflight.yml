@@ -22,18 +22,22 @@ jobs:
           cache: npm
           cache-dependency-path: app/package-lock.json
 
+      - name: Set up EAS
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
       - name: Install dependencies
         run: npm ci
 
       - name: Build and submit to TestFlight
         id: eas-build
         run: |
-          BUILD_JSON=$(npx eas build --platform ios --profile production --auto-submit --non-interactive --json)
+          BUILD_JSON=$(eas build --platform ios --profile production --auto-submit --non-interactive --json)
           BUILD_ID=$(echo "$BUILD_JSON" | jq -r '.[0].id')
           BUILD_URL="https://expo.dev/accounts/gsblinkhorn/projects/pindejos-bowling/builds/$BUILD_ID"
           echo "build-url=$BUILD_URL" >> "$GITHUB_OUTPUT"
           echo "### iOS Build Queued" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "[$BUILD_URL]($BUILD_URL)" >> "$GITHUB_STEP_SUMMARY"
-        env:
-          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
