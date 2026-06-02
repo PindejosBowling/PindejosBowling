@@ -498,7 +498,7 @@ See [PAGE_CREATION.md](PAGE_CREATION.md) for the full blueprint: hook patterns, 
 
 8. **No test suite.** Verify behavior manually via the Expo dev server (`expo start`).
 
-9. **No auth layer.** Any user can read or write. Admin actions (archive, add player, end season, generate teams) are gated only by UI accessibility.
+9. **Auth layer is active.** Phone OTP login is required. User identity is derived from `auth.users` and linked to `players` via `players.user_id`. The `useAuthStore` exposes `userId`, `playerId`, `playerName`, and `role`. See [supabase/AUTH.md](supabase/AUTH.md) for the full architecture — JWT hook, trigger, RLS patterns, and role management.
 
 10. **`useRefresh` requires a function argument.** Pass the `reload` from the screen's data hook: `useRefresh(reload)`. It is not bound to a global store refresh.
 
