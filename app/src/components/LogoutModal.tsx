@@ -8,11 +8,11 @@ interface Props {
 }
 
 export default function LogoutModal({ visible, onClose }: Props) {
-  const setRole = useAuthStore(s => s.setRole)
+  const signOut = useAuthStore(s => s.signOut)
 
   async function confirm() {
     onClose()
-    await setRole(null)
+    await signOut()
   }
 
   return (
