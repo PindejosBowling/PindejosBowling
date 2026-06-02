@@ -33,8 +33,8 @@ jobs:
 
       - name: Push secrets to EAS
         run: |
-          eas secret:set --scope project --name EXPO_PUBLIC_SUPABASE_URL --value "$SUPABASE_URL" --force --non-interactive
-          eas secret:set --scope project --name EXPO_PUBLIC_SUPABASE_API_KEY --value "$SUPABASE_KEY" --force --non-interactive
+          eas secret:create --scope project --name EXPO_PUBLIC_SUPABASE_URL --value "$SUPABASE_URL" --force --non-interactive
+          eas secret:create --scope project --name EXPO_PUBLIC_SUPABASE_API_KEY --value "$SUPABASE_KEY" --force --non-interactive
         env:
           SUPABASE_URL: ${{ secrets.EXPO_PUBLIC_SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.EXPO_PUBLIC_SUPABASE_API_KEY }}
