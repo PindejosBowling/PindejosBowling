@@ -18,7 +18,6 @@ import {
 import RootNavigator from './src/navigation/RootNavigator'
 import LoginScreen from './src/screens/LoginScreen'
 import Toast from './src/components/Toast'
-import { usePrefsStore } from './src/stores/prefsStore'
 import { useAuthStore } from './src/stores/authStore'
 
 const BASE = 'PindejosBowling'
@@ -65,7 +64,6 @@ export default function App() {
   const isHydrated = useAuthStore(s => s.isHydrated)
 
   useEffect(() => {
-    usePrefsStore.getState().hydrate()
     useAuthStore.getState().hydrate()
   }, [])
 

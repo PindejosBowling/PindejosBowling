@@ -1,15 +1,6 @@
 import { supabase } from './client'
 import type { TablesInsert, TablesUpdate } from './database.types'
 
-export const credentials = {
-  getByHash: (hash: string) =>
-    (supabase as any)
-      .from('app_credentials')
-      .select('role')
-      .eq('password_hash', hash)
-      .single() as Promise<{ data: { role: string } | null; error: unknown }>,
-}
-
 export const boardPosts = {
   list: () =>
     supabase
@@ -51,6 +42,10 @@ export const players = {
     supabase.from('players').select('*').eq('id', id).single(),
   getByName: (name: string) =>
     supabase.from('players').select('*').ilike('name', name.trim()).single(),
+  getByUserId: (userId: string) =>
+    supabase.from('players').select('id, name, role').eq('user_id', userId).maybeSingle(),
+  isRegistered: (phone: string) =>
+    supabase.rpc('is_registered_player', { phone }),
   insert: (data: TablesInsert<'players'>) =>
     supabase.from('players').insert(data),
   update: (id: string, data: TablesUpdate<'players'>) =>

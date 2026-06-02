@@ -19,7 +19,8 @@ import ScreenHeader from '../components/ScreenHeader'
 import { useUiStore } from '../stores/uiStore'
 import { timeAgo } from '../utils/helpers.js'
 import { colors, fonts, radius } from '../theme'
-import { boardPosts, players as playersDb } from '../utils/supabase/db'
+import { boardPosts } from '../utils/supabase/db'
+import { useAuthStore } from '../stores/authStore'
 import type { Tables } from '../utils/supabase/database.types'
 
 type Post = Tables<'board_posts'> & {
@@ -29,7 +30,7 @@ type Post = Tables<'board_posts'> & {
 export default function TrashBoardScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<MoreStackParamList>>()
   const { showToast } = useUiStore()
-  const [authorName, setAuthorName] = useState('')
+  const { playerId, playerName } = useAuthStore()
   const [msg, setMsg] = useState('')
   const [posting, setPosting] = useState(false)
   const [posts, setPosts] = useState<Post[]>([])
@@ -61,18 +62,10 @@ export default function TrashBoardScreen() {
   }
 
   async function post() {
-    if (!authorName.trim() || !msg.trim()) return
+    if (!playerId || !msg.trim()) return
     setPosting(true)
     try {
-      const { data: player } = await playersDb.getByName(authorName)
-
-      if (!player) {
-        showToast(`No player found named "${authorName}"`, 'error')
-        return
-      }
-
-      const { error } = await boardPosts.insert({ message: msg.trim(), player_id: player.id })
-
+      const { error } = await boardPosts.insert({ message: msg.trim(), player_id: playerId })
       if (error) {
         showToast('Failed to post', 'error')
       } else {
@@ -109,13 +102,7 @@ export default function TrashBoardScreen() {
               <ScreenHeader title="Trash Board" onBack={() => navigation.goBack()} />
 
               <View style={styles.composer}>
-                <TextInput
-                  style={styles.authorInput}
-                  placeholder="Your name"
-                  placeholderTextColor={colors.muted2}
-                  value={authorName}
-                  onChangeText={setAuthorName}
-                />
+                <Text style={styles.composerAuthor}>{playerName}</Text>
                 <TextInput
                   style={styles.msgInput}
                   placeholder="Talk shit, hype the boys, whatever..."
@@ -126,9 +113,9 @@ export default function TrashBoardScreen() {
                   numberOfLines={3}
                 />
                 <TouchableOpacity
-                  style={[styles.postBtn, (!authorName.trim() || !msg.trim()) && styles.postBtnDisabled]}
+                  style={[styles.postBtn, !msg.trim() && styles.postBtnDisabled]}
                   onPress={post}
-                  disabled={posting || !authorName.trim() || !msg.trim()}
+                  disabled={posting || !msg.trim()}
                   activeOpacity={0.7}
                 >
                   <Text style={styles.postBtnText}>{posting ? 'Posting…' : 'Post'}</Text>
@@ -149,9 +136,11 @@ export default function TrashBoardScreen() {
                   <Text style={styles.postAuthor}>{item.players?.name ?? 'Unknown'}</Text>
                   <Text style={styles.postTime}>{timeAgo(item.created_at)}</Text>
                 </View>
-                <TouchableOpacity onPress={() => deletePost(item.id)} hitSlop={8}>
-                  <Text style={styles.deleteBtn}>✕</Text>
-                </TouchableOpacity>
+                {item.player_id === playerId && (
+                  <TouchableOpacity onPress={() => deletePost(item.id)} hitSlop={8}>
+                    <Text style={styles.deleteBtn}>✕</Text>
+                  </TouchableOpacity>
+                )}
               </View>
               <Text style={styles.postMsg}>{item.message}</Text>
             </View>
@@ -174,16 +163,12 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     gap: 10,
   },
-  authorInput: {
-    fontFamily: fonts.barlow,
+  composerAuthor: {
+    fontFamily: fonts.barlowCondensed,
     fontSize: 14,
-    color: colors.text,
-    backgroundColor: colors.surface2,
-    borderRadius: radius.cardSm,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderWidth: 1,
-    borderColor: colors.border,
+    fontWeight: '700',
+    color: colors.accent,
+    letterSpacing: 0.5,
   },
   msgInput: {
     fontFamily: fonts.barlow,

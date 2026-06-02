@@ -8,7 +8,6 @@ import { MoreStackParamList } from '../navigation/types'
 import AppHeader from '../components/AppHeader'
 import AdminEndSeasonModal from '../components/AdminEndSeasonModal'
 import AdminGenerateTeamsModal from '../components/AdminGenerateTeamsModal'
-import LogoutModal from '../components/LogoutModal'
 import { useAuthStore } from '../stores/authStore'
 
 type Nav = NativeStackNavigationProp<MoreStackParamList>
@@ -25,7 +24,6 @@ export default function MoreHomeScreen() {
   const navigation = useNavigation<Nav>()
   const [showEndSeason, setShowEndSeason] = useState(false)
   const [showGenerateTeams, setShowGenerateTeams] = useState(false)
-  const [showLogout, setShowLogout] = useState(false)
   const isAdmin = useAuthStore(s => s.role) === 'admin'
 
   const leagueToolsTiles: Tile[] = [
@@ -35,7 +33,6 @@ export default function MoreHomeScreen() {
     { icon: '📅', label: 'Past Seasons', onPress: () => navigation.navigate('SeasonHistory') },
     { icon: '🎳', label: 'Past Games',   onPress: () => navigation.navigate('PastGames') },
     { icon: '🗑️', label: 'Trash Board',  onPress: () => navigation.navigate('TrashBoard') },
-    { icon: '🚪', label: 'Log Out',      onPress: () => setShowLogout(true) },
   ]
 
   const adminTiles: Tile[] = [
@@ -94,7 +91,6 @@ export default function MoreHomeScreen() {
           <AdminGenerateTeamsModal visible={showGenerateTeams} onClose={() => setShowGenerateTeams(false)} />
         </>
       )}
-      <LogoutModal visible={showLogout} onClose={() => setShowLogout(false)} />
     </SafeAreaView>
   )
 }

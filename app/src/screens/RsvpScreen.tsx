@@ -32,7 +32,12 @@ export default function RsvpScreen() {
   const [loading, setLoading] = useState(true)
   const { pendingRSVP, set } = usePendingStore()
   const [saving, setSaving] = useState(false)
-  const isAdmin = useAuthStore(s => s.role) === 'admin'
+  const { role, playerId: myPlayerId } = useAuthStore()
+  const isAdmin = role === 'admin'
+
+  function canEdit(playerId: string) {
+    return isAdmin || playerId === myPlayerId
+  }
 
   const load = useCallback(async () => {
     const [weekRes, playersRes] = await Promise.all([
@@ -199,16 +204,16 @@ export default function RsvpScreen() {
                 </View>
                 <View style={styles.rsvpButtons}>
                   <TouchableOpacity
-                    style={[styles.rsvpBtn, status === 'in' && styles.rsvpBtnInActive, !isAdmin && styles.rsvpBtnReadOnly]}
-                    onPress={isAdmin ? () => stageRSVP(item.id, 'in') : undefined}
-                    activeOpacity={isAdmin ? 0.7 : 1}
+                    style={[styles.rsvpBtn, status === 'in' && styles.rsvpBtnInActive, !canEdit(item.id) && styles.rsvpBtnReadOnly]}
+                    onPress={canEdit(item.id) ? () => stageRSVP(item.id, 'in') : undefined}
+                    activeOpacity={canEdit(item.id) ? 0.7 : 1}
                   >
                     <Text style={[styles.rsvpBtnText, status === 'in' && styles.rsvpBtnTextActive]}>In</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
-                    style={[styles.rsvpBtn, status === 'out' && styles.rsvpBtnOutActive, !isAdmin && styles.rsvpBtnReadOnly]}
-                    onPress={isAdmin ? () => stageRSVP(item.id, 'out') : undefined}
-                    activeOpacity={isAdmin ? 0.7 : 1}
+                    style={[styles.rsvpBtn, status === 'out' && styles.rsvpBtnOutActive, !canEdit(item.id) && styles.rsvpBtnReadOnly]}
+                    onPress={canEdit(item.id) ? () => stageRSVP(item.id, 'out') : undefined}
+                    activeOpacity={canEdit(item.id) ? 0.7 : 1}
                   >
                     <Text style={[styles.rsvpBtnText, status === 'out' && styles.rsvpBtnTextActive]}>Out</Text>
                   </TouchableOpacity>
@@ -218,7 +223,7 @@ export default function RsvpScreen() {
           }}
           ItemSeparatorComponent={() => <View style={styles.separator} />}
         />
-        {isAdmin && hasPending && (
+        {hasPending && (
           <ConfirmBar
             icon="✏️"
             title={saving ? `Saving ${pendingCount} change${pendingCount !== 1 ? 's' : ''}...` : `${pendingCount} unsaved change${pendingCount !== 1 ? 's' : ''}`}

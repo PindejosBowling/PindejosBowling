@@ -12,8 +12,48 @@ export type Database = {
   __InternalSupabase: {
     PostgrestVersion: "14.5"
   }
+  graphql_public: {
+    Tables: {
+      [_ in never]: never
+    }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      graphql: {
+        Args: {
+          extensions?: Json
+          operationName?: string
+          query?: string
+          variables?: Json
+        }
+        Returns: Json
+      }
+    }
+    Enums: {
+      [_ in never]: never
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
+  }
   public: {
     Tables: {
+      app_credentials: {
+        Row: {
+          password_hash: string
+          role: string
+        }
+        Insert: {
+          password_hash: string
+          role: string
+        }
+        Update: {
+          password_hash?: string
+          role?: string
+        }
+        Relationships: []
+      }
       board_posts: {
         Row: {
           created_at: string
@@ -84,6 +124,8 @@ export type Database = {
           last_name: string
           name: string | null
           phone: string | null
+          role: string
+          user_id: string | null
         }
         Insert: {
           created_at?: string
@@ -93,6 +135,8 @@ export type Database = {
           last_name: string
           name?: string | null
           phone?: string | null
+          role?: string
+          user_id?: string | null
         }
         Update: {
           created_at?: string
@@ -102,8 +146,18 @@ export type Database = {
           last_name?: string
           name?: string | null
           phone?: string | null
+          role?: string
+          user_id?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "players_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       rsvp: {
         Row: {
@@ -450,6 +504,9 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
+  graphql_public: {
+    Enums: {},
+  },
   public: {
     Enums: {},
   },
