@@ -33,6 +33,7 @@ export default function MoreHomeScreen() {
     { icon: '⚔️',  label: 'Head to Head', onPress: () => navigation.navigate('HeadToHead') },
     { icon: '🧪', label: 'Chemistry',    onPress: () => navigation.navigate('Chemistry') },
     { icon: '📅', label: 'Past Seasons', onPress: () => navigation.navigate('SeasonHistory') },
+    { icon: '🎳', label: 'Past Games',   onPress: () => navigation.navigate('PastGames') },
     { icon: '🗑️', label: 'Trash Board',  onPress: () => navigation.navigate('TrashBoard') },
     { icon: '🚪', label: 'Log Out',      onPress: () => setShowLogout(true) },
   ]

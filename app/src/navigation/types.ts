@@ -7,6 +7,7 @@ export type MoreStackParamList = {
   TrashBoard: undefined
   Playoffs: undefined
   PlayerManagement: undefined
+  PastGames: undefined
 }
 
 export type StandingsStackParamList = {

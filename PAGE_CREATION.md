@@ -211,6 +211,7 @@ const styles = StyleSheet.create({
 - **Pull-to-refresh on every scrollable screen** via `useRefresh(reload)` + `RefreshControl`.
 - **`ScreenHeader`** for all inner (non-tab-root) screens. Tab roots use `AppHeader`.
 - **`SafeAreaView` with `edges={['top']}`** — do not add `bottom` here; handle it via `paddingBottom` in content or a fixed bar's inset.
+- **Always check with the user to determine which role (player or admin) should have access to the page or its contents**
 
 ### Theme reference (import from `src/theme.ts`)
 

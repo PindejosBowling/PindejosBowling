@@ -30,7 +30,8 @@ export default function AdminArchiveModal({ visible, onClose }: Props) {
         return
       }
 
-      const { error: archiveErr } = await weeks.update(activeWeek.id, { is_archived: true })
+      const today = new Date().toISOString().slice(0, 10)
+      const { error: archiveErr } = await weeks.update(activeWeek.id, { is_archived: true, bowled_at: today })
       if (archiveErr) {
         showToast('Failed to archive week', 'error')
         setSaving(false)
