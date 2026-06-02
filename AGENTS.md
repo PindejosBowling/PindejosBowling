@@ -202,6 +202,8 @@ Win/loss is determined by comparing **team totals** (all players on a team inclu
 | `useH2HData.ts` | `useH2HData` | `computeH2HFromSupabase(p1Name, p2Name, rawScores, rawSchedule)` | HeadToHeadScreen |
 | `useLeagueRecordsData.ts` | `useLeagueRecordsData` | `computeLeagueRecordsFromSupabase(rawScores, filterSeasonId)` | LeagueRecordsScreen |
 | `useSeasonHistoryData.ts` | `useSeasonHistoryData` | — (uses `computeStandingsFromSupabase`) | SeasonHistoryScreen |
+| `usePastGamesData.ts` | `usePastGamesData` | `computePastGamesFromSupabase(rawScores, rawSchedule, seasonId)` | PastGamesScreen |
+| `usePlayerManagementData.ts` | `usePlayerManagementData` | — | PlayerManagementScreen |
 | `useRefresh.ts` | `useRefresh(fn)` | — | All screens with pull-to-refresh |
 
 ### Hook return shapes
@@ -293,6 +295,8 @@ Ephemeral UI state — toggles, selections, toast queue. All fields via `set(par
 | `SeasonHistory` | SeasonHistoryScreen |
 | `TrashBoard` | TrashBoardScreen |
 | `Playoffs` | PlayoffsScreen |
+| `PlayerManagement` | PlayerManagementScreen — add, edit, and toggle active/inactive players |
+| `PastGames` | PastGamesScreen — browse historical week rosters and scores by season |
 
 **Cross-tab navigation to PlayerDetail** (e.g. from More tab):
 ```tsx
@@ -318,7 +322,6 @@ Ephemeral UI state — toggles, selections, toast queue. All fields via `set(par
 | `ProfileMenuModal` | Bottom sheet opened from the avatar in `AppHeader` — shows player identity and per-user actions (My Profile, Log Out) |
 | `PlayerPickerModal` | Full-screen player search/select for H2H |
 | `AdminArchiveModal` | Confirm dialog — archives active week (sets `is_archived = true`, creates next week row) |
-| `AdminAddPlayerModal` | Input dialog — inserts a new player via `players.insert` |
 | `AdminEndSeasonModal` | Confirm dialog — records season champions and creates new season row |
 | `AdminGenerateTeamsModal` | Generate balanced teams from RSVP list, preview swaps, write slots/schedule to Supabase |
 
@@ -355,7 +358,7 @@ const { refreshing, onRefresh } = useRefresh(reload)
 
 ### Admin flows (all Supabase direct)
 - **Archive week** (`AdminArchiveModal`) — sets `weeks.update(id, { is_archived: true })`, then inserts a new week row for the next week number
-- **Add player** (`AdminAddPlayerModal`) — calls `players.insert`
+- **Add/edit player** (`PlayerManagementScreen`) — inline modal calls `players.insert` or `players.update`; first name, last name, and phone are all required
 - **End season** (`AdminEndSeasonModal`) — writes `season_champions.insert` for selected champions, then calls `seasons.insert` for the new season
 - **Generate teams** (`AdminGenerateTeamsModal`) — reads RSVP + player avgs, computes balanced teams client-side, previews swaps, then writes `team_slots.insert` + `gameSchedule.insert` + `weeks.update(..., { is_confirmed: true })`
 
@@ -418,7 +421,9 @@ app/
 │   │   ├── useH2HData.ts        # H2H data + computeH2HFromSupabase
 │   │   ├── useLeagueRecordsData.ts  # League records + computeLeagueRecordsFromSupabase
 │   │   ├── useMatchupsData.ts   # Active week matchup data (full derivation in hook)
+│   │   ├── usePastGamesData.ts  # Past games by season + computePastGamesFromSupabase
 │   │   ├── usePlayerDetailData.ts   # Player data + many compute* functions
+│   │   ├── usePlayerManagementData.ts  # Raw player list for PlayerManagementScreen
 │   │   ├── useRefresh.ts        # useRefresh(fn) — RefreshControl helper
 │   │   ├── useSeasonHistoryData.ts  # Past seasons raw data
 │   │   └── useStandingsData.ts  # Standings data + computeStandingsFromSupabase
@@ -450,15 +455,17 @@ app/
 │   │   ├── ProfileMenuModal.tsx
 │   │   ├── PlayerPickerModal.tsx
 │   │   ├── AdminArchiveModal.tsx
-│   │   ├── AdminAddPlayerModal.tsx
 │   │   ├── AdminEndSeasonModal.tsx
 │   │   └── AdminGenerateTeamsModal.tsx
 │   └── screens/
-│       ├── MatchupsScreen.tsx   # Live scoreboard + score entry
-│       ├── RsvpScreen.tsx       # Weekly attendance management
-│       ├── StandingsScreen.tsx  # Season/all-time standings table
-│       ├── MoreHomeScreen.tsx   # Tile grid for tools/admin
+│       ├── LoginScreen.tsx          # Phone OTP login flow
+│       ├── MatchupsScreen.tsx       # Live scoreboard + score entry
+│       ├── RsvpScreen.tsx           # Weekly attendance management
+│       ├── StandingsScreen.tsx      # Season/all-time standings table
+│       ├── MoreHomeScreen.tsx       # Tile grid for tools/admin
 │       ├── PlayerDetailScreen.tsx   # Per-player stats, game log, records
+│       ├── PlayerManagementScreen.tsx  # Add/edit/toggle players (admin)
+│       ├── PastGamesScreen.tsx      # Historical week rosters + scores by season
 │       ├── LeagueRecordsScreen.tsx  # High game/series/team records
 │       ├── HeadToHeadScreen.tsx     # 1v1 player comparison
 │       ├── ChemistryScreen.tsx      # Pair/trio win-rate analysis

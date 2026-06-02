@@ -93,8 +93,9 @@ export default function PlayerManagementScreen() {
     if (!editModal) return
     const firstName = editModal.firstName.trim()
     const lastName = editModal.lastName.trim()
-    if (!firstName) return
-    const displayName = lastName ? `${firstName} ${lastName}` : firstName
+    const phone = (editModal.phone ?? '').trim()
+    if (!firstName || !lastName || !phone) return
+    const displayName = `${firstName} ${lastName}`
     setSaving(true)
     try {
       if (editModal.id) {
@@ -183,7 +184,7 @@ export default function PlayerManagementScreen() {
                 <Text style={styles.fieldLabel}>LAST NAME</Text>
                 <TextInput
                   style={styles.input}
-                  placeholder="Last name (optional)"
+                  placeholder="Last name"
                   placeholderTextColor={colors.muted}
                   value={editModal.lastName}
                   onChangeText={v => setEditModal(prev => prev ? { ...prev, lastName: v } : null)}
@@ -193,7 +194,7 @@ export default function PlayerManagementScreen() {
                 <Text style={styles.fieldLabel}>PHONE</Text>
                 <TextInput
                   style={styles.input}
-                  placeholder="Optional"
+                  placeholder="Phone number"
                   placeholderTextColor={colors.muted}
                   value={editModal.phone ?? ''}
                   onChangeText={v => setEditModal(prev => prev ? { ...prev, phone: v || null } : null)}
@@ -225,9 +226,9 @@ export default function PlayerManagementScreen() {
                     <Text style={styles.btnCancelText}>Cancel</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
-                    style={[styles.btnPrimary, (!editModal.firstName.trim() || saving) && styles.btnDisabled]}
+                    style={[styles.btnPrimary, (!editModal.firstName.trim() || !editModal.lastName.trim() || !(editModal.phone ?? '').trim() || saving) && styles.btnDisabled]}
                     onPress={save}
-                    disabled={!editModal.firstName.trim() || saving}
+                    disabled={!editModal.firstName.trim() || !editModal.lastName.trim() || !(editModal.phone ?? '').trim() || saving}
                     activeOpacity={0.7}
                   >
                     {saving ? (
