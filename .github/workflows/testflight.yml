@@ -31,13 +31,23 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Push secrets to EAS
+        run: |
+          eas secret:set --scope project --name EXPO_PUBLIC_SUPABASE_URL --value "$SUPABASE_URL" --force --non-interactive
+          eas secret:set --scope project --name EXPO_PUBLIC_SUPABASE_API_KEY --value "$SUPABASE_KEY" --force --non-interactive
+        env:
+          SUPABASE_URL: ${{ secrets.EXPO_PUBLIC_SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.EXPO_PUBLIC_SUPABASE_API_KEY }}
+
       - name: Build and submit to TestFlight
         id: eas-build
         run: |
-          BUILD_JSON=$(eas build --platform ios --profile production --auto-submit --non-interactive --json)
+          BUILD_JSON=$(eas build --platform ios --profile production --auto-submit --non-interactive --json --wait)
           BUILD_ID=$(echo "$BUILD_JSON" | jq -r '.[0].id')
           BUILD_URL="https://expo.dev/accounts/gsblinkhorn/projects/pindejos-bowling/builds/$BUILD_ID"
           echo "build-url=$BUILD_URL" >> "$GITHUB_OUTPUT"
-          echo "### iOS Build Queued" >> "$GITHUB_STEP_SUMMARY"
+          echo "### iOS Build Submitted to TestFlight" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "[$BUILD_URL]($BUILD_URL)" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "Note: Apple processes the build asynchronously — allow 15–30 min for TestFlight availability." >> "$GITHUB_STEP_SUMMARY"
