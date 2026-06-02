@@ -3,28 +3,23 @@ Bowling hub for the Pindejos Bowling League
 
 ## Local Development
 
-### Vue web app
-`npm run dev` will start the server, accessible at http://localhost:5173/PindejosBowling/
-
-### React Native app (iOS)
-The React Native app lives in `app/` and runs independently alongside the Vue app.
-
-One-time installation of `node`
+The app lives in `app/`. One-time installation of `node` if needed:
 ```bash
 brew install node
 ```
 
+### iOS simulator
 ```bash
 cd app
 npx expo start --ios
 ```
 
-**Phase 1 verification checklist:**
-- [ ] App launches without errors in the simulator
-- [ ] All 5 bottom tabs are visible and tappable: This Week, RSVP, Standings, Matches, More
-- [ ] Tapping "More" shows the More Home placeholder screen
-- [ ] From More Home, tapping back (swipe or back gesture) returns to the tab correctly
-- [ ] No red error screens on launch
+### Web (localhost)
+```bash
+cd app
+npx expo start --web
+```
+Opens at http://localhost:8081
 
 ## Supabase Database
 
