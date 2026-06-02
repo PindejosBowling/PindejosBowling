@@ -124,6 +124,8 @@ export type Database = {
           last_name: string
           name: string | null
           phone: string | null
+          role: string
+          user_id: string | null
         }
         Insert: {
           created_at?: string
@@ -133,6 +135,8 @@ export type Database = {
           last_name: string
           name?: string | null
           phone?: string | null
+          role?: string
+          user_id?: string | null
         }
         Update: {
           created_at?: string
@@ -142,8 +146,18 @@ export type Database = {
           last_name?: string
           name?: string | null
           phone?: string | null
+          role?: string
+          user_id?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "players_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       rsvp: {
         Row: {
@@ -320,21 +334,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
-      }
-      user_roles: {
-        Row: {
-          role: string
-          user_id: string
-        }
-        Insert: {
-          role?: string
-          user_id: string
-        }
-        Update: {
-          role?: string
-          user_id?: string
-        }
-        Relationships: []
       }
       weeks: {
         Row: {
