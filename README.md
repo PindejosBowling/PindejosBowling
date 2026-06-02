@@ -3,10 +3,17 @@ Bowling hub for the Pindejos Bowling League
 
 ## Local Development
 
-The app lives in `app/`. One-time installation of `node` if needed:
+One-time installation of 'brew' (MacOS Package Manager) if needed:
+```bash
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+```
+
+One-time installation of `node` if needed:
 ```bash
 brew install node
 ```
+
+The app lives in `app/`. 
 
 ### iOS simulator
 ```bash
