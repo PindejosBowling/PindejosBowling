@@ -8,6 +8,8 @@ on:
 jobs:
   build-and-submit:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     defaults:
       run:
         working-directory: app
@@ -31,10 +33,31 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Push secrets to EAS
+      - name: Bump patch version
+        id: bump
         run: |
-          eas secret:create --scope project --name EXPO_PUBLIC_SUPABASE_URL --value "$SUPABASE_URL" --force --non-interactive
-          eas secret:create --scope project --name EXPO_PUBLIC_SUPABASE_API_KEY --value "$SUPABASE_KEY" --force --non-interactive
+          NEW_VERSION=$(node -e "
+            const fs = require('fs');
+            const cfg = JSON.parse(fs.readFileSync('app.json', 'utf8'));
+            const [maj, min, pat] = cfg.expo.version.split('.').map(Number);
+            cfg.expo.version = maj + '.' + min + '.' + (pat + 1);
+            fs.writeFileSync('app.json', JSON.stringify(cfg, null, 2) + '\n');
+            process.stdout.write(cfg.expo.version);
+          ")
+          echo "version=$NEW_VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Commit version bump
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add app.json
+          git commit -m "chore: bump version to ${{ steps.bump.outputs.version }} [skip ci]"
+          git push
+
+      - name: Push Supabase env vars to EAS
+        run: |
+          printf 'EXPO_PUBLIC_SUPABASE_URL=%s\nEXPO_PUBLIC_SUPABASE_API_KEY=%s\n' "$SUPABASE_URL" "$SUPABASE_KEY" > /tmp/eas-env.txt
+          eas env:push --scope project --environment production --env-file /tmp/eas-env.txt --force --non-interactive
         env:
           SUPABASE_URL: ${{ secrets.EXPO_PUBLIC_SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.EXPO_PUBLIC_SUPABASE_API_KEY }}
