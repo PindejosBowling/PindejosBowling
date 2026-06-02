@@ -56,8 +56,8 @@ jobs:
 
       - name: Push Supabase env vars to EAS
         run: |
-          printf 'EXPO_PUBLIC_SUPABASE_URL=%s\nEXPO_PUBLIC_SUPABASE_API_KEY=%s\n' "$SUPABASE_URL" "$SUPABASE_KEY" > /tmp/eas-env.txt
-          eas env:push /tmp/eas-env.txt --environment production --force
+          printf 'EXPO_PUBLIC_SUPABASE_URL=%s\nEXPO_PUBLIC_SUPABASE_API_KEY=%s\n' "$SUPABASE_URL" "$SUPABASE_KEY" > .env.local
+          eas env:push --environment production --force
         env:
           SUPABASE_URL: ${{ secrets.EXPO_PUBLIC_SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.EXPO_PUBLIC_SUPABASE_API_KEY }}
