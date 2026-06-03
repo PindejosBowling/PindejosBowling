@@ -41,16 +41,22 @@ export type Database = {
     Tables: {
       app_credentials: {
         Row: {
+          created_at: string
           password_hash: string
           role: string
+          updated_at: string
         }
         Insert: {
+          created_at?: string
           password_hash: string
           role: string
+          updated_at?: string
         }
         Update: {
+          created_at?: string
           password_hash?: string
           role?: string
+          updated_at?: string
         }
         Relationships: []
       }
@@ -60,18 +66,21 @@ export type Database = {
           id: string
           message: string
           player_id: string
+          updated_at: string
         }
         Insert: {
           created_at?: string
           id?: string
           message: string
           player_id: string
+          updated_at?: string
         }
         Update: {
           created_at?: string
           id?: string
           message?: string
           player_id?: string
+          updated_at?: string
         }
         Relationships: [
           {
@@ -85,24 +94,30 @@ export type Database = {
       }
       game_schedule: {
         Row: {
+          created_at: string
           game_number: number
           id: string
           team_a: number
           team_b: number
+          updated_at: string
           week_id: string
         }
         Insert: {
+          created_at?: string
           game_number: number
           id?: string
           team_a: number
           team_b: number
+          updated_at?: string
           week_id: string
         }
         Update: {
+          created_at?: string
           game_number?: number
           id?: string
           team_a?: number
           team_b?: number
+          updated_at?: string
           week_id?: string
         }
         Relationships: [
@@ -125,6 +140,7 @@ export type Database = {
           name: string | null
           phone: string | null
           role: string
+          updated_at: string
           user_id: string | null
         }
         Insert: {
@@ -136,6 +152,7 @@ export type Database = {
           name?: string | null
           phone?: string | null
           role?: string
+          updated_at?: string
           user_id?: string | null
         }
         Update: {
@@ -147,20 +164,14 @@ export type Database = {
           name?: string | null
           phone?: string | null
           role?: string
+          updated_at?: string
           user_id?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "players_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: true
-            referencedRelation: "users"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       rsvp: {
         Row: {
+          created_at: string
           id: string
           note: string | null
           player_id: string
@@ -169,6 +180,7 @@ export type Database = {
           week_id: string
         }
         Insert: {
+          created_at?: string
           id?: string
           note?: string | null
           player_id: string
@@ -177,6 +189,7 @@ export type Database = {
           week_id: string
         }
         Update: {
+          created_at?: string
           id?: string
           note?: string | null
           player_id?: string
@@ -203,6 +216,7 @@ export type Database = {
       }
       scores: {
         Row: {
+          created_at: string
           game_number: number
           id: string
           score: number | null
@@ -210,6 +224,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          created_at?: string
           game_number: number
           id?: string
           score?: number | null
@@ -217,6 +232,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          created_at?: string
           game_number?: number
           id?: string
           score?: number | null
@@ -235,19 +251,25 @@ export type Database = {
       }
       season_champions: {
         Row: {
+          created_at: string
           id: string
           player_id: string
           season_id: number
+          updated_at: string
         }
         Insert: {
+          created_at?: string
           id?: string
           player_id: string
           season_id: number
+          updated_at?: string
         }
         Update: {
+          created_at?: string
           id?: string
           player_id?: string
           season_id?: number
+          updated_at?: string
         }
         Relationships: [
           {
@@ -269,53 +291,65 @@ export type Database = {
       seasons: {
         Row: {
           bowling_night: string
+          created_at: string
           ended_at: string | null
           id: number
           league_name: string
           number: number
           started_at: string
+          updated_at: string
         }
         Insert: {
           bowling_night: string
+          created_at?: string
           ended_at?: string | null
           id?: number
           league_name: string
           number: number
           started_at: string
+          updated_at?: string
         }
         Update: {
           bowling_night?: string
+          created_at?: string
           ended_at?: string | null
           id?: number
           league_name?: string
           number?: number
           started_at?: string
+          updated_at?: string
         }
         Relationships: []
       }
       team_slots: {
         Row: {
+          created_at: string
           id: string
           is_fill: boolean
           player_id: string | null
           slot: number
           team_number: number
+          updated_at: string
           week_id: string
         }
         Insert: {
+          created_at?: string
           id?: string
           is_fill?: boolean
           player_id?: string | null
           slot: number
           team_number: number
+          updated_at?: string
           week_id: string
         }
         Update: {
+          created_at?: string
           id?: string
           is_fill?: boolean
           player_id?: string | null
           slot?: number
           team_number?: number
+          updated_at?: string
           week_id?: string
         }
         Relationships: [
@@ -338,26 +372,32 @@ export type Database = {
       weeks: {
         Row: {
           bowled_at: string | null
+          created_at: string
           id: string
           is_archived: boolean
           is_confirmed: boolean
           season_id: number
+          updated_at: string
           week_number: number
         }
         Insert: {
           bowled_at?: string | null
+          created_at?: string
           id?: string
           is_archived?: boolean
           is_confirmed?: boolean
           season_id: number
+          updated_at?: string
           week_number: number
         }
         Update: {
           bowled_at?: string | null
+          created_at?: string
           id?: string
           is_archived?: boolean
           is_confirmed?: boolean
           season_id?: number
+          updated_at?: string
           week_number?: number
         }
         Relationships: [
@@ -375,7 +415,8 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      custom_access_token: { Args: { event: Json }; Returns: Json }
+      is_registered_player: { Args: { phone: string }; Returns: boolean }
     }
     Enums: {
       [_ in never]: never
