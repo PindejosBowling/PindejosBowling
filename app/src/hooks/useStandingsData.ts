@@ -21,15 +21,13 @@ type RawScore = {
     player_id: string | null
     team_id: string
     is_fill: boolean
-    week_id: string
     players: { id: string; name: string } | null
-    weeks: { season_id: number; is_archived: boolean }
+    teams: { week_id: string; weeks: { season_id: number; is_archived: boolean } }
   }
 }
 
 type RawSchedule = {
   id: string
-  week_id: string
   game_number: number
   team_a_id: string
   team_b_id: string
@@ -58,8 +56,8 @@ export function computeStandingsFromSupabase(
   const teamTotals = new Map<string, number>()
   for (const row of rawScores as RawScore[]) {
     const slot = row.team_slots
-    if (!slot?.weeks?.is_archived) continue
-    if (seasonId !== null && slot.weeks.season_id !== seasonId) continue
+    if (!slot?.teams?.weeks?.is_archived) continue
+    if (seasonId !== null && slot.teams.weeks.season_id !== seasonId) continue
     const key = `${row.game_id}|${slot.team_id}`
     teamTotals.set(key, (teamTotals.get(key) ?? 0) + (row.score ?? 0))
   }
@@ -79,8 +77,8 @@ export function computeStandingsFromSupabase(
     if (!slot || slot.is_fill) continue
     const player = slot.players
     if (!player?.id || !player?.name) continue
-    if (!slot.weeks?.is_archived) continue
-    if (seasonId !== null && slot.weeks.season_id !== seasonId) continue
+    if (!slot.teams?.weeks?.is_archived) continue
+    if (seasonId !== null && slot.teams.weeks.season_id !== seasonId) continue
 
     const myTeam = slot.team_id
     const oppTeam = scheduleMap.get(`${row.game_id}|${myTeam}`)
@@ -97,7 +95,7 @@ export function computeStandingsFromSupabase(
     p.losses += myTotal <= oppTotal ? 1 : 0
     p.pins   += row.score ?? 0
     p.games  += 1
-    p.weeks.add(slot.week_id)
+    p.weeks.add(slot.teams.week_id)
   }
 
   return Array.from(byPlayer.entries())

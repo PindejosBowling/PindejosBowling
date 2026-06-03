@@ -51,8 +51,8 @@ The client is configured via Expo environment variables that are set in `.env.lo
 | `weeks` | `id`, `season_id`, `week_number`, `is_archived`, `is_confirmed`, `bowled_at` |
 | `rsvp` | `id`, `player_id`, `week_id`, `status`, `note`, `updated_at` |
 | `teams` | `id`, `week_id`, `team_number` |
-| `team_slots` | `id`, `week_id`, `team_id`, `slot`, `player_id`, `is_fill` |
-| `games` | `id`, `week_id`, `game_number`, `team_a_id`, `team_b_id` |
+| `team_slots` | `id`, `team_id`, `slot`, `player_id`, `is_fill` |
+| `games` | `id`, `game_number`, `team_a_id`, `team_b_id` |
 | `scores` | `id`, `team_slot_id`, `game_id`, `score`, `updated_at` |
 | `season_champions` | `id`, `player_id`, `season_id` |
 | `board_posts` | `id`, `player_id`, `message`, `created_at` |
@@ -61,7 +61,9 @@ The client is configured via Expo environment variables that are set in `.env.lo
 - `weeks.is_archived` — `true` once the week has been bowled and scores are final. All historical queries filter to archived weeks.
 - `weeks.is_confirmed` — `true` once teams have been generated and locked for the week. Used to distinguish an active (live-scoring) week from a pending one.
 - `team_slots.is_fill` — `true` for league-avg fill placeholders. Excluded from personal stats but included in team totals. **Generated column** (`player_id IS NULL`) — readable but never written; a fill is simply a slot with no `player_id`.
-- **`teams` is the team entity.** A team is one `(week_id, team_number)` pairing. `team_slots.team_id` (who's on the team) and `games.team_a_id`/`team_b_id` (the matchup) both reference it via composite `(team_id, week_id)` FKs that enforce a slot/game can only point at a team in its own week. `team_number` survives on `teams` purely for the "Team N" display label — **all matching/joining keys on the team UUID.**
+- **`teams` is the team entity and the sole owner of `week_id`.** A team is one `(week_id, team_number)` pairing. `team_slots.team_id` (who's on the team) and `games.team_a_id`/`team_b_id` (the matchup) reference it by **plain UUID FK** (`→ teams(id)`, `ON DELETE CASCADE`). A row's week is **derived through its team** (`team_slots → teams → weeks`, `games → teams → weeks`); neither `team_slots` nor `games` stores its own `week_id`. `team_number` lives on `teams` purely for the "Team N" display label — **all matching/joining keys on the team UUID.**
+- **`games` same-week invariant** is enforced by the `games_same_week` trigger (`team_a_id` and `team_b_id` must resolve to the same `teams.week_id`) — it replaces the old shared-`week_id` composite FK.
+- **Week deletes cascade from `teams`.** `scores` FKs (`team_slot_id`, `game_id`) and the `team_slots`/`games` team FKs are all `ON DELETE CASCADE`, so deleting a week's `teams` rows (`teams.removeByWeek`) wipes its slots, games, and scores in one step — there is no `team_slots.removeByWeek` / `games.removeByWeek`.
 
 ---
 
@@ -77,12 +79,11 @@ The client is configured via Expo environment variables that are set in `.env.lo
 ### `games`
 | Method | Description |
 |---|---|
-| `listByWeek(weekId)` | Game rows for one week |
-| `listForArchivedWeeks()` | All game rows for archived weeks (used by standings/chemistry/H2H/past-games) — includes `id`, `team_a_id`, `team_b_id` |
+| `listByWeek(weekId)` | Game rows for one week (filters via the team-a → `teams.week_id` embed) |
+| `listForArchivedWeeks()` | All game rows for archived weeks (used by standings/chemistry/H2H/past-games) — includes `id`, `team_a_id`, `team_b_id`, and the week via embedded `teams(week_id)` |
 | `insert(data)` | Insert one or many game rows |
 | `remove(id)` | Delete by id |
-| `removeByWeek(weekId)` | Delete all game rows for a week |
-| `removeByWeekAndGame(weekId, gameNumber)` | Delete a specific game row by week + game number |
+| `removeByWeekAndGame(weekId, gameNumber)` | Delete a specific game (by game number) for a week — resolves the week's team ids, then deletes by `team_a_id` |
 
 ### `players`
 | Method | Description |
@@ -141,19 +142,18 @@ The client is configured via Expo environment variables that are set in `.env.lo
 ### `teamSlots`
 | Method | Description |
 |---|---|
-| `listByWeek(weekId)` | All slots for a week with joined player name + `teams(team_number)` |
-| `listByPlayer(playerId)` | All archived slots for a player with `team_id`, `teams(team_number)`, and week/season join |
+| `listByWeek(weekId)` | All slots for a week with joined player name + `teams(team_number, week_id)` (filters via `teams.week_id`) |
+| `listByPlayer(playerId)` | All archived slots for a player with `team_id` and the week/season join embedded under `teams` |
 | `insert(data)` | Insert one or many slots |
 | `update(id, data)` | Update a slot |
 | `remove(id)` | Delete a slot |
-| `removeByWeek(weekId)` | Delete all slots for a week |
 
 ### `teams`
 | Method | Description |
 |---|---|
 | `listByWeek(weekId)` | All team rows for a week, ordered by `team_number` |
 | `insert(data)` | Insert one or many teams; chains `.select()` so callers get the new ids back |
-| `removeByWeek(weekId)` | Delete all teams for a week |
+| `removeByWeek(weekId)` | Delete all teams for a week — cascades to its slots, games, and scores |
 
 ### `weeks`
 | Method | Description |
@@ -374,7 +374,7 @@ const { refreshing, onRefresh } = useRefresh(reload)
 - **Archive week** (`AdminArchiveModal`) — sets `weeks.update(id, { is_archived: true })`, then inserts a new week row for the next week number
 - **Add/edit player** (`PlayerManagementScreen`) — inline modal calls `players.insert` or `players.update`; first name, last name, and phone are all required
 - **End season** (`AdminEndSeasonModal`) — writes `season_champions.insert` for selected champions, then calls `seasons.insert` for the new season
-- **Generate teams** (`AdminGenerateTeamsModal`) — reads RSVP + player avgs, computes balanced teams client-side, previews swaps, then wipes the week (scores → team_slots → games → teams) and writes `teams.insert` (capturing the new ids) → `team_slots.insert` + `games.insert` (both referencing `team_id`/`team_a_id`/`team_b_id`) → `weeks.update(..., { is_confirmed: true })`
+- **Generate teams** (`AdminGenerateTeamsModal`) — reads RSVP + player avgs, computes balanced teams client-side, previews swaps, then wipes the week with a single `teams.removeByWeek` (cascades slots → games → scores) and writes `teams.insert` (capturing the new ids) → `team_slots.insert` + `games.insert` (referencing `team_id`/`team_a_id`/`team_b_id`; no `week_id` — week is derived through the team) → `weeks.update(..., { is_confirmed: true })`
 
 ---
 

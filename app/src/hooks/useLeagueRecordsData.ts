@@ -30,12 +30,12 @@ export function computeLeagueRecordsFromSupabase(
 
   for (const row of rawScores) {
     const slot = row.team_slots
-    if (!slot?.weeks?.is_archived) continue
-    if (filterSeasonId !== null && slot.weeks.season_id !== filterSeasonId) continue
+    if (!slot?.teams?.weeks?.is_archived) continue
+    if (filterSeasonId !== null && slot.teams.weeks.season_id !== filterSeasonId) continue
 
     const score: number = row.score ?? 0
-    const seasonNum: number = slot.weeks.seasons?.number ?? 0
-    const weekNum: number = slot.weeks.week_number ?? 0
+    const seasonNum: number = slot.teams.weeks.seasons?.number ?? 0
+    const weekNum: number = slot.teams.weeks.week_number ?? 0
     const gameNum: number = (row.games as any)?.game_number ?? 0
 
     if (!slot.is_fill && slot.players?.name) {
@@ -46,12 +46,12 @@ export function computeLeagueRecordsFromSupabase(
         recs.highGame = { val: score, by: playerName, when: `S${seasonNum} W${weekNum} G${gameNum}` }
       }
 
-      const seriesKey = `${slot.week_id}|${playerId}`
+      const seriesKey = `${slot.teams.week_id}|${playerId}`
       if (!seriesMap.has(seriesKey)) seriesMap.set(seriesKey, { name: playerName, gameScores: new Map(), seasonNum, weekNum })
       const se = seriesMap.get(seriesKey)!
       se.gameScores.set(gameNum, score)
 
-      const spKey = `${slot.weeks.season_id}|${playerId}`
+      const spKey = `${slot.teams.weeks.season_id}|${playerId}`
       if (!seasonPlayerMap.has(spKey)) seasonPlayerMap.set(spKey, { name: playerName, seasonNum, pins: 0, games: 0 })
       const sp = seasonPlayerMap.get(spKey)!
       sp.pins += score
@@ -60,13 +60,13 @@ export function computeLeagueRecordsFromSupabase(
 
     const teamNumber: number = slot.teams?.team_number ?? 0
 
-    const tgKey = `${slot.week_id}|${gameNum}|${slot.team_id}`
+    const tgKey = `${slot.teams.week_id}|${gameNum}|${slot.team_id}`
     if (!teamGameMap.has(tgKey)) teamGameMap.set(tgKey, { team: teamNumber, seasonNum, weekNum, gameNum, total: 0, roster: [] })
     const tg = teamGameMap.get(tgKey)!
     tg.total += score
     if (!slot.is_fill && slot.players?.name) tg.roster.push({ name: slot.players.name, score })
 
-    const tnKey = `${slot.week_id}|${slot.team_id}`
+    const tnKey = `${slot.teams.week_id}|${slot.team_id}`
     if (!teamNightMap.has(tnKey)) teamNightMap.set(tnKey, { team: teamNumber, seasonNum, weekNum, total: 0, gameRosters: new Map() })
     const tn = teamNightMap.get(tnKey)!
     tn.total += score

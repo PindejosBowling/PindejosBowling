@@ -25,7 +25,7 @@ export function computeChemistryFromSupabase(
   const teamTotals = new Map<string, number>()
   for (const row of rawScores) {
     const slot = row.team_slots
-    if (!slot?.weeks?.is_archived) continue
+    if (!slot?.teams?.weeks?.is_archived) continue
     const key = `${row.game_id}|${slot.team_id}`
     teamTotals.set(key, (teamTotals.get(key) ?? 0) + (row.score ?? 0))
   }
@@ -41,9 +41,9 @@ export function computeChemistryFromSupabase(
 
   for (const row of rawScores) {
     const slot = row.team_slots
-    if (!slot?.weeks?.is_archived) continue
+    if (!slot?.teams?.weeks?.is_archived) continue
 
-    const twKey = `${slot.week_id}|${slot.team_id}`
+    const twKey = `${slot.teams.week_id}|${slot.team_id}`
     if (!teamWeekMap.has(twKey)) {
       teamWeekMap.set(twKey, { wins: 0, losses: 0, games: 0, gamesProcessed: new Set(), playerMap: new Map() })
     }

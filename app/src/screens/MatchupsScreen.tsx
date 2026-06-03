@@ -23,7 +23,7 @@ import { useMatchupsData } from '../hooks/useMatchupsData'
 import { useUiStore } from '../stores/uiStore'
 import { usePendingStore } from '../stores/pendingStore'
 import { useAuthStore } from '../stores/authStore'
-import { scores, teamSlots, games, weeks } from '../utils/supabase/db'
+import { scores, teams as teamsDb, games, weeks } from '../utils/supabase/db'
 import { colors, fonts, radius } from '../theme'
 
 // ---------------------------------------------------------------------------
@@ -112,12 +112,8 @@ export default function MatchupsScreen() {
   function confirmClearMatchups() {
     const doClear = async () => {
       if (!weekId) return
-      const slotIds = Object.values(teams).flatMap((team: any) =>
-        team.players.map((p: any) => p.teamSlotId)
-      )
-      if (slotIds.length) await scores.removeBySlotIds(slotIds)
-      await teamSlots.removeByWeek(weekId)
-      await games.removeByWeek(weekId)
+      // Deleting the week's teams cascades to its slots, games, and scores.
+      await teamsDb.removeByWeek(weekId)
       await weeks.update(weekId, { is_confirmed: false })
       setPending({ pendingScores: {} })
       await reload()
@@ -162,7 +158,6 @@ export default function MatchupsScreen() {
       const rows = game1Round.pairings
         .filter(p => p.b !== null)
         .map(p => ({
-          week_id: weekId,
           game_number: nextGameNum,
           team_a_id: p.a.teamId,
           team_b_id: p.b!.teamId,

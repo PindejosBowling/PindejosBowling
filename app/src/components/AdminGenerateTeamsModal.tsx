@@ -245,17 +245,7 @@ export default function AdminGenerateTeamsModal({ visible, onClose }: Props) {
     try {
       const numTeams = (genTeams as any[]).length
 
-      // Wipe the week's existing data. Order respects FKs: scores → team_slots → games → teams.
-      const { data: existingSlots } = await teamSlots.listByWeek(weekId)
-      const existingSlotIds = (existingSlots ?? []).map((s: any) => s.id)
-      if (existingSlotIds.length > 0) {
-        const { error: e0 } = await scores.removeBySlotIds(existingSlotIds)
-        if (e0) throw e0
-      }
-      const { error: e1 } = await teamSlots.removeByWeek(weekId)
-      if (e1) throw e1
-      const { error: e3 } = await games.removeByWeek(weekId)
-      if (e3) throw e3
+      // Wipe the week's existing data: deleting its teams cascades to slots, games, and scores.
       const { error: eTeamsDel } = await teamsDb.removeByWeek(weekId)
       if (eTeamsDel) throw eTeamsDel
 
@@ -272,7 +262,6 @@ export default function AdminGenerateTeamsModal({ visible, onClose }: Props) {
 
       const slotRows: TablesInsert<'team_slots'>[] = (genTeams as any[]).flatMap((team, tIdx) =>
         team.players.map((player: GenPlayer, pIdx: number) => ({
-          week_id: weekId,
           player_id: player.isFill ? null : player.id,
           team_id: teamIdByNumber.get(tIdx + 1)!,
           slot: pIdx,
@@ -281,7 +270,6 @@ export default function AdminGenerateTeamsModal({ visible, onClose }: Props) {
       )
 
       const scheduleRows: TablesInsert<'games'>[] = buildSchedule(numTeams).map(s => ({
-        week_id: weekId,
         game_number: s.game_number,
         team_a_id: teamIdByNumber.get(s.team_a)!,
         team_b_id: teamIdByNumber.get(s.team_b)!,

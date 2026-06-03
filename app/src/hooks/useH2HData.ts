@@ -61,15 +61,15 @@ export function computeH2HFromSupabase(
     if (!playerWeekMap.has(name)) playerWeekMap.set(name, new Map())
     const weekMap = playerWeekMap.get(name)!
 
-    if (!weekMap.has(slot.week_id)) {
-      weekMap.set(slot.week_id, {
+    if (!weekMap.has(slot.teams.week_id)) {
+      weekMap.set(slot.teams.week_id, {
         team: slot.team_id,
         scores: new Map(),
-        seasonNum: slot.weeks?.seasons?.number ?? 0,
-        weekNum: slot.weeks?.week_number ?? 0,
+        seasonNum: slot.teams.weeks?.seasons?.number ?? 0,
+        weekNum: slot.teams.weeks?.week_number ?? 0,
       })
     }
-    weekMap.get(slot.week_id)!.scores.set(row.game_id, row.score ?? 0)
+    weekMap.get(slot.teams.week_id)!.scores.set(row.game_id, row.score ?? 0)
   }
 
   const p1Weeks = playerWeekMap.get(p1Name)

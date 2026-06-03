@@ -30,8 +30,8 @@ export default function PastSeasonsScreen() {
         const weekIds = new Set<string>()
         for (const row of rawScores) {
           const slot = row.team_slots
-          if (slot?.weeks?.season_id === season.id && slot?.weeks?.is_archived) {
-            weekIds.add(slot.week_id)
+          if (slot?.teams?.weeks?.season_id === season.id && slot?.teams?.weeks?.is_archived) {
+            weekIds.add(slot.teams.week_id)
           }
         }
 

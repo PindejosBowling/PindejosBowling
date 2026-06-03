@@ -28,18 +28,18 @@ export function computePastGamesFromSupabase(
 ): WeekGames[] {
   const filtered = rawScores.filter(r => {
     const slot = r.team_slots
-    return slot?.weeks?.is_archived && (seasonId == null || slot.weeks.season_id === seasonId)
+    return slot?.teams?.weeks?.is_archived && (seasonId == null || slot.teams.weeks.season_id === seasonId)
   })
 
   // week metadata: weekId → { weekNumber, bowledAt }
   const weekMeta = new Map<string, { weekNumber: number; bowledAt: string | null }>()
   for (const r of filtered) {
     const slot = r.team_slots
-    const weekId: string = slot?.week_id
+    const weekId: string = slot?.teams?.week_id
     if (weekId && !weekMeta.has(weekId)) {
       weekMeta.set(weekId, {
-        weekNumber: slot.weeks.week_number,
-        bowledAt: slot.weeks.bowled_at ?? null,
+        weekNumber: slot.teams.weeks.week_number,
+        bowledAt: slot.teams.weeks.bowled_at ?? null,
       })
     }
   }
@@ -47,9 +47,10 @@ export function computePastGamesFromSupabase(
   // schedule lookup: weekId → gameId → { teamA, teamB (team ids), gameNumber }
   const schedMap = new Map<string, Map<string, { teamA: string; teamB: string; gameNumber: number }>>()
   for (const s of rawSchedule) {
-    if (!weekMeta.has(s.week_id)) continue
-    if (!schedMap.has(s.week_id)) schedMap.set(s.week_id, new Map())
-    schedMap.get(s.week_id)!.set(s.id, { teamA: s.team_a_id, teamB: s.team_b_id, gameNumber: s.game_number })
+    const weekId: string = s.teams?.week_id
+    if (!weekMeta.has(weekId)) continue
+    if (!schedMap.has(weekId)) schedMap.set(weekId, new Map())
+    schedMap.get(weekId)!.set(s.id, { teamA: s.team_a_id, teamB: s.team_b_id, gameNumber: s.game_number })
   }
 
   // team id → display number (every archived team has scores, so this covers all teams that played)
@@ -59,7 +60,7 @@ export function computePastGamesFromSupabase(
   const scoresMap = new Map<string, Map<string, Map<string, PlayerScore[]>>>()
   for (const r of filtered) {
     const slot = r.team_slots
-    const weekId: string = slot?.week_id
+    const weekId: string = slot?.teams?.week_id
     const teamId: string = slot?.team_id
     const gameId: string = r.game_id
     const score: number = r.score

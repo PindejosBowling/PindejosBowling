@@ -10,6 +10,14 @@ import {
 
 // ---- Raw query result shapes ----
 
+type WeekMeta = {
+  id: string
+  season_id: number
+  week_number: number
+  is_archived: boolean
+  seasons: { id: number; number: number }
+}
+
 export type DetailScore = {
   game_id: string
   score: number | null
@@ -19,16 +27,8 @@ export type DetailScore = {
     team_id: string
     slot: number
     is_fill: boolean
-    week_id: string
     players: { id: string; name: string } | null
-    teams: { team_number: number } | null
-    weeks: {
-      id: string
-      season_id: number
-      week_number: number
-      is_archived: boolean
-      seasons: { id: number; number: number }
-    }
+    teams: { team_number: number; week_id: string; weeks: WeekMeta }
   }
 }
 
@@ -37,23 +37,15 @@ export type PlayerSlot = {
   team_id: string
   slot: number
   is_fill: boolean
-  week_id: string
-  teams: { team_number: number } | null
-  weeks: {
-    id: string
-    season_id: number
-    week_number: number
-    is_archived: boolean
-    seasons: { id: number; number: number }
-  }
+  teams: { team_number: number; week_id: string; weeks: WeekMeta }
 }
 
 type RawSchedule = {
   id: string
-  week_id: string
   game_number: number
   team_a_id: string
   team_b_id: string
+  teams: { week_id: string }
 }
 
 // ---- Exported derived data types ----
@@ -138,7 +130,7 @@ export function computePlayerSeasons(
   for (const row of allScores) {
     const slot = row.team_slots
     if (!slot || slot.is_fill || slot.player_id !== playerId) continue
-    seen.add(slot.weeks.season_id)
+    seen.add(slot.teams.weeks.season_id)
   }
   return seasonList.filter(s => seen.has(s.id))
 }
@@ -156,7 +148,7 @@ export function computePlayerProfile(
   const playerRows = allScores.filter(r => {
     const slot = r.team_slots
     if (!slot || slot.is_fill || slot.player_id !== playerId) return false
-    if (seasonId !== null && slot.weeks.season_id !== seasonId) return false
+    if (seasonId !== null && slot.teams.weeks.season_id !== seasonId) return false
     return true
   })
 
@@ -169,7 +161,7 @@ export function computePlayerProfile(
   const sorted = [...playerRows]
     .filter(r => (r.score ?? 0) > 0)
     .sort((a, b) => {
-      const aw = a.team_slots.weeks, bw = b.team_slots.weeks
+      const aw = a.team_slots.teams.weeks, bw = b.team_slots.teams.weeks
       const ak = aw.seasons.number * 1000 + aw.week_number
       const bk = bw.seasons.number * 1000 + bw.week_number
       return ak !== bk ? ak - bk : (gameNumberById.get(a.game_id) ?? 0) - (gameNumberById.get(b.game_id) ?? 0)
@@ -182,7 +174,7 @@ export function computePlayerProfile(
     const cs = allScores
       .filter(r => {
         const slot = r.team_slots
-        return slot && !slot.is_fill && slot.player_id === playerId && slot.weeks.season_id === currentSeasonId
+        return slot && !slot.is_fill && slot.player_id === playerId && slot.teams.weeks.season_id === currentSeasonId
       })
       .map(r => r.score ?? 0)
       .filter(s => s > 0)
@@ -230,8 +222,8 @@ export function computePersonalRecords(
   const sortedSlots = [...playerSlots]
     .filter(s => !s.is_fill)
     .sort((a, b) => {
-      const ak = a.weeks.seasons.number * 1000 + a.weeks.week_number
-      const bk = b.weeks.seasons.number * 1000 + b.weeks.week_number
+      const ak = a.teams.weeks.seasons.number * 1000 + a.teams.weeks.week_number
+      const bk = b.teams.weeks.seasons.number * 1000 + b.teams.weeks.week_number
       return ak - bk
     })
 
@@ -275,8 +267,8 @@ export function computeCurrentTeam(playerSlots: PlayerSlot[]): string | null {
   const sorted = [...playerSlots]
     .filter(s => !s.is_fill)
     .sort((a, b) => {
-      const ak = a.weeks.seasons.number * 1000 + a.weeks.week_number
-      const bk = b.weeks.seasons.number * 1000 + b.weeks.week_number
+      const ak = a.teams.weeks.seasons.number * 1000 + a.teams.weeks.week_number
+      const bk = b.teams.weeks.seasons.number * 1000 + b.teams.weeks.week_number
       return bk - ak
     })
   const latest = sorted[0]
@@ -306,7 +298,7 @@ export function computeWeekRows(
   const rows: WeekRow[] = []
   for (const slot of playerSlots) {
     if (slot.is_fill) continue
-    if (seasonId !== null && slot.weeks.season_id !== seasonId) continue
+    if (seasonId !== null && slot.teams.weeks.season_id !== seasonId) continue
 
     const slotScores = scoresBySlotId.get(slot.id)
     const present = !!slotScores?.size
@@ -329,9 +321,9 @@ export function computeWeekRows(
     }
 
     rows.push({
-      weekId: slot.week_id,
-      seasonNumber: slot.weeks.seasons.number,
-      weekNumber: slot.weeks.week_number,
+      weekId: slot.teams.week_id,
+      seasonNumber: slot.teams.weeks.seasons.number,
+      weekNumber: slot.teams.weeks.week_number,
       teamNumber: slot.teams?.team_number ?? 0,
       scores, wins, losses, present,
     })
@@ -355,18 +347,18 @@ export function computeChartPoints(
     .filter(r => {
       const slot = r.team_slots
       if (!slot || slot.is_fill || slot.player_id !== playerId) return false
-      if (seasonId !== null && slot.weeks.season_id !== seasonId) return false
+      if (seasonId !== null && slot.teams.weeks.season_id !== seasonId) return false
       return (r.score ?? 0) > 0
     })
     .sort((a, b) => {
-      const aw = a.team_slots.weeks, bw = b.team_slots.weeks
+      const aw = a.team_slots.teams.weeks, bw = b.team_slots.teams.weeks
       const ak = aw.seasons.number * 1000 + aw.week_number
       const bk = bw.seasons.number * 1000 + bw.week_number
       return ak !== bk ? ak - bk : (gameNumberById.get(a.game_id) ?? 0) - (gameNumberById.get(b.game_id) ?? 0)
     })
     .map(r => ({
       value: r.score ?? 0,
-      label: `S${r.team_slots.weeks.seasons.number}W${r.team_slots.weeks.week_number}`,
+      label: `S${r.team_slots.teams.weeks.seasons.number}W${r.team_slots.teams.weeks.week_number}`,
     }))
 }
 
@@ -375,14 +367,14 @@ export function computeExpandedMatchups(
   allScores: DetailScore[],
   allSchedule: RawSchedule[],
 ): ExpandedMatchup[] {
-  const weekScores = allScores.filter(r => r.team_slots.week_id === weekId)
+  const weekScores = allScores.filter(r => r.team_slots.teams.week_id === weekId)
   const gameNumberById = buildGameNumberById(allSchedule)
   const gameIds = [...new Set(weekScores.map(r => r.game_id))]
     .sort((a, b) => (gameNumberById.get(a) ?? 0) - (gameNumberById.get(b) ?? 0))
 
   const pairingsByGame = new Map<string, { teamA: string; teamB: string }>()
   for (const s of allSchedule) {
-    if (s.week_id === weekId) pairingsByGame.set(s.id, { teamA: s.team_a_id, teamB: s.team_b_id })
+    if (s.teams.week_id === weekId) pairingsByGame.set(s.id, { teamA: s.team_a_id, teamB: s.team_b_id })
   }
 
   // team id → display number for this week's roster

@@ -75,7 +75,6 @@ export type Database = {
           team_a_id: string
           team_b_id: string
           updated_at: string
-          week_id: string
         }
         Insert: {
           created_at?: string
@@ -84,7 +83,6 @@ export type Database = {
           team_a_id: string
           team_b_id: string
           updated_at?: string
-          week_id: string
         }
         Update: {
           created_at?: string
@@ -93,29 +91,21 @@ export type Database = {
           team_a_id?: string
           team_b_id?: string
           updated_at?: string
-          week_id?: string
         }
         Relationships: [
           {
-            foreignKeyName: "game_schedule_week_id_fkey"
-            columns: ["week_id"]
+            foreignKeyName: "games_team_a_id_fkey"
+            columns: ["team_a_id"]
             isOneToOne: false
-            referencedRelation: "weeks"
+            referencedRelation: "teams"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "games_team_a_id_week_id_fkey"
-            columns: ["team_a_id", "week_id"]
+            foreignKeyName: "games_team_b_id_fkey"
+            columns: ["team_b_id"]
             isOneToOne: false
             referencedRelation: "teams"
-            referencedColumns: ["id", "week_id"]
-          },
-          {
-            foreignKeyName: "games_team_b_id_week_id_fkey"
-            columns: ["team_b_id", "week_id"]
-            isOneToOne: false
-            referencedRelation: "teams"
-            referencedColumns: ["id", "week_id"]
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -326,7 +316,6 @@ export type Database = {
           slot: number
           team_id: string
           updated_at: string
-          week_id: string
         }
         Insert: {
           created_at?: string
@@ -336,7 +325,6 @@ export type Database = {
           slot: number
           team_id: string
           updated_at?: string
-          week_id: string
         }
         Update: {
           created_at?: string
@@ -346,7 +334,6 @@ export type Database = {
           slot?: number
           team_id?: string
           updated_at?: string
-          week_id?: string
         }
         Relationships: [
           {
@@ -357,17 +344,10 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "team_slots_team_id_week_id_fkey"
-            columns: ["team_id", "week_id"]
+            foreignKeyName: "team_slots_team_id_fkey"
+            columns: ["team_id"]
             isOneToOne: false
             referencedRelation: "teams"
-            referencedColumns: ["id", "week_id"]
-          },
-          {
-            foreignKeyName: "team_slots_week_id_fkey"
-            columns: ["week_id"]
-            isOneToOne: false
-            referencedRelation: "weeks"
             referencedColumns: ["id"]
           },
         ]
