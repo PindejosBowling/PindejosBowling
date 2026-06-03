@@ -23,7 +23,7 @@ export const games = {
   listForArchivedWeeks: () =>
     supabase
       .from('games')
-      .select('id, week_id, game_number, team_a, team_b, team_a_id, team_b_id, weeks!inner(is_archived)')
+      .select('id, week_id, game_number, team_a_id, team_b_id, weeks!inner(is_archived)')
       .eq('weeks.is_archived', true),
   insert: (data: TablesInsert<'games'> | TablesInsert<'games'>[]) =>
     supabase.from('games').insert(data),

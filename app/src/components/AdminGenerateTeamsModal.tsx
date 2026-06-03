@@ -276,7 +276,7 @@ export default function AdminGenerateTeamsModal({ visible, onClose }: Props) {
           player_id: player.isFill ? null : player.id,
           team_id: teamIdByNumber.get(tIdx + 1)!,
           slot: pIdx,
-          is_fill: player.isFill,
+          // is_fill is a generated column (player_id IS NULL) — never written
         }))
       )
 

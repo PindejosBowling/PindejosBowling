@@ -321,7 +321,7 @@ export type Database = {
         Row: {
           created_at: string
           id: string
-          is_fill: boolean
+          is_fill: boolean | null
           player_id: string | null
           slot: number
           team_id: string
@@ -331,7 +331,7 @@ export type Database = {
         Insert: {
           created_at?: string
           id?: string
-          is_fill?: boolean
+          is_fill?: boolean | null
           player_id?: string | null
           slot: number
           team_id: string
@@ -341,7 +341,7 @@ export type Database = {
         Update: {
           created_at?: string
           id?: string
-          is_fill?: boolean
+          is_fill?: boolean | null
           player_id?: string | null
           slot?: number
           team_id?: string

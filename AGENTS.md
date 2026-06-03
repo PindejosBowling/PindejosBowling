@@ -60,7 +60,7 @@ The client is configured via Expo environment variables that are set in `.env.lo
 **Key distinctions:**
 - `weeks.is_archived` — `true` once the week has been bowled and scores are final. All historical queries filter to archived weeks.
 - `weeks.is_confirmed` — `true` once teams have been generated and locked for the week. Used to distinguish an active (live-scoring) week from a pending one.
-- `team_slots.is_fill` — `true` for league-avg fill placeholders. Excluded from personal stats but included in team totals.
+- `team_slots.is_fill` — `true` for league-avg fill placeholders. Excluded from personal stats but included in team totals. **Generated column** (`player_id IS NULL`) — readable but never written; a fill is simply a slot with no `player_id`.
 - **`teams` is the team entity.** A team is one `(week_id, team_number)` pairing. `team_slots.team_id` (who's on the team) and `games.team_a_id`/`team_b_id` (the matchup) both reference it via composite `(team_id, week_id)` FKs that enforce a slot/game can only point at a team in its own week. `team_number` survives on `teams` purely for the "Team N" display label — **all matching/joining keys on the team UUID.**
 
 ---
