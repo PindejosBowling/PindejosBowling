@@ -135,7 +135,7 @@ export default function PlayerDetailScreen() {
           <>
             <Text style={styles.sectionHeader}>Personal Records</Text>
             <RecordCard icon="🎳" label="High Game" value={records.highGame || '—'} />
-            <RecordCard icon="📈" label="High Series (G1+G2)" value={records.highSeries || '—'} />
+            <RecordCard icon="📈" label="High Series" value={records.highSeries || '—'} />
             <RecordCard
               icon="🔥"
               label="Best Streak"
@@ -195,80 +195,87 @@ export default function PlayerDetailScreen() {
 
         {weekRows.length ? (
           <View style={styles.logCard}>
-            <View style={styles.logRow}>
-              <Text style={[styles.logCell, styles.logWeekCell, styles.logHeaderText]}>Week</Text>
-              <Text style={[styles.logCell, styles.logTeamCell, styles.logHeaderText]}>Team</Text>
-              <Text style={[styles.logCell, styles.logScoreCell, styles.logHeaderText]}>G1</Text>
-              <Text style={[styles.logCell, styles.logScoreCell, styles.logHeaderText]}>G2</Text>
-              <Text style={[styles.logCell, styles.logWlCell, styles.logHeaderText]}>W—L</Text>
-              <View style={styles.logExpandCell} />
-            </View>
-
-            {weekRows.map((row) => {
-              const expanded = expandedWeek === row.weekId
-              const matchups = expanded
-                ? computeExpandedMatchups(row.weekId, allScores, allSchedule)
-                : []
-
+            {(() => {
+              const maxGames = weekRows.reduce((max, r) => Math.max(max, r.scores.length), 2)
               return (
-                <View key={row.weekId}>
-                  <TouchableOpacity
-                    style={[styles.logRow, styles.logRowBorder]}
-                    onPress={() => toggleWeek(row.weekId)}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={[styles.logCell, styles.logWeekCell, styles.logText]}>
-                      {`S${row.seasonNumber}W${row.weekNumber}`}
-                    </Text>
-                    <Text style={[styles.logCell, styles.logTeamCell, styles.logMuted]} numberOfLines={1}>
-                      {`Team ${row.teamNumber}`}
-                    </Text>
-                    {!row.present ? (
-                      <Text style={[styles.logCell, styles.logAbsent]}>absent</Text>
-                    ) : (
-                      <>
-                        <Text style={[styles.logCell, styles.logScoreCell, { color: row.g1 ? colors.accent : colors.muted }]}>
-                          {row.g1 || '—'}
-                        </Text>
-                        <Text style={[styles.logCell, styles.logScoreCell, { color: row.g2 ? colors.accent : colors.muted }]}>
-                          {row.g2 || '—'}
-                        </Text>
-                        <Text style={[
-                          styles.logCell, styles.logWlCell,
-                          row.wins > row.losses ? styles.logWin : row.losses > row.wins ? styles.logLoss : styles.logMuted,
-                        ]}>
-                          {(row.wins || row.losses) ? `${row.wins}—${row.losses}` : '—'}
-                        </Text>
-                      </>
-                    )}
-                    <Text style={styles.logExpandCell}>{expanded ? '▾' : '▸'}</Text>
-                  </TouchableOpacity>
+                <>
+                  <View style={styles.logRow}>
+                    <Text style={[styles.logCell, styles.logWeekCell, styles.logHeaderText]}>Week</Text>
+                    <Text style={[styles.logCell, styles.logTeamCell, styles.logHeaderText]}>Team</Text>
+                    {Array.from({ length: maxGames }, (_, i) => (
+                      <Text key={i} style={[styles.logCell, styles.logScoreCell, styles.logHeaderText]}>G{i + 1}</Text>
+                    ))}
+                    <Text style={[styles.logCell, styles.logWlCell, styles.logHeaderText]}>W—L</Text>
+                    <View style={styles.logExpandCell} />
+                  </View>
 
-                  {expanded ? (
-                    <View style={styles.expandedBlock}>
-                      {matchups.length ? (
-                        matchups.map((m) => (
-                          <View key={`${m.gameNum}-${m.a.team}`} style={styles.expandedMatchup}>
-                            <Text style={styles.expandedGameLabel}>Game {m.gameNum}</Text>
-                            <ExpandedTeam team={m.a} />
-                            {m.b ? (
-                              <>
-                                <View style={styles.vsRow}>
-                                  <Text style={styles.vsText}>VS</Text>
+                  {weekRows.map((row) => {
+                    const expanded = expandedWeek === row.weekId
+                    const matchups = expanded
+                      ? computeExpandedMatchups(row.weekId, allScores, allSchedule)
+                      : []
+
+                    return (
+                      <View key={row.weekId}>
+                        <TouchableOpacity
+                          style={[styles.logRow, styles.logRowBorder]}
+                          onPress={() => toggleWeek(row.weekId)}
+                          activeOpacity={0.7}
+                        >
+                          <Text style={[styles.logCell, styles.logWeekCell, styles.logText]}>
+                            {`S${row.seasonNumber}W${row.weekNumber}`}
+                          </Text>
+                          <Text style={[styles.logCell, styles.logTeamCell, styles.logMuted]} numberOfLines={1}>
+                            {`Team ${row.teamNumber}`}
+                          </Text>
+                          {!row.present ? (
+                            <Text style={[styles.logCell, styles.logAbsent]}>absent</Text>
+                          ) : (
+                            <>
+                              {Array.from({ length: maxGames }, (_, i) => (
+                                <Text key={i} style={[styles.logCell, styles.logScoreCell, { color: row.scores[i] ? colors.accent : colors.muted }]}>
+                                  {row.scores[i] || '—'}
+                                </Text>
+                              ))}
+                              <Text style={[
+                                styles.logCell, styles.logWlCell,
+                                row.wins > row.losses ? styles.logWin : row.losses > row.wins ? styles.logLoss : styles.logMuted,
+                              ]}>
+                                {(row.wins || row.losses) ? `${row.wins}—${row.losses}` : '—'}
+                              </Text>
+                            </>
+                          )}
+                          <Text style={styles.logExpandCell}>{expanded ? '▾' : '▸'}</Text>
+                        </TouchableOpacity>
+
+                        {expanded ? (
+                          <View style={styles.expandedBlock}>
+                            {matchups.length ? (
+                              matchups.map((m) => (
+                                <View key={`${m.gameNum}-${m.a.team}`} style={styles.expandedMatchup}>
+                                  <Text style={styles.expandedGameLabel}>Game {m.gameNum}</Text>
+                                  <ExpandedTeam team={m.a} />
+                                  {m.b ? (
+                                    <>
+                                      <View style={styles.vsRow}>
+                                        <Text style={styles.vsText}>VS</Text>
+                                      </View>
+                                      <ExpandedTeam team={m.b} />
+                                    </>
+                                  ) : null}
                                 </View>
-                                <ExpandedTeam team={m.b} />
-                              </>
-                            ) : null}
+                              ))
+                            ) : (
+                              <Text style={styles.emptyExpand}>No matchup data for this week.</Text>
+                            )}
                           </View>
-                        ))
-                      ) : (
-                        <Text style={styles.emptyExpand}>No matchup data for this week.</Text>
-                      )}
-                    </View>
-                  ) : null}
-                </View>
+                        ) : null}
+                      </View>
+                    )
+                  })}
+                </>
               )
-            })}
+            })()}
           </View>
         ) : profile ? (
           <Text style={styles.empty}>No games yet.</Text>

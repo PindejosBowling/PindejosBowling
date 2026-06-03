@@ -31,6 +31,8 @@ export const gameSchedule = {
     supabase.from('game_schedule').delete().eq('id', id),
   removeByWeek: (weekId: string) =>
     supabase.from('game_schedule').delete().eq('week_id', weekId),
+  removeByWeekAndGame: (weekId: string, gameNumber: number) =>
+    supabase.from('game_schedule').delete().eq('week_id', weekId).eq('game_number', gameNumber),
 }
 
 export const players = {

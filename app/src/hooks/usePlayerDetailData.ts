@@ -78,8 +78,7 @@ export interface WeekRow {
   seasonNumber: number
   weekNumber: number
   teamNumber: number
-  g1: number
-  g2: number
+  scores: number[]
   wins: number
   losses: number
   present: boolean
@@ -230,11 +229,12 @@ export function computePersonalRecords(
     const slotScores = scoresBySlotId.get(slot.id)
     if (!slotScores?.size) continue
 
-    const g1 = slotScores.get(1) ?? 0
-    const g2 = slotScores.get(2) ?? 0
-    if (g1 > highGame) highGame = g1
-    if (g2 > highGame) highGame = g2
-    if (g1 + g2 > highSeries) highSeries = g1 + g2
+    let weekTotal = 0
+    for (const [, score] of slotScores) {
+      if (score > highGame) highGame = score
+      weekTotal += score
+    }
+    if (weekTotal > highSeries) highSeries = weekTotal
 
     let weekWins = 0, weekLosses = 0
     for (const [gameNum, score] of slotScores) {
@@ -299,8 +299,9 @@ export function computeWeekRows(
 
     const slotScores = scoresBySlotId.get(slot.id)
     const present = !!slotScores?.size
-    const g1 = slotScores?.get(1) ?? 0
-    const g2 = slotScores?.get(2) ?? 0
+    const scores = slotScores
+      ? Array.from(slotScores.entries()).sort(([a], [b]) => a - b).map(([, s]) => s)
+      : []
 
     let wins = 0, losses = 0
     if (slotScores) {
@@ -321,7 +322,7 @@ export function computeWeekRows(
       seasonNumber: slot.weeks.seasons.number,
       weekNumber: slot.weeks.week_number,
       teamNumber: slot.team_number,
-      g1, g2, wins, losses, present,
+      scores, wins, losses, present,
     })
   }
 

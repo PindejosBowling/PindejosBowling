@@ -59,6 +59,8 @@ export default function MatchupsScreen() {
   const isAdmin = useAuthStore(s => s.role) === 'admin'
   const [saving, setSaving] = useState(false)
   const [showArchive, setShowArchive] = useState(false)
+  const [addingGame, setAddingGame] = useState(false)
+  const [removingGame, setRemovingGame] = useState(false)
   const { refreshing, onRefresh } = useRefresh(reload)
 
   const isActive = !!derived
@@ -131,6 +133,44 @@ export default function MatchupsScreen() {
           { text: 'Clear', style: 'destructive', onPress: doClear },
         ]
       )
+    }
+  }
+
+  async function removeLastGame() {
+    if (!weekId || rounds.length <= 2) return
+    const maxGameNum = Math.max(...rounds.map(r => r.num))
+    setRemovingGame(true)
+    try {
+      const slotIds = Object.values(teams).flatMap((team: any) =>
+        team.players.map((p: any) => p.teamSlotId)
+      )
+      await Promise.all(slotIds.map(slotId => scores.remove(slotId, maxGameNum)))
+      await gameSchedule.removeByWeekAndGame(weekId, maxGameNum)
+      await reload()
+    } finally {
+      setRemovingGame(false)
+    }
+  }
+
+  async function addNextGame() {
+    if (!weekId) return
+    const game1Round = rounds.find(r => r.num === 1)
+    if (!game1Round) return
+    const nextGameNum = rounds.length > 0 ? Math.max(...rounds.map(r => r.num)) + 1 : 2
+    setAddingGame(true)
+    try {
+      const rows = game1Round.pairings
+        .filter(p => p.b !== null)
+        .map(p => ({
+          week_id: weekId,
+          game_number: nextGameNum,
+          team_a: parseInt(p.a.name.replace('Team ', '')),
+          team_b: parseInt(p.b!.name.replace('Team ', '')),
+        }))
+      await gameSchedule.insert(rows)
+      await reload()
+    } finally {
+      setAddingGame(false)
     }
   }
 
@@ -291,6 +331,38 @@ export default function MatchupsScreen() {
                     </View>
                   ))}
 
+                  {/* Add / remove game buttons */}
+                  {isAdmin && (
+                    <View style={styles.gameCtrlRow}>
+                      {rounds.length > 2 && (
+                        <TouchableOpacity
+                          style={styles.removeGameBtn}
+                          onPress={removeLastGame}
+                          disabled={removingGame}
+                          activeOpacity={0.7}
+                        >
+                          <Text style={styles.removeGameText}>
+                            {removingGame
+                              ? 'Removing…'
+                              : `✕ Remove Game ${Math.max(...rounds.map(r => r.num))}`}
+                          </Text>
+                        </TouchableOpacity>
+                      )}
+                      <TouchableOpacity
+                        style={styles.addGameBtn}
+                        onPress={addNextGame}
+                        disabled={addingGame}
+                        activeOpacity={0.7}
+                      >
+                        <Text style={styles.addGameText}>
+                          {addingGame
+                            ? 'Adding…'
+                            : `+ Add Game ${rounds.length > 0 ? Math.max(...rounds.map(r => r.num)) + 1 : 2}`}
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                  )}
+
                   {/* Odds easter egg (expected mode only) */}
                   {matchupsView === 'expected' && (
                     <View>
@@ -446,16 +518,20 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   matchHeader: {
-    paddingVertical: 6,
-    marginTop: 4,
+    paddingVertical: 8,
+    marginTop: 8,
     marginBottom: 4,
+    borderLeftWidth: 3,
+    borderLeftColor: colors.accent,
+    paddingLeft: 10,
   },
   matchTitle: {
     fontFamily: fonts.barlowCondensed,
-    fontSize: 11,
-    letterSpacing: 2,
+    fontSize: 20,
+    fontWeight: '700',
+    letterSpacing: 1.5,
     textTransform: 'uppercase',
-    color: colors.muted,
+    color: colors.text,
   },
   matchupCard: {
     backgroundColor: colors.surface,
@@ -558,6 +634,41 @@ const styles = StyleSheet.create({
     fontFamily: fonts.barlow,
     fontSize: 15,
     color: colors.muted,
+  },
+  gameCtrlRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 4,
+  },
+  addGameBtn: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderWidth: 1,
+    borderColor: colors.border2,
+    borderRadius: radius.cardSm,
+    borderStyle: 'dashed',
+  },
+  addGameText: {
+    fontFamily: fonts.barlowCondensed,
+    fontSize: 13,
+    color: colors.muted,
+    letterSpacing: 1,
+  },
+  removeGameBtn: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255,79,109,0.3)',
+    borderRadius: radius.cardSm,
+    borderStyle: 'dashed',
+  },
+  removeGameText: {
+    fontFamily: fonts.barlowCondensed,
+    fontSize: 13,
+    color: colors.danger,
+    letterSpacing: 1,
   },
   archiveFloatBar: {
     position: 'absolute',

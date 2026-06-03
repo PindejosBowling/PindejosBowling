@@ -64,7 +64,7 @@ export default function LeagueRecordsScreen() {
         />
         <RecordCard
           icon="📈"
-          label="High Series (G1+G2)"
+          label="High Series"
           by={records.highSeries.by}
           when={records.highSeries.when}
           value={records.highSeries.val}
@@ -83,10 +83,7 @@ export default function LeagueRecordsScreen() {
           by={records.highTeamNight.team}
           when={records.highTeamNight.when}
           value={records.highTeamNight.val}
-          g1Roster={records.highTeamNight.g1Roster}
-          g2Roster={records.highTeamNight.g2Roster}
-          g1Total={records.highTeamNight.g1Total}
-          g2Total={records.highTeamNight.g2Total}
+          games={records.highTeamNight.games}
         />
         <RecordCard
           icon="🏆"
@@ -107,13 +104,10 @@ interface RecordCardProps {
   when?: string
   value?: string | number
   roster?: { name: string; score: number }[]
-  g1Roster?: { name: string; score: number }[]
-  g2Roster?: { name: string; score: number }[]
-  g1Total?: number
-  g2Total?: number
+  games?: { gameNum: number; roster: { name: string; score: number }[]; total: number }[]
 }
 
-function RecordCard({ icon, label, by, when, value, roster, g1Roster, g2Roster, g1Total, g2Total }: RecordCardProps) {
+function RecordCard({ icon, label, by, when, value, roster, games }: RecordCardProps) {
   const hasValue = value != null && value !== '' && value !== 0
   return (
     <View style={cardStyles.card}>
@@ -149,15 +143,12 @@ function RecordCard({ icon, label, by, when, value, roster, g1Roster, g2Roster, 
         </View>
       ) : null}
 
-      {/* Night roster with G1 + G2 breakdown */}
-      {(g1Roster?.length || g2Roster?.length) ? (
+      {/* Night roster breakdown per game */}
+      {games?.length ? (
         <View style={cardStyles.roster}>
-          {g1Roster?.length ? (
-            <GameBlock label="Game 1" total={g1Total} players={g1Roster} />
-          ) : null}
-          {g2Roster?.length ? (
-            <GameBlock label="Game 2" total={g2Total} players={g2Roster} />
-          ) : null}
+          {games.map(g => (
+            <GameBlock key={g.gameNum} label={`Game ${g.gameNum}`} total={g.total} players={g.roster} />
+          ))}
         </View>
       ) : null}
     </View>
