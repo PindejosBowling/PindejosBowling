@@ -51,8 +51,8 @@ The client is configured via Expo environment variables that are set in `.env.lo
 | `weeks` | `id`, `season_id`, `week_number`, `is_archived`, `is_confirmed`, `bowled_at` |
 | `rsvp` | `id`, `player_id`, `week_id`, `status`, `note`, `updated_at` |
 | `team_slots` | `id`, `week_id`, `team_number`, `slot`, `player_id`, `is_fill` |
-| `game_schedule` | `id`, `week_id`, `game_number`, `team_a`, `team_b` |
-| `scores` | `id`, `team_slot_id`, `game_number`, `score`, `updated_at` |
+| `games` | `id`, `week_id`, `game_number`, `team_a`, `team_b` |
+| `scores` | `id`, `team_slot_id`, `game_id`, `score`, `updated_at` |
 | `season_champions` | `id`, `player_id`, `season_id` |
 | `board_posts` | `id`, `player_id`, `message`, `created_at` |
 
@@ -72,14 +72,15 @@ The client is configured via Expo environment variables that are set in `.env.lo
 | `insert(data)` | Insert a new post |
 | `remove(id)` | Delete a post by id |
 
-### `gameSchedule`
+### `games`
 | Method | Description |
 |---|---|
-| `listByWeek(weekId)` | Schedule rows for one week |
-| `listForArchivedWeeks()` | All schedule rows for archived weeks (used by standings/chemistry/H2H) |
-| `insert(data)` | Insert one or many schedule rows |
+| `listByWeek(weekId)` | Game rows for one week |
+| `listForArchivedWeeks()` | All game rows for archived weeks (used by standings/chemistry/H2H) — includes `id` |
+| `insert(data)` | Insert one or many game rows |
 | `remove(id)` | Delete by id |
-| `removeByWeek(weekId)` | Delete all schedule rows for a week |
+| `removeByWeek(weekId)` | Delete all game rows for a week |
+| `removeByWeekAndGame(weekId, gameNumber)` | Delete a specific game row by week + game number |
 
 ### `players`
 | Method | Description |
@@ -110,10 +111,10 @@ The client is configured via Expo environment variables that are set in `.env.lo
 | `listForH2H()` | Archived scores with player/week/season join (head-to-head) |
 | `listForLeagueRecords()` | Archived scores with player/week/season join (league records) |
 | `insert(data)` | Insert one or many scores |
-| `upsert(data)` | Upsert on `team_slot_id, game_number` conflict |
+| `upsert(data)` | Upsert on `team_slot_id, game_id` conflict |
 | `update(id, data)` | Update a score by id |
 | `removeBySlotIds(ids)` | Delete scores for a list of slot ids |
-| `remove(teamSlotId, gameNumber)` | Delete a specific score |
+| `remove(teamSlotId, gameId)` | Delete a specific score |
 
 ### `seasonChampions`
 | Method | Description |
@@ -165,7 +166,7 @@ Each screen (or group of screens) has a corresponding hook in `src/hooks/`. The 
 ┌─────────────┐      ┌──────────────┐      ┌────────────────────────┐
 │   Screen    │ uses │     Hook     │ uses │      db.ts / Supabase  │
 │  (useMemo)  │◄─────│ rawScores,   │◄─────│  scores.listForXxx()  │
-│             │      │ rawSchedule, │      │  gameSchedule.list...  │
+│             │      │ rawSchedule, │      │  games.list...         │
 │             │      │ loading,     │      │  seasons.list()        │
 │             │      │ reload       │      └────────────────────────┘
 └─────────────┘      └──────────────┘
@@ -182,7 +183,7 @@ Each screen (or group of screens) has a corresponding hook in `src/hooks/`. The 
 
 ### Standings computation
 
-Win/loss is determined by comparing **team totals** (all players on a team including fill) per game. The schedule (`game_schedule`) defines which team-number faced which. The `computeStandingsFromSupabase` function (exported from `useStandingsData.ts`) implements this and is reused by multiple screens.
+Win/loss is determined by comparing **team totals** (all players on a team including fill) per game. The `games` table defines which team-number faced which. The `computeStandingsFromSupabase` function (exported from `useStandingsData.ts`) implements this and is reused by multiple screens.
 
 ### Effective avg for matchups
 
@@ -198,7 +199,7 @@ Win/loss is determined by comparing **team totals** (all players on a team inclu
 |---|---|---|---|
 | `useStandingsData.ts` | `useStandingsData` | `computeStandingsFromSupabase(rawScores, rawSchedule, seasonId)` | StandingsScreen, SeasonHistoryScreen |
 | `useMatchupsData.ts` | `useMatchupsData` | — | MatchupsScreen |
-| `usePlayerDetailData.ts` | `usePlayerDetailData(name)` | `computePlayerProfile`, `computePersonalRecords`, `computeCurrentTeam`, `computeWeekRows`, `computeChartPoints`, `computeExpandedMatchups`, `computePlayerSeasons` | PlayerDetailScreen |
+| `usePlayerDetailData.ts` | `usePlayerDetailData(name)` | `computePlayerProfile`, `computePersonalRecords`, `computeCurrentTeam`, `computeWeekRows`, `computeChartPoints(playerId, allScores, allSchedule, seasonId)`, `computeExpandedMatchups`, `computePlayerSeasons` | PlayerDetailScreen |
 | `useChemistryData.ts` | `useChemistryData` | `computeChemistryFromSupabase(rawScores, rawSchedule, groupSize)` | ChemistryScreen |
 | `useH2HData.ts` | `useH2HData` | `computeH2HFromSupabase(p1Name, p2Name, rawScores, rawSchedule)` | HeadToHeadScreen |
 | `useLeagueRecordsData.ts` | `useLeagueRecordsData` | `computeLeagueRecordsFromSupabase(rawScores, filterSeasonId)` | LeagueRecordsScreen |
@@ -246,10 +247,10 @@ Three Zustand stores — all imported as `useXxxStore` hooks:
 ### `usePendingStore` ([src/stores/pendingStore.ts](src/stores/pendingStore.ts))
 Optimistic edit buffer — not persisted. Holds staged changes before save.
 - `pendingRSVP: Record<playerName, 'In'|'Out'>` — staged RSVP changes
-- `pendingScores: Record<'teamName|slot|gameNum', scoreString>` — staged score edits
+- `pendingScores: Record<'teamSlotId|gameNum', scoreString>` — staged score edits
 - `genTeams` / `genNumTeams` / `genTeamSize` / `genAvgSource` / `genFillMode` / `genFillToSize` / `genSwapTarget` — state for the Generate Teams admin flow
 
-Pending score key format: `"${teamName}|${slot}|${gameNum}"`
+Pending score key format: `"${teamSlotId}|${gameNum}"` where `gameNum` is the integer game number (1, 2, 3)
 
 ### `useUiStore` ([src/stores/uiStore.ts](src/stores/uiStore.ts))
 Ephemeral UI state — toggles, selections, toast queue. All fields via `set(partial)`. Key fields:
@@ -361,7 +362,7 @@ const { refreshing, onRefresh } = useRefresh(reload)
 - **Archive week** (`AdminArchiveModal`) — sets `weeks.update(id, { is_archived: true })`, then inserts a new week row for the next week number
 - **Add/edit player** (`PlayerManagementScreen`) — inline modal calls `players.insert` or `players.update`; first name, last name, and phone are all required
 - **End season** (`AdminEndSeasonModal`) — writes `season_champions.insert` for selected champions, then calls `seasons.insert` for the new season
-- **Generate teams** (`AdminGenerateTeamsModal`) — reads RSVP + player avgs, computes balanced teams client-side, previews swaps, then writes `team_slots.insert` + `gameSchedule.insert` + `weeks.update(..., { is_confirmed: true })`
+- **Generate teams** (`AdminGenerateTeamsModal`) — reads RSVP + player avgs, computes balanced teams client-side, previews swaps, then writes `team_slots.insert` + `games.insert` + `weeks.update(..., { is_confirmed: true })`
 
 ---
 
