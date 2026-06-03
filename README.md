@@ -36,6 +36,11 @@ Opens at http://localhost:8081
 
 ## Supabase Database
 
+Before you can use the `supabase` CLI, you need to install it using `brew`:
+```bash
+brew install supabase/tap/supabase
+```
+
 Schema is version-controlled in `supabase/migrations/`. The CLI was installed via Homebrew (`supabase/tap/supabase`).
 
 ### Apply migrations to the remote database

@@ -510,8 +510,29 @@ It contains hook patterns, screen skeleton, navigation wiring, database migratio
 11. **Supabase CLI requires `SUPABASE_ACCESS_TOKEN` — no MCP server is configured.** Always load the token from `app/.env.local` and use `--linked` with `--workdir` pointing to the repo root. Never run `supabase` commands without this setup or they will fail with 401.
 
   ```bash
-  SUPABASE_ACCESS_TOKEN=$SUPABASE_ACCESS_TOKEN \
-    supabase db query --linked --workdir /Users/garrett/Code/PindejosBowling \
+  SUPABASE_ACCESS_TOKEN=$(grep '^SUPABASE_ACCESS_TOKEN=' app/.env.local | cut -d'=' -f2) \
+    supabase db query --linked --workdir $(pwd) \
     "SELECT ..."
   ```
   Project ref: `lyihsvxraurjghjqxaau` — URL: `https://lyihsvxraurjghjqxaau.supabase.co`
+
+12. **ALL database changes MUST go through migration files — never write to the database directly.** This is a hard rule with no exceptions. Every schema change (DDL: `CREATE`, `ALTER`, `DROP`, index additions, RLS policy changes, trigger changes, etc.) MUST be written as a `.sql` file in `supabase/migrations/` and applied via `supabase db push`. The Supabase CLI may ONLY be used for two purposes:
+    - **Reading** — `supabase db query` to inspect the current database state and confirm schema or data.
+    - **Pushing migrations** — `supabase db push` to apply a migration file you have already written to `supabase/migrations/`.
+
+  Never use `supabase db query` (or any other tool) to execute `INSERT`, `UPDATE`, `DELETE`, `CREATE`, `ALTER`, `DROP`, or any other write statement against the live database. If a change needs to be made, write a migration file first.
+
+  **Creating a migration file:** Always use the CLI to generate the file — never create it manually. This ensures the timestamp prefix is correct and consistent:
+  ```bash
+  SUPABASE_ACCESS_TOKEN=$(grep '^SUPABASE_ACCESS_TOKEN=' app/.env.local | cut -d'=' -f2) \
+    supabase migration new short_description --workdir supabase/migrations
+  ```
+  This creates an empty `supabase/migrations/YYYYMMDDHHMMSS_short_description.sql` file. Write your SQL into that file, then push it.
+
+  **To apply a migration:**
+  ```bash
+  SUPABASE_ACCESS_TOKEN=$(grep '^SUPABASE_ACCESS_TOKEN=' app/.env.local | cut -d'=' -f2) \
+    supabase db push --linked --workdir $(pwd)
+  ```
+
+  **Why:** Migration files are version-controlled and reversible. Direct writes bypass this safety net and make schema drift impossible to track or roll back.
