@@ -23,7 +23,7 @@ import { useMatchupsData } from '../hooks/useMatchupsData'
 import { useUiStore } from '../stores/uiStore'
 import { usePendingStore } from '../stores/pendingStore'
 import { useAuthStore } from '../stores/authStore'
-import { scores, teamSlots, gameSchedule, weeks } from '../utils/supabase/db'
+import { scores, teamSlots, games, weeks } from '../utils/supabase/db'
 import { colors, fonts, radius } from '../theme'
 
 // ---------------------------------------------------------------------------
@@ -53,7 +53,7 @@ const ARCHIVE_BAR_HEIGHT = 57
 // ---------------------------------------------------------------------------
 
 export default function MatchupsScreen() {
-  const { loading, weekId, derived, reload } = useMatchupsData()
+  const { loading, weekId, derived, gameIdByNumber, reload } = useMatchupsData()
   const { matchupsView, oddsRevealed, set: setUi } = useUiStore()
   const { pendingScores, set: setPending } = usePendingStore()
   const isAdmin = useAuthStore(s => s.role) === 'admin'
@@ -117,7 +117,7 @@ export default function MatchupsScreen() {
       )
       if (slotIds.length) await scores.removeBySlotIds(slotIds)
       await teamSlots.removeByWeek(weekId)
-      await gameSchedule.removeByWeek(weekId)
+      await games.removeByWeek(weekId)
       await weeks.update(weekId, { is_confirmed: false })
       setPending({ pendingScores: {} })
       await reload()
@@ -144,8 +144,8 @@ export default function MatchupsScreen() {
       const slotIds = Object.values(teams).flatMap((team: any) =>
         team.players.map((p: any) => p.teamSlotId)
       )
-      await Promise.all(slotIds.map(slotId => scores.remove(slotId, maxGameNum)))
-      await gameSchedule.removeByWeekAndGame(weekId, maxGameNum)
+      await Promise.all(slotIds.map(slotId => scores.remove(slotId, gameIdByNumber[maxGameNum])))
+      await games.removeByWeekAndGame(weekId, maxGameNum)
       await reload()
     } finally {
       setRemovingGame(false)
@@ -167,7 +167,7 @@ export default function MatchupsScreen() {
           team_a: parseInt(p.a.name.replace('Team ', '')),
           team_b: parseInt(p.b!.name.replace('Team ', '')),
         }))
-      await gameSchedule.insert(rows)
+      await games.insert(rows)
       await reload()
     } finally {
       setAddingGame(false)
@@ -183,14 +183,15 @@ export default function MatchupsScreen() {
         .filter(k => pendingScores[k] !== '')
         .map(k => {
           const [teamSlotId, gameNum] = k.split('|')
-          return { team_slot_id: teamSlotId, game_number: parseInt(gameNum), score: parseInt(pendingScores[k]) }
+          const gameNumber = parseInt(gameNum)
+          return { team_slot_id: teamSlotId, game_id: gameIdByNumber[gameNumber], score: parseInt(pendingScores[k]) }
         })
       const toDelete = keys
         .filter(k => pendingScores[k] === '')
-        .map(k => { const [teamSlotId, gameNum] = k.split('|'); return { teamSlotId, gameNum: parseInt(gameNum) } })
+        .map(k => { const [teamSlotId, gameNum] = k.split('|'); return { teamSlotId, gameId: gameIdByNumber[parseInt(gameNum)] } })
 
       if (toUpsert.length) await scores.upsert(toUpsert)
-      await Promise.all(toDelete.map(({ teamSlotId, gameNum }) => scores.remove(teamSlotId, gameNum)))
+      await Promise.all(toDelete.map(({ teamSlotId, gameId }) => scores.remove(teamSlotId, gameId)))
       await reload()
       setPending({ pendingScores: {} })
     } finally {

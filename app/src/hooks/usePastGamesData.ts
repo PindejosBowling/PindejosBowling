@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect } from 'react'
-import { seasons, scores, gameSchedule } from '../utils/supabase/db'
+import { seasons, scores, games } from '../utils/supabase/db'
 
 interface PlayerScore {
   name: string
@@ -44,32 +44,32 @@ export function computePastGamesFromSupabase(
     }
   }
 
-  // schedule lookup: weekId → gameNumber → { teamA, teamB }
-  const schedMap = new Map<string, Map<number, { teamA: number; teamB: number }>>()
+  // schedule lookup: weekId → gameId → { teamA, teamB, gameNumber }
+  const schedMap = new Map<string, Map<string, { teamA: number; teamB: number; gameNumber: number }>>()
   for (const s of rawSchedule) {
     if (!weekMeta.has(s.week_id)) continue
     if (!schedMap.has(s.week_id)) schedMap.set(s.week_id, new Map())
-    schedMap.get(s.week_id)!.set(s.game_number, { teamA: s.team_a, teamB: s.team_b })
+    schedMap.get(s.week_id)!.set(s.id, { teamA: s.team_a, teamB: s.team_b, gameNumber: s.game_number })
   }
 
-  // scores lookup: weekId → teamNumber → gameNumber → PlayerScore[]
-  const scoresMap = new Map<string, Map<number, Map<number, PlayerScore[]>>>()
+  // scores lookup: weekId → teamNumber → gameId → PlayerScore[]
+  const scoresMap = new Map<string, Map<number, Map<string, PlayerScore[]>>>()
   for (const r of filtered) {
     const slot = r.team_slots
     const weekId: string = slot?.week_id
     const teamNumber: number = slot?.team_number
-    const gameNumber: number = r.game_number
+    const gameId: string = r.game_id
     const score: number = r.score
     const name: string = slot?.players?.name ?? 'Unknown'
     const isFill: boolean = slot?.is_fill ?? false
 
-    if (!weekId || teamNumber == null || gameNumber == null || score == null) continue
+    if (!weekId || teamNumber == null || gameId == null || score == null) continue
     if (!scoresMap.has(weekId)) scoresMap.set(weekId, new Map())
     const byTeam = scoresMap.get(weekId)!
     if (!byTeam.has(teamNumber)) byTeam.set(teamNumber, new Map())
     const byGame = byTeam.get(teamNumber)!
-    if (!byGame.has(gameNumber)) byGame.set(gameNumber, [])
-    byGame.get(gameNumber)!.push({ name, score, isFill })
+    if (!byGame.has(gameId)) byGame.set(gameId, [])
+    byGame.get(gameId)!.push({ name, score, isFill })
   }
 
   const result: WeekGames[] = []
@@ -78,9 +78,9 @@ export function computePastGamesFromSupabase(
     if (!gameSched) continue
 
     const games: GameResult[] = []
-    for (const [gameNumber, { teamA: teamANum, teamB: teamBNum }] of gameSched) {
-      const teamAAll = scoresMap.get(weekId)?.get(teamANum)?.get(gameNumber) ?? []
-      const teamBAll = scoresMap.get(weekId)?.get(teamBNum)?.get(gameNumber) ?? []
+    for (const [gameId, { teamA: teamANum, teamB: teamBNum, gameNumber }] of gameSched) {
+      const teamAAll = scoresMap.get(weekId)?.get(teamANum)?.get(gameId) ?? []
+      const teamBAll = scoresMap.get(weekId)?.get(teamBNum)?.get(gameId) ?? []
       const teamATotal = teamAAll.reduce((s, p) => s + p.score, 0)
       const teamBTotal = teamBAll.reduce((s, p) => s + p.score, 0)
       games.push({
@@ -111,7 +111,7 @@ export function usePastGamesData() {
       const [seasonsRes, scoresRes, scheduleRes] = await Promise.all([
         seasons.list(),
         scores.listForPastGames(),
-        gameSchedule.listForArchivedWeeks(),
+        games.listForArchivedWeeks(),
       ])
       setSeasonList((seasonsRes.data ?? []).map(s => ({ id: s.id, number: s.number })))
       setRawScores(scoresRes.data ?? [])

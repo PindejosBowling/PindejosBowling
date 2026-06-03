@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect } from 'react'
-import { seasons, scores, gameSchedule, seasonChampions } from '../utils/supabase/db'
+import { seasons, scores, games, seasonChampions } from '../utils/supabase/db'
 
 export interface StandingsRow {
   playerId: string
@@ -15,7 +15,7 @@ export interface StandingsRow {
 // Raw query result shapes (opaque at runtime, typed for clarity)
 type RawScore = {
   score: number | null
-  game_number: number
+  game_id: string
   team_slots: {
     id: string
     player_id: string | null
@@ -28,6 +28,7 @@ type RawScore = {
 }
 
 type RawSchedule = {
+  id: string
   week_id: string
   game_number: number
   team_a: number
@@ -49,17 +50,17 @@ export function computeStandingsFromSupabase(
   // Keyed per-team so multiple matchups in the same game round don't overwrite each other.
   const scheduleMap = new Map<string, number>()
   for (const row of rawSchedule as RawSchedule[]) {
-    scheduleMap.set(`${row.week_id}|${row.game_number}|${row.team_a}`, row.team_b)
-    scheduleMap.set(`${row.week_id}|${row.game_number}|${row.team_b}`, row.team_a)
+    scheduleMap.set(`${row.id}|${row.team_a}`, row.team_b)
+    scheduleMap.set(`${row.id}|${row.team_b}`, row.team_a)
   }
 
-  // Team totals (all players including fill): "weekId|gameNum|teamNum" → total pins
+  // Team totals (all players including fill): "gameId|teamNum" → total pins
   const teamTotals = new Map<string, number>()
   for (const row of rawScores as RawScore[]) {
     const slot = row.team_slots
     if (!slot?.weeks?.is_archived) continue
     if (seasonId !== null && slot.weeks.season_id !== seasonId) continue
-    const key = `${slot.week_id}|${row.game_number}|${slot.team_number}`
+    const key = `${row.game_id}|${slot.team_number}`
     teamTotals.set(key, (teamTotals.get(key) ?? 0) + (row.score ?? 0))
   }
 
@@ -82,11 +83,11 @@ export function computeStandingsFromSupabase(
     if (seasonId !== null && slot.weeks.season_id !== seasonId) continue
 
     const myTeam = slot.team_number
-    const oppTeam = scheduleMap.get(`${slot.week_id}|${row.game_number}|${myTeam}`)
+    const oppTeam = scheduleMap.get(`${row.game_id}|${myTeam}`)
     if (oppTeam === undefined) continue
 
-    const myTotal = teamTotals.get(`${slot.week_id}|${row.game_number}|${myTeam}`) ?? 0
-    const oppTotal = teamTotals.get(`${slot.week_id}|${row.game_number}|${oppTeam}`) ?? 0
+    const myTotal = teamTotals.get(`${row.game_id}|${myTeam}`) ?? 0
+    const oppTotal = teamTotals.get(`${row.game_id}|${oppTeam}`) ?? 0
 
     if (!byPlayer.has(player.id)) {
       byPlayer.set(player.id, { name: player.name, wins: 0, losses: 0, pins: 0, games: 0, weeks: new Set() })
@@ -127,7 +128,7 @@ export function useStandingsData() {
         seasons.list(),
         seasonChampions.list(),
         scores.listForStandings(),
-        gameSchedule.listForArchivedWeeks(),
+        games.listForArchivedWeeks(),
       ])
       setSeasonList((seasonsRes.data ?? []).map(s => ({ id: s.id, number: s.number })))
       setChampionPlayerIds(new Set((champRes.data ?? []).map((c: any) => c.player_id)))

@@ -13,26 +13,26 @@ export const boardPosts = {
     supabase.from('board_posts').delete().eq('id', id),
 }
 
-export const gameSchedule = {
+export const games = {
   listByWeek: (weekId: string) =>
     supabase
-      .from('game_schedule')
+      .from('games')
       .select('*')
       .eq('week_id', weekId)
       .order('game_number'),
   listForArchivedWeeks: () =>
     supabase
-      .from('game_schedule')
-      .select('week_id, game_number, team_a, team_b, weeks!inner(is_archived)')
+      .from('games')
+      .select('id, week_id, game_number, team_a, team_b, weeks!inner(is_archived)')
       .eq('weeks.is_archived', true),
-  insert: (data: TablesInsert<'game_schedule'> | TablesInsert<'game_schedule'>[]) =>
-    supabase.from('game_schedule').insert(data),
+  insert: (data: TablesInsert<'games'> | TablesInsert<'games'>[]) =>
+    supabase.from('games').insert(data),
   remove: (id: string) =>
-    supabase.from('game_schedule').delete().eq('id', id),
+    supabase.from('games').delete().eq('id', id),
   removeByWeek: (weekId: string) =>
-    supabase.from('game_schedule').delete().eq('week_id', weekId),
+    supabase.from('games').delete().eq('week_id', weekId),
   removeByWeekAndGame: (weekId: string, gameNumber: number) =>
-    supabase.from('game_schedule').delete().eq('week_id', weekId).eq('game_number', gameNumber),
+    supabase.from('games').delete().eq('week_id', weekId).eq('game_number', gameNumber),
 }
 
 export const players = {
@@ -73,8 +73,7 @@ export const scores = {
     supabase
       .from('scores')
       .select('*, team_slots!inner(week_id, team_number, slot, player_id)')
-      .eq('team_slots.week_id', weekId)
-      .order('game_number'),
+      .eq('team_slots.week_id', weekId),
   listBySeason: (seasonId: number) =>
     supabase
       .from('scores')
@@ -94,7 +93,7 @@ export const scores = {
     supabase
       .from('scores')
       .select(
-        'game_number, score,' +
+        'game_id, score,' +
         'team_slots!inner(id, player_id, team_number, is_fill, week_id,' +
           'players(id, name),' +
           'weeks!inner(season_id, is_archived)' +
@@ -106,7 +105,7 @@ export const scores = {
     supabase
       .from('scores')
       .select(
-        'game_number, score,' +
+        'game_id, score,' +
         'team_slots!inner(id, player_id, team_number, slot, is_fill, week_id,' +
           'players(id, name),' +
           'weeks!inner(id, season_id, week_number, is_archived,' +
@@ -120,7 +119,7 @@ export const scores = {
     supabase
       .from('scores')
       .select(
-        'game_number, score,' +
+        'game_id, score,' +
         'team_slots!inner(player_id, team_number, is_fill, week_id,' +
           'players(name),' +
           'weeks!inner(week_number, is_archived,' +
@@ -134,7 +133,7 @@ export const scores = {
     supabase
       .from('scores')
       .select(
-        'game_number, score,' +
+        'game_id, score, games!scores_game_id_fkey(game_number),' +
         'team_slots!inner(player_id, team_number, is_fill, week_id,' +
           'players(id, name),' +
           'weeks!inner(season_id, week_number, is_archived,' +
@@ -148,7 +147,7 @@ export const scores = {
     supabase
       .from('scores')
       .select(
-        'game_number, score,' +
+        'game_id, score,' +
         'team_slots!inner(player_id, team_number, is_fill, week_id,' +
           'players(name),' +
           'weeks!inner(id, season_id, week_number, bowled_at, is_archived)' +
@@ -159,13 +158,13 @@ export const scores = {
   insert: (data: TablesInsert<'scores'> | TablesInsert<'scores'>[]) =>
     supabase.from('scores').insert(data),
   upsert: (data: TablesInsert<'scores'> | TablesInsert<'scores'>[]) =>
-    supabase.from('scores').upsert(data, { onConflict: 'team_slot_id,game_number' }),
+    supabase.from('scores').upsert(data, { onConflict: 'team_slot_id,game_id' }),
   update: (id: string, data: TablesUpdate<'scores'>) =>
     supabase.from('scores').update(data).eq('id', id),
   removeBySlotIds: (ids: string[]) =>
     supabase.from('scores').delete().in('team_slot_id', ids),
-  remove: (teamSlotId: string, gameNumber: number) =>
-    supabase.from('scores').delete().eq('team_slot_id', teamSlotId).eq('game_number', gameNumber),
+  remove: (teamSlotId: string, gameId: string) =>
+    supabase.from('scores').delete().eq('team_slot_id', teamSlotId).eq('game_id', gameId),
 }
 
 export const seasonChampions = {

@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect } from 'react'
-import { seasons, scores, gameSchedule, seasonChampions } from '../utils/supabase/db'
+import { seasons, scores, games, seasonChampions } from '../utils/supabase/db'
 
 export function usePastSeasonsData() {
   const [loading, setLoading] = useState(true)
@@ -15,7 +15,7 @@ export function usePastSeasonsData() {
         seasons.list(),
         seasonChampions.list(),
         scores.listForStandings(),
-        gameSchedule.listForArchivedWeeks(),
+        games.listForArchivedWeeks(),
       ])
 
       setSeasonList((seasonsRes.data ?? []).map(s => ({ id: s.id, number: s.number })))

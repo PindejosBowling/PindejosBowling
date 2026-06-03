@@ -11,7 +11,7 @@ import {
 } from 'react-native'
 import { usePendingStore } from '../stores/pendingStore'
 import { useUiStore } from '../stores/uiStore'
-import { weeks, rsvp, players, teamSlots, gameSchedule, scores, seasons } from '../utils/supabase/db'
+import { weeks, rsvp, players, teamSlots, games, scores, seasons } from '../utils/supabase/db'
 import type { TablesInsert } from '../utils/supabase/database.types'
 import { colors, fonts, radius } from '../theme'
 
@@ -28,7 +28,7 @@ interface GenPlayer {
   status: 'in' | 'out' | 'fill'
 }
 
-function buildSchedule(numTeams: number): Omit<TablesInsert<'game_schedule'>, 'week_id'>[] {
+function buildSchedule(numTeams: number): Omit<TablesInsert<'games'>, 'week_id'>[] {
   if (numTeams === 2) return [
     { game_number: 1, team_a: 1, team_b: 2 },
     { game_number: 2, team_a: 1, team_b: 2 },
@@ -250,7 +250,7 @@ export default function AdminGenerateTeamsModal({ visible, onClose }: Props) {
         }))
       )
 
-      const scheduleRows: TablesInsert<'game_schedule'>[] = buildSchedule((genTeams as any[]).length).map(s => ({
+      const scheduleRows: TablesInsert<'games'>[] = buildSchedule((genTeams as any[]).length).map(s => ({
         ...s,
         week_id: weekId,
       }))
@@ -266,10 +266,10 @@ export default function AdminGenerateTeamsModal({ visible, onClose }: Props) {
       if (e1) throw e1
       const { error: e2 } = await teamSlots.insert(slotRows)
       if (e2) throw e2
-      const { error: e3 } = await gameSchedule.removeByWeek(weekId)
+      const { error: e3 } = await games.removeByWeek(weekId)
       if (e3) throw e3
       if (scheduleRows.length) {
-        const { error: e4 } = await gameSchedule.insert(scheduleRows)
+        const { error: e4 } = await games.insert(scheduleRows)
         if (e4) throw e4
       }
 

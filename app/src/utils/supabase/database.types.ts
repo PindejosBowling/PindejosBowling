@@ -92,7 +92,7 @@ export type Database = {
           },
         ]
       }
-      game_schedule: {
+      games: {
         Row: {
           created_at: string
           game_number: number
@@ -217,7 +217,7 @@ export type Database = {
       scores: {
         Row: {
           created_at: string
-          game_number: number
+          game_id: string
           id: string
           score: number | null
           team_slot_id: string
@@ -225,7 +225,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string
-          game_number: number
+          game_id: string
           id?: string
           score?: number | null
           team_slot_id: string
@@ -233,13 +233,20 @@ export type Database = {
         }
         Update: {
           created_at?: string
-          game_number?: number
+          game_id?: string
           id?: string
           score?: number | null
           team_slot_id?: string
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "scores_game_id_fkey"
+            columns: ["game_id"]
+            isOneToOne: false
+            referencedRelation: "games"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "scores_team_slot_id_fkey"
             columns: ["team_slot_id"]

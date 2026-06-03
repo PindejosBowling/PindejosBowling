@@ -36,7 +36,7 @@ export function computeLeagueRecordsFromSupabase(
     const score: number = row.score ?? 0
     const seasonNum: number = slot.weeks.seasons?.number ?? 0
     const weekNum: number = slot.weeks.week_number ?? 0
-    const gameNum: number = row.game_number
+    const gameNum: number = (row.games as any)?.game_number ?? 0
 
     if (!slot.is_fill && slot.players?.name) {
       const playerName: string = slot.players.name

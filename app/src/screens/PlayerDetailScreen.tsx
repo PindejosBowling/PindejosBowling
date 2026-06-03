@@ -85,7 +85,7 @@ export default function PlayerDetailScreen() {
 
   const chartData = useMemo(() => {
     if (!playerId) return null
-    const points = computeChartPoints(playerId, allScores, activeSeasonId)
+    const points = computeChartPoints(playerId, allScores, allSchedule, activeSeasonId)
     if (!points.length) return null
     const avg = profile?.avg ?? 0
     const chartWidth = screenWidth - 32 - 4 - 12 - 35

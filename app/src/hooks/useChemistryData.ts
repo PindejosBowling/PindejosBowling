@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect } from 'react'
-import { scores, gameSchedule, seasonChampions } from '../utils/supabase/db'
+import { scores, games, seasonChampions } from '../utils/supabase/db'
 import { combinations } from '../utils/helpers'
 
 export interface ChemistryRow {
@@ -18,15 +18,15 @@ export function computeChemistryFromSupabase(
 ): ChemistryRow[] {
   const scheduleMap = new Map<string, number>()
   for (const row of rawSchedule) {
-    scheduleMap.set(`${row.week_id}|${row.game_number}|${row.team_a}`, row.team_b)
-    scheduleMap.set(`${row.week_id}|${row.game_number}|${row.team_b}`, row.team_a)
+    scheduleMap.set(`${row.id}|${row.team_a}`, row.team_b)
+    scheduleMap.set(`${row.id}|${row.team_b}`, row.team_a)
   }
 
   const teamTotals = new Map<string, number>()
   for (const row of rawScores) {
     const slot = row.team_slots
     if (!slot?.weeks?.is_archived) continue
-    const key = `${slot.week_id}|${row.game_number}|${slot.team_number}`
+    const key = `${row.game_id}|${slot.team_number}`
     teamTotals.set(key, (teamTotals.get(key) ?? 0) + (row.score ?? 0))
   }
 
@@ -35,7 +35,7 @@ export function computeChemistryFromSupabase(
     wins: number
     losses: number
     games: number
-    gamesProcessed: Set<number>
+    gamesProcessed: Set<string>
     playerMap: Map<string, string> // player_id → name
   }>()
 
@@ -50,13 +50,13 @@ export function computeChemistryFromSupabase(
     const tw = teamWeekMap.get(twKey)!
 
     // Accumulate W/L/games once per game (all players contribute to team total, incl. fill)
-    if (!tw.gamesProcessed.has(row.game_number)) {
-      tw.gamesProcessed.add(row.game_number)
-      const gameKey = `${slot.week_id}|${row.game_number}|${slot.team_number}`
+    if (!tw.gamesProcessed.has(row.game_id)) {
+      tw.gamesProcessed.add(row.game_id)
+      const gameKey = `${row.game_id}|${slot.team_number}`
       const oppTeam = scheduleMap.get(gameKey)
       if (oppTeam !== undefined) {
         const myTotal = teamTotals.get(gameKey) ?? 0
-        const oppTotal = teamTotals.get(`${slot.week_id}|${row.game_number}|${oppTeam}`) ?? 0
+        const oppTotal = teamTotals.get(`${row.game_id}|${oppTeam}`) ?? 0
         tw.wins += myTotal > oppTotal ? 1 : 0
         tw.losses += myTotal <= oppTotal ? 1 : 0
       }
@@ -111,7 +111,7 @@ export function useChemistryData() {
     try {
       const [scoresRes, scheduleRes, champRes] = await Promise.all([
         scores.listForStandings(),
-        gameSchedule.listForArchivedWeeks(),
+        games.listForArchivedWeeks(),
         seasonChampions.list(),
       ])
       setRawScores(scoresRes.data ?? [])

@@ -3,7 +3,7 @@ import {
   players as playersDb,
   seasons as seasonsDb,
   scores as scoresDb,
-  gameSchedule as gameScheduleDb,
+  games,
   seasonChampions as seasonChampionsDb,
   teamSlots as teamSlotsDb,
 } from '../utils/supabase/db'
@@ -11,7 +11,7 @@ import {
 // ---- Raw query result shapes ----
 
 export type DetailScore = {
-  game_number: number
+  game_id: string
   score: number | null
   team_slots: {
     id: string
@@ -47,6 +47,7 @@ export type PlayerSlot = {
 }
 
 type RawSchedule = {
+  id: string
   week_id: string
   game_number: number
   team_a: number
@@ -101,9 +102,15 @@ export interface ExpandedMatchup {
 function buildScheduleMap(allSchedule: RawSchedule[]): Map<string, number> {
   const map = new Map<string, number>()
   for (const row of allSchedule) {
-    map.set(`${row.week_id}|${row.game_number}|${row.team_a}`, row.team_b)
-    map.set(`${row.week_id}|${row.game_number}|${row.team_b}`, row.team_a)
+    map.set(`${row.id}|${row.team_a}`, row.team_b)
+    map.set(`${row.id}|${row.team_b}`, row.team_a)
   }
+  return map
+}
+
+function buildGameNumberById(allSchedule: RawSchedule[]): Map<string, number> {
+  const map = new Map<string, number>()
+  for (const row of allSchedule) map.set(row.id, row.game_number)
   return map
 }
 
@@ -112,7 +119,7 @@ function buildTeamTotalsMap(allScores: DetailScore[]): Map<string, number> {
   for (const row of allScores) {
     const slot = row.team_slots
     if (!slot) continue
-    const key = `${slot.week_id}|${row.game_number}|${slot.team_number}`
+    const key = `${row.game_id}|${slot.team_number}`
     map.set(key, (map.get(key) ?? 0) + (row.score ?? 0))
   }
   return map
@@ -156,13 +163,14 @@ export function computePlayerProfile(
   const highGame = scoreVals.length ? Math.max(...scoreVals) : 0
   const totalGames = scoreVals.length
 
+  const gameNumberById = buildGameNumberById(allSchedule)
   const sorted = [...playerRows]
     .filter(r => (r.score ?? 0) > 0)
     .sort((a, b) => {
       const aw = a.team_slots.weeks, bw = b.team_slots.weeks
       const ak = aw.seasons.number * 1000 + aw.week_number
       const bk = bw.seasons.number * 1000 + bw.week_number
-      return ak !== bk ? ak - bk : a.game_number - b.game_number
+      return ak !== bk ? ak - bk : (gameNumberById.get(a.game_id) ?? 0) - (gameNumberById.get(b.game_id) ?? 0)
     })
   const last5 = sorted.slice(-5).map(r => r.score ?? 0)
   const last5Avg = last5.length ? last5.reduce((a, b) => a + b, 0) / last5.length : 0
@@ -184,10 +192,10 @@ export function computePlayerProfile(
     if ((row.score ?? 0) === 0) continue
     const slot = row.team_slots
     const myTeam = slot.team_number
-    const oppTeam = scheduleMap.get(`${slot.week_id}|${row.game_number}|${myTeam}`)
+    const oppTeam = scheduleMap.get(`${row.game_id}|${myTeam}`)
     if (oppTeam === undefined) continue
-    const myTotal = teamTotals.get(`${slot.week_id}|${row.game_number}|${myTeam}`) ?? 0
-    const oppTotal = teamTotals.get(`${slot.week_id}|${row.game_number}|${oppTeam}`) ?? 0
+    const myTotal = teamTotals.get(`${row.game_id}|${myTeam}`) ?? 0
+    const oppTotal = teamTotals.get(`${row.game_id}|${oppTeam}`) ?? 0
     if (myTotal > oppTotal) totalWins++
     else totalLosses++
   }
@@ -205,13 +213,13 @@ export function computePersonalRecords(
   const teamTotals = buildTeamTotalsMap(allScores)
 
   // Build per-slot score map for this player
-  const scoresBySlotId = new Map<string, Map<number, number>>()
+  const scoresBySlotId = new Map<string, Map<string, number>>()
   for (const row of allScores) {
     const slot = row.team_slots
     if (!slot || slot.player_id !== playerId || slot.is_fill) continue
     if ((row.score ?? 0) === 0) continue
     if (!scoresBySlotId.has(slot.id)) scoresBySlotId.set(slot.id, new Map())
-    scoresBySlotId.get(slot.id)!.set(row.game_number, row.score ?? 0)
+    scoresBySlotId.get(slot.id)!.set(row.game_id, row.score ?? 0)
   }
 
   let highGame = 0, highSeries = 0
@@ -237,13 +245,13 @@ export function computePersonalRecords(
     if (weekTotal > highSeries) highSeries = weekTotal
 
     let weekWins = 0, weekLosses = 0
-    for (const [gameNum, score] of slotScores) {
+    for (const [gameId, score] of slotScores) {
       if (score === 0) continue
       const myTeam = slot.team_number
-      const oppTeam = scheduleMap.get(`${slot.week_id}|${gameNum}|${myTeam}`)
+      const oppTeam = scheduleMap.get(`${gameId}|${myTeam}`)
       if (oppTeam === undefined) continue
-      const myTotal = teamTotals.get(`${slot.week_id}|${gameNum}|${myTeam}`) ?? 0
-      const oppTotal = teamTotals.get(`${slot.week_id}|${gameNum}|${oppTeam}`) ?? 0
+      const myTotal = teamTotals.get(`${gameId}|${myTeam}`) ?? 0
+      const oppTotal = teamTotals.get(`${gameId}|${oppTeam}`) ?? 0
       if (myTotal > oppTotal) weekWins++
       else weekLosses++
     }
@@ -283,13 +291,14 @@ export function computeWeekRows(
   const scheduleMap = buildScheduleMap(allSchedule)
   const teamTotals = buildTeamTotalsMap(allScores)
 
-  const scoresBySlotId = new Map<string, Map<number, number>>()
+  const gameNumberById = buildGameNumberById(allSchedule)
+  const scoresBySlotId = new Map<string, Map<string, number>>()
   for (const row of allScores) {
     const slot = row.team_slots
     if (!slot || slot.player_id !== playerId) continue
     if ((row.score ?? 0) === 0) continue
     if (!scoresBySlotId.has(slot.id)) scoresBySlotId.set(slot.id, new Map())
-    scoresBySlotId.get(slot.id)!.set(row.game_number, row.score ?? 0)
+    scoresBySlotId.get(slot.id)!.set(row.game_id, row.score ?? 0)
   }
 
   const rows: WeekRow[] = []
@@ -300,18 +309,18 @@ export function computeWeekRows(
     const slotScores = scoresBySlotId.get(slot.id)
     const present = !!slotScores?.size
     const scores = slotScores
-      ? Array.from(slotScores.entries()).sort(([a], [b]) => a - b).map(([, s]) => s)
+      ? Array.from(slotScores.entries()).sort(([a], [b]) => (gameNumberById.get(a) ?? 0) - (gameNumberById.get(b) ?? 0)).map(([, s]) => s)
       : []
 
     let wins = 0, losses = 0
     if (slotScores) {
-      for (const [gameNum, score] of slotScores) {
+      for (const [gameId, score] of slotScores) {
         if (score === 0) continue
         const myTeam = slot.team_number
-        const oppTeam = scheduleMap.get(`${slot.week_id}|${gameNum}|${myTeam}`)
+        const oppTeam = scheduleMap.get(`${gameId}|${myTeam}`)
         if (oppTeam === undefined) continue
-        const myTotal = teamTotals.get(`${slot.week_id}|${gameNum}|${myTeam}`) ?? 0
-        const oppTotal = teamTotals.get(`${slot.week_id}|${gameNum}|${oppTeam}`) ?? 0
+        const myTotal = teamTotals.get(`${gameId}|${myTeam}`) ?? 0
+        const oppTotal = teamTotals.get(`${gameId}|${oppTeam}`) ?? 0
         if (myTotal > oppTotal) wins++
         else losses++
       }
@@ -336,8 +345,10 @@ export function computeWeekRows(
 export function computeChartPoints(
   playerId: string,
   allScores: DetailScore[],
+  allSchedule: RawSchedule[],
   seasonId: number | null,
 ): { value: number; label: string }[] {
+  const gameNumberById = buildGameNumberById(allSchedule)
   return allScores
     .filter(r => {
       const slot = r.team_slots
@@ -349,7 +360,7 @@ export function computeChartPoints(
       const aw = a.team_slots.weeks, bw = b.team_slots.weeks
       const ak = aw.seasons.number * 1000 + aw.week_number
       const bk = bw.seasons.number * 1000 + bw.week_number
-      return ak !== bk ? ak - bk : a.game_number - b.game_number
+      return ak !== bk ? ak - bk : (gameNumberById.get(a.game_id) ?? 0) - (gameNumberById.get(b.game_id) ?? 0)
     })
     .map(r => ({
       value: r.score ?? 0,
@@ -363,18 +374,21 @@ export function computeExpandedMatchups(
   allSchedule: RawSchedule[],
 ): ExpandedMatchup[] {
   const weekScores = allScores.filter(r => r.team_slots.week_id === weekId)
-  const gameNums = [...new Set(weekScores.map(r => r.game_number))].sort()
+  const gameNumberById = buildGameNumberById(allSchedule)
+  const gameIds = [...new Set(weekScores.map(r => r.game_id))]
+    .sort((a, b) => (gameNumberById.get(a) ?? 0) - (gameNumberById.get(b) ?? 0))
 
-  const pairingsByGame = new Map<number, { teamA: number; teamB: number }>()
+  const pairingsByGame = new Map<string, { teamA: number; teamB: number }>()
   for (const s of allSchedule) {
-    if (s.week_id === weekId) pairingsByGame.set(s.game_number, { teamA: s.team_a, teamB: s.team_b })
+    if (s.week_id === weekId) pairingsByGame.set(s.id, { teamA: s.team_a, teamB: s.team_b })
   }
 
   const result: ExpandedMatchup[] = []
 
-  for (const gameNum of gameNums) {
+  for (const gameId of gameIds) {
+    const gameNum = gameNumberById.get(gameId) ?? 0
     const gameScores = weekScores
-      .filter(r => r.game_number === gameNum)
+      .filter(r => r.game_id === gameId)
       .sort((a, b) => a.team_slots.slot - b.team_slots.slot)
 
     const teamMap = new Map<number, { players: { name: string; score: number; present: boolean }[]; total: number }>()
@@ -391,7 +405,7 @@ export function computeExpandedMatchups(
       team.total += score
     }
 
-    const pairing = pairingsByGame.get(gameNum)
+    const pairing = pairingsByGame.get(gameId)
     if (pairing) {
       const teamA = teamMap.get(pairing.teamA)
       const teamB = teamMap.get(pairing.teamB)
@@ -438,7 +452,7 @@ export function usePlayerDetailData(name: string) {
         seasonsDb.list(),
         seasonChampionsDb.list(),
         scoresDb.listForPlayerDetail(),
-        gameScheduleDb.listForArchivedWeeks(),
+        games.listForArchivedWeeks(),
       ])
 
       const player = playerRes.data

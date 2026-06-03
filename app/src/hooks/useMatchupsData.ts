@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { weeks, teamSlots, gameSchedule, scores, rsvp, seasons, seasonChampions } from '../utils/supabase/db'
+import { weeks, teamSlots, games, scores, rsvp, seasons, seasonChampions } from '../utils/supabase/db'
 
 export interface MatchupsPlayer {
   name: string
@@ -31,6 +31,7 @@ export function useMatchupsData() {
   const [loading, setLoading] = useState(true)
   const [weekId, setWeekId] = useState<string | null>(null)
   const [derived, setDerived] = useState<MatchupsDerived | null>(null)
+  const [gameIdByNumber, setGameIdByNumber] = useState<Record<number, string>>({})
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -61,7 +62,7 @@ export function useMatchupsData() {
 
       const [slotsRes, scheduleRes, weekScoresRes, rsvpRes, prevScoresRes] = await Promise.all([
         teamSlots.listByWeek(week.id),
-        gameSchedule.listByWeek(week.id),
+        games.listByWeek(week.id),
         scores.listByWeek(week.id),
         rsvp.listByWeek(week.id),
         prevSeason ? scores.listBySeason(prevSeason.id) : Promise.resolve({ data: [] as any[] }),
@@ -69,6 +70,13 @@ export function useMatchupsData() {
 
       const slots = slotsRes.data ?? []
       const schedule = scheduleRes.data ?? []
+      const idByNumber: Record<number, string> = {}
+      const numberById: Record<string, number> = {}
+      for (const g of schedule as any[]) {
+        idByNumber[g.game_number] = g.id
+        numberById[g.id] = g.game_number
+      }
+      setGameIdByNumber(idByNumber)
       const weekScores = weekScoresRes.data ?? []
       const rsvpRows = rsvpRes.data ?? []
       const prevScores = prevScoresRes.data ?? []
@@ -96,7 +104,7 @@ export function useMatchupsData() {
       const scoresBySlotId: Record<string, Record<number, number | ''>> = {}
       for (const row of weekScores) {
         if (!scoresBySlotId[(row as any).team_slot_id]) scoresBySlotId[(row as any).team_slot_id] = {}
-        scoresBySlotId[(row as any).team_slot_id][(row as any).game_number] = (row as any).score ?? ''
+        scoresBySlotId[(row as any).team_slot_id][numberById[(row as any).game_id]] = (row as any).score ?? ''
       }
 
       const teams: Record<string, MatchupsTeam> = {}
@@ -169,5 +177,5 @@ export function useMatchupsData() {
     load()
   }, [load])
 
-  return { loading, weekId, derived, reload: load }
+  return { loading, weekId, derived, gameIdByNumber, reload: load }
 }

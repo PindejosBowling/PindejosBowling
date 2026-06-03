@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect } from 'react'
-import { players as playersDb, scores as scoresDb, gameSchedule as gameScheduleDb } from '../utils/supabase/db'
+import { players as playersDb, scores as scoresDb, games } from '../utils/supabase/db'
 
 export interface H2HGame {
   season: number
@@ -34,20 +34,22 @@ export function computeH2HFromSupabase(
   }
 
   const scheduleMap = new Map<string, number>()
+  const gameNumberById = new Map<string, number>()
   for (const s of allSchedule) {
-    scheduleMap.set(`${s.week_id}|${s.game_number}|${s.team_a}`, s.team_b)
-    scheduleMap.set(`${s.week_id}|${s.game_number}|${s.team_b}`, s.team_a)
+    scheduleMap.set(`${s.id}|${s.team_a}`, s.team_b)
+    scheduleMap.set(`${s.id}|${s.team_b}`, s.team_a)
+    gameNumberById.set(s.id, s.game_number)
   }
 
   const teamTotals = new Map<string, number>()
   for (const row of allScores) {
     const slot = row.team_slots
     if (!slot) continue
-    const key = `${slot.week_id}|${row.game_number}|${slot.team_number}`
+    const key = `${row.game_id}|${slot.team_number}`
     teamTotals.set(key, (teamTotals.get(key) ?? 0) + (row.score ?? 0))
   }
 
-  type WeekEntry = { team: number; scores: Map<number, number>; seasonNum: number; weekNum: number }
+  type WeekEntry = { team: number; scores: Map<string, number>; seasonNum: number; weekNum: number }
   const playerWeekMap = new Map<string, Map<string, WeekEntry>>()
 
   for (const row of allScores) {
@@ -67,7 +69,7 @@ export function computeH2HFromSupabase(
         weekNum: slot.weeks?.week_number ?? 0,
       })
     }
-    weekMap.get(slot.week_id)!.scores.set(row.game_number, row.score ?? 0)
+    weekMap.get(slot.week_id)!.scores.set(row.game_id, row.score ?? 0)
   }
 
   const p1Weeks = playerWeekMap.get(p1Name)
@@ -78,13 +80,13 @@ export function computeH2HFromSupabase(
     const p2Week = p2Weeks.get(weekId)
     if (!p2Week) continue
 
-    for (const [gameNum, p1Score] of p1Week.scores) {
-      const p1Opponent = scheduleMap.get(`${weekId}|${gameNum}|${p1Week.team}`)
+    for (const [gameId, p1Score] of p1Week.scores) {
+      const p1Opponent = scheduleMap.get(`${gameId}|${p1Week.team}`)
       if (p1Opponent !== p2Week.team) continue
 
-      const p2Score = p2Week.scores.get(gameNum) ?? 0
-      const t1Total = teamTotals.get(`${weekId}|${gameNum}|${p1Week.team}`) ?? 0
-      const t2Total = teamTotals.get(`${weekId}|${gameNum}|${p2Week.team}`) ?? 0
+      const p2Score = p2Week.scores.get(gameId) ?? 0
+      const t1Total = teamTotals.get(`${gameId}|${p1Week.team}`) ?? 0
+      const t2Total = teamTotals.get(`${gameId}|${p2Week.team}`) ?? 0
 
       if (t1Total > t2Total) result.teamP1Wins++
       else if (t2Total > t1Total) result.teamP2Wins++
@@ -94,7 +96,7 @@ export function computeH2HFromSupabase(
       else if (p2Score > p1Score) result.pinP2Wins++
       else if (p1Score && p2Score) result.pinTies++
 
-      result.games.push({ season: p1Week.seasonNum, week: p1Week.weekNum, gameNum, t1Total, t2Total, p1Score, p2Score })
+      result.games.push({ season: p1Week.seasonNum, week: p1Week.weekNum, gameNum: gameNumberById.get(gameId) ?? 0, t1Total, t2Total, p1Score, p2Score })
     }
   }
 
@@ -119,7 +121,7 @@ export function useH2HData() {
       const [playersRes, scoresRes, scheduleRes] = await Promise.all([
         playersDb.list(),
         scoresDb.listForH2H(),
-        gameScheduleDb.listForArchivedWeeks(),
+        games.listForArchivedWeeks(),
       ])
       setPlayerNames((playersRes.data ?? []).map((p: any) => p.name))
       setRawScores(scoresRes.data ?? [])
