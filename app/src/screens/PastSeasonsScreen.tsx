@@ -5,7 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { useNavigation } from '@react-navigation/native'
 import { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { colors, fonts, radius } from '../theme'
-import { useSeasonHistoryData } from '../hooks/useSeasonHistoryData'
+import { usePastSeasonsData } from '../hooks/usePastSeasonsData'
 import { computeStandingsFromSupabase } from '../hooks/useStandingsData'
 import { MoreStackParamList } from '../navigation/types'
 import LoadingView from '../components/LoadingView'
@@ -13,8 +13,8 @@ import ScreenHeader from '../components/ScreenHeader'
 
 type Nav = NativeStackNavigationProp<MoreStackParamList>
 
-export default function SeasonHistoryScreen() {
-  const { loading, seasonList, rawScores, rawSchedule, champsBySeason, reload } = useSeasonHistoryData()
+export default function PastSeasonsScreen() {
+  const { loading, seasonList, rawScores, rawSchedule, champsBySeason, reload } = usePastSeasonsData()
   const navigation = useNavigation<Nav>()
   const { refreshing, onRefresh } = useRefresh(reload)
 

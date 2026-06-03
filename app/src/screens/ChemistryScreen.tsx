@@ -35,7 +35,7 @@ export default function ChemistryScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
-      <ScreenHeader title="Team Chemistry" onBack={() => navigation.navigate('MoreHome')} />
+      <ScreenHeader title="Chemistry" onBack={() => navigation.navigate('MoreHome')} />
 
       <ToggleGroup
         options={[{ key: 'pairs', label: 'Pairs' }, { key: 'trios', label: 'Trios' }]}

@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect } from 'react'
 import { seasons, scores, gameSchedule, seasonChampions } from '../utils/supabase/db'
 
-export function useSeasonHistoryData() {
+export function usePastSeasonsData() {
   const [loading, setLoading] = useState(true)
   const [seasonList, setSeasonList] = useState<{ id: number; number: number }[]>([])
   const [rawScores, setRawScores] = useState<any[]>([])
@@ -30,7 +30,7 @@ export function useSeasonHistoryData() {
       setRawScores(scoresRes.data ?? [])
       setRawSchedule(scheduleRes.data ?? [])
     } catch (e) {
-      console.error('useSeasonHistoryData error:', e)
+      console.error('usePastSeasonsData error:', e)
     } finally {
       setLoading(false)
     }
