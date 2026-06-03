@@ -41,7 +41,7 @@ The client is configured via Expo environment variables that are set in `.env.lo
 
 ---
 
-## Database Schema (10 tables)
+## Database Schema (11 tables)
 
 | Table | Key columns |
 |---|---|
@@ -50,8 +50,9 @@ The client is configured via Expo environment variables that are set in `.env.lo
 | `seasons` | `id`, `number`, `league_name`, `bowling_night`, `started_at`, `ended_at` |
 | `weeks` | `id`, `season_id`, `week_number`, `is_archived`, `is_confirmed`, `bowled_at` |
 | `rsvp` | `id`, `player_id`, `week_id`, `status`, `note`, `updated_at` |
-| `team_slots` | `id`, `week_id`, `team_number`, `slot`, `player_id`, `is_fill` |
-| `games` | `id`, `week_id`, `game_number`, `team_a`, `team_b` |
+| `teams` | `id`, `week_id`, `team_number` |
+| `team_slots` | `id`, `week_id`, `team_id`, `slot`, `player_id`, `is_fill` |
+| `games` | `id`, `week_id`, `game_number`, `team_a_id`, `team_b_id` |
 | `scores` | `id`, `team_slot_id`, `game_id`, `score`, `updated_at` |
 | `season_champions` | `id`, `player_id`, `season_id` |
 | `board_posts` | `id`, `player_id`, `message`, `created_at` |
@@ -60,6 +61,7 @@ The client is configured via Expo environment variables that are set in `.env.lo
 - `weeks.is_archived` — `true` once the week has been bowled and scores are final. All historical queries filter to archived weeks.
 - `weeks.is_confirmed` — `true` once teams have been generated and locked for the week. Used to distinguish an active (live-scoring) week from a pending one.
 - `team_slots.is_fill` — `true` for league-avg fill placeholders. Excluded from personal stats but included in team totals.
+- **`teams` is the team entity.** A team is one `(week_id, team_number)` pairing. `team_slots.team_id` (who's on the team) and `games.team_a_id`/`team_b_id` (the matchup) both reference it via composite `(team_id, week_id)` FKs that enforce a slot/game can only point at a team in its own week. `team_number` survives on `teams` purely for the "Team N" display label — **all matching/joining keys on the team UUID.**
 
 ---
 
@@ -76,7 +78,7 @@ The client is configured via Expo environment variables that are set in `.env.lo
 | Method | Description |
 |---|---|
 | `listByWeek(weekId)` | Game rows for one week |
-| `listForArchivedWeeks()` | All game rows for archived weeks (used by standings/chemistry/H2H) — includes `id` |
+| `listForArchivedWeeks()` | All game rows for archived weeks (used by standings/chemistry/H2H/past-games) — includes `id`, `team_a_id`, `team_b_id` |
 | `insert(data)` | Insert one or many game rows |
 | `remove(id)` | Delete by id |
 | `removeByWeek(weekId)` | Delete all game rows for a week |
@@ -136,12 +138,19 @@ The client is configured via Expo environment variables that are set in `.env.lo
 ### `teamSlots`
 | Method | Description |
 |---|---|
-| `listByWeek(weekId)` | All slots for a week with joined player name |
-| `listByPlayer(playerId)` | All archived slots for a player with week/season join |
+| `listByWeek(weekId)` | All slots for a week with joined player name + `teams(team_number)` |
+| `listByPlayer(playerId)` | All archived slots for a player with `team_id`, `teams(team_number)`, and week/season join |
 | `insert(data)` | Insert one or many slots |
 | `update(id, data)` | Update a slot |
 | `remove(id)` | Delete a slot |
 | `removeByWeek(weekId)` | Delete all slots for a week |
+
+### `teams`
+| Method | Description |
+|---|---|
+| `listByWeek(weekId)` | All team rows for a week, ordered by `team_number` |
+| `insert(data)` | Insert one or many teams; chains `.select()` so callers get the new ids back |
+| `removeByWeek(weekId)` | Delete all teams for a week |
 
 ### `weeks`
 | Method | Description |
@@ -183,7 +192,7 @@ Each screen (or group of screens) has a corresponding hook in `src/hooks/`. The 
 
 ### Standings computation
 
-Win/loss is determined by comparing **team totals** (all players on a team including fill) per game. The `games` table defines which team-number faced which. The `computeStandingsFromSupabase` function (exported from `useStandingsData.ts`) implements this and is reused by multiple screens.
+Win/loss is determined by comparing **team totals** (all players on a team including fill) per game. The `games` table defines which team faced which via `team_a_id`/`team_b_id`. All compute functions key the opponent/total maps on the **team UUID** (`team_slots.team_id` ↔ `games.team_a_id`/`team_b_id`), e.g. `` `${gameId}|${teamId}` ``. The `computeStandingsFromSupabase` function (exported from `useStandingsData.ts`) implements this and is reused by multiple screens.
 
 ### Effective avg for matchups
 
@@ -362,7 +371,7 @@ const { refreshing, onRefresh } = useRefresh(reload)
 - **Archive week** (`AdminArchiveModal`) — sets `weeks.update(id, { is_archived: true })`, then inserts a new week row for the next week number
 - **Add/edit player** (`PlayerManagementScreen`) — inline modal calls `players.insert` or `players.update`; first name, last name, and phone are all required
 - **End season** (`AdminEndSeasonModal`) — writes `season_champions.insert` for selected champions, then calls `seasons.insert` for the new season
-- **Generate teams** (`AdminGenerateTeamsModal`) — reads RSVP + player avgs, computes balanced teams client-side, previews swaps, then writes `team_slots.insert` + `games.insert` + `weeks.update(..., { is_confirmed: true })`
+- **Generate teams** (`AdminGenerateTeamsModal`) — reads RSVP + player avgs, computes balanced teams client-side, previews swaps, then wipes the week (scores → team_slots → games → teams) and writes `teams.insert` (capturing the new ids) → `team_slots.insert` + `games.insert` (both referencing `team_id`/`team_a_id`/`team_b_id`) → `weeks.update(..., { is_confirmed: true })`
 
 ---
 

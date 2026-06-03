@@ -16,11 +16,12 @@ export type DetailScore = {
   team_slots: {
     id: string
     player_id: string | null
-    team_number: number
+    team_id: string
     slot: number
     is_fill: boolean
     week_id: string
     players: { id: string; name: string } | null
+    teams: { team_number: number } | null
     weeks: {
       id: string
       season_id: number
@@ -33,10 +34,11 @@ export type DetailScore = {
 
 export type PlayerSlot = {
   id: string
-  team_number: number
+  team_id: string
   slot: number
   is_fill: boolean
   week_id: string
+  teams: { team_number: number } | null
   weeks: {
     id: string
     season_id: number
@@ -50,8 +52,8 @@ type RawSchedule = {
   id: string
   week_id: string
   game_number: number
-  team_a: number
-  team_b: number
+  team_a_id: string
+  team_b_id: string
 }
 
 // ---- Exported derived data types ----
@@ -99,11 +101,11 @@ export interface ExpandedMatchup {
 
 // ---- Internal helpers ----
 
-function buildScheduleMap(allSchedule: RawSchedule[]): Map<string, number> {
-  const map = new Map<string, number>()
+function buildScheduleMap(allSchedule: RawSchedule[]): Map<string, string> {
+  const map = new Map<string, string>()
   for (const row of allSchedule) {
-    map.set(`${row.id}|${row.team_a}`, row.team_b)
-    map.set(`${row.id}|${row.team_b}`, row.team_a)
+    map.set(`${row.id}|${row.team_a_id}`, row.team_b_id)
+    map.set(`${row.id}|${row.team_b_id}`, row.team_a_id)
   }
   return map
 }
@@ -119,7 +121,7 @@ function buildTeamTotalsMap(allScores: DetailScore[]): Map<string, number> {
   for (const row of allScores) {
     const slot = row.team_slots
     if (!slot) continue
-    const key = `${row.game_id}|${slot.team_number}`
+    const key = `${row.game_id}|${slot.team_id}`
     map.set(key, (map.get(key) ?? 0) + (row.score ?? 0))
   }
   return map
@@ -191,7 +193,7 @@ export function computePlayerProfile(
   for (const row of playerRows) {
     if ((row.score ?? 0) === 0) continue
     const slot = row.team_slots
-    const myTeam = slot.team_number
+    const myTeam = slot.team_id
     const oppTeam = scheduleMap.get(`${row.game_id}|${myTeam}`)
     if (oppTeam === undefined) continue
     const myTotal = teamTotals.get(`${row.game_id}|${myTeam}`) ?? 0
@@ -247,7 +249,7 @@ export function computePersonalRecords(
     let weekWins = 0, weekLosses = 0
     for (const [gameId, score] of slotScores) {
       if (score === 0) continue
-      const myTeam = slot.team_number
+      const myTeam = slot.team_id
       const oppTeam = scheduleMap.get(`${gameId}|${myTeam}`)
       if (oppTeam === undefined) continue
       const myTotal = teamTotals.get(`${gameId}|${myTeam}`) ?? 0
@@ -278,7 +280,7 @@ export function computeCurrentTeam(playerSlots: PlayerSlot[]): string | null {
       return bk - ak
     })
   const latest = sorted[0]
-  return latest ? `Team ${latest.team_number}` : null
+  return latest ? `Team ${latest.teams?.team_number ?? '?'}` : null
 }
 
 export function computeWeekRows(
@@ -316,7 +318,7 @@ export function computeWeekRows(
     if (slotScores) {
       for (const [gameId, score] of slotScores) {
         if (score === 0) continue
-        const myTeam = slot.team_number
+        const myTeam = slot.team_id
         const oppTeam = scheduleMap.get(`${gameId}|${myTeam}`)
         if (oppTeam === undefined) continue
         const myTotal = teamTotals.get(`${gameId}|${myTeam}`) ?? 0
@@ -330,7 +332,7 @@ export function computeWeekRows(
       weekId: slot.week_id,
       seasonNumber: slot.weeks.seasons.number,
       weekNumber: slot.weeks.week_number,
-      teamNumber: slot.team_number,
+      teamNumber: slot.teams?.team_number ?? 0,
       scores, wins, losses, present,
     })
   }
@@ -378,10 +380,18 @@ export function computeExpandedMatchups(
   const gameIds = [...new Set(weekScores.map(r => r.game_id))]
     .sort((a, b) => (gameNumberById.get(a) ?? 0) - (gameNumberById.get(b) ?? 0))
 
-  const pairingsByGame = new Map<string, { teamA: number; teamB: number }>()
+  const pairingsByGame = new Map<string, { teamA: string; teamB: string }>()
   for (const s of allSchedule) {
-    if (s.week_id === weekId) pairingsByGame.set(s.id, { teamA: s.team_a, teamB: s.team_b })
+    if (s.week_id === weekId) pairingsByGame.set(s.id, { teamA: s.team_a_id, teamB: s.team_b_id })
   }
+
+  // team id → display number for this week's roster
+  const teamNumberById = new Map<string, number>()
+  for (const r of weekScores) {
+    const slot = r.team_slots
+    if (slot.team_id) teamNumberById.set(slot.team_id, slot.teams?.team_number ?? 0)
+  }
+  const teamLabel = (teamId: string) => `Team ${teamNumberById.get(teamId) ?? '?'}`
 
   const result: ExpandedMatchup[] = []
 
@@ -391,11 +401,11 @@ export function computeExpandedMatchups(
       .filter(r => r.game_id === gameId)
       .sort((a, b) => a.team_slots.slot - b.team_slots.slot)
 
-    const teamMap = new Map<number, { players: { name: string; score: number; present: boolean }[]; total: number }>()
+    const teamMap = new Map<string, { players: { name: string; score: number; present: boolean }[]; total: number }>()
     for (const row of gameScores) {
       const slot = row.team_slots
-      if (!teamMap.has(slot.team_number)) teamMap.set(slot.team_number, { players: [], total: 0 })
-      const team = teamMap.get(slot.team_number)!
+      if (!teamMap.has(slot.team_id)) teamMap.set(slot.team_id, { players: [], total: 0 })
+      const team = teamMap.get(slot.team_id)!
       const score = row.score ?? 0
       team.players.push({
         name: slot.is_fill ? 'League Avg Fill' : (slot.players?.name ?? ''),
@@ -412,20 +422,22 @@ export function computeExpandedMatchups(
       if (teamA) {
         result.push({
           gameNum,
-          a: { team: `Team ${pairing.teamA}`, ...teamA },
-          b: teamB ? { team: `Team ${pairing.teamB}`, ...teamB } : null,
+          a: { team: teamLabel(pairing.teamA), ...teamA },
+          b: teamB ? { team: teamLabel(pairing.teamB), ...teamB } : null,
         })
       }
     } else {
-      const teams = [...teamMap.entries()].sort(([a], [b]) => a - b)
+      const teams = [...teamMap.entries()].sort(
+        ([a], [b]) => (teamNumberById.get(a) ?? 0) - (teamNumberById.get(b) ?? 0)
+      )
       if (teams.length >= 2) {
         result.push({
           gameNum,
-          a: { team: `Team ${teams[0][0]}`, ...teams[0][1] },
-          b: { team: `Team ${teams[1][0]}`, ...teams[1][1] },
+          a: { team: teamLabel(teams[0][0]), ...teams[0][1] },
+          b: { team: teamLabel(teams[1][0]), ...teams[1][1] },
         })
       } else if (teams.length === 1) {
-        result.push({ gameNum, a: { team: `Team ${teams[0][0]}`, ...teams[0][1] }, b: null })
+        result.push({ gameNum, a: { team: teamLabel(teams[0][0]), ...teams[0][1] }, b: null })
       }
     }
   }

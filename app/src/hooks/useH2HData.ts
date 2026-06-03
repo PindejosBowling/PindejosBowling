@@ -33,11 +33,11 @@ export function computeH2HFromSupabase(
     games: [],
   }
 
-  const scheduleMap = new Map<string, number>()
+  const scheduleMap = new Map<string, string>()
   const gameNumberById = new Map<string, number>()
   for (const s of allSchedule) {
-    scheduleMap.set(`${s.id}|${s.team_a}`, s.team_b)
-    scheduleMap.set(`${s.id}|${s.team_b}`, s.team_a)
+    scheduleMap.set(`${s.id}|${s.team_a_id}`, s.team_b_id)
+    scheduleMap.set(`${s.id}|${s.team_b_id}`, s.team_a_id)
     gameNumberById.set(s.id, s.game_number)
   }
 
@@ -45,11 +45,11 @@ export function computeH2HFromSupabase(
   for (const row of allScores) {
     const slot = row.team_slots
     if (!slot) continue
-    const key = `${row.game_id}|${slot.team_number}`
+    const key = `${row.game_id}|${slot.team_id}`
     teamTotals.set(key, (teamTotals.get(key) ?? 0) + (row.score ?? 0))
   }
 
-  type WeekEntry = { team: number; scores: Map<string, number>; seasonNum: number; weekNum: number }
+  type WeekEntry = { team: string; scores: Map<string, number>; seasonNum: number; weekNum: number }
   const playerWeekMap = new Map<string, Map<string, WeekEntry>>()
 
   for (const row of allScores) {
@@ -63,7 +63,7 @@ export function computeH2HFromSupabase(
 
     if (!weekMap.has(slot.week_id)) {
       weekMap.set(slot.week_id, {
-        team: slot.team_number,
+        team: slot.team_id,
         scores: new Map(),
         seasonNum: slot.weeks?.seasons?.number ?? 0,
         weekNum: slot.weeks?.week_number ?? 0,

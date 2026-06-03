@@ -164,8 +164,8 @@ export default function MatchupsScreen() {
         .map(p => ({
           week_id: weekId,
           game_number: nextGameNum,
-          team_a: parseInt(p.a.name.replace('Team ', '')),
-          team_b: parseInt(p.b!.name.replace('Team ', '')),
+          team_a_id: p.a.teamId,
+          team_b_id: p.b!.teamId,
         }))
       await games.insert(rows)
       await reload()

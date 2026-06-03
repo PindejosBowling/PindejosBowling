@@ -12,31 +12,6 @@ export type Database = {
   __InternalSupabase: {
     PostgrestVersion: "14.5"
   }
-  graphql_public: {
-    Tables: {
-      [_ in never]: never
-    }
-    Views: {
-      [_ in never]: never
-    }
-    Functions: {
-      graphql: {
-        Args: {
-          extensions?: Json
-          operationName?: string
-          query?: string
-          variables?: Json
-        }
-        Returns: Json
-      }
-    }
-    Enums: {
-      [_ in never]: never
-    }
-    CompositeTypes: {
-      [_ in never]: never
-    }
-  }
   public: {
     Tables: {
       app_credentials: {
@@ -97,8 +72,8 @@ export type Database = {
           created_at: string
           game_number: number
           id: string
-          team_a: number
-          team_b: number
+          team_a_id: string
+          team_b_id: string
           updated_at: string
           week_id: string
         }
@@ -106,8 +81,8 @@ export type Database = {
           created_at?: string
           game_number: number
           id?: string
-          team_a: number
-          team_b: number
+          team_a_id: string
+          team_b_id: string
           updated_at?: string
           week_id: string
         }
@@ -115,8 +90,8 @@ export type Database = {
           created_at?: string
           game_number?: number
           id?: string
-          team_a?: number
-          team_b?: number
+          team_a_id?: string
+          team_b_id?: string
           updated_at?: string
           week_id?: string
         }
@@ -127,6 +102,20 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "weeks"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "games_team_a_id_week_id_fkey"
+            columns: ["team_a_id", "week_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id", "week_id"]
+          },
+          {
+            foreignKeyName: "games_team_b_id_week_id_fkey"
+            columns: ["team_b_id", "week_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id", "week_id"]
           },
         ]
       }
@@ -335,7 +324,7 @@ export type Database = {
           is_fill: boolean
           player_id: string | null
           slot: number
-          team_number: number
+          team_id: string
           updated_at: string
           week_id: string
         }
@@ -345,7 +334,7 @@ export type Database = {
           is_fill?: boolean
           player_id?: string | null
           slot: number
-          team_number: number
+          team_id: string
           updated_at?: string
           week_id: string
         }
@@ -355,7 +344,7 @@ export type Database = {
           is_fill?: boolean
           player_id?: string | null
           slot?: number
-          team_number?: number
+          team_id?: string
           updated_at?: string
           week_id?: string
         }
@@ -368,7 +357,46 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "team_slots_team_id_week_id_fkey"
+            columns: ["team_id", "week_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id", "week_id"]
+          },
+          {
             foreignKeyName: "team_slots_week_id_fkey"
+            columns: ["week_id"]
+            isOneToOne: false
+            referencedRelation: "weeks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      teams: {
+        Row: {
+          created_at: string
+          id: string
+          team_number: number
+          updated_at: string
+          week_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          team_number: number
+          updated_at?: string
+          week_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          team_number?: number
+          updated_at?: string
+          week_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "teams_week_id_fkey"
             columns: ["week_id"]
             isOneToOne: false
             referencedRelation: "weeks"
@@ -552,9 +580,6 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
-  graphql_public: {
-    Enums: {},
-  },
   public: {
     Enums: {},
   },

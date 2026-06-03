@@ -16,6 +16,8 @@ export interface MatchupsPlayer {
 
 export interface MatchupsTeam {
   name: string
+  teamId: string
+  teamNumber: number
   players: MatchupsPlayer[]
   opponents: Record<string, string>
   expectedTotal: number
@@ -109,8 +111,9 @@ export function useMatchupsData() {
 
       const teams: Record<string, MatchupsTeam> = {}
       for (const slot of slots as any[]) {
-        const teamName = `Team ${slot.team_number}`
-        if (!teams[teamName]) teams[teamName] = { name: teamName, players: [], opponents: {}, expectedTotal: 0 }
+        const teamNumber: number = slot.teams?.team_number ?? 0
+        const teamName = `Team ${teamNumber}`
+        if (!teams[teamName]) teams[teamName] = { name: teamName, teamId: slot.team_id, teamNumber, players: [], opponents: {}, expectedTotal: 0 }
 
         const slotScores = scoresBySlotId[slot.id] ?? {}
         const playerId: string | null = slot.player_id
@@ -142,11 +145,16 @@ export function useMatchupsData() {
         )
       })
 
+      const nameByTeamId = new Map<string, string>()
+      for (const t of Object.values(teams)) nameByTeamId.set(t.teamId, t.name)
+
       for (const game of schedule as any[]) {
-        const teamA = `Team ${game.team_a}`
-        const teamB = `Team ${game.team_b}`
-        if (teams[teamA]) teams[teamA].opponents[String(game.game_number)] = teamB
-        if (teams[teamB]) teams[teamB].opponents[String(game.game_number)] = teamA
+        const teamA = nameByTeamId.get(game.team_a_id)
+        const teamB = nameByTeamId.get(game.team_b_id)
+        if (teamA && teamB) {
+          if (teams[teamA]) teams[teamA].opponents[String(game.game_number)] = teamB
+          if (teams[teamB]) teams[teamB].opponents[String(game.game_number)] = teamA
+        }
       }
 
       const rounds: MatchupsDerived['rounds'] = []

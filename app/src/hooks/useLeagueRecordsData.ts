@@ -58,14 +58,16 @@ export function computeLeagueRecordsFromSupabase(
       sp.games++
     }
 
-    const tgKey = `${slot.week_id}|${gameNum}|${slot.team_number}`
-    if (!teamGameMap.has(tgKey)) teamGameMap.set(tgKey, { team: slot.team_number, seasonNum, weekNum, gameNum, total: 0, roster: [] })
+    const teamNumber: number = slot.teams?.team_number ?? 0
+
+    const tgKey = `${slot.week_id}|${gameNum}|${slot.team_id}`
+    if (!teamGameMap.has(tgKey)) teamGameMap.set(tgKey, { team: teamNumber, seasonNum, weekNum, gameNum, total: 0, roster: [] })
     const tg = teamGameMap.get(tgKey)!
     tg.total += score
     if (!slot.is_fill && slot.players?.name) tg.roster.push({ name: slot.players.name, score })
 
-    const tnKey = `${slot.week_id}|${slot.team_number}`
-    if (!teamNightMap.has(tnKey)) teamNightMap.set(tnKey, { team: slot.team_number, seasonNum, weekNum, total: 0, gameRosters: new Map() })
+    const tnKey = `${slot.week_id}|${slot.team_id}`
+    if (!teamNightMap.has(tnKey)) teamNightMap.set(tnKey, { team: teamNumber, seasonNum, weekNum, total: 0, gameRosters: new Map() })
     const tn = teamNightMap.get(tnKey)!
     tn.total += score
     if (!tn.gameRosters.has(gameNum)) tn.gameRosters.set(gameNum, { total: 0, roster: [] })

@@ -16,17 +16,17 @@ export function computeChemistryFromSupabase(
   rawSchedule: any[],
   groupSize: 2 | 3,
 ): ChemistryRow[] {
-  const scheduleMap = new Map<string, number>()
+  const scheduleMap = new Map<string, string>()
   for (const row of rawSchedule) {
-    scheduleMap.set(`${row.id}|${row.team_a}`, row.team_b)
-    scheduleMap.set(`${row.id}|${row.team_b}`, row.team_a)
+    scheduleMap.set(`${row.id}|${row.team_a_id}`, row.team_b_id)
+    scheduleMap.set(`${row.id}|${row.team_b_id}`, row.team_a_id)
   }
 
   const teamTotals = new Map<string, number>()
   for (const row of rawScores) {
     const slot = row.team_slots
     if (!slot?.weeks?.is_archived) continue
-    const key = `${row.game_id}|${slot.team_number}`
+    const key = `${row.game_id}|${slot.team_id}`
     teamTotals.set(key, (teamTotals.get(key) ?? 0) + (row.score ?? 0))
   }
 
@@ -43,7 +43,7 @@ export function computeChemistryFromSupabase(
     const slot = row.team_slots
     if (!slot?.weeks?.is_archived) continue
 
-    const twKey = `${slot.week_id}|${slot.team_number}`
+    const twKey = `${slot.week_id}|${slot.team_id}`
     if (!teamWeekMap.has(twKey)) {
       teamWeekMap.set(twKey, { wins: 0, losses: 0, games: 0, gamesProcessed: new Set(), playerMap: new Map() })
     }
@@ -52,7 +52,7 @@ export function computeChemistryFromSupabase(
     // Accumulate W/L/games once per game (all players contribute to team total, incl. fill)
     if (!tw.gamesProcessed.has(row.game_id)) {
       tw.gamesProcessed.add(row.game_id)
-      const gameKey = `${row.game_id}|${slot.team_number}`
+      const gameKey = `${row.game_id}|${slot.team_id}`
       const oppTeam = scheduleMap.get(gameKey)
       if (oppTeam !== undefined) {
         const myTotal = teamTotals.get(gameKey) ?? 0

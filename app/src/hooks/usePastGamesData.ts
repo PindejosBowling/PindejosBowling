@@ -44,30 +44,34 @@ export function computePastGamesFromSupabase(
     }
   }
 
-  // schedule lookup: weekId → gameId → { teamA, teamB, gameNumber }
-  const schedMap = new Map<string, Map<string, { teamA: number; teamB: number; gameNumber: number }>>()
+  // schedule lookup: weekId → gameId → { teamA, teamB (team ids), gameNumber }
+  const schedMap = new Map<string, Map<string, { teamA: string; teamB: string; gameNumber: number }>>()
   for (const s of rawSchedule) {
     if (!weekMeta.has(s.week_id)) continue
     if (!schedMap.has(s.week_id)) schedMap.set(s.week_id, new Map())
-    schedMap.get(s.week_id)!.set(s.id, { teamA: s.team_a, teamB: s.team_b, gameNumber: s.game_number })
+    schedMap.get(s.week_id)!.set(s.id, { teamA: s.team_a_id, teamB: s.team_b_id, gameNumber: s.game_number })
   }
 
-  // scores lookup: weekId → teamNumber → gameId → PlayerScore[]
-  const scoresMap = new Map<string, Map<number, Map<string, PlayerScore[]>>>()
+  // team id → display number (every archived team has scores, so this covers all teams that played)
+  const teamNumberById = new Map<string, number>()
+
+  // scores lookup: weekId → teamId → gameId → PlayerScore[]
+  const scoresMap = new Map<string, Map<string, Map<string, PlayerScore[]>>>()
   for (const r of filtered) {
     const slot = r.team_slots
     const weekId: string = slot?.week_id
-    const teamNumber: number = slot?.team_number
+    const teamId: string = slot?.team_id
     const gameId: string = r.game_id
     const score: number = r.score
     const name: string = slot?.players?.name ?? 'Unknown'
     const isFill: boolean = slot?.is_fill ?? false
 
-    if (!weekId || teamNumber == null || gameId == null || score == null) continue
+    if (!weekId || teamId == null || gameId == null || score == null) continue
+    teamNumberById.set(teamId, slot?.teams?.team_number ?? 0)
     if (!scoresMap.has(weekId)) scoresMap.set(weekId, new Map())
     const byTeam = scoresMap.get(weekId)!
-    if (!byTeam.has(teamNumber)) byTeam.set(teamNumber, new Map())
-    const byGame = byTeam.get(teamNumber)!
+    if (!byTeam.has(teamId)) byTeam.set(teamId, new Map())
+    const byGame = byTeam.get(teamId)!
     if (!byGame.has(gameId)) byGame.set(gameId, [])
     byGame.get(gameId)!.push({ name, score, isFill })
   }
@@ -78,15 +82,15 @@ export function computePastGamesFromSupabase(
     if (!gameSched) continue
 
     const games: GameResult[] = []
-    for (const [gameId, { teamA: teamANum, teamB: teamBNum, gameNumber }] of gameSched) {
-      const teamAAll = scoresMap.get(weekId)?.get(teamANum)?.get(gameId) ?? []
-      const teamBAll = scoresMap.get(weekId)?.get(teamBNum)?.get(gameId) ?? []
+    for (const [gameId, { teamA: teamAId, teamB: teamBId, gameNumber }] of gameSched) {
+      const teamAAll = scoresMap.get(weekId)?.get(teamAId)?.get(gameId) ?? []
+      const teamBAll = scoresMap.get(weekId)?.get(teamBId)?.get(gameId) ?? []
       const teamATotal = teamAAll.reduce((s, p) => s + p.score, 0)
       const teamBTotal = teamBAll.reduce((s, p) => s + p.score, 0)
       games.push({
         gameNumber,
-        teamA: { teamNumber: teamANum, players: teamAAll, total: teamATotal },
-        teamB: { teamNumber: teamBNum, players: teamBAll, total: teamBTotal },
+        teamA: { teamNumber: teamNumberById.get(teamAId) ?? 0, players: teamAAll, total: teamATotal },
+        teamB: { teamNumber: teamNumberById.get(teamBId) ?? 0, players: teamBAll, total: teamBTotal },
         winner: teamATotal > teamBTotal ? 'A' : teamBTotal > teamATotal ? 'B' : 'tie',
       })
     }

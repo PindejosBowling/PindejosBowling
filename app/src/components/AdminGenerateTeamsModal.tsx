@@ -11,7 +11,7 @@ import {
 } from 'react-native'
 import { usePendingStore } from '../stores/pendingStore'
 import { useUiStore } from '../stores/uiStore'
-import { weeks, rsvp, players, teamSlots, games, scores, seasons } from '../utils/supabase/db'
+import { weeks, rsvp, players, teamSlots, teams as teamsDb, games, scores, seasons } from '../utils/supabase/db'
 import type { TablesInsert } from '../utils/supabase/database.types'
 import { colors, fonts, radius } from '../theme'
 
@@ -28,7 +28,10 @@ interface GenPlayer {
   status: 'in' | 'out' | 'fill'
 }
 
-function buildSchedule(numTeams: number): Omit<TablesInsert<'games'>, 'week_id'>[] {
+// Round-robin templates keyed by team *number* (1-based); mapped to team ids before insert.
+type ScheduleTemplate = { game_number: number; team_a: number; team_b: number }
+
+function buildSchedule(numTeams: number): ScheduleTemplate[] {
   if (numTeams === 2) return [
     { game_number: 1, team_a: 1, team_b: 2 },
     { game_number: 2, team_a: 1, team_b: 2 },
@@ -240,34 +243,52 @@ export default function AdminGenerateTeamsModal({ visible, onClose }: Props) {
     if (!genTeams || !weekId) return
     setConfirming(true)
     try {
-      const slotRows: TablesInsert<'team_slots'>[] = (genTeams as any[]).flatMap((team, tIdx) =>
-        team.players.map((player: GenPlayer, pIdx: number) => ({
-          week_id: weekId,
-          player_id: player.isFill ? null : player.id,
-          team_number: tIdx + 1,
-          slot: pIdx,
-          is_fill: player.isFill,
-        }))
-      )
+      const numTeams = (genTeams as any[]).length
 
-      const scheduleRows: TablesInsert<'games'>[] = buildSchedule((genTeams as any[]).length).map(s => ({
-        ...s,
-        week_id: weekId,
-      }))
-
+      // Wipe the week's existing data. Order respects FKs: scores → team_slots → games → teams.
       const { data: existingSlots } = await teamSlots.listByWeek(weekId)
       const existingSlotIds = (existingSlots ?? []).map((s: any) => s.id)
       if (existingSlotIds.length > 0) {
         const { error: e0 } = await scores.removeBySlotIds(existingSlotIds)
         if (e0) throw e0
       }
-
       const { error: e1 } = await teamSlots.removeByWeek(weekId)
       if (e1) throw e1
-      const { error: e2 } = await teamSlots.insert(slotRows)
-      if (e2) throw e2
       const { error: e3 } = await games.removeByWeek(weekId)
       if (e3) throw e3
+      const { error: eTeamsDel } = await teamsDb.removeByWeek(weekId)
+      if (eTeamsDel) throw eTeamsDel
+
+      // Create the teams first so slots/games can reference them by id.
+      const teamRows: TablesInsert<'teams'>[] = Array.from({ length: numTeams }, (_, i) => ({
+        week_id: weekId,
+        team_number: i + 1,
+      }))
+      const { data: insertedTeams, error: eTeamsIns } = await teamsDb.insert(teamRows)
+      if (eTeamsIns) throw eTeamsIns
+      const teamIdByNumber = new Map<number, string>(
+        (insertedTeams ?? []).map((t: any) => [t.team_number, t.id])
+      )
+
+      const slotRows: TablesInsert<'team_slots'>[] = (genTeams as any[]).flatMap((team, tIdx) =>
+        team.players.map((player: GenPlayer, pIdx: number) => ({
+          week_id: weekId,
+          player_id: player.isFill ? null : player.id,
+          team_id: teamIdByNumber.get(tIdx + 1)!,
+          slot: pIdx,
+          is_fill: player.isFill,
+        }))
+      )
+
+      const scheduleRows: TablesInsert<'games'>[] = buildSchedule(numTeams).map(s => ({
+        week_id: weekId,
+        game_number: s.game_number,
+        team_a_id: teamIdByNumber.get(s.team_a)!,
+        team_b_id: teamIdByNumber.get(s.team_b)!,
+      }))
+
+      const { error: e2 } = await teamSlots.insert(slotRows)
+      if (e2) throw e2
       if (scheduleRows.length) {
         const { error: e4 } = await games.insert(scheduleRows)
         if (e4) throw e4

@@ -19,7 +19,7 @@ type RawScore = {
   team_slots: {
     id: string
     player_id: string | null
-    team_number: number
+    team_id: string
     is_fill: boolean
     week_id: string
     players: { id: string; name: string } | null
@@ -31,8 +31,8 @@ type RawSchedule = {
   id: string
   week_id: string
   game_number: number
-  team_a: number
-  team_b: number
+  team_a_id: string
+  team_b_id: string
 }
 
 /**
@@ -46,21 +46,21 @@ export function computeStandingsFromSupabase(
   rawSchedule: any[],
   seasonId: number | null,
 ): StandingsRow[] {
-  // Schedule lookup: "weekId|gameNum|teamNum" → opponentTeamNum
+  // Schedule lookup: "gameId|teamId" → opponentTeamId
   // Keyed per-team so multiple matchups in the same game round don't overwrite each other.
-  const scheduleMap = new Map<string, number>()
+  const scheduleMap = new Map<string, string>()
   for (const row of rawSchedule as RawSchedule[]) {
-    scheduleMap.set(`${row.id}|${row.team_a}`, row.team_b)
-    scheduleMap.set(`${row.id}|${row.team_b}`, row.team_a)
+    scheduleMap.set(`${row.id}|${row.team_a_id}`, row.team_b_id)
+    scheduleMap.set(`${row.id}|${row.team_b_id}`, row.team_a_id)
   }
 
-  // Team totals (all players including fill): "gameId|teamNum" → total pins
+  // Team totals (all players including fill): "gameId|teamId" → total pins
   const teamTotals = new Map<string, number>()
   for (const row of rawScores as RawScore[]) {
     const slot = row.team_slots
     if (!slot?.weeks?.is_archived) continue
     if (seasonId !== null && slot.weeks.season_id !== seasonId) continue
-    const key = `${row.game_id}|${slot.team_number}`
+    const key = `${row.game_id}|${slot.team_id}`
     teamTotals.set(key, (teamTotals.get(key) ?? 0) + (row.score ?? 0))
   }
 
@@ -82,7 +82,7 @@ export function computeStandingsFromSupabase(
     if (!slot.weeks?.is_archived) continue
     if (seasonId !== null && slot.weeks.season_id !== seasonId) continue
 
-    const myTeam = slot.team_number
+    const myTeam = slot.team_id
     const oppTeam = scheduleMap.get(`${row.game_id}|${myTeam}`)
     if (oppTeam === undefined) continue
 
