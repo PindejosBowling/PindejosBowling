@@ -91,6 +91,8 @@ The client is configured via Expo environment variables that are set in `.env.lo
 | `listActive()` | Active players only |
 | `getById(id)` | Single player by id |
 | `getByName(name)` | Case-insensitive name match (single) |
+| `getByUserId(userId)` | Single player (`id, name, role`) by auth `user_id` |
+| `isRegistered(phone)` | RPC `is_registered_player` — whether a phone belongs to a registered player (login gate) |
 | `insert(data)` | Add a player |
 | `update(id, data)` | Update player fields |
 
@@ -108,10 +110,11 @@ The client is configured via Expo environment variables that are set in `.env.lo
 | `listByWeek(weekId)` | Scores for a live week (joins team_slots) |
 | `listBySeason(seasonId)` | Archived, non-fill scores for a season (for avg calc) |
 | `listAllArchived()` | All archived non-fill scores |
-| `listForStandings()` | Archived scores with full player/week/season join (standings, chemistry, season history) |
+| `listForStandings()` | Archived scores with full player/week/season join (standings, chemistry, past seasons) |
 | `listForPlayerDetail()` | Archived scores with slot/week/season join (player detail screen) |
 | `listForH2H()` | Archived scores with player/week/season join (head-to-head) |
 | `listForLeagueRecords()` | Archived scores with player/week/season join (league records) |
+| `listForPastGames()` | Archived scores with slot/team/week join — embeds `teams(team_number)` (past games screen) |
 | `insert(data)` | Insert one or many scores |
 | `upsert(data)` | Upsert on `team_slot_id, game_id` conflict |
 | `update(id, data)` | Update a score by id |
@@ -206,13 +209,13 @@ Win/loss is determined by comparing **team totals** (all players on a team inclu
 
 | Hook file | Exported hook | Exported compute functions | Used by |
 |---|---|---|---|
-| `useStandingsData.ts` | `useStandingsData` | `computeStandingsFromSupabase(rawScores, rawSchedule, seasonId)` | StandingsScreen, SeasonHistoryScreen |
+| `useStandingsData.ts` | `useStandingsData` | `computeStandingsFromSupabase(rawScores, rawSchedule, seasonId)` | StandingsScreen, PastSeasonsScreen |
 | `useMatchupsData.ts` | `useMatchupsData` | — | MatchupsScreen |
 | `usePlayerDetailData.ts` | `usePlayerDetailData(name)` | `computePlayerProfile`, `computePersonalRecords`, `computeCurrentTeam`, `computeWeekRows`, `computeChartPoints(playerId, allScores, allSchedule, seasonId)`, `computeExpandedMatchups`, `computePlayerSeasons` | PlayerDetailScreen |
 | `useChemistryData.ts` | `useChemistryData` | `computeChemistryFromSupabase(rawScores, rawSchedule, groupSize)` | ChemistryScreen |
 | `useH2HData.ts` | `useH2HData` | `computeH2HFromSupabase(p1Name, p2Name, rawScores, rawSchedule)` | HeadToHeadScreen |
 | `useLeagueRecordsData.ts` | `useLeagueRecordsData` | `computeLeagueRecordsFromSupabase(rawScores, filterSeasonId)` | LeagueRecordsScreen |
-| `useSeasonHistoryData.ts` | `useSeasonHistoryData` | — (uses `computeStandingsFromSupabase`) | SeasonHistoryScreen |
+| `usePastSeasonsData.ts` | `usePastSeasonsData` | — (uses `computeStandingsFromSupabase`) | PastSeasonsScreen |
 | `usePastGamesData.ts` | `usePastGamesData` | `computePastGamesFromSupabase(rawScores, rawSchedule, seasonId)` | PastGamesScreen |
 | `usePlayerManagementData.ts` | `usePlayerManagementData` | — | PlayerManagementScreen |
 | `useRefresh.ts` | `useRefresh(fn)` | — | All screens with pull-to-refresh |
@@ -264,7 +267,7 @@ Pending score key format: `"${teamSlotId}|${gameNum}"` where `gameNum` is the in
 ### `useUiStore` ([src/stores/uiStore.ts](src/stores/uiStore.ts))
 Ephemeral UI state — toggles, selections, toast queue. All fields via `set(partial)`. Key fields:
 - `matchupsView` — `'scores'` | `'expected'`
-- `expandedWeek` — week id for expanded row in season history
+- `expandedWeek` — week id for expanded row in past seasons
 - `standingsSeason` — season filter for StandingsScreen
 - `playerSeason` — season filter for PlayerDetailScreen
 - `recordsSeason` — season filter for LeagueRecordsScreen (`'all'` or season id string)
@@ -303,7 +306,7 @@ Ephemeral UI state — toggles, selections, toast queue. All fields via `set(par
 | `LeagueRecords` | LeagueRecordsScreen |
 | `HeadToHead` | HeadToHeadScreen |
 | `Chemistry` | ChemistryScreen |
-| `SeasonHistory` | SeasonHistoryScreen |
+| `PastSeasons` | PastSeasonsScreen — season-by-season summary |
 | `TrashBoard` | TrashBoardScreen |
 | `Playoffs` | PlayoffsScreen |
 | `PlayerManagement` | PlayerManagementScreen — add, edit, and toggle active/inactive players |
@@ -334,7 +337,7 @@ Ephemeral UI state — toggles, selections, toast queue. All fields via `set(par
 | `PlayerPickerModal` | Full-screen player search/select for H2H |
 | `AdminArchiveModal` | Confirm dialog — archives active week (sets `is_archived = true`, creates next week row) |
 | `AdminEndSeasonModal` | Confirm dialog — records season champions and creates new season row |
-| `AdminGenerateTeamsModal` | Generate balanced teams from RSVP list, preview swaps, write slots/schedule to Supabase |
+| `AdminGenerateTeamsModal` | Generate balanced teams from RSVP list, preview swaps, write teams/slots/schedule to Supabase |
 
 ---
 
@@ -433,10 +436,10 @@ app/
 │   │   ├── useLeagueRecordsData.ts  # League records + computeLeagueRecordsFromSupabase
 │   │   ├── useMatchupsData.ts   # Active week matchup data (full derivation in hook)
 │   │   ├── usePastGamesData.ts  # Past games by season + computePastGamesFromSupabase
+│   │   ├── usePastSeasonsData.ts  # Past seasons raw data (screen reuses computeStandingsFromSupabase)
 │   │   ├── usePlayerDetailData.ts   # Player data + many compute* functions
 │   │   ├── usePlayerManagementData.ts  # Raw player list for PlayerManagementScreen
 │   │   ├── useRefresh.ts        # useRefresh(fn) — RefreshControl helper
-│   │   ├── useSeasonHistoryData.ts  # Past seasons raw data
 │   │   └── useStandingsData.ts  # Standings data + computeStandingsFromSupabase
 │   ├── navigation/
 │   │   ├── RootNavigator.tsx    # Bottom tab navigator
@@ -480,7 +483,7 @@ app/
 │       ├── LeagueRecordsScreen.tsx  # High game/series/team records
 │       ├── HeadToHeadScreen.tsx     # 1v1 player comparison
 │       ├── ChemistryScreen.tsx      # Pair/trio win-rate analysis
-│       ├── SeasonHistoryScreen.tsx  # Season-by-season summary
+│       ├── PastSeasonsScreen.tsx    # Past seasons — season-by-season summary
 │       ├── TrashBoardScreen.tsx     # Fun message board
 │       └── PlayoffsScreen.tsx       # Admin: playoffs bracket
 ```
@@ -535,9 +538,9 @@ It contains hook patterns, screen skeleton, navigation wiring, database migratio
   **Creating a migration file:** Always use the CLI to generate the file — never create it manually. This ensures the timestamp prefix is correct and consistent:
   ```bash
   SUPABASE_ACCESS_TOKEN=$(grep '^SUPABASE_ACCESS_TOKEN=' app/.env.local | cut -d'=' -f2) \
-    supabase migration new short_description --workdir supabase/migrations
+    supabase migration new short_description --workdir $(pwd)
   ```
-  This creates an empty `supabase/migrations/YYYYMMDDHHMMSS_short_description.sql` file. Write your SQL into that file, then push it.
+  This creates an empty `supabase/migrations/YYYYMMDDHHMMSS_short_description.sql` file. Write your SQL into that file, then push it. **`--workdir` must be the repo root** (`migration new` writes to `<workdir>/supabase/migrations/`) — pointing it at `supabase/migrations` nests the file at `supabase/migrations/supabase/migrations/`.
 
   **To apply a migration:**
   ```bash

@@ -61,7 +61,7 @@ export default function PlayerManagementScreen() {
   const [saving, setSaving] = useState(false)
 
   const { active, inactive } = useMemo(() => {
-    const sorted = [...rawPlayers].sort((a, b) => a.name.localeCompare(b.name))
+    const sorted = [...rawPlayers].sort((a, b) => (a.name ?? '').localeCompare(b.name ?? ''))
     return {
       active: sorted.filter(p => p.is_active),
       inactive: sorted.filter(p => !p.is_active),

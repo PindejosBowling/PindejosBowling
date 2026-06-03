@@ -20,7 +20,7 @@ interface Props {
 export default function AdminEndSeasonModal({ visible, onClose }: Props) {
   const [championIds, setChampionIds] = useState<string[]>([])
   const [saving, setSaving] = useState(false)
-  const [playerList, setPlayerList] = useState<{ id: string; name: string }[]>([])
+  const [playerList, setPlayerList] = useState<{ id: string; name: string | null }[]>([])
   const [season, setSeason] = useState<{ id: number; number: number } | null>(null)
   const { showToast } = useUiStore()
 

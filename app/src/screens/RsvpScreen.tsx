@@ -111,18 +111,8 @@ export default function RsvpScreen() {
         Alert.alert('Save failed', error.message)
         return
       }
-      setRsvpRows(prev => {
-        const next = [...prev]
-        for (const { player_id, status } of upsertData) {
-          const idx = next.findIndex(r => r.player_id === player_id)
-          if (idx >= 0) {
-            next[idx] = { ...next[idx], status }
-          } else {
-            next.push({ id: '', week_id: weekId, player_id, status, note: null, updated_at: new Date().toISOString() })
-          }
-        }
-        return next
-      })
+      const rsvpRes = await dbRsvp.listByWeek(weekId)
+      if (rsvpRes.data) setRsvpRows(rsvpRes.data)
       set({ pendingRSVP: {} })
     } finally {
       setSaving(false)
