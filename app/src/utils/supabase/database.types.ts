@@ -14,27 +14,6 @@ export type Database = {
   }
   public: {
     Tables: {
-      app_credentials: {
-        Row: {
-          created_at: string
-          password_hash: string
-          role: string
-          updated_at: string
-        }
-        Insert: {
-          created_at?: string
-          password_hash: string
-          role: string
-          updated_at?: string
-        }
-        Update: {
-          created_at?: string
-          password_hash?: string
-          role?: string
-          updated_at?: string
-        }
-        Relationships: []
-      }
       board_posts: {
         Row: {
           created_at: string

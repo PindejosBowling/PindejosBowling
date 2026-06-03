@@ -41,11 +41,10 @@ The client is configured via Expo environment variables that are set in `.env.lo
 
 ---
 
-## Database Schema (11 tables)
+## Database Schema (10 tables)
 
 | Table | Key columns |
 |---|---|
-| `app_credentials` | `role`, `password_hash` |
 | `players` | `id`, `first_name`, `last_name`, `name`, `phone`, `role`, `user_id`, `is_active`, `created_at` |
 | `seasons` | `id`, `number`, `league_name`, `bowling_night`, `started_at`, `ended_at` |
 | `weeks` | `id`, `season_id`, `week_number`, `is_archived`, `is_confirmed`, `bowled_at` |
