@@ -15,6 +15,12 @@ brew install node
 
 The app lives in `app/`. 
 
+Install dependencies (one-time, after cloning):
+```bash
+cd app
+npm install
+```
+
 ### iOS simulator
 ```bash
 cd app
