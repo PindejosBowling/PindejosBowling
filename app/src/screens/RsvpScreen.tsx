@@ -17,9 +17,16 @@ import ConfirmBar from '../components/ConfirmBar'
 import LoadingView from '../components/LoadingView'
 import { usePendingStore } from '../stores/pendingStore'
 import { useAuthStore } from '../stores/authStore'
-import { players as dbPlayers, rsvp as dbRsvp, weeks as dbWeeks } from '../utils/supabase/db'
+import {
+  players as dbPlayers,
+  rsvp as dbRsvp,
+  weeks as dbWeeks,
+  betLines as dbBetLines,
+  pinLedger as dbPinLedger,
+} from '../utils/supabase/db'
 import type { Tables } from '../utils/supabase/database.types'
 import { initials } from '../utils/helpers'
+import { computeAvgById, lineForAvg } from '../utils/betLines'
 import { colors, fonts, radius } from '../theme'
 
 type Player = Tables<'players'>
@@ -59,6 +66,64 @@ export default function RsvpScreen() {
   useEffect(() => { load() }, [load])
 
   const { refreshing, onRefresh } = useRefresh(load)
+
+  // Keep bet lines in sync with who is "in" for the week. Runs after any RSVP
+  // mutation. Creates lines (current-season avg → floor+0.5) for in-players who
+  // are missing them, and refunds+removes lines for players no longer in.
+  // Reads fresh state from Supabase rather than trusting component state.
+  async function syncBetLines(wid: string) {
+    try {
+      const [rsvpRes, linesRes] = await Promise.all([
+        dbRsvp.listByWeek(wid),
+        dbBetLines.listByWeek(wid),
+      ])
+      const rows = rsvpRes.data ?? []
+      const lines = linesRes.data ?? []
+      const inIds = new Set(rows.filter(r => r.status === 'in').map(r => r.player_id))
+
+      // Group existing lines by player; the established game set for the week is
+      // the distinct game_numbers already present (defaults to games 1 & 2 when
+      // none exist yet, so late In-joiners match the set incl. game 3 post-gen).
+      const gamesByPlayer = new Map<string, Set<number>>()
+      const targetGames = new Set<number>()
+      for (const l of lines) {
+        if (!gamesByPlayer.has(l.player_id)) gamesByPlayer.set(l.player_id, new Set())
+        gamesByPlayer.get(l.player_id)!.add(l.game_number)
+        targetGames.add(l.game_number)
+      }
+      if (targetGames.size === 0) { targetGames.add(1); targetGames.add(2) }
+
+      // Refund + remove: players with lines who are no longer "in".
+      const toCancel = [...gamesByPlayer.keys()].filter(pid => !inIds.has(pid))
+      if (toCancel.length > 0) {
+        const { error } = await dbPinLedger.cancelBetLinesForPlayers(wid, toCancel)
+        if (error) throw error
+      }
+
+      // Create: in-players missing any target game line.
+      const missing = [...inIds]
+        .map(pid => {
+          const have = gamesByPlayer.get(pid) ?? new Set<number>()
+          return { pid, need: [...targetGames].filter(g => !have.has(g)) }
+        })
+        .filter(m => m.need.length > 0)
+      if (missing.length > 0) {
+        const { avgById, leagueAvg } = await computeAvgById('current')
+        const insertRows = missing.flatMap(m =>
+          m.need.map(g => ({
+            week_id: wid,
+            player_id: m.pid,
+            game_number: g,
+            line: lineForAvg(avgById[m.pid] ?? leagueAvg),
+          })),
+        )
+        const { error } = await dbBetLines.insert(insertRows)
+        if (error) throw error
+      }
+    } catch (e: any) {
+      Alert.alert('Bet line sync failed', e?.message ?? 'Could not update bet lines for the RSVP change.')
+    }
+  }
 
   function currentStatus(playerId: string): string {
     return rsvpRows.find(r => r.player_id === playerId)?.status ?? ''
@@ -114,6 +179,7 @@ export default function RsvpScreen() {
       const rsvpRes = await dbRsvp.listByWeek(weekId)
       if (rsvpRes.data) setRsvpRows(rsvpRes.data)
       set({ pendingRSVP: {} })
+      await syncBetLines(weekId)
     } finally {
       setSaving(false)
     }
@@ -125,6 +191,7 @@ export default function RsvpScreen() {
       await dbRsvp.removeByWeek(weekId)
       setRsvpRows([])
       set({ pendingRSVP: {} })
+      await syncBetLines(weekId)
     }
     if (Platform.OS === 'web') {
       if (window.confirm('Reset RSVPs? This will clear all RSVPs for the upcoming week.')) doReset()

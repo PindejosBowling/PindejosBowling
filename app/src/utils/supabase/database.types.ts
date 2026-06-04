@@ -614,6 +614,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      cancel_bet_lines_for_players: {
+        Args: { p_player_ids: string[]; p_week_id: string }
+        Returns: undefined
+      }
       custom_access_token: { Args: { event: Json }; Returns: Json }
       is_registered_player: { Args: { phone: string }; Returns: boolean }
     }

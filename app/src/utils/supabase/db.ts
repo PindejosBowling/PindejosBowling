@@ -328,6 +328,8 @@ export const betLines = {
     supabase.from('bet_lines').insert(data).select(),
   update: (id: string, data: TablesUpdate<'bet_lines'>) =>
     supabase.from('bet_lines').update(data).eq('id', id),
+  remove: (id: string) =>
+    supabase.from('bet_lines').delete().eq('id', id),
 }
 
 export const placedBets = {
@@ -383,6 +385,12 @@ export const pinLedger = {
   // entries) — used by the admin cancel-bet flow to fully undo a bet.
   removeByPlacedBet: (placedBetId: string) =>
     supabase.from('pin_ledger').delete().eq('placed_bet_id', placedBetId),
+  // Privileged RSVP-driven cleanup: for a week + set of players who are no longer
+  // "in", refunds bets (deletes ledger rows → placed bets) and deletes their bet
+  // lines, atomically via SECURITY DEFINER RPC (bypasses bet_lines' no-DELETE RLS
+  // and admin-only placed_bets/pin_ledger DELETE so non-admins can self-RSVP out).
+  cancelBetLinesForPlayers: (weekId: string, playerIds: string[]) =>
+    supabase.rpc('cancel_bet_lines_for_players', { p_week_id: weekId, p_player_ids: playerIds }),
 }
 
 export const weeks = {
