@@ -9,6 +9,7 @@ export type MoreStackParamList = {
   PlayerManagement: undefined
   PastGames: undefined
   Registration: undefined
+  BettingAdmin: undefined
 }
 
 export type StandingsStackParamList = {

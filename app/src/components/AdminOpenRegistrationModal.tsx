@@ -11,7 +11,7 @@ import {
 } from 'react-native'
 import DateTimePicker from '@react-native-community/datetimepicker'
 import { useUiStore } from '../stores/uiStore'
-import { seasons } from '../utils/supabase/db'
+import { seasons, seasonChampions, pinLedger } from '../utils/supabase/db'
 import { colors, fonts, radius } from '../theme'
 import Toast from './Toast'
 
@@ -98,6 +98,27 @@ export default function AdminOpenRegistrationModal({ visible, onClose, onCreated
         is_active: false,
       })
       if (error) { showToast(error.message, 'error'); setSaving(false); return }
+
+      // Credit +100 pin bonus to prior-season champions for the new season.
+      const [newSeasonRes, lastEndedRes] = await Promise.all([
+        seasons.getLatest(),
+        seasons.getLastEnded(),
+      ])
+      if (newSeasonRes.data && lastEndedRes.data) {
+        const { data: champions } = await seasonChampions.listBySeason(lastEndedRes.data.id)
+        if (champions && champions.length > 0) {
+          await pinLedger.insert(
+            champions.map(c => ({
+              player_id: c.player_id,
+              season_id: newSeasonRes.data!.id,
+              amount: 100,
+              type: 'champion_bonus' as const,
+              description: `Season ${lastEndedRes.data!.number} champion bonus`,
+            }))
+          )
+        }
+      }
+
       showToast(`Registration open for Season ${nextNumber}`, 'success')
       await onCreated?.()
       onClose()

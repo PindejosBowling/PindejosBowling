@@ -181,6 +181,18 @@ export const scores = {
       )
       .eq('team_slots.teams.weeks.is_archived', true)
       .not('score', 'is', null),
+  // Used by archive settlement: fetches non-fill scores with game_number for bet resolution.
+  listByWeekWithGames: (weekId: string) =>
+    supabase
+      .from('scores')
+      .select(
+        'score,' +
+        'games!scores_game_id_fkey!inner(game_number),' +
+        'team_slots!inner(player_id, is_fill, teams!inner(week_id))'
+      )
+      .eq('team_slots.teams.week_id', weekId)
+      .eq('team_slots.is_fill', false)
+      .not('score', 'is', null),
   insert: (data: TablesInsert<'scores'> | TablesInsert<'scores'>[]) =>
     supabase.from('scores').insert(data),
   upsert: (data: TablesInsert<'scores'> | TablesInsert<'scores'>[]) =>
@@ -234,6 +246,17 @@ export const seasons = {
       .order('number', { ascending: false })
       .limit(1)
       .single(),
+  // Most recently ended season (is_active=false, not in registration).
+  // Used to look up champions for the champion bonus when a new season opens.
+  getLastEnded: () =>
+    supabase
+      .from('seasons')
+      .select('*')
+      .eq('is_active', false)
+      .eq('registration_open', false)
+      .order('number', { ascending: false })
+      .limit(1)
+      .maybeSingle(),
   insert: (data: TablesInsert<'seasons'>) =>
     supabase.from('seasons').insert(data),
   update: (id: string, data: TablesUpdate<'seasons'>) =>
@@ -283,6 +306,91 @@ export const teamSlots = {
   remove: (id: string) =>
     supabase.from('team_slots').delete().eq('id', id),
   // No week-scoped delete: deleting a week's teams cascades to its slots (see teams.removeByWeek).
+}
+
+export const betLines = {
+  listByWeek: (weekId: string) =>
+    supabase
+      .from('bet_lines')
+      .select('*, players(name)')
+      .eq('week_id', weekId)
+      .order('player_id')
+      .order('game_number'),
+  listOpenByWeek: (weekId: string) =>
+    supabase
+      .from('bet_lines')
+      .select('*, players(name)')
+      .eq('week_id', weekId)
+      .eq('is_open', true)
+      .order('player_id')
+      .order('game_number'),
+  insert: (data: TablesInsert<'bet_lines'> | TablesInsert<'bet_lines'>[]) =>
+    supabase.from('bet_lines').insert(data).select(),
+  update: (id: string, data: TablesUpdate<'bet_lines'>) =>
+    supabase.from('bet_lines').update(data).eq('id', id),
+  remove: (id: string) =>
+    supabase.from('bet_lines').delete().eq('id', id),
+}
+
+export const placedBets = {
+  listByPlayer: (playerId: string) =>
+    supabase
+      .from('placed_bets')
+      .select('*, bet_lines(week_id, player_id, game_number, line, result, actual_score, players(name))')
+      .eq('player_id', playerId)
+      .order('created_at', { ascending: false }),
+  listByLine: (betLineId: string) =>
+    supabase
+      .from('placed_bets')
+      .select('*, players(name)')
+      .eq('bet_line_id', betLineId),
+  listByWeek: (weekId: string) =>
+    supabase
+      .from('placed_bets')
+      .select('*, players(name), bet_lines!inner(week_id, player_id, game_number, line, result, actual_score, players(name))')
+      .eq('bet_lines.week_id', weekId)
+      .order('created_at', { ascending: false }),
+  // All settled bets (settled_at set) for a season, via bet_lines → weeks.season_id
+  listSettledBySeason: (seasonId: string) =>
+    supabase
+      .from('placed_bets')
+      .select('*, players(name), bet_lines!inner(week_id, player_id, game_number, line, result, actual_score, players(name), weeks!inner(season_id, week_number))')
+      .eq('bet_lines.weeks.season_id', seasonId)
+      .not('settled_at', 'is', null)
+      .order('settled_at', { ascending: false }),
+  insert: (data: TablesInsert<'placed_bets'>) =>
+    supabase.from('placed_bets').insert(data).select().single(),
+  update: (id: string, data: TablesUpdate<'placed_bets'>) =>
+    supabase.from('placed_bets').update(data).eq('id', id),
+  remove: (id: string) =>
+    supabase.from('placed_bets').delete().eq('id', id),
+}
+
+export const pinLedger = {
+  listByPlayerSeason: (playerId: string, seasonId: string) =>
+    supabase
+      .from('pin_ledger')
+      .select('*')
+      .eq('player_id', playerId)
+      .eq('season_id', seasonId)
+      .order('created_at', { ascending: false }),
+  listBySeasonForLeaderboard: (seasonId: string) =>
+    supabase
+      .from('pin_ledger')
+      .select('player_id, amount, players(name, is_active)')
+      .eq('season_id', seasonId),
+  insert: (data: TablesInsert<'pin_ledger'> | TablesInsert<'pin_ledger'>[]) =>
+    supabase.from('pin_ledger').insert(data),
+  // Delete every ledger entry tied to a placed bet (bet_placed + any settlement
+  // entries) — used by the admin cancel-bet flow to fully undo a bet.
+  removeByPlacedBet: (placedBetId: string) =>
+    supabase.from('pin_ledger').delete().eq('placed_bet_id', placedBetId),
+  // Privileged RSVP-driven cleanup: for a week + set of players who are no longer
+  // "in", refunds bets (deletes ledger rows → placed bets) and deletes their bet
+  // lines, atomically via SECURITY DEFINER RPC (bypasses bet_lines' no-DELETE RLS
+  // and admin-only placed_bets/pin_ledger DELETE so non-admins can self-RSVP out).
+  cancelBetLinesForPlayers: (weekId: string, playerIds: string[]) =>
+    supabase.rpc('cancel_bet_lines_for_players', { p_week_id: weekId, p_player_ids: playerIds }),
 }
 
 export const weeks = {

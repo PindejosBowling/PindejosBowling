@@ -14,6 +14,60 @@ export type Database = {
   }
   public: {
     Tables: {
+      bet_lines: {
+        Row: {
+          actual_score: number | null
+          created_at: string
+          game_number: number
+          id: string
+          is_open: boolean
+          line: number
+          player_id: string
+          result: string | null
+          updated_at: string
+          week_id: string
+        }
+        Insert: {
+          actual_score?: number | null
+          created_at?: string
+          game_number: number
+          id?: string
+          is_open?: boolean
+          line: number
+          player_id: string
+          result?: string | null
+          updated_at?: string
+          week_id: string
+        }
+        Update: {
+          actual_score?: number | null
+          created_at?: string
+          game_number?: number
+          id?: string
+          is_open?: boolean
+          line?: number
+          player_id?: string
+          result?: string | null
+          updated_at?: string
+          week_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bet_lines_player_id_fkey"
+            columns: ["player_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bet_lines_week_id_fkey"
+            columns: ["week_id"]
+            isOneToOne: false
+            referencedRelation: "weeks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       board_posts: {
         Row: {
           created_at: string
@@ -84,6 +138,115 @@ export type Database = {
             columns: ["team_b_id"]
             isOneToOne: false
             referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pin_ledger: {
+        Row: {
+          amount: number
+          created_at: string
+          description: string
+          id: string
+          placed_bet_id: string | null
+          player_id: string
+          season_id: string
+          type: string
+          updated_at: string
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          description: string
+          id?: string
+          placed_bet_id?: string | null
+          player_id: string
+          season_id: string
+          type: string
+          updated_at?: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          description?: string
+          id?: string
+          placed_bet_id?: string | null
+          player_id?: string
+          season_id?: string
+          type?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pin_ledger_placed_bet_id_fkey"
+            columns: ["placed_bet_id"]
+            isOneToOne: false
+            referencedRelation: "placed_bets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pin_ledger_player_id_fkey"
+            columns: ["player_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pin_ledger_season_id_fkey"
+            columns: ["season_id"]
+            isOneToOne: false
+            referencedRelation: "seasons"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      placed_bets: {
+        Row: {
+          bet_line_id: string
+          created_at: string
+          id: string
+          payout: number | null
+          pick: string
+          player_id: string
+          settled_at: string | null
+          updated_at: string
+          wager: number
+        }
+        Insert: {
+          bet_line_id: string
+          created_at?: string
+          id?: string
+          payout?: number | null
+          pick: string
+          player_id: string
+          settled_at?: string | null
+          updated_at?: string
+          wager: number
+        }
+        Update: {
+          bet_line_id?: string
+          created_at?: string
+          id?: string
+          payout?: number | null
+          pick?: string
+          player_id?: string
+          settled_at?: string | null
+          updated_at?: string
+          wager?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "placed_bets_bet_line_id_fkey"
+            columns: ["bet_line_id"]
+            isOneToOne: false
+            referencedRelation: "bet_lines"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "placed_bets_player_id_fkey"
+            columns: ["player_id"]
+            isOneToOne: false
+            referencedRelation: "players"
             referencedColumns: ["id"]
           },
         ]
@@ -451,6 +614,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      cancel_bet_lines_for_players: {
+        Args: { p_player_ids: string[]; p_week_id: string }
+        Returns: undefined
+      }
       custom_access_token: { Args: { event: Json }; Returns: Json }
       is_registered_player: { Args: { phone: string }; Returns: boolean }
     }
