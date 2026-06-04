@@ -13,7 +13,6 @@ import PlayoffsScreen from '../screens/PlayoffsScreen'
 import PlayerManagementScreen from '../screens/PlayerManagementScreen'
 import PastGamesScreen from '../screens/PastGamesScreen'
 import RegistrationScreen from '../screens/RegistrationScreen'
-import BettingScreen from '../screens/BettingScreen'
 import BettingAdminScreen from '../screens/BettingAdminScreen'
 
 const Stack = createNativeStackNavigator<MoreStackParamList>()
@@ -36,7 +35,6 @@ export default function MoreStackNavigator() {
       <Stack.Screen name="PlayerManagement" component={PlayerManagementScreen} options={{ title: 'Player Management' }} />
       <Stack.Screen name="PastGames" component={PastGamesScreen} options={{ title: 'Past Games' }} />
       <Stack.Screen name="Registration" component={RegistrationScreen} options={{ title: 'Registration' }} />
-      <Stack.Screen name="Betting" component={BettingScreen} options={{ title: 'Betting' }} />
       <Stack.Screen name="BettingAdmin" component={BettingAdminScreen} options={{ title: 'Bet Lines' }} />
     </Stack.Navigator>
   )

@@ -14,11 +14,8 @@ import {
   Alert,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import { useNavigation } from '@react-navigation/native'
-import { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { colors, fonts, radius } from '../theme'
-import { MoreStackParamList } from '../navigation/types'
-import ScreenHeader from '../components/ScreenHeader'
+import AppHeader from '../components/AppHeader'
 import LoadingView from '../components/LoadingView'
 import ToggleGroup from '../components/ToggleGroup'
 import Toast from '../components/Toast'
@@ -27,8 +24,6 @@ import { useRefresh } from '../hooks/useRefresh'
 import { useAuthStore } from '../stores/authStore'
 import { useUiStore } from '../stores/uiStore'
 import { betLines, placedBets, pinLedger } from '../utils/supabase/db'
-
-type Nav = NativeStackNavigationProp<MoreStackParamList>
 
 type Pick = 'over' | 'under'
 type View2 = 'leaderboard' | 'action' | 'place' | 'settled'
@@ -68,7 +63,6 @@ function resultBadge(result: string | null, pick: string) {
 }
 
 export default function BettingScreen() {
-  const navigation = useNavigation<Nav>()
   const playerId = useAuthStore(s => s.playerId)
   const isAdmin = useAuthStore(s => s.role) === 'admin'
   const { showToast } = useUiStore()
@@ -314,7 +308,7 @@ export default function BettingScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
-      <ScreenHeader title="Betting" onBack={() => navigation.goBack()} />
+      <AppHeader />
       <ScrollView
         contentContainerStyle={styles.content}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.muted} />}

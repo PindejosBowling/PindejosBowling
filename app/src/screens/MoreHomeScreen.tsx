@@ -34,7 +34,6 @@ export default function MoreHomeScreen() {
     { icon: '🎳', label: 'Past Games',   onPress: () => navigation.navigate('PastGames') },
     { icon: '📝', label: 'Registration', onPress: () => navigation.navigate('Registration') },
     { icon: '🗑️', label: 'Trash Board',  onPress: () => navigation.navigate('TrashBoard') },
-    { icon: '💰', label: 'Betting',      onPress: () => navigation.navigate('Betting') },
   ]
 
   const adminTiles: Tile[] = [
