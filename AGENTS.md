@@ -174,13 +174,15 @@ The client is configured via Expo environment variables that are set in `.env.lo
 | `listByWeek(weekId)` | All bets for a week (inner-joins through `bet_lines.week_id`) with player and line context |
 | `insert(data)` | Insert one bet; chains `.select().single()` to return the new row |
 | `update(id, data)` | Update a bet (set `payout` and `settled_at` on settlement) |
+| `remove(id)` | Delete a placed bet by id (admin cancel-bet flow) |
 
 ### `pinLedger`
 | Method | Description |
 |---|---|
 | `listByPlayerSeason(playerId, seasonId)` | All ledger entries for a player in a season — newest first. `SUM(amount)` = balance |
-| `listBySeasonForLeaderboard(seasonId)` | All entries for a season with joined `players(name)` — for building a leaderboard |
+| `listBySeasonForLeaderboard(seasonId)` | All entries for a season with joined `players(name, is_active)` — for building the pin-balance scoreboard (sum amount per player) |
 | `insert(data)` | Insert one or many entries (batch insert used by archive settlement and bet placement) |
+| `removeByPlacedBet(placedBetId)` | Delete every ledger entry tied to a placed bet (admin cancel-bet flow — fully undoes the bet) |
 
 ### `teamSlots`
 | Method | Description |
@@ -263,7 +265,7 @@ Win/loss is determined by comparing **team totals** (all players on a team inclu
 | `usePlayerManagementData.ts` | `usePlayerManagementData` | — | PlayerManagementScreen |
 | `useRegistrationData.ts` | `useRegistrationData` | — | RegistrationScreen |
 | `useRefresh.ts` | `useRefresh(fn)` | — | All screens with pull-to-refresh |
-| `useBettingData.ts` | `useBettingData(playerId)` | — | BettingScreen — returns `{ balance, openLines, myBets, myBetLineIds, currentWeekId, currentSeasonId }` |
+| `useBettingData.ts` | `useBettingData(playerId)` | — | BettingScreen — returns `{ balance, openLines, myBets, weekBets, leaderboard, myBetLineIds, currentWeekId, currentSeasonId }` (`weekBets` = all players' placed bets this week via `placedBets.listByWeek`; `leaderboard` = active players' season pin balances summed from the ledger, each with `potential` = balance + Σ(wager×2) over still-pending bets (the balance if all live bets win); sorted high → low by `potential`) |
 | `useBettingAdminData.ts` | `useBettingAdminData()` | — | BettingAdminScreen — returns `{ lines, betCountByLine, currentWeekId }` |
 
 > Stats hooks (`useStandingsData`, `usePastSeasonsData`, `usePastGamesData`, `useLeagueRecordsData`, `usePlayerDetailData`) build their `seasonList` from `seasons.list()` **filtered to started seasons** (`!registration_open`), so an in-registration season never appears as a stats filter or default. `useRegistrationData` keeps **all** seasons (registration UI needs them).
@@ -361,7 +363,7 @@ Ephemeral UI state — toggles, selections, toast queue. All fields via `set(par
 | `PlayerManagement` | PlayerManagementScreen — add, edit, and toggle active/inactive players |
 | `PastGames` | PastGamesScreen — browse historical week rosters and scores by season |
 | `Registration` | RegistrationScreen — per-season sign-ups; admins open/close registration, manage the roster, and delete an open season |
-| `Betting` | BettingScreen — balance card, open per-game over/under lines, bet placement modal, my bets history (all players) |
+| `Betting` | BettingScreen — balance card + three toggled views (horizontally-scrollable pills): **Leaderboard** (default; pin-balance scoreboard of active players, season balances summed from the ledger, Standings-style, with an "If Win" column = projected balance if all that player's still-pending bets win, sorted descending by that projection), **Bets Placed This Week** (league-wide summary of all players' bets this week, grouped by game), and **Place Bets** (open per-game over/under lines, bet placement modal, my bets history) |
 | `BettingAdmin` | BettingAdminScreen — toggle bet lines open/closed for current week, shows bet counts per line (admin only) |
 
 **Cross-tab navigation to PlayerDetail** (e.g. from More tab):
@@ -435,6 +437,7 @@ The app-root `<Toast />` (App.tsx) renders behind any React Native `<Modal>`, so
 - **Generate teams** (`AdminGenerateTeamsModal`) — reads RSVP + player avgs, computes balanced teams client-side, previews swaps, then wipes the week with a single `teams.removeByWeek` (cascades slots → games → scores) and writes `teams.insert` (capturing the new ids) → `team_slots.insert` + `games.insert` → `weeks.update(..., { is_confirmed: true })` → `betLines.insert` for every non-fill player, one row per game their team plays (game numbers derived from `buildSchedule`), using the player's effective avg as the line
 - **Place bet** (`BettingScreen`) — calls `placedBets.insert` then `pinLedger.insert` with `−wager` / `bet_placed`; balance is enforced client-side (max wager = current balance, min 10)
 - **Toggle bet line** (`BettingAdminScreen`) — calls `betLines.update(id, { is_open })` to open or close a line before bowling starts; settled lines (have a `result`) cannot be re-opened
+- **Cancel placed bet** (`BettingScreen`, admin only) — an "✕" on each row in the **Bets Placed This Week** view (gated to `role === 'admin'`); after an `Alert` confirm it runs `pinLedger.removeByPlacedBet(betId)` **then** `placedBets.remove(betId)` (ledger first — `pin_ledger.placed_bet_id` is `ON DELETE SET NULL`, so deleting the bet first would orphan its ledger rows). This is a total undo — every ledger entry tied to the bet is removed, restoring the player's balance to exactly what it was before the bet was placed. DB-enforced: admin-only `DELETE` RLS policies on `placed_bets`/`pin_ledger` (JWT `app_metadata.role = 'admin'`)
 
 ---
 

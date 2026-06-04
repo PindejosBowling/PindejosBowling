@@ -11,6 +11,7 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
+  Alert,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useNavigation } from '@react-navigation/native'
@@ -19,6 +20,7 @@ import { colors, fonts, radius } from '../theme'
 import { MoreStackParamList } from '../navigation/types'
 import ScreenHeader from '../components/ScreenHeader'
 import LoadingView from '../components/LoadingView'
+import ToggleGroup from '../components/ToggleGroup'
 import Toast from '../components/Toast'
 import { useBettingData } from '../hooks/useBettingData'
 import { useRefresh } from '../hooks/useRefresh'
@@ -29,6 +31,13 @@ import { placedBets, pinLedger } from '../utils/supabase/db'
 type Nav = NativeStackNavigationProp<MoreStackParamList>
 
 type Pick = 'over' | 'under'
+type View2 = 'leaderboard' | 'action' | 'place'
+
+const VIEW_OPTIONS: { key: View2; label: string }[] = [
+  { key: 'leaderboard', label: 'Leaderboard' },
+  { key: 'action', label: 'Bets Placed This Week' },
+  { key: 'place', label: 'Place Bets' },
+]
 
 interface BetModalState {
   lineId: string
@@ -51,13 +60,35 @@ function resultBadge(result: string | null, pick: string) {
 export default function BettingScreen() {
   const navigation = useNavigation<Nav>()
   const playerId = useAuthStore(s => s.playerId)
+  const isAdmin = useAuthStore(s => s.role) === 'admin'
   const { showToast } = useUiStore()
 
-  const { loading, balance, openLines, myBets, myBetLineIds, currentSeasonId, reload } = useBettingData(playerId)
+  const { loading, balance, openLines, myBets, weekBets, leaderboard, myBetLineIds, currentSeasonId, reload } = useBettingData(playerId)
   const { refreshing, onRefresh } = useRefresh(reload)
 
+  const [view, setView] = useState<View2>('leaderboard')
   const [modal, setModal] = useState<BetModalState | null>(null)
   const [placing, setPlacing] = useState(false)
+
+  // Group all of this week's placed bets by game number (for the action view)
+  const weekBetsByGame = useMemo(() => {
+    const map: Record<number, any[]> = {}
+    for (const bet of weekBets) {
+      const gameNum = bet.bet_lines?.game_number
+      if (gameNum == null) continue
+      if (!map[gameNum]) map[gameNum] = []
+      map[gameNum].push(bet)
+    }
+    return map
+  }, [weekBets])
+
+  const actionGameNumbers = useMemo(
+    () => Object.keys(weekBetsByGame).map(Number).sort((a, b) => a - b),
+    [weekBetsByGame],
+  )
+
+  const totalWagered = useMemo(() => weekBets.reduce((s, b) => s + (b.wager ?? 0), 0), [weekBets])
+  const uniqueBettors = useMemo(() => new Set(weekBets.map(b => b.player_id)).size, [weekBets])
 
   // Group open lines by game_number
   const linesByGame = useMemo(() => {
@@ -118,6 +149,33 @@ export default function BettingScreen() {
     }
   }
 
+  async function cancelBet(betId: string) {
+    // Delete ledger entries first: pin_ledger.placed_bet_id is ON DELETE SET NULL,
+    // so removing the placed bet first would orphan (not delete) its ledger rows.
+    const { error: ledgerErr } = await pinLedger.removeByPlacedBet(betId)
+    if (ledgerErr) { showToast(ledgerErr.message, 'error'); return }
+
+    const { error: betErr } = await placedBets.remove(betId)
+    if (betErr) { showToast(betErr.message, 'error'); return }
+
+    showToast('Bet canceled', 'success')
+    await reload()
+  }
+
+  function confirmCancelBet(bet: any) {
+    const bl = bet.bet_lines
+    const bettor = bet.players?.name ?? 'this player'
+    const subject = bl?.players?.name ?? '—'
+    Alert.alert(
+      'Cancel this bet?',
+      `Remove ${bettor}'s ${bet.pick?.toUpperCase()} ${Number(bl?.line ?? 0).toFixed(1)} bet on ${subject} (Game ${bl?.game_number}). This refunds their ${bet.wager} pin wager and cannot be undone.`,
+      [
+        { text: 'Keep Bet', style: 'cancel' },
+        { text: 'Cancel Bet', style: 'destructive', onPress: () => cancelBet(bet.id) },
+      ],
+    )
+  }
+
   const maxWager = balance
 
   if (loading) return <LoadingView label="Loading…" />
@@ -136,6 +194,121 @@ export default function BettingScreen() {
           <Text style={styles.balanceUnit}>PINS</Text>
         </View>
 
+        {/* View toggle */}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.viewToggle}
+        >
+          <ToggleGroup options={VIEW_OPTIONS} value={view} onChange={setView} />
+        </ScrollView>
+
+        {/* ── Leaderboard ─────────────────────────────────────── */}
+        {view === 'leaderboard' && (
+          leaderboard.length > 0 ? (
+            <View style={styles.sbCard}>
+              <View style={styles.sbHeaderRow}>
+                <Text style={[styles.sbHeaderCell, styles.sbRankCell]}>#</Text>
+                <Text style={[styles.sbHeaderCell, styles.sbNameCell]}>Bowler</Text>
+                <Text style={[styles.sbHeaderCell, styles.sbBalCell]}>Pins</Text>
+                <Text style={[styles.sbHeaderCell, styles.sbProjCell]}>If Win</Text>
+              </View>
+              {leaderboard.map((p, index) => {
+                const isMe = p.playerId === playerId
+                return (
+                  <View
+                    key={p.playerId}
+                    style={[styles.sbRow, index < leaderboard.length - 1 && styles.sbRowBorder]}
+                  >
+                    <View style={[styles.sbIconBox, index < 3 && styles.sbIconBoxTop]}>
+                      <Text style={[styles.sbRankText, index < 3 && styles.sbRankTextTop]}>{index + 1}</Text>
+                    </View>
+                    <Text style={[styles.sbName, isMe && styles.sbNameMe]} numberOfLines={1}>{p.name}</Text>
+                    <Text style={styles.sbBalance}>{p.balance.toLocaleString()}</Text>
+                    <Text style={[styles.sbProjection, p.potential > p.balance && styles.sbProjectionLive]}>
+                      {p.potential.toLocaleString()}
+                    </Text>
+                  </View>
+                )
+              })}
+            </View>
+          ) : (
+            <View style={styles.emptyCard}>
+              <Text style={styles.emptyText}>No pin balances yet</Text>
+            </View>
+          )
+        )}
+
+        {/* ── Bets Placed This Week ───────────────────────────── */}
+        {view === 'action' && (
+          actionGameNumbers.length > 0 ? (
+            <>
+              <View style={styles.summaryCard}>
+                <View style={styles.summaryItem}>
+                  <Text style={styles.summaryValue}>{weekBets.length}</Text>
+                  <Text style={styles.summaryLabel}>BETS</Text>
+                </View>
+                <View style={styles.summaryDivider} />
+                <View style={styles.summaryItem}>
+                  <Text style={styles.summaryValue}>{totalWagered.toLocaleString()}</Text>
+                  <Text style={styles.summaryLabel}>PINS WAGERED</Text>
+                </View>
+                <View style={styles.summaryDivider} />
+                <View style={styles.summaryItem}>
+                  <Text style={styles.summaryValue}>{uniqueBettors}</Text>
+                  <Text style={styles.summaryLabel}>BETTORS</Text>
+                </View>
+              </View>
+
+              {actionGameNumbers.map(gameNum => (
+                <View key={gameNum}>
+                  <Text style={styles.gameLabel}>GAME {gameNum}</Text>
+                  <View style={styles.card}>
+                    {weekBetsByGame[gameNum].map((bet: any, idx: number) => {
+                      const bl = bet.bet_lines
+                      const badge = resultBadge(bl?.result ?? null, bet.pick)
+                      const isLast = idx === weekBetsByGame[gameNum].length - 1
+                      return (
+                        <View key={bet.id} style={[styles.betRow, !isLast && styles.lineRowBorder]}>
+                          <View style={{ flex: 1 }}>
+                            <Text style={styles.betSubject}>{bet.players?.name ?? '—'}</Text>
+                            <Text style={styles.betDetails}>
+                              {bet.pick?.toUpperCase()} {Number(bl?.line ?? 0).toFixed(1)} · {bl?.players?.name ?? '—'}
+                              {bl?.actual_score != null ? `  ·  actual ${bl.actual_score}` : ''}
+                            </Text>
+                          </View>
+                          <View style={styles.betRight}>
+                            {badge
+                              ? <Text style={[styles.betBadge, { color: badge.color }]}>{badge.label}</Text>
+                              : <Text style={styles.betPending}>PENDING</Text>}
+                            <Text style={styles.betWager}>{bet.wager} pins</Text>
+                          </View>
+                          {isAdmin && (
+                            <TouchableOpacity
+                              style={styles.cancelBtn}
+                              onPress={() => confirmCancelBet(bet)}
+                              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                              activeOpacity={0.7}
+                            >
+                              <Text style={styles.cancelBtnText}>✕</Text>
+                            </TouchableOpacity>
+                          )}
+                        </View>
+                      )
+                    })}
+                  </View>
+                </View>
+              ))}
+            </>
+          ) : (
+            <View style={styles.emptyCard}>
+              <Text style={styles.emptyText}>No bets placed yet this week</Text>
+            </View>
+          )
+        )}
+
+        {/* ── Place Bets ──────────────────────────────────────── */}
+        {view === 'place' && <>
         {/* Open lines */}
         {sortedGameNumbers.length > 0 ? (
           <>
@@ -231,6 +404,7 @@ export default function BettingScreen() {
             </View>
           </>
         )}
+        </>}
       </ScrollView>
 
       {/* Bet placement modal */}
@@ -331,6 +505,99 @@ const styles = StyleSheet.create({
     color: colors.muted,
     marginTop: 2,
   },
+
+  // Pin-balance scoreboard (mirrors StandingsScreen)
+  sbCard: {
+    backgroundColor: colors.surface,
+    borderRadius: radius.card,
+    borderWidth: 1,
+    borderColor: colors.border,
+    overflow: 'hidden',
+    marginBottom: 20,
+  },
+  sbHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  sbHeaderCell: {
+    fontFamily: fonts.barlowCondensed,
+    fontSize: 11,
+    color: colors.muted,
+    textTransform: 'uppercase',
+    letterSpacing: 1.5,
+  },
+  sbRankCell: { width: 32 },
+  sbNameCell: { flex: 1 },
+  sbBalCell: { width: 56, textAlign: 'right' },
+  sbProjCell: { width: 56, textAlign: 'right' },
+  sbRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  sbRowBorder: { borderBottomWidth: 1, borderBottomColor: colors.border },
+  sbIconBox: {
+    width: 24,
+    height: 24,
+    borderRadius: 6,
+    backgroundColor: colors.surface2,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 8,
+  },
+  sbIconBoxTop: { backgroundColor: colors.accentDim },
+  sbRankText: { fontFamily: fonts.barlowCondensed, fontSize: 12, color: colors.muted },
+  sbRankTextTop: { color: colors.accent },
+  sbName: { flex: 1, fontFamily: fonts.barlow, fontSize: 15, color: colors.text },
+  sbNameMe: { color: colors.accent },
+  sbBalance: {
+    width: 56,
+    textAlign: 'right',
+    fontFamily: fonts.barlowCondensed,
+    fontSize: 15,
+    color: colors.text,
+  },
+  sbProjection: {
+    width: 56,
+    textAlign: 'right',
+    fontFamily: fonts.barlowCondensed,
+    fontSize: 15,
+    color: colors.muted,
+  },
+  sbProjectionLive: { color: colors.success },
+
+  viewToggle: { marginBottom: 20 },
+
+  summaryCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.surface,
+    borderRadius: radius.cardMd,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingVertical: 16,
+    marginBottom: 16,
+  },
+  summaryItem: { flex: 1, alignItems: 'center' },
+  summaryValue: {
+    fontFamily: fonts.barlowCondensedHeavy,
+    fontSize: 26,
+    color: colors.accent,
+    lineHeight: 28,
+  },
+  summaryLabel: {
+    fontFamily: fonts.barlowCondensed,
+    fontSize: 10,
+    letterSpacing: 1,
+    color: colors.muted,
+    marginTop: 2,
+  },
+  summaryDivider: { width: 1, alignSelf: 'stretch', backgroundColor: colors.border },
 
   sectionHeader: {
     fontFamily: fonts.barlowCondensed,
@@ -446,6 +713,21 @@ const styles = StyleSheet.create({
     letterSpacing: 0.3,
   },
   betRight: { alignItems: 'flex-end' },
+  cancelBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: colors.danger,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cancelBtnText: {
+    fontFamily: fonts.barlowCondensed,
+    fontSize: 14,
+    color: colors.danger,
+    lineHeight: 16,
+  },
   betBadge: {
     fontFamily: fonts.barlowCondensed,
     fontSize: 13,

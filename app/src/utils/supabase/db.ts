@@ -352,6 +352,8 @@ export const placedBets = {
     supabase.from('placed_bets').insert(data).select().single(),
   update: (id: string, data: TablesUpdate<'placed_bets'>) =>
     supabase.from('placed_bets').update(data).eq('id', id),
+  remove: (id: string) =>
+    supabase.from('placed_bets').delete().eq('id', id),
 }
 
 export const pinLedger = {
@@ -365,10 +367,14 @@ export const pinLedger = {
   listBySeasonForLeaderboard: (seasonId: string) =>
     supabase
       .from('pin_ledger')
-      .select('player_id, amount, players(name)')
+      .select('player_id, amount, players(name, is_active)')
       .eq('season_id', seasonId),
   insert: (data: TablesInsert<'pin_ledger'> | TablesInsert<'pin_ledger'>[]) =>
     supabase.from('pin_ledger').insert(data),
+  // Delete every ledger entry tied to a placed bet (bet_placed + any settlement
+  // entries) — used by the admin cancel-bet flow to fully undo a bet.
+  removeByPlacedBet: (placedBetId: string) =>
+    supabase.from('pin_ledger').delete().eq('placed_bet_id', placedBetId),
 }
 
 export const weeks = {
