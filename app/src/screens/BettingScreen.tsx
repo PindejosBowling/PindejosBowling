@@ -206,7 +206,7 @@ export default function BettingScreen() {
     const subject = bl?.players?.name ?? '—'
     Alert.alert(
       'Cancel this bet?',
-      `Remove ${bettor}'s ${bet.pick?.toUpperCase()} ${Number(bl?.line ?? 0).toFixed(1)} bet on ${subject} (Game ${bl?.game_number}). This refunds their ${bet.wager} pin wager and cannot be undone.`,
+      `Remove ${bettor}'s ${bet.pick?.toUpperCase()} ${Number(bl?.line ?? 0).toFixed(1)} bet on ${subject} (Game ${bl?.game_number}). This fully reverses the bet's pin effect — restoring the balance to before it was placed — and cannot be undone.`,
       [
         { text: 'Keep Bet', style: 'cancel' },
         { text: 'Cancel Bet', style: 'destructive', onPress: () => cancelBet(bet.id) },
@@ -571,6 +571,16 @@ export default function BettingScreen() {
                               : `${bet.wager} pins`}
                           </Text>
                         </View>
+                        {isAdmin && (
+                          <TouchableOpacity
+                            style={styles.cancelBtn}
+                            onPress={() => confirmCancelBet(bet)}
+                            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                            activeOpacity={0.7}
+                          >
+                            <Text style={styles.cancelBtnText}>✕</Text>
+                          </TouchableOpacity>
+                        )}
                       </View>
                     )
                   })}
