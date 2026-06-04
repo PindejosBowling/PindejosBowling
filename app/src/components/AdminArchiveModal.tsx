@@ -77,7 +77,7 @@ async function settleBettingForWeek(activeWeek: { id: string; season_id: string;
     for (const bet of (bets ?? []) as any[]) {
       const won = bet.pick === result
       const isPush = result === 'push'
-      const payout = isPush ? bet.wager : (won ? bet.wager * 2 : 0)
+      const payout = won && !isPush ? bet.wager : 0 // net winnings; push/loss = 0
 
       betUpdates.push(Promise.resolve(placedBets.update(bet.id, { payout, settled_at: new Date().toISOString() })))
 

@@ -62,6 +62,19 @@ function resultBadge(result: string | null, pick: string) {
   return { label: 'LOST', color: colors.danger }
 }
 
+// Total amount the player gets back, signed for display.
+// `payout` stores the net winnings (= wager at even odds), set at placement —
+// so the full return on a win/pending bet is payout + wager (winnings + stake back).
+// A push refunds the stake; a loss forfeits it.
+function betReturnText(bet: any): string {
+  const result = bet.bet_lines?.result ?? null
+  const stake = bet.wager
+  const profit = bet.payout ?? stake // fallback for any row missing payout
+  if (result === 'push') return `+${stake}`
+  if (result != null && result !== bet.pick) return `-${stake}`
+  return `+${profit + stake}` // won or still pending → full return
+}
+
 export default function BettingScreen() {
   const playerId = useAuthStore(s => s.playerId)
   const isAdmin = useAuthStore(s => s.role) === 'admin'
@@ -159,6 +172,7 @@ export default function BettingScreen() {
         bet_line_id: modal.lineId,
         pick: modal.pick,
         wager: wagerNum,
+        payout: wagerNum, // potential net winnings (even odds), known at placement
       })
       if (betErr) { showToast(betErr.message, 'error'); return }
 
@@ -259,7 +273,7 @@ export default function BettingScreen() {
       for (const b of (bets ?? []) as any[]) {
         const won = b.pick === result
         const isPush = result === 'push'
-        const payout = isPush ? b.wager : (won ? b.wager * 2 : 0)
+        const payout = won && !isPush ? b.wager : 0 // net winnings; push/loss = 0
         const { error: betErr } = await placedBets.update(b.id, { payout, settled_at: now })
         if (betErr) { showToast(betErr.message, 'error'); return }
 
@@ -415,7 +429,7 @@ export default function BettingScreen() {
                               {badge
                                 ? <Text style={[styles.betBadge, { color: badge.color }]}>{badge.label}</Text>
                                 : <Text style={styles.betPending}>PENDING</Text>}
-                              <Text style={styles.betWager}>{bet.wager} pins</Text>
+                              <Text style={styles.betWager}>{betReturnText(bet)} pins</Text>
                             </View>
                           </TouchableOpacity>
                           {isAdmin && (
@@ -530,13 +544,7 @@ export default function BettingScreen() {
                       ) : (
                         <Text style={styles.betPending}>PENDING</Text>
                       )}
-                      <Text style={styles.betWager}>
-                        {bet.payout != null
-                          ? bet.payout > 0
-                            ? `+${bet.payout - bet.wager}`
-                            : `-${bet.wager}`
-                          : `${bet.wager} pins`}
-                      </Text>
+                      <Text style={styles.betWager}>{betReturnText(bet)}</Text>
                     </View>
                   </View>
                 )
@@ -570,13 +578,7 @@ export default function BettingScreen() {
                         </View>
                         <View style={styles.betRight}>
                           {badge && <Text style={[styles.betBadge, { color: badge.color }]}>{badge.label}</Text>}
-                          <Text style={styles.betWager}>
-                            {bet.payout != null
-                              ? bet.payout > 0
-                                ? `+${bet.payout - bet.wager}`
-                                : `-${bet.wager}`
-                              : `${bet.wager} pins`}
-                          </Text>
+                          <Text style={styles.betWager}>{betReturnText(bet)}</Text>
                         </View>
                         {isAdmin && (
                           <TouchableOpacity
