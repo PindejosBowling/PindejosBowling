@@ -187,7 +187,9 @@ export default function BettingScreen() {
     }
   }
 
-  async function cancelBet(betId: string) {
+  async function cancelBet(bet: any) {
+    const betId = bet.id
+    const lineId = bet.bet_line_id
     // Delete ledger entries first: pin_ledger.placed_bet_id is ON DELETE SET NULL,
     // so removing the placed bet first would orphan (not delete) its ledger rows.
     const { error: ledgerErr } = await pinLedger.removeByPlacedBet(betId)
@@ -195,6 +197,17 @@ export default function BettingScreen() {
 
     const { error: betErr } = await placedBets.remove(betId)
     if (betErr) { showToast(betErr.message, 'error'); return }
+
+    // If this cancel removed the last bet from a settled line, un-settle the line
+    // (reopen + clear its result) so it can be bet on again — otherwise the line
+    // stays closed and disappears from Place Bets.
+    const lineWasSettled = bet.bet_lines?.result != null
+    if (lineWasSettled && lineId) {
+      const { data: remaining } = await placedBets.listByLine(lineId)
+      if (!remaining || remaining.length === 0) {
+        await betLines.update(lineId, { result: null, actual_score: null, is_open: true })
+      }
+    }
 
     showToast('Bet canceled', 'success')
     await reload()
@@ -209,7 +222,7 @@ export default function BettingScreen() {
       `Remove ${bettor}'s ${bet.pick?.toUpperCase()} ${Number(bl?.line ?? 0).toFixed(1)} bet on ${subject} (Game ${bl?.game_number}). This fully reverses the bet's pin effect — restoring the balance to before it was placed — and cannot be undone.`,
       [
         { text: 'Keep Bet', style: 'cancel' },
-        { text: 'Cancel Bet', style: 'destructive', onPress: () => cancelBet(bet.id) },
+        { text: 'Cancel Bet', style: 'destructive', onPress: () => cancelBet(bet) },
       ],
     )
   }
