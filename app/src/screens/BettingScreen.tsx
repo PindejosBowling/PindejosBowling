@@ -153,7 +153,7 @@ export default function BettingScreen() {
     if (!modal.pick) { showToast('Choose over or under', 'error'); return }
     // Hard constraint: no betting the under on your own line (anti-tanking).
     if (modal.pick === 'under' && modal.subjectPlayerId === playerId) {
-      showToast("You can't bet the under on yourself", 'error'); return
+      showToast("Believe in yourself man", 'error'); return
     }
     if (isNaN(wagerNum) || wagerNum < 10) { showToast('Minimum wager is 10 pins', 'error'); return }
     if (wagerNum > balance) { showToast('Wager exceeds your balance', 'error'); return }
@@ -488,7 +488,7 @@ export default function BettingScreen() {
                             <TouchableOpacity
                               style={[styles.pickBtn, (balance < 10 || isOwnLine) && styles.pickBtnDisabled]}
                               onPress={() => {
-                                if (isOwnLine) { showToast("You can't bet the under on yourself", 'error'); return }
+                                if (isOwnLine) { showToast("Believe in yourself man", 'error'); return }
                                 if (balance >= 10) openBetModal(line, 'under')
                               }}
                               activeOpacity={0.7}
@@ -639,7 +639,7 @@ export default function BettingScreen() {
                         blocked && styles.pickToggleBtnDisabled,
                       ]}
                       onPress={() => {
-                        if (blocked) { showToast("You can't bet the under on yourself", 'error'); return }
+                        if (blocked) { showToast("Believe in yourself man", 'error'); return }
                         setModal(m => m ? { ...m, pick: p } : m)
                       }}
                       activeOpacity={0.7}

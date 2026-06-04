@@ -304,7 +304,9 @@ export default function AdminGenerateTeamsModal({ visible, onClose }: Props) {
             week_id: weekId,
             player_id: player.id as string,
             game_number: gameNum,
-            line: Math.round(player.avg * 10) / 10,
+            // Floor the avg to a whole number, then +0.5 — a half-pin line can
+            // never be matched by an integer score, so a bet can never push.
+            line: Math.floor(player.avg) + 0.5,
           }))
         })
       })
