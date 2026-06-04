@@ -3,10 +3,10 @@ import { seasons, scores, games, seasonChampions } from '../utils/supabase/db'
 
 export function usePastSeasonsData() {
   const [loading, setLoading] = useState(true)
-  const [seasonList, setSeasonList] = useState<{ id: number; number: number }[]>([])
+  const [seasonList, setSeasonList] = useState<{ id: string; number: number }[]>([])
   const [rawScores, setRawScores] = useState<any[]>([])
   const [rawSchedule, setRawSchedule] = useState<any[]>([])
-  const [champsBySeason, setChampsBySeason] = useState<Map<number, string[]>>(new Map())
+  const [champsBySeason, setChampsBySeason] = useState<Map<string, string[]>>(new Map())
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -18,9 +18,9 @@ export function usePastSeasonsData() {
         games.listForArchivedWeeks(),
       ])
 
-      setSeasonList((seasonsRes.data ?? []).map(s => ({ id: s.id, number: s.number })))
+      setSeasonList((seasonsRes.data ?? []).filter(s => !s.registration_open).map(s => ({ id: s.id, number: s.number })))
 
-      const champsMap = new Map<number, string[]>()
+      const champsMap = new Map<string, string[]>()
       for (const c of (champsRes.data ?? []) as any[]) {
         if (!champsMap.has(c.season_id)) champsMap.set(c.season_id, [])
         if (c.players?.name) champsMap.get(c.season_id)!.push(c.players.name)

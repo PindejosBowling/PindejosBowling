@@ -11,6 +11,7 @@ import {
 import { useUiStore } from '../stores/uiStore'
 import { players, seasons, seasonChampions } from '../utils/supabase/db'
 import { colors, fonts, radius } from '../theme'
+import Toast from './Toast'
 
 interface Props {
   visible: boolean
@@ -21,12 +22,12 @@ export default function AdminEndSeasonModal({ visible, onClose }: Props) {
   const [championIds, setChampionIds] = useState<string[]>([])
   const [saving, setSaving] = useState(false)
   const [playerList, setPlayerList] = useState<{ id: string; name: string | null }[]>([])
-  const [season, setSeason] = useState<{ id: number; number: number } | null>(null)
+  const [season, setSeason] = useState<{ id: string; number: number } | null>(null)
   const { showToast } = useUiStore()
 
   useEffect(() => {
     if (!visible) return
-    Promise.all([players.listActive(), seasons.getLatest()]).then(([pRes, sRes]) => {
+    Promise.all([players.listActive(), seasons.getCurrent()]).then(([pRes, sRes]) => {
       setPlayerList(pRes.data ?? [])
       setSeason(sRes.data ? { id: sRes.data.id, number: sRes.data.number } : null)
     })
@@ -40,7 +41,7 @@ export default function AdminEndSeasonModal({ visible, onClose }: Props) {
     if (!season) return
     setSaving(true)
     try {
-      const { error: seasonError } = await seasons.update(season.id, { ended_at: new Date().toISOString() })
+      const { error: seasonError } = await seasons.update(season.id, { is_active: false })
       if (seasonError) { showToast(seasonError.message, 'error'); setSaving(false); return }
 
       for (const playerId of championIds) {
@@ -118,6 +119,8 @@ export default function AdminEndSeasonModal({ visible, onClose }: Props) {
           </View>
         </TouchableOpacity>
       </TouchableOpacity>
+      {/* Rendered inside the Modal so toasts aren't occluded by the native modal layer. */}
+      <Toast />
     </Modal>
   )
 }

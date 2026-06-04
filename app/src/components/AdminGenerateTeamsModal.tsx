@@ -14,6 +14,7 @@ import { useUiStore } from '../stores/uiStore'
 import { weeks, rsvp, players, teamSlots, teams as teamsDb, games, scores, seasons } from '../utils/supabase/db'
 import type { TablesInsert } from '../utils/supabase/database.types'
 import { colors, fonts, radius } from '../theme'
+import Toast from './Toast'
 
 interface Props {
   visible: boolean
@@ -464,6 +465,8 @@ export default function AdminGenerateTeamsModal({ visible, onClose }: Props) {
           </View>
         </View>
       </View>
+      {/* Rendered inside the Modal so toasts aren't occluded by the native modal layer. */}
+      <Toast />
     </Modal>
   )
 }

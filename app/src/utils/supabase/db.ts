@@ -59,6 +59,17 @@ export const players = {
     supabase.from('players').update(data).eq('id', id),
 }
 
+export const registrations = {
+  list: () =>
+    supabase.from('registrations').select('*, players(id, name)'),
+  listBySeason: (seasonId: string) =>
+    supabase.from('registrations').select('*, players(id, name)').eq('season_id', seasonId),
+  insert: (data: TablesInsert<'registrations'>) =>
+    supabase.from('registrations').insert(data),
+  remove: (seasonId: string, playerId: string) =>
+    supabase.from('registrations').delete().eq('season_id', seasonId).eq('player_id', playerId),
+}
+
 export const rsvp = {
   listByWeek: (weekId: string) =>
     supabase
@@ -79,7 +90,7 @@ export const scores = {
       .from('scores')
       .select('*, team_slots!inner(team_id, slot, player_id, teams!inner(week_id))')
       .eq('team_slots.teams.week_id', weekId),
-  listBySeason: (seasonId: number) =>
+  listBySeason: (seasonId: string) =>
     supabase
       .from('scores')
       .select('score, team_slots!inner(player_id, is_fill, teams!inner(weeks!inner(season_id, is_archived)))')
@@ -186,8 +197,8 @@ export const seasonChampions = {
   list: () =>
     supabase
       .from('season_champions')
-      .select('*, players(name), seasons(number, league_name)'),
-  listBySeason: (seasonId: number) =>
+      .select('*, players(name), seasons(number)'),
+  listBySeason: (seasonId: string) =>
     supabase
       .from('season_champions')
       .select('*, players(name)')
@@ -208,12 +219,27 @@ export const seasons = {
       .order('number', { ascending: false })
       .limit(1)
       .single(),
-  getById: (id: number) =>
+  getById: (id: string) =>
     supabase.from('seasons').select('*').eq('id', id).single(),
+  // The current playing season: active and no longer in registration. A
+  // newly-created season sits in registration (registration_open=true,
+  // is_active=false) and must NOT be treated as current just for having the
+  // highest number — use this instead of getLatest() for "what season is it now".
+  getCurrent: () =>
+    supabase
+      .from('seasons')
+      .select('*')
+      .eq('is_active', true)
+      .eq('registration_open', false)
+      .order('number', { ascending: false })
+      .limit(1)
+      .single(),
   insert: (data: TablesInsert<'seasons'>) =>
     supabase.from('seasons').insert(data),
-  update: (id: number, data: TablesUpdate<'seasons'>) =>
+  update: (id: string, data: TablesUpdate<'seasons'>) =>
     supabase.from('seasons').update(data).eq('id', id),
+  remove: (id: string) =>
+    supabase.from('seasons').delete().eq('id', id),
 }
 
 export const teams = {
@@ -262,7 +288,7 @@ export const teamSlots = {
 export const weeks = {
   list: () =>
     supabase.from('weeks').select('*').order('week_number'),
-  listBySeason: (seasonId: number) =>
+  listBySeason: (seasonId: string) =>
     supabase
       .from('weeks')
       .select('*')

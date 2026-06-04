@@ -42,8 +42,10 @@ export const useUiStore = create<UiStore>((set, get) => ({
   showToast: (msg, type = '') => {
     const id = Date.now() + Math.random()
     set((state) => ({ toasts: [...state.toasts, { id, msg, type }] }))
+    // Longer messages (e.g. full DB error text) stay up long enough to read.
+    const duration = Math.min(10000, Math.max(2400, msg.length * 70))
     setTimeout(() => {
       set((state) => ({ toasts: state.toasts.filter((t) => t.id !== id) }))
-    }, 2400)
+    }, duration)
   },
 }))

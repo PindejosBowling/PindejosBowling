@@ -58,9 +58,13 @@ export function useMatchupsData() {
 
       const championPlayerIds = new Set(champRows.map((c: any) => c.player_id))
 
-      const prevSeason = allSeasons.length >= 2
-        ? allSeasons[allSeasons.length - 2]
-        : allSeasons[allSeasons.length - 1]
+      // Only seasons that have started count — a season still in registration
+      // (registration_open) has no scores and must not be mistaken for the
+      // current season when picking the previous season for average calc.
+      const startedSeasons = allSeasons.filter((s: any) => !s.registration_open)
+      const prevSeason = startedSeasons.length >= 2
+        ? startedSeasons[startedSeasons.length - 2]
+        : startedSeasons[startedSeasons.length - 1]
 
       const [slotsRes, scheduleRes, weekScoresRes, rsvpRes, prevScoresRes] = await Promise.all([
         teamSlots.listByWeek(week.id),
