@@ -26,26 +26,36 @@ import { useBettingData } from '../hooks/useBettingData'
 import { useRefresh } from '../hooks/useRefresh'
 import { useAuthStore } from '../stores/authStore'
 import { useUiStore } from '../stores/uiStore'
-import { placedBets, pinLedger } from '../utils/supabase/db'
+import { betLines, placedBets, pinLedger } from '../utils/supabase/db'
 
 type Nav = NativeStackNavigationProp<MoreStackParamList>
 
 type Pick = 'over' | 'under'
-type View2 = 'leaderboard' | 'action' | 'place'
+type View2 = 'leaderboard' | 'action' | 'place' | 'settled'
 
 const VIEW_OPTIONS: { key: View2; label: string }[] = [
   { key: 'leaderboard', label: 'Leaderboard' },
-  { key: 'action', label: 'Bets Placed This Week' },
   { key: 'place', label: 'Place Bets' },
+  { key: 'action', label: 'Active Bets' },
+  { key: 'settled', label: 'Settled Bets' },
 ]
 
 interface BetModalState {
   lineId: string
   playerName: string
+  subjectPlayerId: string
   gameNumber: number
   line: number
   pick: Pick | null
   wager: string
+}
+
+interface SettleModalState {
+  lineId: string
+  subjectName: string
+  gameNumber: number
+  line: number
+  actual: string
 }
 
 function resultBadge(result: string | null, pick: string) {
@@ -63,32 +73,55 @@ export default function BettingScreen() {
   const isAdmin = useAuthStore(s => s.role) === 'admin'
   const { showToast } = useUiStore()
 
-  const { loading, balance, openLines, myBets, weekBets, leaderboard, myBetLineIds, currentSeasonId, reload } = useBettingData(playerId)
+  const { loading, balance, openLines, myBets, weekBets, settledBets, leaderboard, myBetLineIds, currentSeasonId, reload } = useBettingData(playerId)
   const { refreshing, onRefresh } = useRefresh(reload)
 
   const [view, setView] = useState<View2>('leaderboard')
   const [modal, setModal] = useState<BetModalState | null>(null)
   const [placing, setPlacing] = useState(false)
+  const [settleModal, setSettleModal] = useState<SettleModalState | null>(null)
+  const [settling, setSettling] = useState(false)
 
-  // Group all of this week's placed bets by game number (for the action view)
+  // Active = this week's bets that haven't been settled yet (settled ones move
+  // to the Settled Bets view once they have a settled_at).
+  const activeBets = useMemo(() => weekBets.filter(b => b.settled_at == null), [weekBets])
+
+  // Group all of this week's active bets by game number (for the action view)
   const weekBetsByGame = useMemo(() => {
     const map: Record<number, any[]> = {}
-    for (const bet of weekBets) {
+    for (const bet of activeBets) {
       const gameNum = bet.bet_lines?.game_number
       if (gameNum == null) continue
       if (!map[gameNum]) map[gameNum] = []
       map[gameNum].push(bet)
     }
     return map
-  }, [weekBets])
+  }, [activeBets])
 
   const actionGameNumbers = useMemo(
     () => Object.keys(weekBetsByGame).map(Number).sort((a, b) => a - b),
     [weekBetsByGame],
   )
 
-  const totalWagered = useMemo(() => weekBets.reduce((s, b) => s + (b.wager ?? 0), 0), [weekBets])
-  const uniqueBettors = useMemo(() => new Set(weekBets.map(b => b.player_id)).size, [weekBets])
+  const totalWagered = useMemo(() => activeBets.reduce((s, b) => s + (b.wager ?? 0), 0), [activeBets])
+  const uniqueBettors = useMemo(() => new Set(activeBets.map(b => b.player_id)).size, [activeBets])
+
+  // Group settled bets by week number (newest week first)
+  const settledByWeek = useMemo(() => {
+    const map: Record<number, any[]> = {}
+    for (const bet of settledBets) {
+      const wk = bet.bet_lines?.weeks?.week_number
+      if (wk == null) continue
+      if (!map[wk]) map[wk] = []
+      map[wk].push(bet)
+    }
+    return map
+  }, [settledBets])
+
+  const settledWeekNumbers = useMemo(
+    () => Object.keys(settledByWeek).map(Number).sort((a, b) => b - a),
+    [settledByWeek],
+  )
 
   // Group open lines by game_number
   const linesByGame = useMemo(() => {
@@ -106,6 +139,7 @@ export default function BettingScreen() {
     setModal({
       lineId: line.id,
       playerName: line.players?.name ?? 'Player',
+      subjectPlayerId: line.player_id,
       gameNumber: line.game_number,
       line: Number(line.line),
       pick,
@@ -117,6 +151,10 @@ export default function BettingScreen() {
     if (!modal || !playerId || !currentSeasonId) return
     const wagerNum = parseInt(modal.wager, 10)
     if (!modal.pick) { showToast('Choose over or under', 'error'); return }
+    // Hard constraint: no betting the under on your own line (anti-tanking).
+    if (modal.pick === 'under' && modal.subjectPlayerId === playerId) {
+      showToast("You can't bet the under on yourself", 'error'); return
+    }
     if (isNaN(wagerNum) || wagerNum < 10) { showToast('Minimum wager is 10 pins', 'error'); return }
     if (wagerNum > balance) { showToast('Wager exceeds your balance', 'error'); return }
 
@@ -176,7 +214,88 @@ export default function BettingScreen() {
     )
   }
 
+  function openSettleModal(bet: any) {
+    const bl = bet.bet_lines
+    setSettleModal({
+      lineId: bet.bet_line_id,
+      subjectName: bl?.players?.name ?? '—',
+      gameNumber: bl?.game_number,
+      line: Number(bl?.line ?? 0),
+      actual: '',
+    })
+  }
+
+  // Manual single-line settlement — mirrors settleBettingForWeek (AdminArchiveModal)
+  // for one line: set the line result/score, then pay out every bet on it.
+  async function settleBet() {
+    if (!settleModal || !currentSeasonId) return
+    const actual = parseInt(settleModal.actual, 10)
+    if (isNaN(actual) || actual < 0 || actual > 300) {
+      showToast('Enter a valid score (0–300)', 'error'); return
+    }
+
+    setSettling(true)
+    try {
+      const line = settleModal.line
+      const result: 'over' | 'under' | 'push' =
+        actual > line ? 'over' : actual < line ? 'under' : 'push'
+
+      const { error: lineErr } = await betLines.update(settleModal.lineId, {
+        result, actual_score: actual, is_open: false,
+      })
+      if (lineErr) { showToast(lineErr.message, 'error'); return }
+
+      const { data: bets } = await placedBets.listByLine(settleModal.lineId)
+      const now = new Date().toISOString()
+      const ledgerEntries: any[] = []
+
+      for (const b of (bets ?? []) as any[]) {
+        const won = b.pick === result
+        const isPush = result === 'push'
+        const payout = isPush ? b.wager : (won ? b.wager * 2 : 0)
+        const { error: betErr } = await placedBets.update(b.id, { payout, settled_at: now })
+        if (betErr) { showToast(betErr.message, 'error'); return }
+
+        if (isPush) {
+          ledgerEntries.push({
+            player_id: b.player_id, season_id: currentSeasonId, amount: b.wager,
+            type: 'bet_push',
+            description: `Push: ${settleModal.subjectName} at ${line} — Game ${settleModal.gameNumber}`,
+            placed_bet_id: b.id,
+          })
+        } else if (won) {
+          ledgerEntries.push({
+            player_id: b.player_id, season_id: currentSeasonId, amount: b.wager * 2,
+            type: 'bet_won',
+            description: `Won: ${settleModal.subjectName} ${result} ${line} — Game ${settleModal.gameNumber}`,
+            placed_bet_id: b.id,
+          })
+        }
+      }
+
+      if (ledgerEntries.length > 0) {
+        const { error: ledgerErr } = await pinLedger.insert(ledgerEntries)
+        if (ledgerErr) { showToast(ledgerErr.message, 'error'); return }
+      }
+
+      showToast('Bet settled', 'success')
+      setSettleModal(null)
+      await reload()
+    } catch {
+      showToast('Failed to settle bet', 'error')
+    } finally {
+      setSettling(false)
+    }
+  }
+
   const maxWager = balance
+  const settlePreview = settleModal && settleModal.actual !== ''
+    ? (() => {
+        const a = parseInt(settleModal.actual, 10)
+        if (isNaN(a)) return null
+        return a > settleModal.line ? 'OVER' : a < settleModal.line ? 'UNDER' : 'PUSH'
+      })()
+    : null
 
   if (loading) return <LoadingView label="Loading…" />
 
@@ -239,13 +358,13 @@ export default function BettingScreen() {
           )
         )}
 
-        {/* ── Bets Placed This Week ───────────────────────────── */}
+        {/* ── Active Bets ─────────────────────────────────────── */}
         {view === 'action' && (
           actionGameNumbers.length > 0 ? (
             <>
               <View style={styles.summaryCard}>
                 <View style={styles.summaryItem}>
-                  <Text style={styles.summaryValue}>{weekBets.length}</Text>
+                  <Text style={styles.summaryValue}>{activeBets.length}</Text>
                   <Text style={styles.summaryLabel}>BETS</Text>
                 </View>
                 <View style={styles.summaryDivider} />
@@ -260,6 +379,8 @@ export default function BettingScreen() {
                 </View>
               </View>
 
+              {isAdmin && <Text style={styles.adminHint}>Tap a bet to settle it</Text>}
+
               {actionGameNumbers.map(gameNum => (
                 <View key={gameNum}>
                   <Text style={styles.gameLabel}>GAME {gameNum}</Text>
@@ -270,19 +391,26 @@ export default function BettingScreen() {
                       const isLast = idx === weekBetsByGame[gameNum].length - 1
                       return (
                         <View key={bet.id} style={[styles.betRow, !isLast && styles.lineRowBorder]}>
-                          <View style={{ flex: 1 }}>
-                            <Text style={styles.betSubject}>{bet.players?.name ?? '—'}</Text>
-                            <Text style={styles.betDetails}>
-                              {bet.pick?.toUpperCase()} {Number(bl?.line ?? 0).toFixed(1)} · {bl?.players?.name ?? '—'}
-                              {bl?.actual_score != null ? `  ·  actual ${bl.actual_score}` : ''}
-                            </Text>
-                          </View>
-                          <View style={styles.betRight}>
-                            {badge
-                              ? <Text style={[styles.betBadge, { color: badge.color }]}>{badge.label}</Text>
-                              : <Text style={styles.betPending}>PENDING</Text>}
-                            <Text style={styles.betWager}>{bet.wager} pins</Text>
-                          </View>
+                          <TouchableOpacity
+                            style={styles.betPressable}
+                            onPress={() => openSettleModal(bet)}
+                            disabled={!isAdmin}
+                            activeOpacity={0.7}
+                          >
+                            <View style={{ flex: 1 }}>
+                              <Text style={styles.betSubject}>{bet.players?.name ?? '—'}</Text>
+                              <Text style={styles.betDetails}>
+                                {bet.pick?.toUpperCase()} {Number(bl?.line ?? 0).toFixed(1)} · {bl?.players?.name ?? '—'}
+                                {bl?.actual_score != null ? `  ·  actual ${bl.actual_score}` : ''}
+                              </Text>
+                            </View>
+                            <View style={styles.betRight}>
+                              {badge
+                                ? <Text style={[styles.betBadge, { color: badge.color }]}>{badge.label}</Text>
+                                : <Text style={styles.betPending}>PENDING</Text>}
+                              <Text style={styles.betWager}>{bet.wager} pins</Text>
+                            </View>
+                          </TouchableOpacity>
                           {isAdmin && (
                             <TouchableOpacity
                               style={styles.cancelBtn}
@@ -321,6 +449,8 @@ export default function BettingScreen() {
                     const alreadyBet = myBetLineIds.has(line.id)
                     const myBetForLine = myBets.find((b: any) => b.bet_line_id === line.id)
                     const isLast = idx === linesByGame[gameNum].length - 1
+                    // Anti-tanking: a player may not bet the under on their own line.
+                    const isOwnLine = line.player_id === playerId
                     return (
                       <View key={line.id} style={[styles.lineRow, !isLast && styles.lineRowBorder]}>
                         <View style={styles.lineInfo}>
@@ -343,8 +473,11 @@ export default function BettingScreen() {
                               <Text style={styles.pickBtnText}>OVER</Text>
                             </TouchableOpacity>
                             <TouchableOpacity
-                              style={[styles.pickBtn, balance < 10 && styles.pickBtnDisabled]}
-                              onPress={() => balance >= 10 && openBetModal(line, 'under')}
+                              style={[styles.pickBtn, (balance < 10 || isOwnLine) && styles.pickBtnDisabled]}
+                              onPress={() => {
+                                if (isOwnLine) { showToast("You can't bet the under on yourself", 'error'); return }
+                                if (balance >= 10) openBetModal(line, 'under')
+                              }}
                               activeOpacity={0.7}
                             >
                               <Text style={styles.pickBtnText}>UNDER</Text>
@@ -405,6 +538,51 @@ export default function BettingScreen() {
           </>
         )}
         </>}
+
+        {/* ── Settled Bets ────────────────────────────────────── */}
+        {view === 'settled' && (
+          settledWeekNumbers.length > 0 ? (
+            settledWeekNumbers.map(wk => (
+              <View key={wk}>
+                <Text style={styles.gameLabel}>WEEK {wk}</Text>
+                <View style={styles.card}>
+                  {settledByWeek[wk].map((bet: any, idx: number) => {
+                    const bl = bet.bet_lines
+                    const badge = resultBadge(bl?.result ?? null, bet.pick)
+                    const isLast = idx === settledByWeek[wk].length - 1
+                    return (
+                      <View key={bet.id} style={[styles.betRow, !isLast && styles.lineRowBorder]}>
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.betSubject}>
+                            {bet.players?.name ?? '—'}  ·  Game {bl?.game_number}
+                          </Text>
+                          <Text style={styles.betDetails}>
+                            {bet.pick?.toUpperCase()} {Number(bl?.line ?? 0).toFixed(1)} · {bl?.players?.name ?? '—'}
+                            {bl?.actual_score != null ? `  ·  actual ${bl.actual_score}` : ''}
+                          </Text>
+                        </View>
+                        <View style={styles.betRight}>
+                          {badge && <Text style={[styles.betBadge, { color: badge.color }]}>{badge.label}</Text>}
+                          <Text style={styles.betWager}>
+                            {bet.payout != null
+                              ? bet.payout > 0
+                                ? `+${bet.payout - bet.wager}`
+                                : `-${bet.wager}`
+                              : `${bet.wager} pins`}
+                          </Text>
+                        </View>
+                      </View>
+                    )
+                  })}
+                </View>
+              </View>
+            ))
+          ) : (
+            <View style={styles.emptyCard}>
+              <Text style={styles.emptyText}>No settled bets yet</Text>
+            </View>
+          )
+        )}
       </ScrollView>
 
       {/* Bet placement modal */}
@@ -426,18 +604,29 @@ export default function BettingScreen() {
               <Text style={styles.modalLine}>LINE: {modal.line.toFixed(1)}</Text>
 
               <View style={styles.pickToggle}>
-                {(['over', 'under'] as Pick[]).map(p => (
-                  <TouchableOpacity
-                    key={p}
-                    style={[styles.pickToggleBtn, modal.pick === p && styles.pickToggleBtnActive]}
-                    onPress={() => setModal(m => m ? { ...m, pick: p } : m)}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={[styles.pickToggleBtnText, modal.pick === p && styles.pickToggleBtnTextActive]}>
-                      {p.toUpperCase()}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
+                {(['over', 'under'] as Pick[]).map(p => {
+                  // Anti-tanking: can't pick under on your own line.
+                  const blocked = p === 'under' && modal.subjectPlayerId === playerId
+                  return (
+                    <TouchableOpacity
+                      key={p}
+                      style={[
+                        styles.pickToggleBtn,
+                        modal.pick === p && styles.pickToggleBtnActive,
+                        blocked && styles.pickToggleBtnDisabled,
+                      ]}
+                      onPress={() => {
+                        if (blocked) { showToast("You can't bet the under on yourself", 'error'); return }
+                        setModal(m => m ? { ...m, pick: p } : m)
+                      }}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={[styles.pickToggleBtnText, modal.pick === p && styles.pickToggleBtnTextActive]}>
+                        {p.toUpperCase()}
+                      </Text>
+                    </TouchableOpacity>
+                  )
+                })}
               </View>
 
               <Text style={styles.wagerLabel}>WAGER (pins)</Text>
@@ -461,6 +650,56 @@ export default function BettingScreen() {
                 {placing
                   ? <ActivityIndicator size="small" color={colors.bg} />
                   : <Text style={styles.placeBtnText}>Place Bet</Text>}
+              </TouchableOpacity>
+            </View>
+          </KeyboardAvoidingView>
+          <Toast />
+        </Modal>
+      )}
+
+      {/* Admin: settle bet modal */}
+      {settleModal && (
+        <Modal visible transparent animationType="slide" onRequestClose={() => !settling && setSettleModal(null)}>
+          <KeyboardAvoidingView
+            style={styles.modalBackdrop}
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          >
+            <TouchableOpacity
+              style={StyleSheet.absoluteFill}
+              activeOpacity={1}
+              onPress={() => !settling && setSettleModal(null)}
+            />
+            <View style={styles.modalSheet}>
+              <Text style={styles.modalTitle}>
+                Settle — {settleModal.subjectName} Game {settleModal.gameNumber}
+              </Text>
+              <Text style={styles.modalLine}>LINE: {settleModal.line.toFixed(1)}</Text>
+
+              <Text style={styles.wagerLabel}>ACTUAL SCORE</Text>
+              <TextInput
+                style={styles.wagerInput}
+                value={settleModal.actual}
+                onChangeText={v => setSettleModal(m => m ? { ...m, actual: v.replace(/[^0-9]/g, '') } : m)}
+                keyboardType="number-pad"
+                placeholder="0 – 300"
+                placeholderTextColor={colors.muted2}
+                maxLength={3}
+              />
+              <Text style={styles.wagerHint}>
+                {settlePreview
+                  ? `Result: ${settlePreview} — resolves all bets on this line`
+                  : `${settleModal.subjectName}'s actual score for game ${settleModal.gameNumber}`}
+              </Text>
+
+              <TouchableOpacity
+                style={[styles.placeBtn, settling && styles.placeBtnDisabled]}
+                onPress={settleBet}
+                disabled={settling}
+                activeOpacity={0.7}
+              >
+                {settling
+                  ? <ActivityIndicator size="small" color={colors.bg} />
+                  : <Text style={styles.placeBtnText}>Settle Bet</Text>}
               </TouchableOpacity>
             </View>
           </KeyboardAvoidingView>
@@ -713,6 +952,14 @@ const styles = StyleSheet.create({
     letterSpacing: 0.3,
   },
   betRight: { alignItems: 'flex-end' },
+  betPressable: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10 },
+  adminHint: {
+    fontFamily: fonts.barlow,
+    fontSize: 12,
+    color: colors.muted,
+    fontStyle: 'italic',
+    marginBottom: 10,
+  },
   cancelBtn: {
     width: 28,
     height: 28,
@@ -793,6 +1040,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.accentDim,
     borderColor: colors.accent,
   },
+  pickToggleBtnDisabled: { borderColor: colors.border2, opacity: 0.4 },
   pickToggleBtnText: {
     fontFamily: fonts.barlowCondensed,
     fontSize: 16,

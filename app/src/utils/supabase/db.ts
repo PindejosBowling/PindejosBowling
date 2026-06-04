@@ -348,6 +348,14 @@ export const placedBets = {
       .select('*, players(name), bet_lines!inner(week_id, player_id, game_number, line, result, actual_score, players(name))')
       .eq('bet_lines.week_id', weekId)
       .order('created_at', { ascending: false }),
+  // All settled bets (settled_at set) for a season, via bet_lines → weeks.season_id
+  listSettledBySeason: (seasonId: string) =>
+    supabase
+      .from('placed_bets')
+      .select('*, players(name), bet_lines!inner(week_id, player_id, game_number, line, result, actual_score, players(name), weeks!inner(season_id, week_number))')
+      .eq('bet_lines.weeks.season_id', seasonId)
+      .not('settled_at', 'is', null)
+      .order('settled_at', { ascending: false }),
   insert: (data: TablesInsert<'placed_bets'>) =>
     supabase.from('placed_bets').insert(data).select().single(),
   update: (id: string, data: TablesUpdate<'placed_bets'>) =>

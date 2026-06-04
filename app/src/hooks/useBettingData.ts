@@ -6,8 +6,10 @@ export function useBettingData(playerId: string | null) {
   const [balance, setBalance] = useState(0)
   const [openLines, setOpenLines] = useState<any[]>([])
   const [myBets, setMyBets] = useState<any[]>([])
-  // All bets placed by every player this week (for the "Bets Placed This Week" view)
+  // All bets placed by every player this week (for the "Active Bets" view)
   const [weekBets, setWeekBets] = useState<any[]>([])
+  // All settled (won/lost/push) bets this season (for the "Settled Bets" view)
+  const [settledBets, setSettledBets] = useState<any[]>([])
   // Season pin-balance scoreboard: active players sorted high → low
   const [leaderboard, setLeaderboard] = useState<{ playerId: string; name: string; balance: number; potential: number }[]>([])
   const [currentWeekId, setCurrentWeekId] = useState<string | null>(null)
@@ -44,12 +46,16 @@ export function useBettingData(playerId: string | null) {
         )
       }
 
-      // Season-wide ledger for the pin-balance scoreboard
+      // Season-wide ledger for the pin-balance scoreboard + settled bets history
       let seasonLedger: any[] = []
+      let settledBetsData: any[] = []
       if (seasonId) {
         fetches.push(
           pinLedger.listBySeasonForLeaderboard(seasonId).then(({ data }) => {
             seasonLedger = data ?? []
+          }),
+          placedBets.listSettledBySeason(seasonId).then(({ data }) => {
+            settledBetsData = data ?? []
           })
         )
       }
@@ -84,12 +90,12 @@ export function useBettingData(playerId: string | null) {
         }
         byPlayer[pid].balance += e.amount
       }
-      // Potential winnings: for each still-pending bet (payout not yet set),
+      // Potential winnings: for each still-pending bet (not yet settled),
       // a win adds wager×2 to the ledger (the wager was already debited at
       // placement), so projected balance = current balance + Σ(wager×2).
       const pendingByPlayer: Record<string, number> = {}
       for (const b of weekBetsData) {
-        if (b.payout == null) {
+        if (b.settled_at == null) {
           pendingByPlayer[b.player_id] = (pendingByPlayer[b.player_id] ?? 0) + b.wager * 2
         }
       }
@@ -106,6 +112,7 @@ export function useBettingData(playerId: string | null) {
 
       setOpenLines(linesData)
       setWeekBets(weekBetsData)
+      setSettledBets(settledBetsData)
       setLeaderboard(board)
       setMyBets(betsData)
       setBalance(ledgerData.reduce((sum, e) => sum + e.amount, 0))
@@ -119,5 +126,5 @@ export function useBettingData(playerId: string | null) {
 
   useEffect(() => { load() }, [load])
 
-  return { loading, balance, openLines, myBets, weekBets, leaderboard, myBetLineIds, currentWeekId, currentSeasonId, reload: load }
+  return { loading, balance, openLines, myBets, weekBets, settledBets, leaderboard, myBetLineIds, currentWeekId, currentSeasonId, reload: load }
 }
