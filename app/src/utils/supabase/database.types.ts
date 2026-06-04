@@ -127,6 +127,45 @@ export type Database = {
         }
         Relationships: []
       }
+      registrations: {
+        Row: {
+          created_at: string
+          id: string
+          player_id: string
+          season_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          player_id: string
+          season_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          player_id?: string
+          season_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "registrations_player_id_fkey"
+            columns: ["player_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "registrations_season_id_fkey"
+            columns: ["season_id"]
+            isOneToOne: false
+            referencedRelation: "seasons"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       rsvp: {
         Row: {
           created_at: string
@@ -219,21 +258,21 @@ export type Database = {
           created_at: string
           id: string
           player_id: string
-          season_id: number
+          season_id: string
           updated_at: string
         }
         Insert: {
           created_at?: string
           id?: string
           player_id: string
-          season_id: number
+          season_id: string
           updated_at?: string
         }
         Update: {
           created_at?: string
           id?: string
           player_id?: string
-          season_id?: number
+          season_id?: string
           updated_at?: string
         }
         Relationships: [
@@ -257,31 +296,34 @@ export type Database = {
         Row: {
           bowling_night: string
           created_at: string
-          ended_at: string | null
-          id: number
-          league_name: string
+          end_date: string | null
+          id: string
+          is_active: boolean
           number: number
-          started_at: string
+          registration_open: boolean
+          start_date: string
           updated_at: string
         }
         Insert: {
           bowling_night: string
           created_at?: string
-          ended_at?: string | null
-          id?: number
-          league_name: string
+          end_date?: string | null
+          id?: string
+          is_active?: boolean
           number: number
-          started_at: string
+          registration_open?: boolean
+          start_date: string
           updated_at?: string
         }
         Update: {
           bowling_night?: string
           created_at?: string
-          ended_at?: string | null
-          id?: number
-          league_name?: string
+          end_date?: string | null
+          id?: string
+          is_active?: boolean
           number?: number
-          started_at?: string
+          registration_open?: boolean
+          start_date?: string
           updated_at?: string
         }
         Relationships: []
@@ -370,7 +412,7 @@ export type Database = {
           id: string
           is_archived: boolean
           is_confirmed: boolean
-          season_id: number
+          season_id: string
           updated_at: string
           week_number: number
         }
@@ -380,7 +422,7 @@ export type Database = {
           id?: string
           is_archived?: boolean
           is_confirmed?: boolean
-          season_id: number
+          season_id: string
           updated_at?: string
           week_number: number
         }
@@ -390,7 +432,7 @@ export type Database = {
           id?: string
           is_archived?: boolean
           is_confirmed?: boolean
-          season_id?: number
+          season_id?: string
           updated_at?: string
           week_number?: number
         }

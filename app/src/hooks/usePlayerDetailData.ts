@@ -12,10 +12,10 @@ import {
 
 type WeekMeta = {
   id: string
-  season_id: number
+  season_id: string
   week_number: number
   is_archived: boolean
-  seasons: { id: number; number: number }
+  seasons: { id: string; number: number }
 }
 
 export type DetailScore = {
@@ -124,9 +124,9 @@ function buildTeamTotalsMap(allScores: DetailScore[]): Map<string, number> {
 export function computePlayerSeasons(
   playerId: string,
   allScores: DetailScore[],
-  seasonList: { id: number; number: number }[],
-): { id: number; number: number }[] {
-  const seen = new Set<number>()
+  seasonList: { id: string; number: number }[],
+): { id: string; number: number }[] {
+  const seen = new Set<string>()
   for (const row of allScores) {
     const slot = row.team_slots
     if (!slot || slot.is_fill || slot.player_id !== playerId) continue
@@ -139,8 +139,8 @@ export function computePlayerProfile(
   playerId: string,
   allScores: DetailScore[],
   allSchedule: RawSchedule[],
-  seasonId: number | null,
-  currentSeasonId: number | null,
+  seasonId: string | null,
+  currentSeasonId: string | null,
 ): PlayerProfileData {
   const scheduleMap = buildScheduleMap(allSchedule)
   const teamTotals = buildTeamTotalsMap(allScores)
@@ -280,7 +280,7 @@ export function computeWeekRows(
   playerSlots: PlayerSlot[],
   allScores: DetailScore[],
   allSchedule: RawSchedule[],
-  seasonId: number | null,
+  seasonId: string | null,
 ): WeekRow[] {
   const scheduleMap = buildScheduleMap(allSchedule)
   const teamTotals = buildTeamTotalsMap(allScores)
@@ -340,7 +340,7 @@ export function computeChartPoints(
   playerId: string,
   allScores: DetailScore[],
   allSchedule: RawSchedule[],
-  seasonId: number | null,
+  seasonId: string | null,
 ): { value: number; label: string }[] {
   const gameNumberById = buildGameNumberById(allSchedule)
   return allScores
@@ -443,7 +443,7 @@ export function usePlayerDetailData(name: string) {
   const [loading, setLoading] = useState(true)
   const [playerId, setPlayerId] = useState<string | null>(null)
   const [isChampion, setIsChampion] = useState(false)
-  const [seasonList, setSeasonList] = useState<{ id: number; number: number }[]>([])
+  const [seasonList, setSeasonList] = useState<{ id: string; number: number }[]>([])
   const [allScores, setAllScores] = useState<DetailScore[]>([])
   const [allSchedule, setAllSchedule] = useState<RawSchedule[]>([])
   const [playerSlots, setPlayerSlots] = useState<PlayerSlot[]>([])
@@ -460,7 +460,7 @@ export function usePlayerDetailData(name: string) {
       ])
 
       const player = playerRes.data
-      const rawSeasons = (seasonsRes.data ?? []).map(s => ({ id: s.id, number: s.number }))
+      const rawSeasons = (seasonsRes.data ?? []).filter(s => !s.registration_open).map(s => ({ id: s.id, number: s.number }))
       const champIds = new Set((champRes.data ?? []).map((c: any) => c.player_id))
 
       setSeasonList(rawSeasons)

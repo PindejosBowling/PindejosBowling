@@ -38,7 +38,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
     paddingVertical: 10,
     borderRadius: radius.cardMd,
-    maxWidth: '80%',
+    maxWidth: '90%',
     shadowColor: '#000',
     shadowOpacity: 0.4,
     shadowRadius: 8,

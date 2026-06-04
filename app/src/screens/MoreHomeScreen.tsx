@@ -32,6 +32,7 @@ export default function MoreHomeScreen() {
     { icon: '🧪', label: 'Chemistry',    onPress: () => navigation.navigate('Chemistry') },
     { icon: '📅', label: 'Past Seasons', onPress: () => navigation.navigate('PastSeasons') },
     { icon: '🎳', label: 'Past Games',   onPress: () => navigation.navigate('PastGames') },
+    { icon: '📝', label: 'Registration', onPress: () => navigation.navigate('Registration') },
     { icon: '🗑️', label: 'Trash Board',  onPress: () => navigation.navigate('TrashBoard') },
   ]
 

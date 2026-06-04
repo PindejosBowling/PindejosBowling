@@ -8,6 +8,7 @@ export type MoreStackParamList = {
   Playoffs: undefined
   PlayerManagement: undefined
   PastGames: undefined
+  Registration: undefined
 }
 
 export type StandingsStackParamList = {

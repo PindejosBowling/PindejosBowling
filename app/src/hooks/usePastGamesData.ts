@@ -24,7 +24,7 @@ export interface WeekGames {
 export function computePastGamesFromSupabase(
   rawScores: any[],
   rawSchedule: any[],
-  seasonId: number | null,
+  seasonId: string | null,
 ): WeekGames[] {
   const filtered = rawScores.filter(r => {
     const slot = r.team_slots
@@ -106,7 +106,7 @@ export function computePastGamesFromSupabase(
 
 export function usePastGamesData() {
   const [loading, setLoading] = useState(true)
-  const [seasonList, setSeasonList] = useState<{ id: number; number: number }[]>([])
+  const [seasonList, setSeasonList] = useState<{ id: string; number: number }[]>([])
   const [rawScores, setRawScores] = useState<any[]>([])
   const [rawSchedule, setRawSchedule] = useState<any[]>([])
 
@@ -118,7 +118,7 @@ export function usePastGamesData() {
         scores.listForPastGames(),
         games.listForArchivedWeeks(),
       ])
-      setSeasonList((seasonsRes.data ?? []).map(s => ({ id: s.id, number: s.number })))
+      setSeasonList((seasonsRes.data ?? []).filter(s => !s.registration_open).map(s => ({ id: s.id, number: s.number })))
       setRawScores(scoresRes.data ?? [])
       setRawSchedule(scheduleRes.data ?? [])
     } catch (e) {

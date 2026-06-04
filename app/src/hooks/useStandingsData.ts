@@ -22,7 +22,7 @@ type RawScore = {
     team_id: string
     is_fill: boolean
     players: { id: string; name: string } | null
-    teams: { week_id: string; weeks: { season_id: number; is_archived: boolean } }
+    teams: { week_id: string; weeks: { season_id: string; is_archived: boolean } }
   }
 }
 
@@ -42,7 +42,7 @@ type RawSchedule = {
 export function computeStandingsFromSupabase(
   rawScores: any[],
   rawSchedule: any[],
-  seasonId: number | null,
+  seasonId: string | null,
 ): StandingsRow[] {
   // Schedule lookup: "gameId|teamId" → opponentTeamId
   // Keyed per-team so multiple matchups in the same game round don't overwrite each other.
@@ -114,7 +114,7 @@ export function computeStandingsFromSupabase(
 
 export function useStandingsData() {
   const [loading, setLoading] = useState(true)
-  const [seasonList, setSeasonList] = useState<{ id: number; number: number }[]>([])
+  const [seasonList, setSeasonList] = useState<{ id: string; number: number }[]>([])
   const [championPlayerIds, setChampionPlayerIds] = useState<Set<string>>(new Set())
   const [rawScores, setRawScores] = useState<any[]>([])
   const [rawSchedule, setRawSchedule] = useState<any[]>([])
@@ -128,7 +128,7 @@ export function useStandingsData() {
         scores.listForStandings(),
         games.listForArchivedWeeks(),
       ])
-      setSeasonList((seasonsRes.data ?? []).map(s => ({ id: s.id, number: s.number })))
+      setSeasonList((seasonsRes.data ?? []).filter(s => !s.registration_open).map(s => ({ id: s.id, number: s.number })))
       setChampionPlayerIds(new Set((champRes.data ?? []).map((c: any) => c.player_id)))
       setRawScores(scoresRes.data ?? [])
       setRawSchedule(scheduleRes.data ?? [])

@@ -19,6 +19,7 @@ import { colors, fonts, radius } from '../theme'
 import { MoreStackParamList } from '../navigation/types'
 import ScreenHeader from '../components/ScreenHeader'
 import LoadingView from '../components/LoadingView'
+import Toast from '../components/Toast'
 import { usePlayerManagementData } from '../hooks/usePlayerManagementData'
 import { useRefresh } from '../hooks/useRefresh'
 import { useUiStore } from '../stores/uiStore'
@@ -241,6 +242,8 @@ export default function PlayerManagementScreen() {
               </TouchableOpacity>
             </TouchableOpacity>
           </KeyboardAvoidingView>
+          {/* Rendered inside the Modal so toasts aren't occluded by the native modal layer. */}
+          <Toast />
         </Modal>
       )}
     </SafeAreaView>

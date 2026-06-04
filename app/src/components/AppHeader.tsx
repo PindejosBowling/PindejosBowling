@@ -13,7 +13,7 @@ export default function AppHeader() {
   const playerName = useAuthStore(s => s.playerName)
 
   useEffect(() => {
-    Promise.all([weeks.getCurrent(), seasons.getLatest()]).then(([weekRes, seasonRes]) => {
+    Promise.all([weeks.getCurrent(), seasons.getCurrent()]).then(([weekRes, seasonRes]) => {
       setWeekNumber(weekRes.data?.week_number ?? null)
       setSeasonNumber(seasonRes.data?.number ?? null)
     })

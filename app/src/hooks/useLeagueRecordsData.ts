@@ -13,7 +13,7 @@ export interface LeagueRecords {
 
 export function computeLeagueRecordsFromSupabase(
   rawScores: any[],
-  filterSeasonId: number | null,
+  filterSeasonId: string | null,
 ): LeagueRecords {
   const recs: LeagueRecords = {
     highGame:      { val: 0, by: '', when: '' },
@@ -128,7 +128,7 @@ export function computeLeagueRecordsFromSupabase(
 
 export function useLeagueRecordsData() {
   const [loading, setLoading] = useState(true)
-  const [seasonList, setSeasonList] = useState<{ id: number; number: number }[]>([])
+  const [seasonList, setSeasonList] = useState<{ id: string; number: number }[]>([])
   const [rawScores, setRawScores] = useState<any[]>([])
 
   const load = useCallback(async () => {
@@ -138,7 +138,7 @@ export function useLeagueRecordsData() {
         seasons.list(),
         scores.listForLeagueRecords(),
       ])
-      setSeasonList((seasonsRes.data ?? []).map(s => ({ id: s.id, number: s.number })))
+      setSeasonList((seasonsRes.data ?? []).filter(s => !s.registration_open).map(s => ({ id: s.id, number: s.number })))
       setRawScores(scoresRes.data ?? [])
     } catch (e) {
       console.error('useLeagueRecordsData error:', e)

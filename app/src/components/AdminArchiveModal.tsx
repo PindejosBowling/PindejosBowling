@@ -10,6 +10,7 @@ import {
 import { useUiStore } from '../stores/uiStore'
 import { weeks } from '../utils/supabase/db'
 import { colors, fonts, radius } from '../theme'
+import Toast from './Toast'
 
 interface Props {
   visible: boolean
@@ -92,6 +93,8 @@ export default function AdminArchiveModal({ visible, onClose }: Props) {
           </View>
         </TouchableOpacity>
       </TouchableOpacity>
+      {/* Rendered inside the Modal so toasts aren't occluded by the native modal layer. */}
+      <Toast />
     </Modal>
   )
 }
