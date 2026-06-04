@@ -41,12 +41,12 @@ The client is configured via Expo environment variables that are set in `.env.lo
 
 ---
 
-## Database Schema (10 tables)
+## Database Schema (11 tables)
 
 | Table | Key columns |
 |---|---|
 | `players` | `id`, `first_name`, `last_name`, `name`, `phone`, `role`, `user_id`, `is_active`, `created_at` |
-| `seasons` | `id`, `number`, `league_name`, `bowling_night`, `started_at`, `ended_at` |
+| `seasons` | `id` (**uuid**), `number`, `bowling_night`, `start_date`, `end_date`, `registration_open`, `is_active`, `created_at`, `updated_at` |
 | `weeks` | `id`, `season_id`, `week_number`, `is_archived`, `is_confirmed`, `bowled_at` |
 | `rsvp` | `id`, `player_id`, `week_id`, `status`, `note`, `updated_at` |
 | `teams` | `id`, `week_id`, `team_number` |
@@ -54,6 +54,7 @@ The client is configured via Expo environment variables that are set in `.env.lo
 | `games` | `id`, `game_number`, `team_a_id`, `team_b_id` |
 | `scores` | `id`, `team_slot_id`, `game_id`, `score`, `updated_at` |
 | `season_champions` | `id`, `player_id`, `season_id` |
+| `registrations` | `id`, `season_id`, `player_id`, `created_at`, `updated_at` |
 | `board_posts` | `id`, `player_id`, `message`, `created_at` |
 
 **Key distinctions:**
@@ -63,6 +64,9 @@ The client is configured via Expo environment variables that are set in `.env.lo
 - **`teams` is the team entity and the sole owner of `week_id`.** A team is one `(week_id, team_number)` pairing. `team_slots.team_id` (who's on the team) and `games.team_a_id`/`team_b_id` (the matchup) reference it by **plain UUID FK** (`→ teams(id)`, `ON DELETE CASCADE`). A row's week is **derived through its team** (`team_slots → teams → weeks`, `games → teams → weeks`); neither `team_slots` nor `games` stores its own `week_id`. `team_number` lives on `teams` purely for the "Team N" display label — **all matching/joining keys on the team UUID.**
 - **`games` same-week invariant** is enforced by the `games_same_week` trigger (`team_a_id` and `team_b_id` must resolve to the same `teams.week_id`) — it replaces the old shared-`week_id` composite FK.
 - **Week deletes cascade from `teams`.** `scores` FKs (`team_slot_id`, `game_id`) and the `team_slots`/`games` team FKs are all `ON DELETE CASCADE`, so deleting a week's `teams` rows (`teams.removeByWeek`) wipes its slots, games, and scores in one step — there is no `team_slots.removeByWeek` / `games.removeByWeek`.
+- **`seasons.id` is a `uuid`** (`gen_random_uuid()`), like every other table — there are no integer/sequence keys in the schema. FKs `weeks.season_id`, `registrations.season_id`, `season_champions.season_id` are all `uuid`. In TypeScript a season id / `season_id` is a **`string`**.
+- **Season lifecycle = `registration_open` + `is_active`.** A new season starts in registration (`registration_open = true`, `is_active = false`); closing registration flips it to `registration_open = false`, `is_active = true` (the live/current season); ending it sets `is_active = false`. **The current season is the one that is `is_active = true` AND `registration_open = false`** — never "highest `number`". A partial unique index (`seasons_single_active`, `WHERE is_active`) enforces **at most one active season** at a time, so activating a new season while another is still active fails until the old one is ended.
+- **`registrations`** holds per-season player sign-ups, unique on `(season_id, player_id)`. `registrations.season_id` is `ON DELETE CASCADE` (deleting a season removes its sign-ups); `weeks`/`season_champions` season FKs are **not** cascade, so a season with weeks or champions cannot be deleted (an in-registration season has neither).
 
 ---
 
@@ -129,14 +133,24 @@ The client is configured via Expo environment variables that are set in `.env.lo
 | `insert(data)` | Record a champion |
 | `remove(id)` | Delete a champion record |
 
+### `registrations`
+| Method | Description |
+|---|---|
+| `list()` | All registrations with joined player `(id, name)` |
+| `listBySeason(seasonId)` | Registrations for one season with joined player |
+| `insert(data)` | Add a registration (sign a player up for a season) |
+| `remove(seasonId, playerId)` | Delete a sign-up by `(season_id, player_id)` |
+
 ### `seasons`
 | Method | Description |
 |---|---|
 | `list()` | All seasons, ordered by number |
-| `getLatest()` | Most recent season (single) |
+| `getLatest()` | Highest-`number` season (single) — use **only** for computing the next season number, not "current" |
+| `getCurrent()` | The current playing season: `is_active = true` AND `registration_open = false` (single). **Use this for "what season is it now"**, not `getLatest()` |
 | `getById(id)` | Single season by id |
 | `insert(data)` | Create a season |
 | `update(id, data)` | Update season fields |
+| `remove(id)` | Delete a season by id (admin; registrations cascade) |
 
 ### `teamSlots`
 | Method | Description |
@@ -217,7 +231,10 @@ Win/loss is determined by comparing **team totals** (all players on a team inclu
 | `usePastSeasonsData.ts` | `usePastSeasonsData` | — (uses `computeStandingsFromSupabase`) | PastSeasonsScreen |
 | `usePastGamesData.ts` | `usePastGamesData` | `computePastGamesFromSupabase(rawScores, rawSchedule, seasonId)` | PastGamesScreen |
 | `usePlayerManagementData.ts` | `usePlayerManagementData` | — | PlayerManagementScreen |
+| `useRegistrationData.ts` | `useRegistrationData` | — | RegistrationScreen |
 | `useRefresh.ts` | `useRefresh(fn)` | — | All screens with pull-to-refresh |
+
+> Stats hooks (`useStandingsData`, `usePastSeasonsData`, `usePastGamesData`, `useLeagueRecordsData`, `usePlayerDetailData`) build their `seasonList` from `seasons.list()` **filtered to started seasons** (`!registration_open`), so an in-registration season never appears as a stats filter or default. `useRegistrationData` keeps **all** seasons (registration UI needs them).
 
 ### Hook return shapes
 
@@ -270,12 +287,13 @@ Ephemeral UI state — toggles, selections, toast queue. All fields via `set(par
 - `standingsSeason` — season filter for StandingsScreen
 - `playerSeason` — season filter for PlayerDetailScreen
 - `recordsSeason` — season filter for LeagueRecordsScreen (`'all'` or season id string)
+- `pastGamesSeason` — season filter for PastGamesScreen
 - `playerLogMode` — `'bowled'` | other — controls game log display in PlayerDetailScreen
 - `chemMode` — `'pairs'` | `'trios'`
 - `chemExpanded` — boolean, whether chemistry rows are expanded
 - `h2hP1`, `h2hP2` — selected player names for head-to-head
 - `oddsRevealed` — easter egg toggle on matchup screen
-- `toasts` — call `showToast(msg, type)` to show a 2.4s auto-dismissing toast
+- `toasts` — call `showToast(msg, type)` to show an auto-dismissing toast; display time scales with message length (2.4s–10s) so long DB errors stay readable
 
 ---
 
@@ -310,6 +328,7 @@ Ephemeral UI state — toggles, selections, toast queue. All fields via `set(par
 | `Playoffs` | PlayoffsScreen |
 | `PlayerManagement` | PlayerManagementScreen — add, edit, and toggle active/inactive players |
 | `PastGames` | PastGamesScreen — browse historical week rosters and scores by season |
+| `Registration` | RegistrationScreen — per-season sign-ups; admins open/close registration, manage the roster, and delete an open season |
 
 **Cross-tab navigation to PlayerDetail** (e.g. from More tab):
 ```tsx
@@ -322,9 +341,9 @@ Ephemeral UI state — toggles, selections, toast queue. All fields via `set(par
 
 | Component | Purpose |
 |---|---|
-| `AppHeader` | App logo + current Week/Season badge, reads from Supabase (`weeks.getCurrent`, `seasons.getLatest`) |
+| `AppHeader` | App logo + current Week/Season badge, reads from Supabase (`weeks.getCurrent`, `seasons.getCurrent`) |
 | `ScreenHeader` | Reusable titled header for inner screens |
-| `Toast` | Absolute-positioned animated toast, reads from `uiStore.toasts` |
+| `Toast` | Absolute-positioned animated toast, reads from `uiStore.toasts`. **Render a `<Toast />` inside any RN `<Modal>` that calls `showToast`** — the app-root `<Toast />` (App.tsx) sits behind the native modal layer and is occluded while a modal is open (see Key Patterns) |
 | `ConfirmBar` | Sticky bottom bar for pending saves (RSVP, scores) |
 | `PlayerScoreRow` | One player row in the live matchup view — editable score input or expected avg display |
 | `OddsBlock` | Betting-style spread + moneyline card (easter egg, `Expected` mode only) |
@@ -335,7 +354,8 @@ Ephemeral UI state — toggles, selections, toast queue. All fields via `set(par
 | `ProfileMenuModal` | Bottom sheet opened from the avatar in `AppHeader` — shows player identity and per-user actions (My Profile, Log Out) |
 | `PlayerPickerModal` | Full-screen player search/select for H2H |
 | `AdminArchiveModal` | Confirm dialog — archives active week (sets `is_archived = true`, creates next week row) |
-| `AdminEndSeasonModal` | Confirm dialog — records season champions and creates new season row |
+| `AdminEndSeasonModal` | Confirm dialog — records season champions and marks the current season ended (`is_active = false`); reads the current season via `seasons.getCurrent()` |
+| `AdminOpenRegistrationModal` | Create the next season (`seasons.insert` with `registration_open = true`) and open its registration window; next number derived from `seasons.getLatest()` |
 | `AdminGenerateTeamsModal` | Generate balanced teams from RSVP list, preview swaps, write teams/slots/schedule to Supabase |
 
 ---
@@ -366,13 +386,18 @@ const { refreshing, onRefresh } = useRefresh(reload)
 // pass refreshing/onRefresh to RefreshControl
 ```
 
+### Toasts inside modals
+The app-root `<Toast />` (App.tsx) renders behind any React Native `<Modal>`, so a `showToast` call made while a modal is open is **invisible** (occluded by the native modal layer). Any `<Modal>` that calls `showToast` must render its **own `<Toast />` as the last child inside the Modal** — it reads the same global `uiStore.toasts`, so it just surfaces the toast above the modal. All admin modals and `PlayerManagementScreen` follow this.
+
 ### Pending / optimistic score edits
 `usePendingStore.pendingScores` holds unsaved score changes. `MatchupsScreen` renders them immediately and shows a `ConfirmBar`. On save, `scores.upsert` is called, then `reload()` refreshes from Supabase, then the pending buffer is cleared. On discard, pending is just cleared.
 
 ### Admin flows (all Supabase direct)
 - **Archive week** (`AdminArchiveModal`) — sets `weeks.update(id, { is_archived: true })`, then inserts a new week row for the next week number
 - **Add/edit player** (`PlayerManagementScreen`) — inline modal calls `players.insert` or `players.update`; first name, last name, and phone are all required
-- **End season** (`AdminEndSeasonModal`) — writes `season_champions.insert` for selected champions, then calls `seasons.insert` for the new season
+- **End season** (`AdminEndSeasonModal`) — writes `season_champions.insert` for selected champions and sets `seasons.update(currentId, { is_active: false })`; the current season is resolved via `seasons.getCurrent()` (not the highest number)
+- **Open registration** (`AdminOpenRegistrationModal`) — `seasons.insert` for the next season with `registration_open = true, is_active = false`; the new number is `getLatest().number + 1`
+- **Registration management** (`RegistrationScreen`, admin) — open/close registration (`seasons.update` toggling `registration_open`/`is_active`), add/remove players via `registrations.insert`/`registrations.remove`, and **delete an open season** via `seasons.remove` (confirmed). Closing registration sets `is_active = true`, which fails if another season is already active (single-active index) — end the current season first
 - **Generate teams** (`AdminGenerateTeamsModal`) — reads RSVP + player avgs, computes balanced teams client-side, previews swaps, then wipes the week with a single `teams.removeByWeek` (cascades slots → games → scores) and writes `teams.insert` (capturing the new ids) → `team_slots.insert` + `games.insert` (referencing `team_id`/`team_a_id`/`team_b_id`; no `week_id` — week is derived through the team) → `weeks.update(..., { is_confirmed: true })`
 
 ---
@@ -438,6 +463,7 @@ app/
 │   │   ├── usePastSeasonsData.ts  # Past seasons raw data (screen reuses computeStandingsFromSupabase)
 │   │   ├── usePlayerDetailData.ts   # Player data + many compute* functions
 │   │   ├── usePlayerManagementData.ts  # Raw player list for PlayerManagementScreen
+│   │   ├── useRegistrationData.ts  # Registrations + seasons + roster for RegistrationScreen
 │   │   ├── useRefresh.ts        # useRefresh(fn) — RefreshControl helper
 │   │   └── useStandingsData.ts  # Standings data + computeStandingsFromSupabase
 │   ├── navigation/
@@ -469,6 +495,7 @@ app/
 │   │   ├── PlayerPickerModal.tsx
 │   │   ├── AdminArchiveModal.tsx
 │   │   ├── AdminEndSeasonModal.tsx
+│   │   ├── AdminOpenRegistrationModal.tsx
 │   │   └── AdminGenerateTeamsModal.tsx
 │   └── screens/
 │       ├── LoginScreen.tsx          # Phone OTP login flow
@@ -479,6 +506,7 @@ app/
 │       ├── PlayerDetailScreen.tsx   # Per-player stats, game log, records
 │       ├── PlayerManagementScreen.tsx  # Add/edit/toggle players (admin)
 │       ├── PastGamesScreen.tsx      # Historical week rosters + scores by season
+│       ├── RegistrationScreen.tsx   # Per-season sign-ups + admin registration management
 │       ├── LeagueRecordsScreen.tsx  # High game/series/team records
 │       ├── HeadToHeadScreen.tsx     # 1v1 player comparison
 │       ├── ChemistryScreen.tsx      # Pair/trio win-rate analysis
@@ -548,3 +576,7 @@ It contains hook patterns, screen skeleton, navigation wiring, database migratio
   ```
 
   **Why:** Migration files are version-controlled and reversible. Direct writes bypass this safety net and make schema drift impossible to track or roll back.
+
+13. **"Current season" ≠ highest `number`.** The current season is `is_active = true` AND `registration_open = false` — query it with `seasons.getCurrent()`. `seasons.getLatest()` (highest `number`) exists only to compute the *next* season number; using it for "current" mis-selects a season that is still in registration. Stats season lists exclude in-registration seasons (`!registration_open`). At most one season can be `is_active` (enforced by the `seasons_single_active` partial unique index).
+
+14. **All ids are `uuid` / TypeScript `string`.** No table uses integer/sequence keys. When adding season-related code, season ids and `season_id` are `string`.
