@@ -41,7 +41,7 @@ The client is configured via Expo environment variables that are set in `.env.lo
 
 ---
 
-## Database Schema (11 tables)
+## Database Schema (14 tables)
 
 | Table | Key columns |
 |---|---|
@@ -56,6 +56,9 @@ The client is configured via Expo environment variables that are set in `.env.lo
 | `season_champions` | `id`, `player_id`, `season_id` |
 | `registrations` | `id`, `season_id`, `player_id`, `created_at`, `updated_at` |
 | `board_posts` | `id`, `player_id`, `message`, `created_at` |
+| `bet_lines` | `id`, `week_id`, `player_id`, `game_number`, `line`, `is_open`, `result`, `actual_score`, `created_at`, `updated_at` |
+| `placed_bets` | `id`, `player_id`, `bet_line_id`, `pick`, `wager`, `payout`, `settled_at`, `created_at`, `updated_at` |
+| `pin_ledger` | `id`, `player_id`, `season_id`, `amount`, `type`, `description`, `placed_bet_id`, `created_at`, `updated_at` |
 
 **Key distinctions:**
 - `weeks.is_archived` — `true` once the week has been bowled and scores are final. All historical queries filter to archived weeks.
@@ -67,6 +70,7 @@ The client is configured via Expo environment variables that are set in `.env.lo
 - **`seasons.id` is a `uuid`** (`gen_random_uuid()`), like every other table — there are no integer/sequence keys in the schema. FKs `weeks.season_id`, `registrations.season_id`, `season_champions.season_id` are all `uuid`. In TypeScript a season id / `season_id` is a **`string`**.
 - **Season lifecycle = `registration_open` + `is_active`.** A new season starts in registration (`registration_open = true`, `is_active = false`); closing registration flips it to `registration_open = false`, `is_active = true` (the live/current season); ending it sets `is_active = false`. **The current season is the one that is `is_active = true` AND `registration_open = false`** — never "highest `number`". A partial unique index (`seasons_single_active`, `WHERE is_active`) enforces **at most one active season** at a time, so activating a new season while another is still active fails until the old one is ended.
 - **`registrations`** holds per-season player sign-ups, unique on `(season_id, player_id)`. `registrations.season_id` is `ON DELETE CASCADE` (deleting a season removes its sign-ups); `weeks`/`season_champions` season FKs are **not** cascade, so a season with weeks or champions cannot be deleted (an in-registration season has neither).
+- **Betting tables** (`bet_lines`, `placed_bets`, `pin_ledger`) support the pin-economy betting feature. `bet_lines` holds one per-player per-game over/under line per week (`UNIQUE (week_id, player_id, game_number)`), auto-created when teams are confirmed and auto-settled when the week is archived. `placed_bets` holds each player's bet on a line (`UNIQUE (player_id, bet_line_id)`); even odds — win pays `wager × 2`, loss forfeits `wager`, push refunds `wager`; min wager 10 pins. `pin_ledger` is an append-only balance log; `balance = SUM(amount) WHERE player_id = X AND season_id = Y`. `bet_lines.week_id` and `placed_bets.bet_line_id` are `ON DELETE CASCADE`. `pin_ledger.placed_bet_id` is `ON DELETE SET NULL`. **Balance lifecycle:** season opens → `+100` (`champion_bonus`) for prior-season champions; week archived → `+score` per game (`score_credit`); bet placed → `−wager` (`bet_placed`); bet won → `+wager×2` (`bet_won`); push → `+wager` (`bet_push`); loss → no new entry (already debited).
 
 ---
 
@@ -112,6 +116,7 @@ The client is configured via Expo environment variables that are set in `.env.lo
 | Method | Description |
 |---|---|
 | `listByWeek(weekId)` | Scores for a live week (joins team_slots) |
+| `listByWeekWithGames(weekId)` | Non-fill scores for a week with `games(game_number)` join — used by archive settlement to match scores to bet lines |
 | `listBySeason(seasonId)` | Archived, non-fill scores for a season (for avg calc) |
 | `listAllArchived()` | All archived non-fill scores |
 | `listForStandings()` | Archived scores with full player/week/season join (standings, chemistry, past seasons) |
@@ -147,10 +152,35 @@ The client is configured via Expo environment variables that are set in `.env.lo
 | `list()` | All seasons, ordered by number |
 | `getLatest()` | Highest-`number` season (single) — use **only** for computing the next season number, not "current" |
 | `getCurrent()` | The current playing season: `is_active = true` AND `registration_open = false` (single). **Use this for "what season is it now"**, not `getLatest()` |
+| `getLastEnded()` | Most recently ended season (`is_active = false`, `registration_open = false`, highest number) — used to look up champions when crediting the new-season champion bonus |
 | `getById(id)` | Single season by id |
 | `insert(data)` | Create a season |
 | `update(id, data)` | Update season fields |
 | `remove(id)` | Delete a season by id (admin; registrations cascade) |
+
+### `betLines`
+| Method | Description |
+|---|---|
+| `listByWeek(weekId)` | All bet lines for a week with joined `players(name)`, ordered by player then game number |
+| `listOpenByWeek(weekId)` | Open (`is_open = true`) bet lines for a week with joined `players(name)` |
+| `insert(data)` | Insert one or many lines; chains `.select()` |
+| `update(id, data)` | Update a line (toggle `is_open`, set `result`/`actual_score` on settlement) |
+
+### `placedBets`
+| Method | Description |
+|---|---|
+| `listByPlayer(playerId)` | All bets by a player with nested `bet_lines` context (player name, game number, line, result) — newest first |
+| `listByLine(betLineId)` | All bets on a specific line with joined `players(name)` — used during settlement |
+| `listByWeek(weekId)` | All bets for a week (inner-joins through `bet_lines.week_id`) with player and line context |
+| `insert(data)` | Insert one bet; chains `.select().single()` to return the new row |
+| `update(id, data)` | Update a bet (set `payout` and `settled_at` on settlement) |
+
+### `pinLedger`
+| Method | Description |
+|---|---|
+| `listByPlayerSeason(playerId, seasonId)` | All ledger entries for a player in a season — newest first. `SUM(amount)` = balance |
+| `listBySeasonForLeaderboard(seasonId)` | All entries for a season with joined `players(name)` — for building a leaderboard |
+| `insert(data)` | Insert one or many entries (batch insert used by archive settlement and bet placement) |
 
 ### `teamSlots`
 | Method | Description |
@@ -233,6 +263,8 @@ Win/loss is determined by comparing **team totals** (all players on a team inclu
 | `usePlayerManagementData.ts` | `usePlayerManagementData` | — | PlayerManagementScreen |
 | `useRegistrationData.ts` | `useRegistrationData` | — | RegistrationScreen |
 | `useRefresh.ts` | `useRefresh(fn)` | — | All screens with pull-to-refresh |
+| `useBettingData.ts` | `useBettingData(playerId)` | — | BettingScreen — returns `{ balance, openLines, myBets, myBetLineIds, currentWeekId, currentSeasonId }` |
+| `useBettingAdminData.ts` | `useBettingAdminData()` | — | BettingAdminScreen — returns `{ lines, betCountByLine, currentWeekId }` |
 
 > Stats hooks (`useStandingsData`, `usePastSeasonsData`, `usePastGamesData`, `useLeagueRecordsData`, `usePlayerDetailData`) build their `seasonList` from `seasons.list()` **filtered to started seasons** (`!registration_open`), so an in-registration season never appears as a stats filter or default. `useRegistrationData` keeps **all** seasons (registration UI needs them).
 
@@ -329,6 +361,8 @@ Ephemeral UI state — toggles, selections, toast queue. All fields via `set(par
 | `PlayerManagement` | PlayerManagementScreen — add, edit, and toggle active/inactive players |
 | `PastGames` | PastGamesScreen — browse historical week rosters and scores by season |
 | `Registration` | RegistrationScreen — per-season sign-ups; admins open/close registration, manage the roster, and delete an open season |
+| `Betting` | BettingScreen — balance card, open per-game over/under lines, bet placement modal, my bets history (all players) |
+| `BettingAdmin` | BettingAdminScreen — toggle bet lines open/closed for current week, shows bet counts per line (admin only) |
 
 **Cross-tab navigation to PlayerDetail** (e.g. from More tab):
 ```tsx
@@ -353,10 +387,10 @@ Ephemeral UI state — toggles, selections, toast queue. All fields via `set(par
 | `HistoricalTeamBlock` | Team block for displaying archived week rosters |
 | `ProfileMenuModal` | Bottom sheet opened from the avatar in `AppHeader` — shows player identity and per-user actions (My Profile, Log Out) |
 | `PlayerPickerModal` | Full-screen player search/select for H2H |
-| `AdminArchiveModal` | Confirm dialog — archives active week (sets `is_archived = true`, creates next week row) |
+| `AdminArchiveModal` | Confirm dialog — archives active week (`is_archived = true`, creates next week row), then runs `settleBettingForWeek`: credits pin scores to the ledger and auto-settles all open bet lines |
 | `AdminEndSeasonModal` | Confirm dialog — records season champions and marks the current season ended (`is_active = false`); reads the current season via `seasons.getCurrent()` |
-| `AdminOpenRegistrationModal` | Create the next season (`seasons.insert` with `registration_open = true`) and open its registration window; next number derived from `seasons.getLatest()` |
-| `AdminGenerateTeamsModal` | Generate balanced teams from RSVP list, preview swaps, write teams/slots/schedule to Supabase |
+| `AdminOpenRegistrationModal` | Create the next season (`seasons.insert` with `registration_open = true`) and open its registration window; next number derived from `seasons.getLatest()`; credits +100 pin champion bonus to prior-season champions |
+| `AdminGenerateTeamsModal` | Generate balanced teams from RSVP list, preview swaps, write teams/slots/schedule to Supabase; auto-creates `bet_lines` for every non-fill player using their effective avg as the line |
 
 ---
 
@@ -393,12 +427,14 @@ The app-root `<Toast />` (App.tsx) renders behind any React Native `<Modal>`, so
 `usePendingStore.pendingScores` holds unsaved score changes. `MatchupsScreen` renders them immediately and shows a `ConfirmBar`. On save, `scores.upsert` is called, then `reload()` refreshes from Supabase, then the pending buffer is cleared. On discard, pending is just cleared.
 
 ### Admin flows (all Supabase direct)
-- **Archive week** (`AdminArchiveModal`) — sets `weeks.update(id, { is_archived: true })`, then inserts a new week row for the next week number
+- **Archive week** (`AdminArchiveModal`) — sets `weeks.update(id, { is_archived: true })`, runs `settleBettingForWeek` (credits game scores as `score_credit` ledger entries, resolves all open bet lines, pays out `bet_won`/`bet_push` ledger entries), then inserts a new week row for the next week number
 - **Add/edit player** (`PlayerManagementScreen`) — inline modal calls `players.insert` or `players.update`; first name, last name, and phone are all required
 - **End season** (`AdminEndSeasonModal`) — writes `season_champions.insert` for selected champions and sets `seasons.update(currentId, { is_active: false })`; the current season is resolved via `seasons.getCurrent()` (not the highest number)
-- **Open registration** (`AdminOpenRegistrationModal`) — `seasons.insert` for the next season with `registration_open = true, is_active = false`; the new number is `getLatest().number + 1`
+- **Open registration** (`AdminOpenRegistrationModal`) — `seasons.insert` for the next season with `registration_open = true, is_active = false`; the new number is `getLatest().number + 1`; after insert, queries `seasons.getLastEnded()` + `seasonChampions.listBySeason` and inserts `+100` `champion_bonus` ledger entries for each champion into the new season
 - **Registration management** (`RegistrationScreen`, admin) — open/close registration (`seasons.update` toggling `registration_open`/`is_active`), add/remove players via `registrations.insert`/`registrations.remove`, and **delete an open season** via `seasons.remove` (confirmed). Closing registration sets `is_active = true`, which fails if another season is already active (single-active index) — end the current season first
-- **Generate teams** (`AdminGenerateTeamsModal`) — reads RSVP + player avgs, computes balanced teams client-side, previews swaps, then wipes the week with a single `teams.removeByWeek` (cascades slots → games → scores) and writes `teams.insert` (capturing the new ids) → `team_slots.insert` + `games.insert` (referencing `team_id`/`team_a_id`/`team_b_id`; no `week_id` — week is derived through the team) → `weeks.update(..., { is_confirmed: true })`
+- **Generate teams** (`AdminGenerateTeamsModal`) — reads RSVP + player avgs, computes balanced teams client-side, previews swaps, then wipes the week with a single `teams.removeByWeek` (cascades slots → games → scores) and writes `teams.insert` (capturing the new ids) → `team_slots.insert` + `games.insert` → `weeks.update(..., { is_confirmed: true })` → `betLines.insert` for every non-fill player, one row per game their team plays (game numbers derived from `buildSchedule`), using the player's effective avg as the line
+- **Place bet** (`BettingScreen`) — calls `placedBets.insert` then `pinLedger.insert` with `−wager` / `bet_placed`; balance is enforced client-side (max wager = current balance, min 10)
+- **Toggle bet line** (`BettingAdminScreen`) — calls `betLines.update(id, { is_open })` to open or close a line before bowling starts; settled lines (have a `result`) cannot be re-opened
 
 ---
 
@@ -455,6 +491,8 @@ app/
 ├── src/
 │   ├── theme.ts                 # colors, fonts, radius
 │   ├── hooks/
+│   │   ├── useBettingAdminData.ts  # Lines + bet counts for BettingAdminScreen
+│   │   ├── useBettingData.ts    # Balance + open lines + my bets for BettingScreen
 │   │   ├── useChemistryData.ts  # Chemistry data + computeChemistryFromSupabase
 │   │   ├── useH2HData.ts        # H2H data + computeH2HFromSupabase
 │   │   ├── useLeagueRecordsData.ts  # League records + computeLeagueRecordsFromSupabase
@@ -511,6 +549,8 @@ app/
 │       ├── HeadToHeadScreen.tsx     # 1v1 player comparison
 │       ├── ChemistryScreen.tsx      # Pair/trio win-rate analysis
 │       ├── PastSeasonsScreen.tsx    # Past seasons — season-by-season summary
+│       ├── BettingAdminScreen.tsx   # Admin: toggle bet lines open/closed
+│       ├── BettingScreen.tsx        # Balance, open O/U lines, bet placement, my bets
 │       ├── TrashBoardScreen.tsx     # Fun message board
 │       └── PlayoffsScreen.tsx       # Admin: playoffs bracket
 ```

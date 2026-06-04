@@ -11,7 +11,7 @@ import {
 } from 'react-native'
 import { usePendingStore } from '../stores/pendingStore'
 import { useUiStore } from '../stores/uiStore'
-import { weeks, rsvp, players, teamSlots, teams as teamsDb, games, scores, seasons } from '../utils/supabase/db'
+import { weeks, rsvp, players, teamSlots, teams as teamsDb, games, scores, seasons, betLines } from '../utils/supabase/db'
 import type { TablesInsert } from '../utils/supabase/database.types'
 import { colors, fonts, radius } from '../theme'
 import Toast from './Toast'
@@ -285,6 +285,33 @@ export default function AdminGenerateTeamsModal({ visible, onClose }: Props) {
 
       const { error: e5 } = await weeks.update(weekId, { is_confirmed: true })
       if (e5) throw e5
+
+      // Build bet lines: one per non-fill player per game they play.
+      // Derive which game_numbers each team plays from the schedule template.
+      const template = buildSchedule(numTeams)
+      const teamGameNums: Record<number, Set<number>> = {}
+      for (const s of template) {
+        if (!teamGameNums[s.team_a]) teamGameNums[s.team_a] = new Set()
+        if (!teamGameNums[s.team_b]) teamGameNums[s.team_b] = new Set()
+        teamGameNums[s.team_a].add(s.game_number)
+        teamGameNums[s.team_b].add(s.game_number)
+      }
+      const betLineRows: TablesInsert<'bet_lines'>[] = (genTeams as any[]).flatMap((team, tIdx) => {
+        const gameNums = teamGameNums[tIdx + 1] ?? new Set<number>()
+        return team.players.flatMap((player: GenPlayer) => {
+          if (player.isFill || !player.id) return []
+          return Array.from(gameNums).map((gameNum: number) => ({
+            week_id: weekId,
+            player_id: player.id as string,
+            game_number: gameNum,
+            line: Math.round(player.avg * 10) / 10,
+          }))
+        })
+      })
+      if (betLineRows.length > 0) {
+        const { error: eBetLines } = await betLines.insert(betLineRows)
+        if (eBetLines) console.warn('Failed to create bet lines:', eBetLines.message)
+      }
 
       showToast('Teams saved', 'success')
       set({ genTeams: null, genSwapTarget: null })

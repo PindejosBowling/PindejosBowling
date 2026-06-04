@@ -34,6 +34,7 @@ export default function MoreHomeScreen() {
     { icon: '🎳', label: 'Past Games',   onPress: () => navigation.navigate('PastGames') },
     { icon: '📝', label: 'Registration', onPress: () => navigation.navigate('Registration') },
     { icon: '🗑️', label: 'Trash Board',  onPress: () => navigation.navigate('TrashBoard') },
+    { icon: '💰', label: 'Betting',      onPress: () => navigation.navigate('Betting') },
   ]
 
   const adminTiles: Tile[] = [
@@ -41,6 +42,7 @@ export default function MoreHomeScreen() {
     { icon: '👥', label: 'Players',         onPress: () => navigation.navigate('PlayerManagement') },
     { icon: '🥇', label: 'End Season',     onPress: () => setShowEndSeason(true) },
     { icon: '🏁', label: 'Playoffs',       onPress: () => navigation.navigate('Playoffs') },
+    { icon: '📊', label: 'Bet Lines',      onPress: () => navigation.navigate('BettingAdmin') },
   ]
 
   return (
