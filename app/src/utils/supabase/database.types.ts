@@ -12,6 +12,31 @@ export type Database = {
   __InternalSupabase: {
     PostgrestVersion: "14.5"
   }
+  graphql_public: {
+    Tables: {
+      [_ in never]: never
+    }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      graphql: {
+        Args: {
+          extensions?: Json
+          operationName?: string
+          query?: string
+          variables?: Json
+        }
+        Returns: Json
+      }
+    }
+    Enums: {
+      [_ in never]: never
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
+  }
   public: {
     Tables: {
       bet_lines: {
@@ -614,12 +639,32 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      cancel_bet_lines_for_players: {
-        Args: { p_player_ids: string[]; p_week_id: string }
-        Returns: undefined
-      }
       custom_access_token: { Args: { event: Json }; Returns: Json }
       is_registered_player: { Args: { phone: string }; Returns: boolean }
+      place_bet: {
+        Args: { p_bet_line_id: string; p_pick: string; p_wager: number }
+        Returns: {
+          bet_line_id: string
+          created_at: string
+          id: string
+          payout: number | null
+          pick: string
+          player_id: string
+          settled_at: string | null
+          updated_at: string
+          wager: number
+        }
+        SetofOptions: {
+          from: "*"
+          to: "placed_bets"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      sync_bet_lines_for_week: {
+        Args: { p_week_id: string }
+        Returns: undefined
+      }
     }
     Enums: {
       [_ in never]: never
@@ -748,6 +793,9 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
+  graphql_public: {
+    Enums: {},
+  },
   public: {
     Enums: {},
   },

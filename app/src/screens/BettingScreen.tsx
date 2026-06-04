@@ -167,23 +167,11 @@ export default function BettingScreen() {
 
     setPlacing(true)
     try {
-      const { data: bet, error: betErr } = await placedBets.insert({
-        player_id: playerId,
-        bet_line_id: modal.lineId,
-        pick: modal.pick,
-        wager: wagerNum,
-        payout: wagerNum, // potential net winnings (even odds), known at placement
-      })
+      // Atomic + balance-checked, server-side (place_bet RPC). The bettor is
+      // resolved from the JWT and the -wager bet_placed ledger entry is written
+      // in the same transaction — the client no longer writes either row.
+      const { error: betErr } = await placedBets.placeBet(modal.lineId, modal.pick, wagerNum)
       if (betErr) { showToast(betErr.message, 'error'); return }
-
-      await pinLedger.insert({
-        player_id: playerId,
-        season_id: currentSeasonId,
-        amount: -wagerNum,
-        type: 'bet_placed',
-        description: `Bet: ${modal.playerName} ${modal.pick} ${modal.line} — Game ${modal.gameNumber}`,
-        placed_bet_id: bet?.id ?? null,
-      })
 
       showToast('Bet placed!', 'success')
       setModal(null)

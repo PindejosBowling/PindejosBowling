@@ -330,6 +330,13 @@ export const betLines = {
     supabase.from('bet_lines').update(data).eq('id', id),
   remove: (id: string) =>
     supabase.from('bet_lines').delete().eq('id', id),
+  // RSVP-driven line sync, server-side. The sync_bet_lines_for_week RPC
+  // (SECURITY DEFINER) derives the line set from rsvp + scores: it refunds and
+  // removes lines for players no longer "in" and creates lines (at the
+  // floor(avg)+0.5 rule) for in-players missing them. Idempotent; safe for a
+  // non-admin toggling their own RSVP. Replaces direct player-side line writes.
+  syncForWeek: (weekId: string) =>
+    supabase.rpc('sync_bet_lines_for_week', { p_week_id: weekId }),
 }
 
 export const placedBets = {
@@ -358,8 +365,13 @@ export const placedBets = {
       .eq('bet_lines.weeks.season_id', seasonId)
       .not('settled_at', 'is', null)
       .order('settled_at', { ascending: false }),
-  insert: (data: TablesInsert<'placed_bets'>) =>
-    supabase.from('placed_bets').insert(data).select().single(),
+  // Place a bet atomically + balance-checked, server-side. The place_bet RPC
+  // (SECURITY DEFINER) resolves the bettor from the JWT, validates the line is
+  // open, enforces min wager / balance / anti-tanking, then writes the
+  // placed_bet and its -wager bet_placed ledger entry in one transaction.
+  // Direct placed_bets/pin_ledger inserts are no longer permitted for players.
+  placeBet: (betLineId: string, pick: 'over' | 'under', wager: number) =>
+    supabase.rpc('place_bet', { p_bet_line_id: betLineId, p_pick: pick, p_wager: wager }),
   update: (id: string, data: TablesUpdate<'placed_bets'>) =>
     supabase.from('placed_bets').update(data).eq('id', id),
   remove: (id: string) =>
@@ -385,12 +397,6 @@ export const pinLedger = {
   // entries) — used by the admin cancel-bet flow to fully undo a bet.
   removeByPlacedBet: (placedBetId: string) =>
     supabase.from('pin_ledger').delete().eq('placed_bet_id', placedBetId),
-  // Privileged RSVP-driven cleanup: for a week + set of players who are no longer
-  // "in", refunds bets (deletes ledger rows → placed bets) and deletes their bet
-  // lines, atomically via SECURITY DEFINER RPC (bypasses bet_lines' no-DELETE RLS
-  // and admin-only placed_bets/pin_ledger DELETE so non-admins can self-RSVP out).
-  cancelBetLinesForPlayers: (weekId: string, playerIds: string[]) =>
-    supabase.rpc('cancel_bet_lines_for_players', { p_week_id: weekId, p_player_ids: playerIds }),
 }
 
 export const weeks = {
