@@ -7,7 +7,6 @@ import { colors, fonts, radius } from '../theme'
 import { MoreStackParamList } from '../navigation/types'
 import AppHeader from '../components/AppHeader'
 import AdminEndSeasonModal from '../components/AdminEndSeasonModal'
-import AdminGenerateTeamsModal from '../components/AdminGenerateTeamsModal'
 import { useAuthStore } from '../stores/authStore'
 
 type Nav = NativeStackNavigationProp<MoreStackParamList>
@@ -23,7 +22,6 @@ interface Tile {
 export default function MoreHomeScreen() {
   const navigation = useNavigation<Nav>()
   const [showEndSeason, setShowEndSeason] = useState(false)
-  const [showGenerateTeams, setShowGenerateTeams] = useState(false)
   const isAdmin = useAuthStore(s => s.role) === 'admin'
 
   const leagueToolsTiles: Tile[] = [
@@ -37,7 +35,6 @@ export default function MoreHomeScreen() {
   ]
 
   const adminTiles: Tile[] = [
-    { icon: '🎲', label: 'Generate Teams', onPress: () => setShowGenerateTeams(true) },
     { icon: '👥', label: 'Players',         onPress: () => navigation.navigate('PlayerManagement') },
     { icon: '🖼️', label: 'Profile Pictures', onPress: () => navigation.navigate('ProfilePictures') },
     { icon: '🥇', label: 'End Season',     onPress: () => setShowEndSeason(true) },
@@ -90,7 +87,6 @@ export default function MoreHomeScreen() {
       {isAdmin && (
         <>
           <AdminEndSeasonModal visible={showEndSeason} onClose={() => setShowEndSeason(false)} />
-          <AdminGenerateTeamsModal visible={showGenerateTeams} onClose={() => setShowGenerateTeams(false)} />
         </>
       )}
     </SafeAreaView>

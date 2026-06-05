@@ -18,6 +18,7 @@ import PlayerScoreRow from '../components/PlayerScoreRow'
 import OddsBlock from '../components/OddsBlock'
 import ConfirmBar from '../components/ConfirmBar'
 import AdminArchiveModal from '../components/AdminArchiveModal'
+import AdminGenerateTeamsModal from '../components/AdminGenerateTeamsModal'
 import ToggleGroup from '../components/ToggleGroup'
 import { useMatchupsData } from '../hooks/useMatchupsData'
 import { useUiStore } from '../stores/uiStore'
@@ -59,6 +60,7 @@ export default function MatchupsScreen() {
   const isAdmin = useAuthStore(s => s.role) === 'admin'
   const [saving, setSaving] = useState(false)
   const [showArchive, setShowArchive] = useState(false)
+  const [showGenerateTeams, setShowGenerateTeams] = useState(false)
   const [addingGame, setAddingGame] = useState(false)
   const [removingGame, setRemovingGame] = useState(false)
   const [openGames, setOpenGames] = useState<Record<number, boolean>>({})
@@ -451,6 +453,15 @@ export default function MatchupsScreen() {
               ) : (
                 <View style={styles.emptyState}>
                   <Text style={styles.emptyText}>This week's teams haven't been set up yet.</Text>
+                  {isAdmin && (
+                    <TouchableOpacity
+                      style={styles.generateBtn}
+                      onPress={() => setShowGenerateTeams(true)}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={styles.generateBtnText}>🎲 Generate Teams</Text>
+                    </TouchableOpacity>
+                  )}
                 </View>
               )}
             </ScrollView>
@@ -489,6 +500,12 @@ export default function MatchupsScreen() {
       </KeyboardAvoidingView>
 
       <AdminArchiveModal visible={showArchive} onClose={() => { setShowArchive(false); reload() }} />
+      {isAdmin && (
+        <AdminGenerateTeamsModal
+          visible={showGenerateTeams}
+          onClose={() => { setShowGenerateTeams(false); reload() }}
+        />
+      )}
     </SafeAreaView>
   )
 }
@@ -728,6 +745,21 @@ const styles = StyleSheet.create({
     fontFamily: fonts.barlow,
     fontSize: 15,
     color: colors.muted,
+  },
+  generateBtn: {
+    marginTop: 20,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: radius.cardSm,
+    borderWidth: 1,
+    borderColor: colors.accent,
+    backgroundColor: colors.accentDim,
+  },
+  generateBtnText: {
+    fontFamily: fonts.barlowCondensed,
+    fontSize: 15,
+    color: colors.accent,
+    letterSpacing: 0.5,
   },
   gameCtrlRow: {
     flexDirection: 'row',
