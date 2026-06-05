@@ -39,13 +39,14 @@ export default function ToggleGroup<T extends string = string>({
 }
 
 const styles = StyleSheet.create({
-  group: { flexDirection: 'row', gap: 4 },
+  group: { flexDirection: 'row', gap: 8, justifyContent: 'space-around' },
   btn: {
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 8,
     borderWidth: 1,
     borderColor: colors.border2,
+    alignItems: 'center',
   },
   btnActive: { backgroundColor: colors.accentDim, borderColor: colors.accent },
   btnText: { fontFamily: fonts.barlowCondensed, fontSize: 13, color: colors.muted, letterSpacing: 0.5 },

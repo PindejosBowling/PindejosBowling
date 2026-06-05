@@ -365,7 +365,7 @@ export const bets = {
   listByPlayer: (playerId: string) =>
     supabase
       .from('bets')
-      .select('*, ' + LEG_GRAPH)
+      .select('*, players(name), ' + LEG_GRAPH)
       .eq('player_id', playerId)
       .order('placed_at', { ascending: false }),
   // All bets with a leg on an over_under market in this week (Active Bets).

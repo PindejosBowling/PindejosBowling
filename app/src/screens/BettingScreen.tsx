@@ -19,6 +19,7 @@ import AppHeader from '../components/AppHeader'
 import LoadingView from '../components/LoadingView'
 import ToggleGroup from '../components/ToggleGroup'
 import Toast from '../components/Toast'
+import BetRow from '../components/BetRow'
 import { useBettingData, type BetView, type LineView } from '../hooks/useBettingData'
 import { useRefresh } from '../hooks/useRefresh'
 import { useAuthStore } from '../stores/authStore'
@@ -85,6 +86,7 @@ export default function BettingScreen() {
   const [placing, setPlacing] = useState(false)
   const [settleModal, setSettleModal] = useState<SettleModalState | null>(null)
   const [settling, setSettling] = useState(false)
+  const [detailModal, setDetailModal] = useState<BetView | null>(null)
 
   // Active = this week's still-pending bets (settled ones move to Settled Bets).
   const activeBets = useMemo(() => weekBets.filter(b => b.status === 'pending'), [weekBets])
@@ -261,13 +263,9 @@ export default function BettingScreen() {
         </View>
 
         {/* View toggle */}
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={styles.viewToggle}
-        >
+        <View style={styles.viewToggle}>
           <ToggleGroup options={VIEW_OPTIONS} value={view} onChange={setView} />
-        </ScrollView>
+        </View>
 
         {/* ── Leaderboard ─────────────────────────────────────── */}
         {view === 'leaderboard' && (
@@ -336,38 +334,16 @@ export default function BettingScreen() {
                       const badge = resultBadge(bet.status)
                       const isLast = idx === weekBetsByGame[gameNum].length - 1
                       return (
-                        <View key={bet.id} style={[styles.betRow, !isLast && styles.lineRowBorder]}>
-                          <TouchableOpacity
-                            style={styles.betPressable}
-                            onPress={() => openSettleModal(bet)}
-                            disabled={!isAdmin}
-                            activeOpacity={0.7}
-                          >
-                            <View style={{ flex: 1 }}>
-                              <Text style={styles.betSubject}>{bet.bettorName}</Text>
-                              <Text style={styles.betDetails}>
-                                {bet.pick?.toUpperCase()} {bet.line.toFixed(1)} · {bet.subjectName}
-                                {bet.actualScore != null ? `  ·  actual ${bet.actualScore}` : ''}
-                              </Text>
-                            </View>
-                            <View style={styles.betRight}>
-                              {badge
-                                ? <Text style={[styles.betBadge, { color: badge.color }]}>{badge.label}</Text>
-                                : <Text style={styles.betPending}>PENDING</Text>}
-                              <Text style={styles.betWager}>{betReturnText(bet)} pins</Text>
-                            </View>
-                          </TouchableOpacity>
-                          {isAdmin && (
-                            <TouchableOpacity
-                              style={styles.cancelBtn}
-                              onPress={() => confirmCancelBet(bet)}
-                              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                              activeOpacity={0.7}
-                            >
-                              <Text style={styles.cancelBtnText}>✕</Text>
-                            </TouchableOpacity>
-                          )}
-                        </View>
+                        <BetRow
+                          key={bet.id}
+                          bet={bet}
+                          isLast={isLast}
+                          badge={badge}
+                          betReturnText={betReturnText(bet)}
+                          isAdmin={isAdmin}
+                          onPress={() => isAdmin ? openSettleModal(bet) : setDetailModal(bet)}
+                          onCancelPress={() => confirmCancelBet(bet)}
+                        />
                       )
                     })}
                   </View>
@@ -383,10 +359,34 @@ export default function BettingScreen() {
 
         {/* ── Place Bets ──────────────────────────────────────── */}
         {view === 'place' && <>
+        {/* My bets */}
+        {myBets.length > 0 && (
+          <>
+            <Text style={styles.sectionHeader}>MY BETS</Text>
+            <View style={styles.card}>
+              {myBets.map((bet, idx) => {
+                const badge = resultBadge(bet.status)
+                const isLast = idx === myBets.length - 1
+                return (
+                  <BetRow
+                    key={bet.id}
+                    bet={bet}
+                    isLast={isLast}
+                    badge={badge}
+                    betReturnText={betReturnText(bet)}
+                    isAdmin={isAdmin}
+                    onPress={() => setDetailModal(bet)}
+                  />
+                )
+              })}
+            </View>
+          </>
+        )}
+
         {/* Open lines */}
         {sortedGameNumbers.length > 0 ? (
           <>
-            <Text style={styles.sectionHeader}>THIS WEEK'S LINES</Text>
+            <Text style={[styles.sectionHeader, { marginTop: 24 }]}>THIS WEEK'S LINES</Text>
             {sortedGameNumbers.map(gameNum => (
               <View key={gameNum}>
                 <Text style={styles.gameLabel}>GAME {gameNum}</Text>
@@ -442,40 +442,6 @@ export default function BettingScreen() {
             <Text style={styles.emptyText}>No open lines this week</Text>
           </View>
         )}
-
-        {/* My bets */}
-        {myBets.length > 0 && (
-          <>
-            <Text style={[styles.sectionHeader, { marginTop: 24 }]}>MY BETS</Text>
-            <View style={styles.card}>
-              {myBets.map((bet, idx) => {
-                const badge = resultBadge(bet.status)
-                const isLast = idx === myBets.length - 1
-                return (
-                  <View key={bet.id} style={[styles.betRow, !isLast && styles.lineRowBorder]}>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.betSubject}>
-                        {bet.subjectName}  ·  Game {bet.gameNumber}
-                      </Text>
-                      <Text style={styles.betDetails}>
-                        {bet.pick?.toUpperCase()}  {bet.line.toFixed(1)}
-                        {bet.actualScore != null ? `  ·  actual ${bet.actualScore}` : ''}
-                      </Text>
-                    </View>
-                    <View style={styles.betRight}>
-                      {badge ? (
-                        <Text style={[styles.betBadge, { color: badge.color }]}>{badge.label}</Text>
-                      ) : (
-                        <Text style={styles.betPending}>PENDING</Text>
-                      )}
-                      <Text style={styles.betWager}>{betReturnText(bet)}</Text>
-                    </View>
-                  </View>
-                )
-              })}
-            </View>
-          </>
-        )}
         </>}
 
         {/* ── Settled Bets ────────────────────────────────────── */}
@@ -489,31 +455,16 @@ export default function BettingScreen() {
                     const badge = resultBadge(bet.status)
                     const isLast = idx === settledByWeek[wk].length - 1
                     return (
-                      <View key={bet.id} style={[styles.betRow, !isLast && styles.lineRowBorder]}>
-                        <View style={{ flex: 1 }}>
-                          <Text style={styles.betSubject}>
-                            {bet.bettorName}  ·  Game {bet.gameNumber}
-                          </Text>
-                          <Text style={styles.betDetails}>
-                            {bet.pick?.toUpperCase()} {bet.line.toFixed(1)} · {bet.subjectName}
-                            {bet.actualScore != null ? `  ·  actual ${bet.actualScore}` : ''}
-                          </Text>
-                        </View>
-                        <View style={styles.betRight}>
-                          {badge && <Text style={[styles.betBadge, { color: badge.color }]}>{badge.label}</Text>}
-                          <Text style={styles.betWager}>{betReturnText(bet)}</Text>
-                        </View>
-                        {isAdmin && (
-                          <TouchableOpacity
-                            style={styles.cancelBtn}
-                            onPress={() => confirmCancelBet(bet)}
-                            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                            activeOpacity={0.7}
-                          >
-                            <Text style={styles.cancelBtnText}>✕</Text>
-                          </TouchableOpacity>
-                        )}
-                      </View>
+                      <BetRow
+                        key={bet.id}
+                        bet={bet}
+                        isLast={isLast}
+                        badge={badge}
+                        betReturnText={betReturnText(bet)}
+                        isAdmin={isAdmin}
+                        onPress={() => setDetailModal(bet)}
+                        onCancelPress={() => confirmCancelBet(bet)}
+                      />
                     )
                   })}
                 </View>
@@ -646,6 +597,71 @@ export default function BettingScreen() {
             </View>
           </KeyboardAvoidingView>
           <Toast />
+        </Modal>
+      )}
+
+      {/* Bet details modal */}
+      {detailModal && (
+        <Modal visible transparent animationType="fade" onRequestClose={() => setDetailModal(null)}>
+          <TouchableOpacity
+            style={styles.detailModalBackdrop}
+            activeOpacity={1}
+            onPress={() => setDetailModal(null)}
+          />
+          <View style={styles.detailModalContainer}>
+            <View style={styles.detailModalContent}>
+              <View style={styles.detailModalHeader}>
+                <Text style={styles.detailModalTitle}>Bet Details</Text>
+                <TouchableOpacity onPress={() => setDetailModal(null)}>
+                  <Text style={styles.detailModalClose}>✕</Text>
+                </TouchableOpacity>
+              </View>
+
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>BETTOR</Text>
+                <Text style={styles.detailValue}>{detailModal.bettorName}</Text>
+              </View>
+
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>SUBJECT</Text>
+                <Text style={styles.detailValue}>{detailModal.subjectName}</Text>
+              </View>
+
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>PICK</Text>
+                <Text style={styles.detailValue}>{detailModal.pick?.toUpperCase()}</Text>
+              </View>
+
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>LINE</Text>
+                <Text style={styles.detailValue}>{detailModal.line.toFixed(1)}</Text>
+              </View>
+
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>WAGER</Text>
+                <Text style={styles.detailValue}>{detailModal.stake} pins</Text>
+              </View>
+
+              {detailModal.actualScore != null && (
+                <View style={styles.detailRow}>
+                  <Text style={styles.detailLabel}>ACTUAL SCORE</Text>
+                  <Text style={styles.detailValue}>{detailModal.actualScore}</Text>
+                </View>
+              )}
+
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>STATUS</Text>
+                <Text style={[styles.detailValue, { color: resultBadge(detailModal.status)?.color || colors.muted }]}>
+                  {resultBadge(detailModal.status)?.label || 'PENDING'}
+                </Text>
+              </View>
+
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>RETURN</Text>
+                <Text style={styles.detailValue}>{betReturnText(detailModal)} pins</Text>
+              </View>
+            </View>
+          </View>
         </Modal>
       )}
     </SafeAreaView>
@@ -873,67 +889,12 @@ const styles = StyleSheet.create({
     letterSpacing: 0.3,
   },
 
-  betRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    gap: 10,
-  },
-  betSubject: {
-    fontFamily: fonts.barlowCondensed,
-    fontSize: 14,
-    color: colors.text,
-    letterSpacing: 0.3,
-  },
-  betDetails: {
-    fontFamily: fonts.barlowCondensed,
-    fontSize: 12,
-    color: colors.muted,
-    marginTop: 2,
-    letterSpacing: 0.3,
-  },
-  betRight: { alignItems: 'flex-end' },
-  betPressable: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10 },
   adminHint: {
     fontFamily: fonts.barlow,
     fontSize: 12,
     color: colors.muted,
     fontStyle: 'italic',
     marginBottom: 10,
-  },
-  cancelBtn: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: colors.danger,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  cancelBtnText: {
-    fontFamily: fonts.barlowCondensed,
-    fontSize: 14,
-    color: colors.danger,
-    lineHeight: 16,
-  },
-  betBadge: {
-    fontFamily: fonts.barlowCondensed,
-    fontSize: 13,
-    fontWeight: '700',
-    letterSpacing: 1,
-  },
-  betPending: {
-    fontFamily: fonts.barlowCondensed,
-    fontSize: 12,
-    color: colors.muted,
-    letterSpacing: 1,
-  },
-  betWager: {
-    fontFamily: fonts.barlowCondensed,
-    fontSize: 13,
-    color: colors.muted,
-    marginTop: 2,
   },
 
   // Bet modal
@@ -1029,5 +990,57 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: colors.bg,
     letterSpacing: 0.5,
+  },
+
+  // Bet details modal
+  detailModalBackdrop: {
+    ...StyleSheet.absoluteFill,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+  },
+  detailModalContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+  },
+  detailModalContent: {
+    backgroundColor: colors.surface,
+    borderRadius: radius.card,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: 24,
+    width: '100%',
+  },
+  detailModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  detailModalTitle: {
+    fontFamily: fonts.barlowCondensed,
+    fontSize: 20,
+    fontWeight: '700',
+    color: colors.text,
+  },
+  detailModalClose: {
+    fontFamily: fonts.barlowCondensed,
+    fontSize: 20,
+    color: colors.muted,
+  },
+  detailRow: {
+    marginBottom: 16,
+  },
+  detailLabel: {
+    fontFamily: fonts.barlowCondensed,
+    fontSize: 11,
+    letterSpacing: 1.5,
+    color: colors.muted,
+    marginBottom: 6,
+  },
+  detailValue: {
+    fontFamily: fonts.barlowCondensed,
+    fontSize: 16,
+    color: colors.text,
   },
 })
