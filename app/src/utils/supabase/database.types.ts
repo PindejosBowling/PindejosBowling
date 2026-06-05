@@ -39,6 +39,57 @@ export type Database = {
   }
   public: {
     Tables: {
+      bet_legs: {
+        Row: {
+          bet_id: string
+          created_at: string
+          id: string
+          line_at_placement: number | null
+          odds_at_placement: number
+          result: string | null
+          selection_id: string
+          side: string
+          updated_at: string
+        }
+        Insert: {
+          bet_id: string
+          created_at?: string
+          id?: string
+          line_at_placement?: number | null
+          odds_at_placement: number
+          result?: string | null
+          selection_id: string
+          side?: string
+          updated_at?: string
+        }
+        Update: {
+          bet_id?: string
+          created_at?: string
+          id?: string
+          line_at_placement?: number | null
+          odds_at_placement?: number
+          result?: string | null
+          selection_id?: string
+          side?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bet_legs_bet_id_fkey"
+            columns: ["bet_id"]
+            isOneToOne: false
+            referencedRelation: "bets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bet_legs_selection_id_fkey"
+            columns: ["selection_id"]
+            isOneToOne: false
+            referencedRelation: "bet_selections"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       bet_lines: {
         Row: {
           actual_score: number | null
@@ -89,6 +140,319 @@ export type Database = {
             columns: ["week_id"]
             isOneToOne: false
             referencedRelation: "weeks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      bet_markets: {
+        Row: {
+          created_at: string
+          created_by_player_id: string | null
+          game_number: number | null
+          id: string
+          market_type: string
+          params: Json
+          result_value: number | null
+          settled_at: string | null
+          status: string
+          subject_player_id: string | null
+          title: string
+          updated_at: string
+          week_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          created_by_player_id?: string | null
+          game_number?: number | null
+          id?: string
+          market_type: string
+          params?: Json
+          result_value?: number | null
+          settled_at?: string | null
+          status?: string
+          subject_player_id?: string | null
+          title: string
+          updated_at?: string
+          week_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          created_by_player_id?: string | null
+          game_number?: number | null
+          id?: string
+          market_type?: string
+          params?: Json
+          result_value?: number | null
+          settled_at?: string | null
+          status?: string
+          subject_player_id?: string | null
+          title?: string
+          updated_at?: string
+          week_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bet_markets_created_by_player_id_fkey"
+            columns: ["created_by_player_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bet_markets_subject_player_id_fkey"
+            columns: ["subject_player_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bet_markets_week_id_fkey"
+            columns: ["week_id"]
+            isOneToOne: false
+            referencedRelation: "weeks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      bet_matches: {
+        Row: {
+          back_bet_id: string
+          created_at: string
+          id: string
+          lay_bet_id: string
+          offer_id: string | null
+          pool: number
+          rake: number
+          updated_at: string
+        }
+        Insert: {
+          back_bet_id: string
+          created_at?: string
+          id?: string
+          lay_bet_id: string
+          offer_id?: string | null
+          pool: number
+          rake?: number
+          updated_at?: string
+        }
+        Update: {
+          back_bet_id?: string
+          created_at?: string
+          id?: string
+          lay_bet_id?: string
+          offer_id?: string | null
+          pool?: number
+          rake?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bet_matches_back_bet_id_fkey"
+            columns: ["back_bet_id"]
+            isOneToOne: true
+            referencedRelation: "bets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bet_matches_lay_bet_id_fkey"
+            columns: ["lay_bet_id"]
+            isOneToOne: true
+            referencedRelation: "bets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bet_matches_offer_id_fkey"
+            columns: ["offer_id"]
+            isOneToOne: false
+            referencedRelation: "bet_offers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      bet_offers: {
+        Row: {
+          accepted_at: string | null
+          accepted_by: string | null
+          created_at: string
+          expires_at: string | null
+          id: string
+          odds: number
+          proposer_id: string
+          proposer_stake: number
+          season_id: string
+          selection_id: string
+          status: string
+          target_player_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          accepted_at?: string | null
+          accepted_by?: string | null
+          created_at?: string
+          expires_at?: string | null
+          id?: string
+          odds: number
+          proposer_id: string
+          proposer_stake: number
+          season_id: string
+          selection_id: string
+          status?: string
+          target_player_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          accepted_at?: string | null
+          accepted_by?: string | null
+          created_at?: string
+          expires_at?: string | null
+          id?: string
+          odds?: number
+          proposer_id?: string
+          proposer_stake?: number
+          season_id?: string
+          selection_id?: string
+          status?: string
+          target_player_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bet_offers_accepted_by_fkey"
+            columns: ["accepted_by"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bet_offers_proposer_id_fkey"
+            columns: ["proposer_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bet_offers_season_id_fkey"
+            columns: ["season_id"]
+            isOneToOne: false
+            referencedRelation: "seasons"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bet_offers_selection_id_fkey"
+            columns: ["selection_id"]
+            isOneToOne: false
+            referencedRelation: "bet_selections"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bet_offers_target_player_id_fkey"
+            columns: ["target_player_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      bet_selections: {
+        Row: {
+          created_at: string
+          id: string
+          key: string
+          label: string
+          line: number | null
+          market_id: string
+          odds: number
+          result: string | null
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          key: string
+          label: string
+          line?: number | null
+          market_id: string
+          odds?: number
+          result?: string | null
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          key?: string
+          label?: string
+          line?: number | null
+          market_id?: string
+          odds?: number
+          result?: string | null
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bet_selections_market_id_fkey"
+            columns: ["market_id"]
+            isOneToOne: false
+            referencedRelation: "bet_markets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      bets: {
+        Row: {
+          counterparty: string
+          created_at: string
+          id: string
+          placed_at: string
+          player_id: string
+          potential_payout: number
+          season_id: string
+          settled_at: string | null
+          stake: number
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          counterparty: string
+          created_at?: string
+          id?: string
+          placed_at?: string
+          player_id: string
+          potential_payout: number
+          season_id: string
+          settled_at?: string | null
+          stake: number
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          counterparty?: string
+          created_at?: string
+          id?: string
+          placed_at?: string
+          player_id?: string
+          potential_payout?: number
+          season_id?: string
+          settled_at?: string | null
+          stake?: number
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bets_player_id_fkey"
+            columns: ["player_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bets_season_id_fkey"
+            columns: ["season_id"]
+            isOneToOne: false
+            referencedRelation: "seasons"
             referencedColumns: ["id"]
           },
         ]
