@@ -132,9 +132,6 @@ export function useBettingData(playerId: string | null) {
 
       const weekId = weekRes.data?.id ?? null
       const seasonId = seasonRes.data?.id ?? null
-      // The current week row is created the moment the prior week is archived, so
-      // its created_at is the cutoff between "last week's" ledger and this week's.
-      const weekStart = weekRes.data?.created_at ?? null
       setCurrentWeekId(weekId)
       setCurrentSeasonId(seasonId)
 
@@ -187,9 +184,20 @@ export function useBettingData(playerId: string | null) {
       const weekBetViews = weekBetsData.map(normalizeBet)
       const myBetViews = myBetsData.map(normalizeBet)
 
+      // Cutoff for "last week's results": the most recent settlement (score_credit)
+      // timestamp in the season ledger. priorBalance sums only rows strictly before
+      // it — i.e. each player's standing *before* last week's scores posted. Derived
+      // from the ledger itself (not weeks.created_at) so it survives inconsistent
+      // backfill timestamps. null = no settled week yet → no baseline to diff.
+      let settleCutoff: string | null = null
+      for (const e of seasonLedger) {
+        if (e.type === 'score_credit' && e.created_at && (!settleCutoff || e.created_at > settleCutoff)) {
+          settleCutoff = e.created_at
+        }
+      }
+
       // Sum the season ledger per player (house rows already excluded), keep
-      // active players, sort high → low. `priorBalance` sums only rows from before
-      // the current week started — the player's standing at the end of last week.
+      // active players, sort high → low.
       const byPlayer: Record<string, { playerId: string; name: string; balance: number; priorBalance: number; isActive: boolean }> = {}
       for (const e of seasonLedger) {
         const pid = e.player_id
@@ -204,7 +212,7 @@ export function useBettingData(playerId: string | null) {
           }
         }
         byPlayer[pid].balance += e.amount
-        if (weekStart && e.created_at && e.created_at < weekStart) {
+        if (settleCutoff && e.created_at && e.created_at < settleCutoff) {
           byPlayer[pid].priorBalance += e.amount
         }
       }
@@ -220,10 +228,13 @@ export function useBettingData(playerId: string | null) {
 
       const activePlayers = Object.values(byPlayer).filter(p => p.isActive)
 
-      // Prior-week ranking (by end-of-last-week balance). Only meaningful once
-      // there is a prior week to diff against — `weekStart` gates that.
+      // Prior-week ranking (by balance before last week's results posted). Skip it
+      // entirely when the baseline is degenerate — no settled week, or every prior
+      // balance is identical (the all-backfilled-at-once state) — so we don't draw
+      // arrows off an arbitrary tie-break order.
       const priorRank = new Map<string, number>()
-      if (weekStart) {
+      const distinctPrior = new Set(activePlayers.map(p => p.priorBalance))
+      if (settleCutoff && distinctPrior.size > 1) {
         activePlayers
           .slice()
           .sort((a, b) => b.priorBalance - a.priorBalance)

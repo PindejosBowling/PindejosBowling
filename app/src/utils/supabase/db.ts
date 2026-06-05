@@ -377,18 +377,6 @@ export const betMarkets = {
       .eq('market_type', 'over_under')
       .eq('game_number', gameNumber)
       .eq('status', status === 'closed' ? 'open' : 'closed'),
-  // All over_under markets for a week (admin Bet Lines), with selections + subject.
-  listOUByWeek: (weekId: string) =>
-    supabase
-      .from('bet_markets')
-      .select(MARKET_GRAPH)
-      .eq('week_id', weekId)
-      .eq('market_type', 'over_under')
-      .order('game_number')
-      .order('subject_player_id'),
-  // Open/close toggle (admin direct write, permitted by admin RLS).
-  update: (id: string, data: TablesUpdate<'bet_markets'>) =>
-    supabase.from('bet_markets').update(data).eq('id', id),
   // RSVP-driven create/refund of O/U markets (SECURITY DEFINER, server-side).
   // extraGames adds schedule game numbers not yet present (team-gen game 3); RSVP
   // passes none and the RPC defaults the target set to the established games / {1,2}.
@@ -404,9 +392,6 @@ export const betMarkets = {
   // Admin: credit scores + settle all open markets for an archived week.
   settleForWeek: (weekId: string) =>
     supabase.rpc('settle_betting_for_week', { p_week_id: weekId }),
-  // Admin: set a market's line (both selections) while it has no bets.
-  editLine: (marketId: string, line: number) =>
-    supabase.rpc('edit_over_under_line', { p_market_id: marketId, p_line: line }),
 }
 
 export const bets = {
@@ -456,7 +441,7 @@ export const pinLedger = {
   listBySeasonForLeaderboard: (seasonId: string) =>
     supabase
       .from('pin_ledger')
-      .select('player_id, amount, created_at, players(name, is_active)')
+      .select('player_id, amount, type, created_at, players(name, is_active)')
       .eq('season_id', seasonId)
       .eq('is_house', false),
   insert: (data: TablesInsert<'pin_ledger'> | TablesInsert<'pin_ledger'>[]) =>

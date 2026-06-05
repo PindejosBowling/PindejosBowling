@@ -42,7 +42,6 @@ export default function MoreHomeScreen() {
     { icon: '🖼️', label: 'Profile Pictures', onPress: () => navigation.navigate('ProfilePictures') },
     { icon: '🥇', label: 'End Season',     onPress: () => setShowEndSeason(true) },
     { icon: '🏁', label: 'Playoffs',       onPress: () => navigation.navigate('Playoffs') },
-    { icon: '📊', label: 'Bet Lines',      onPress: () => navigation.navigate('BettingAdmin') },
   ]
 
   return (

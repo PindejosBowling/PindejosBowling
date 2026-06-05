@@ -293,7 +293,6 @@ All `SECURITY DEFINER`, pinned `search_path`, identity from `auth.uid()`/`auth.j
 | `settle_market(market_id, result_value)` | **Admin.** Settle one O/U market: set selection results, derive leg results (back/lay), finalize bets, post payout/refund pairs. Idempotent. |
 | `settle_betting_for_week(week_id)` | **Admin.** On archive: credit `score_credit` (once) + settle every open O/U market against the subject's actual score. |
 | `cancel_bet(bet_id)` | **Admin.** Total undo: delete the bet's ledger pair(s) + the bet; re-open a settled market if it was its last bet. |
-| `edit_over_under_line(market_id, line)` | **Admin.** Set a market's line (both selections) — rejects if any bet exists. |
 | `settle_market_internal(market_id, result_value)` | Private engine (no grants); the settlement body shared by `settle_market` / `settle_betting_for_week`. |
 | `is_registered_player(phone)` | Pre-login gate (anon-callable). |
 

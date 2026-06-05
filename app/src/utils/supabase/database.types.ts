@@ -916,10 +916,6 @@ export type Database = {
     Functions: {
       cancel_bet: { Args: { p_bet_id: string }; Returns: undefined }
       custom_access_token: { Args: { event: Json }; Returns: Json }
-      edit_over_under_line: {
-        Args: { p_line: number; p_market_id: string }
-        Returns: undefined
-      }
       is_registered_player: { Args: { phone: string }; Returns: boolean }
       place_house_bet: {
         Args: { p_selection_ids: string[]; p_stake: number }
