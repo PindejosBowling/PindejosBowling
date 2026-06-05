@@ -14,6 +14,8 @@ import {
   Alert,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
+import { useNavigation } from '@react-navigation/native'
+import { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { colors, fonts, radius } from '../theme'
 import AppHeader from '../components/AppHeader'
 import LoadingView from '../components/LoadingView'
@@ -25,6 +27,9 @@ import { useRefresh } from '../hooks/useRefresh'
 import { useAuthStore } from '../stores/authStore'
 import { useUiStore } from '../stores/uiStore'
 import { betMarkets, bets } from '../utils/supabase/db'
+import { BettingStackParamList } from '../navigation/types'
+
+type BettingNav = NativeStackNavigationProp<BettingStackParamList>
 
 type Pick = 'over' | 'under'
 type View2 = 'leaderboard' | 'action' | 'place' | 'settled'
@@ -77,6 +82,7 @@ export default function BettingScreen() {
   const playerId = useAuthStore(s => s.playerId)
   const isAdmin = useAuthStore(s => s.role) === 'admin'
   const { showToast } = useUiStore()
+  const navigation = useNavigation<BettingNav>()
 
   const { loading, balance, openLines, myBets, weekBets, settledBets, leaderboard, myBetMarketIds, reload } = useBettingData(playerId)
   const { refreshing, onRefresh } = useRefresh(reload)
@@ -280,9 +286,11 @@ export default function BettingScreen() {
               {leaderboard.map((p, index) => {
                 const isMe = p.playerId === playerId
                 return (
-                  <View
+                  <TouchableOpacity
                     key={p.playerId}
                     style={[styles.sbRow, index < leaderboard.length - 1 && styles.sbRowBorder]}
+                    onPress={() => navigation.navigate('PlayerBettingDetail', { playerId: p.playerId, name: p.name })}
+                    activeOpacity={0.7}
                   >
                     <View style={[styles.sbIconBox, index < 3 && styles.sbIconBoxTop]}>
                       <Text style={[styles.sbRankText, index < 3 && styles.sbRankTextTop]}>{index + 1}</Text>
@@ -292,7 +300,7 @@ export default function BettingScreen() {
                     <Text style={[styles.sbProjection, p.potential > p.balance && styles.sbProjectionLive]}>
                       {p.potential.toLocaleString()}
                     </Text>
-                  </View>
+                  </TouchableOpacity>
                 )
               })}
             </View>

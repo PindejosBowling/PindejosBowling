@@ -32,7 +32,7 @@ export interface BetView {
 }
 
 // O/U bets are single-leg: collapse bet → leg → selection → market into a flat row.
-function normalizeBet(b: any): BetView {
+export function normalizeBet(b: any): BetView {
   const leg = b.bet_legs?.[0]
   const sel = leg?.bet_selections
   const mkt = sel?.bet_markets
