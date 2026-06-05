@@ -8,6 +8,7 @@ export interface LedgerEntry {
   type: string
   description: string
   created_at: string
+  weekNumber: number | null
 }
 
 export function usePlayerBettingDetailData(playerId: string | null) {
@@ -77,6 +78,7 @@ export function usePlayerBettingDetailData(playerId: string | null) {
         type: e.type,
         description: e.description,
         created_at: e.created_at,
+        weekNumber: (e.weeks as any)?.week_number ?? null,
       }))
 
       // Calculate balance

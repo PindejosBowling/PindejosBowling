@@ -68,6 +68,26 @@ export default function PlayerBettingDetailScreen() {
     { key: 'settled', label: 'Settled Bets' },
   ]
 
+  const bonusEntries = useMemo(
+    () => ledger.filter(e => e.weekNumber === null),
+    [ledger],
+  )
+
+  const ledgerByWeek = useMemo(() => {
+    const map: Record<number, LedgerEntry[]> = {}
+    for (const entry of ledger) {
+      if (entry.weekNumber === null) continue
+      if (!map[entry.weekNumber]) map[entry.weekNumber] = []
+      map[entry.weekNumber].push(entry)
+    }
+    return map
+  }, [ledger])
+
+  const ledgerWeekNumbers = useMemo(
+    () => Object.keys(ledgerByWeek).map(Number).sort((a, b) => b - a),
+    [ledgerByWeek],
+  )
+
   const openBetsByGame = useMemo(() => {
     const map: Record<number, BetView[]> = {}
     for (const bet of openBets) {
@@ -135,26 +155,55 @@ export default function PlayerBettingDetailScreen() {
         {/* ── Activity ────────────────────────────────────── */}
         {view === 'activity' && (
           ledger.length > 0 ? (
-            <View style={styles.card}>
-              {ledger.map((entry, idx) => {
-                const isLast = idx === ledger.length - 1
-                const isPositive = entry.amount > 0
+            <>
+              {bonusEntries.length > 0 && (
+                <View>
+                  <Text style={styles.bonusSectionLabel}>BONUSES</Text>
+                  <View style={styles.card}>
+                    {bonusEntries.map((entry, idx) => {
+                      const isLast = idx === bonusEntries.length - 1
+                      const isPositive = entry.amount > 0
+                      return (
+                        <View key={entry.id} style={[styles.ledgerRow, !isLast && styles.ledgerRowBorder]}>
+                          <View style={styles.ledgerInfo}>
+                            <Text style={styles.ledgerDescription}>{entry.description}</Text>
+                            <Text style={styles.ledgerDate}>{formatDate(entry.created_at)}</Text>
+                          </View>
+                          <Text style={[styles.ledgerAmount, { color: isPositive ? colors.success : colors.danger }]}>
+                            {isPositive ? '+' : ''}{entry.amount}
+                          </Text>
+                        </View>
+                      )
+                    })}
+                  </View>
+                </View>
+              )}
+              {ledgerWeekNumbers.map(weekNum => {
+                const entries = ledgerByWeek[weekNum]
                 return (
-                  <View
-                    key={entry.id}
-                    style={[styles.ledgerRow, !isLast && styles.ledgerRowBorder]}
-                  >
-                    <View style={styles.ledgerInfo}>
-                      <Text style={styles.ledgerDescription}>{entry.description}</Text>
-                      <Text style={styles.ledgerDate}>{formatDate(entry.created_at)}</Text>
+                  <View key={weekNum}>
+                    <Text style={styles.gameLabel}>WEEK {weekNum}</Text>
+                    <View style={styles.card}>
+                      {entries.map((entry, idx) => {
+                        const isLast = idx === entries.length - 1
+                        const isPositive = entry.amount > 0
+                        return (
+                          <View key={entry.id} style={[styles.ledgerRow, !isLast && styles.ledgerRowBorder]}>
+                            <View style={styles.ledgerInfo}>
+                              <Text style={styles.ledgerDescription}>{entry.description}</Text>
+                              <Text style={styles.ledgerDate}>{formatDate(entry.created_at)}</Text>
+                            </View>
+                            <Text style={[styles.ledgerAmount, { color: isPositive ? colors.success : colors.danger }]}>
+                              {isPositive ? '+' : ''}{entry.amount}
+                            </Text>
+                          </View>
+                        )
+                      })}
                     </View>
-                    <Text style={[styles.ledgerAmount, { color: isPositive ? colors.success : colors.danger }]}>
-                      {isPositive ? '+' : ''}{entry.amount}
-                    </Text>
                   </View>
                 )
               })}
-            </View>
+            </>
           ) : (
             <View style={styles.emptyCard}>
               <Text style={styles.emptyText}>No activity yet</Text>
@@ -330,6 +379,14 @@ const styles = StyleSheet.create({
     fontSize: 13,
     letterSpacing: 1,
     color: colors.accent,
+    marginBottom: 6,
+    marginTop: 4,
+  },
+  bonusSectionLabel: {
+    fontFamily: fonts.barlowCondensed,
+    fontSize: 13,
+    letterSpacing: 1,
+    color: colors.gold,
     marginBottom: 6,
     marginTop: 4,
   },
