@@ -1,16 +1,17 @@
 import React, { useEffect, useState } from 'react'
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native'
-import { colors, fonts, radius } from '../theme'
+import { colors, fonts } from '../theme'
 import { weeks, seasons } from '../utils/supabase/db'
 import { useAuthStore } from '../stores/authStore'
-import { initials } from '../utils/helpers'
 import ProfileMenuModal from './ProfileMenuModal'
+import PlayerAvatar from './PlayerAvatar'
 
 export default function AppHeader() {
   const [weekNumber, setWeekNumber] = useState<number | null>(null)
   const [seasonNumber, setSeasonNumber] = useState<number | null>(null)
   const [showProfile, setShowProfile] = useState(false)
   const playerName = useAuthStore(s => s.playerName)
+  const playerId = useAuthStore(s => s.playerId)
 
   useEffect(() => {
     Promise.all([weeks.getCurrent(), seasons.getCurrent()]).then(([weekRes, seasonRes]) => {
@@ -33,10 +34,8 @@ export default function AppHeader() {
         </View>
         <Text style={styles.subline}>{subline}</Text>
       </View>
-      <TouchableOpacity style={styles.avatar} onPress={() => setShowProfile(true)} activeOpacity={0.7}>
-        <Text style={styles.avatarText}>
-          {playerName ? initials(playerName) : '?'}
-        </Text>
+      <TouchableOpacity onPress={() => setShowProfile(true)} activeOpacity={0.7}>
+        <PlayerAvatar name={playerName} playerId={playerId} size={45} />
       </TouchableOpacity>
       <ProfileMenuModal visible={showProfile} onClose={() => setShowProfile(false)} />
     </View>
@@ -81,21 +80,5 @@ const styles = StyleSheet.create({
     color: colors.text,
     letterSpacing: 0.5,
     marginTop: 1,
-  },
-  avatar: {
-    width: 45,
-    height: 45,
-    borderRadius: radius.cardSm,
-    backgroundColor: colors.accentDim,
-    borderWidth: 1,
-    borderColor: colors.accent,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  avatarText: {
-    fontFamily: fonts.barlowCondensedHeavy,
-    fontSize: 18,
-    color: colors.accent,
-    letterSpacing: 0.5,
   },
 })

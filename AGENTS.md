@@ -47,7 +47,7 @@ The client is configured via Expo environment variables that are set in `.env.lo
 
 | Table | Key columns |
 |---|---|
-| `players` | `id`, `first_name`, `last_name`, `name`, `phone`, `role`, `user_id`, `is_active`, `created_at` |
+| `players` | `id`, `first_name`, `last_name`, `name`, `phone`, `role`, `user_id`, `is_active`, `avatar_path`, `created_at` |
 | `seasons` | `id` (**uuid**), `number`, `bowling_night`, `start_date`, `end_date`, `registration_open`, `is_active`, `created_at`, `updated_at` |
 | `weeks` | `id`, `season_id`, `week_number`, `is_archived`, `is_confirmed`, `bowled_at` |
 | `rsvp` | `id`, `player_id`, `week_id`, `status`, `note`, `updated_at` |
@@ -103,7 +103,16 @@ The client is configured via Expo environment variables that are set in `.env.lo
 | `getByUserId(userId)` | Single player (`id, name, role`) by auth `user_id` |
 | `isRegistered(phone)` | RPC `is_registered_player` — whether a phone belongs to a registered player (login gate) |
 | `insert(data)` | Add a player |
-| `update(id, data)` | Update player fields |
+| `update(id, data)` | Update player fields (incl. `avatar_path`) |
+
+### `avatars` (player profile pictures — private `avatars` storage bucket)
+| Method | Description |
+|---|---|
+| `upload(path, body, contentType)` | Upsert a photo to the `avatars` bucket; `path` = `<playerId>.jpg`. **Admin-only** (storage RLS) |
+| `remove(path)` | Delete a photo from the bucket. **Admin-only** |
+| `signedUrls(paths, expiresIn?)` | Batch-create signed download URLs (default 1h) — bucket is private, so reads need signed URLs |
+
+> **Profile pictures:** images live in a **private** `avatars` Storage bucket. Storage RLS: any **`authenticated`** user can read (via signed URLs); only **`admin`** can INSERT/UPDATE/DELETE (mirrors the `(auth.jwt()->'app_metadata'->>'role')='admin'` pattern). `players.avatar_path` holds the storage key (`NULL` = no photo → UI falls back to initials). Admins set/delete photos on behalf of players from the **Profile Pictures** screen — there is no self-service upload. Signed URLs are cached centrally in `useAvatarStore` and rendered via the `<PlayerAvatar>` component.
 
 ### `rsvp`
 | Method | Description |
@@ -306,7 +315,7 @@ const { refreshing, onRefresh } = useRefresh(reload)
 
 ## State Management
 
-Three Zustand stores — all imported as `useXxxStore` hooks:
+Four Zustand stores — all imported as `useXxxStore` hooks:
 
 ### `usePendingStore` ([src/stores/pendingStore.ts](src/stores/pendingStore.ts))
 Optimistic edit buffer — not persisted. Holds staged changes before save.
@@ -330,6 +339,9 @@ Ephemeral UI state — toggles, selections, toast queue. All fields via `set(par
 - `h2hP1`, `h2hP2` — selected player names for head-to-head
 - `oddsRevealed` — easter egg toggle on matchup screen
 - `toasts` — call `showToast(msg, type)` to show an auto-dismissing toast; display time scales with message length (2.4s–10s) so long DB errors stay readable
+
+### `useAvatarStore` ([src/stores/avatarStore.ts](src/stores/avatarStore.ts))
+Central signed-URL cache for player profile pictures. `load()` fetches `players.list()`, batch-signs every non-null `avatar_path` via `avatars.signedUrls()`, and builds `byId` (playerId → url) and `byName` (lowercased name → url) maps. Called once on sign-in (in [App.tsx](App.tsx), gated on `role` since signed-URL reads need auth) and re-run after admin upload/delete. The `<PlayerAvatar>` component reads it; list screens that only have a player name still resolve a photo via `byName`.
 
 ---
 
@@ -366,6 +378,7 @@ Ephemeral UI state — toggles, selections, toast queue. All fields via `set(par
 | `TrashBoard` | TrashBoardScreen |
 | `Playoffs` | PlayoffsScreen |
 | `PlayerManagement` | PlayerManagementScreen — add, edit, and toggle active/inactive players |
+| `ProfilePictures` | ProfilePicturesScreen — admin uploads/deletes player profile photos on behalf of any player (admin only) |
 | `PastGames` | PastGamesScreen — browse historical week rosters and scores by season |
 | `Registration` | RegistrationScreen — per-season sign-ups; admins open/close registration, manage the roster, and delete an open season |
 | `BettingAdmin` | BettingAdminScreen — toggle bet lines open/closed for current week, shows bet counts per line, and edit a line's value while it has no bets (admin only) |
@@ -383,7 +396,8 @@ Ephemeral UI state — toggles, selections, toast queue. All fields via `set(par
 
 | Component | Purpose |
 |---|---|
-| `AppHeader` | App logo + current Week/Season badge, reads from Supabase (`weeks.getCurrent`, `seasons.getCurrent`) |
+| `AppHeader` | App logo + current Week/Season badge, reads from Supabase (`weeks.getCurrent`, `seasons.getCurrent`). Top-right avatar is a `<PlayerAvatar>` opening `ProfileMenuModal` |
+| `PlayerAvatar` | Player profile picture (`{ name?, playerId?, size }`) — resolves a signed URL from `useAvatarStore` (by id, else by name) and renders `<Image>`, falling back to an `initials()` circle. Used in AppHeader, PlayerDetailScreen, ProfilePicturesScreen |
 | `ScreenHeader` | Reusable titled header for inner screens |
 | `Toast` | Absolute-positioned animated toast, reads from `uiStore.toasts`. **Render a `<Toast />` inside any RN `<Modal>` that calls `showToast`** — the app-root `<Toast />` (App.tsx) sits behind the native modal layer and is occluded while a modal is open (see Key Patterns) |
 | `ConfirmBar` | Sticky bottom bar for pending saves (RSVP, scores) |
@@ -518,7 +532,8 @@ app/
 │   │   └── types.ts             # MoreStackParamList, StandingsStackParamList
 │   ├── stores/
 │   │   ├── pendingStore.ts      # Optimistic edit buffer (scores, RSVPs, team gen state)
-│   │   └── uiStore.ts           # Ephemeral UI state + toast queue
+│   │   ├── uiStore.ts           # Ephemeral UI state + toast queue
+│   │   └── avatarStore.ts       # Signed-URL cache for player profile pictures
 │   ├── utils/
 │   │   ├── betLines.ts          # lineForAvg (floor+0.5), computeAvgById — shared bet-line avg/line logic
 │   │   ├── helpers.ts           # initials, timeAgo, combinations, spreadAndML
@@ -528,6 +543,7 @@ app/
 │   │       └── db.ts            # Typed query objects per table
 │   ├── components/
 │   │   ├── AppHeader.tsx
+│   │   ├── PlayerAvatar.tsx
 │   │   ├── ScreenHeader.tsx
 │   │   ├── Toast.tsx
 │   │   ├── ConfirmBar.tsx
@@ -551,6 +567,7 @@ app/
 │       ├── MoreHomeScreen.tsx       # Tile grid for tools/admin
 │       ├── PlayerDetailScreen.tsx   # Per-player stats, game log, records
 │       ├── PlayerManagementScreen.tsx  # Add/edit/toggle players (admin)
+│       ├── ProfilePicturesScreen.tsx  # Upload/delete player profile photos (admin)
 │       ├── PastGamesScreen.tsx      # Historical week rosters + scores by season
 │       ├── RegistrationScreen.tsx   # Per-season sign-ups + admin registration management
 │       ├── LeagueRecordsScreen.tsx  # High game/series/team records

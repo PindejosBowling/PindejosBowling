@@ -7,6 +7,7 @@ export type MoreStackParamList = {
   TrashBoard: undefined
   Playoffs: undefined
   PlayerManagement: undefined
+  ProfilePictures: undefined
   PastGames: undefined
   Registration: undefined
   BettingAdmin: undefined
