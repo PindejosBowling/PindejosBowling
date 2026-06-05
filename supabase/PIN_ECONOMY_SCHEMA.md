@@ -5,17 +5,15 @@ relationships, the accounting model, and how to implement or extend betting
 features. Read this before touching anything under the `bet_*` / `pin_ledger`
 tables or writing new betting flows.
 
-> **Status — two models coexist (strangler migration).**
-> - **Legacy (LIVE today):** `bet_lines`, `placed_bets`, `pin_ledger`. The shipped
->   `BettingScreen`, RSVP sync, admin settlement, and the `place_bet` /
->   `sync_bet_lines_for_week` RPCs all run on these.
-> - **Target (schema in place, NOT yet wired):** `bet_markets`, `bet_selections`,
->   `bets`, `bet_legs`, `bet_offers`, `bet_matches`. Created by
->   `20260605002715_betting_target_model.sql`. No app code references these yet.
->
-> New betting work should drive the cutover onto the target model rather than
-> deepen the legacy tables. See [Roadmap](#roadmap--phase-2) and
-> [Implementing a new bet type](#implementing-a-new-bet-type).
+> **Status — single canonical model (Phase 2 complete).**
+> Over/under runs natively on the canonical model: `bet_markets`,
+> `bet_selections`, `bets`, `bet_legs` (+ the deferred peer layer `bet_offers` /
+> `bet_matches`), with funded-house **double-entry** accounting on `pin_ledger`
+> (player rows + house rows, `is_house` / `bet_id`). The legacy `bet_lines` /
+> `placed_bets` tables, the `place_bet` / `sync_bet_lines_for_week` RPCs, and the
+> `placed_bets_no_self_under` trigger were **removed** in the Phase 2 cutover (the
+> `20260605005517`–`20260605011338` migrations). All betting work now extends the
+> canonical model — see [Implementing a new bet type](#implementing-a-new-bet-type).
 
 ---
 
@@ -211,48 +209,54 @@ Append-only event log. **`balance(player, season) = SUM(amount)`** over their ro
 | Column | Notes |
 |---|---|
 | `id` uuid PK | |
-| `player_id` uuid → players | The account owner. `ON DELETE CASCADE`. |
+| `player_id` uuid → players | The account owner. **Nullable** — `NULL` for house rows. `ON DELETE CASCADE`. |
 | `season_id` uuid → seasons | `ON DELETE CASCADE`. |
 | `amount` int | Signed. Credits positive, debits negative. |
 | `type` text | See lifecycle below. |
 | `description` text | Human-readable. |
-| `placed_bet_id` uuid → placed_bets | `ON DELETE SET NULL` (legacy bet linkage). |
+| `is_house` bool | House-account row (the betting counterparty). Excluded from player balances/leaderboard. |
+| `bet_id` uuid → bets | The bet a transfer belongs to. `ON DELETE SET NULL`. |
 
-#### Current ledger lifecycle (legacy)
+- `pin_ledger_owner_chk`: every row is owned by a player **or** the house
+  (`is_house OR player_id IS NOT NULL`).
+- Per-player balance is `WHERE player_id = X` (house rows have `player_id NULL`,
+  so they're excluded automatically); the leaderboard also filters `is_house = false`.
 
-| Event | Entry |
-|---|---|
-| Season opens | `+100` `champion_bonus` per prior-season champion |
-| Week archived | `+score` `score_credit` per game per player (**the dominant pin faucet**) |
-| Bet placed | `−wager` `bet_placed` |
-| Bet won | `+wager×2` `bet_won` (net gain = wager) |
-| Bet push | `+wager` `bet_push` (refund) |
-| Bet loss | nothing (wager already debited) |
+#### Ledger lifecycle (double-entry)
+
+Faucets are **mints** (player-only, no counterpart). Every `bet_*` transfer writes
+**two** rows with the same `bet_id` and opposite signs (player ↔ house), netting to 0.
+
+| Event | Player row | House row |
+|---|---|---|
+| Season opens | `+100` `champion_bonus` per prior-season champion | — |
+| Season opens | — | `0` `house_seed` (one per season; seed-0 policy, allowed negative) |
+| Week archived | `+score` `score_credit` per game per player (**dominant faucet**) | — |
+| Bet placed | `−stake` `bet_stake` | `+stake` `bet_stake` |
+| Bet won | `+potential_payout` `bet_payout` | `−potential_payout` `bet_payout` |
+| Bet push | `+stake` `bet_refund` | `−stake` `bet_refund` |
+| Bet loss | — (stake already debited) | — (house already holds the stake) |
+
+`potential_payout = floor(stake × Π(won-leg odds))` (single even-money O/U leg =
+`stake × 2`). Net player on win = profit; net house = `stake − payout`.
 
 > The economy is **inflationary by design** via `score_credit` (every game score
-> becomes pins). Betting-side flows are small next to it. This is why a betting
-> sink (house vig) is useful, and why parimutuel's anti-inflation benefit was
-> irrelevant here.
+> becomes pins). Only `bet_*` movements balance against the house; the faucets do
+> not. A house **vig** (sub-fair odds) is the available sink; Phase 2 ships fair
+> even odds (`2.000`).
 
-### Target accounting (PHASE 2 — designed, not yet built)
+**Conservation invariant (post-cutover):** for any season,
+`SUM(pin_ledger.amount) = SUM(house_seed) + SUM(score_credit) + SUM(champion_bonus)`
+— every `bet_*` transfer nets to 0 across the player + house rows. (Holds from the
+Phase 2 cutover forward; legacy history migrated in WS5 was mint-on-win and has no
+house counter-rows, by design.)
 
-To make the house a real account without rewriting the live ledger:
-
-- Extend `pin_ledger` minimally — allow a **non-player house account per season**
-  (e.g. nullable `player_id` + an `is_house` flag, or a reserved system account),
-  add a `bet_id` reference, and add betting entry types
-  (`bet_stake`, `bet_payout`, `bet_refund`, `bet_rake`, `house_seed`, …).
-- **Every player credit is mirrored by a house/escrow debit** (and vice versa),
-  so each settlement nets to zero ⇒ conservative supply.
-- Player balances keep coming from `pin_ledger` filtered to `player_id`, so the
-  live app's balance/leaderboard queries are unaffected until cutover.
-
-**Settlement math (target):**
-- **House single back:** win → house pays `stake × odds` to the bettor; loss →
-  house keeps the stake. Zero-sum vs the house account.
-- **House parlay:** same, with `odds = Π(leg odds)`.
-- **Peer:** both stakes escrow into `bet_matches.pool`; winner collects
-  `pool − rake`; rake (if any) → house. Zero-sum between the two players.
+**Settlement math:**
+- **House single back:** win → house pays `stake × odds`; loss → house keeps the
+  stake. Zero-sum vs the house account.
+- **House parlay:** same, with `odds = Π(won-leg odds)` (push/void legs drop out).
+- **Peer (deferred):** both stakes escrow into `bet_matches.pool`; winner collects
+  `pool − rake`; rake (if any) → house.
 
 ---
 
@@ -270,13 +274,24 @@ Follows the project-wide pattern (see `supabase/AUTH.md`).
   is why players can place bets despite the tables being admin-only at the RLS
   layer.
 
-### Existing RPCs (legacy, LIVE)
+### Betting RPCs (LIVE — canonical model)
+
+All `SECURITY DEFINER`, pinned `search_path`, identity from `auth.uid()`/`auth.jwt()`.
 
 | RPC | Purpose |
 |---|---|
-| `place_bet(bet_line_id, pick, wager)` | Atomic, balance-checked bet placement; writes `placed_bets` + `−wager` `pin_ledger`. Resolves bettor from JWT. |
-| `sync_bet_lines_for_week(week_id)` | RSVP-driven create/refund of `bet_lines`, derived from `rsvp` + `scores`. Idempotent. |
+| `sync_over_under_markets_for_week(week_id, extra_games default {})` | RSVP-driven create/refund of O/U markets + selections, derived from `rsvp` + `scores`. `extra_games` adds schedule games (team-gen game 3). Idempotent. `authenticated`. |
+| `place_house_bet(selection_ids[], stake)` | Atomic, balance-checked, anti-tank-checked house bet; writes `bets` + `bet_legs` + the `bet_stake` double-entry pair. Parlay-shaped (O/U passes one selection). Returns `bets.id`. `authenticated`. |
+| `settle_market(market_id, result_value)` | **Admin.** Settle one O/U market: set selection results, derive leg results (back/lay), finalize bets, post payout/refund pairs. Idempotent. |
+| `settle_betting_for_week(week_id)` | **Admin.** On archive: credit `score_credit` (once) + settle every open O/U market against the subject's actual score. |
+| `cancel_bet(bet_id)` | **Admin.** Total undo: delete the bet's ledger pair(s) + the bet; re-open a settled market if it was its last bet. |
+| `edit_over_under_line(market_id, line)` | **Admin.** Set a market's line (both selections) — rejects if any bet exists. |
+| `settle_market_internal(market_id, result_value)` | Private engine (no grants); the settlement body shared by `settle_market` / `settle_betting_for_week`. |
 | `is_registered_player(phone)` | Pre-login gate (anon-callable). |
+
+Anti-tanking is also enforced by the `bet_legs_no_self_tank` BEFORE INSERT/UPDATE
+trigger on `bet_legs` (rejects backing `under` / laying `over` on your own market).
+Open/close a market with a direct admin `UPDATE bet_markets SET status` (no RPC).
 
 ### RPC / function conventions (REQUIRED for new functions)
 
@@ -293,11 +308,11 @@ Follows the project-wide pattern (see `supabase/AUTH.md`).
 
 ### Hard integrity rules
 
-- **Anti-tanking:** a player may never bet the `under`/`lay` on their own line
-  (where the bet's subject is the bettor). Legacy: enforced by the
-  `placed_bets_no_self_under` BEFORE INSERT/UPDATE trigger **and** in the UI/RPC.
-  The target model must reintroduce an equivalent guard (subject =
-  `bet_selections`/`bet_markets.subject_player_id`; bettor = `bets.player_id`).
+- **Anti-tanking:** a player may never bet against their own performance —
+  backing the `under` (or laying the `over`) on a market where they are the
+  subject (`bet_markets.subject_player_id = bets.player_id`). Enforced by the
+  `bet_legs_no_self_tank` BEFORE INSERT/UPDATE trigger on `bet_legs` **and**
+  in-body in `place_house_bet` **and** in the UI.
 - **Min stake 10** (CHECK).
 - **One bet per selection per bet** (`UNIQUE (bet_id, selection_id)`).
 - **Balance never goes negative** — enforced in the placement RPC, not the DB.
@@ -339,23 +354,26 @@ Follows the project-wide pattern (see `supabase/AUTH.md`).
    legs win.
 6. **Re-check the integrity rules** in §5 (anti-tanking, min stake, balance).
 
-## 8. Roadmap — phase 2
+## 8. Roadmap
 
-The schema is in place; the economic core and app port are not:
+**Phase 2 — DONE.** House over/under is native on the canonical model with
+funded-house double-entry accounting; the app, RSVP sync, admin settlement, and
+team-gen are ported; legacy `bet_lines` / `placed_bets` / RPCs / trigger are
+dropped (the `20260605005517`–`20260605011338` migrations + git history).
 
-1. **`pin_ledger` house-account extension** (§4 target accounting).
-2. **RPCs:** `place_house_bet` (single + parlay), `create_bet_offer`,
-   `accept_bet_offer`, `settle_market` — all `SECURITY DEFINER`, balance- and
-   integrity-checked, double-entry.
-3. **App cutover (strangler):** add `db.ts` query objects + RPC wrappers for the
-   new tables; migrate `BettingScreen` / admin / RSVP off `bet_lines` /
-   `placed_bets` screen-by-screen.
-4. **Legacy retirement:** migrate `bet_lines` / `placed_bets` history onto the new
-   model (small dataset — betting launched recently), then drop them.
+**Next (schema already supports it):**
+
+1. **Peer bets** (`bet_offers` / `bet_matches`): `create_bet_offer`,
+   `accept_bet_offer` RPCs + escrow settlement — all `SECURITY DEFINER`,
+   integrity-checked, double-entry (peer is zero-sum between players, rake → house).
+2. **Parlays:** the placement/settlement RPCs are already parlay-shaped (leg
+   arrays, combined odds); only multi-leg UI is missing.
+3. **Moneyline / props:** new `bet_markets.market_type` + selections (§7).
 
 ### Open product decisions (do not block the schema)
 - Peer **rake** percentage (`bet_matches.rake` defaults to 0).
-- House **vig** (sub-fair odds as a sink) vs fair odds + manual top-ups.
+- House **vig** (sub-fair odds as a sink) vs fair odds + manual top-ups (Phase 2
+  ships fair `2.000`).
 - Offer **expiry / cancellation refund** rules.
 
 ---
@@ -364,13 +382,52 @@ The schema is in place; the economic core and app port are not:
 
 | File | What |
 |---|---|
-| `migrations/20260604174814_betting_feature.sql` | Legacy `bet_lines` / `placed_bets` / `pin_ledger`. |
-| `migrations/20260604190954_prevent_self_under_bet.sql` | Anti-tanking trigger (legacy). |
-| `migrations/20260604204823_rsvp_bet_line_cleanup_rpc.sql` | (superseded) original cleanup RPC. |
-| `migrations/20260604230655_betting_fk_indexes.sql` | FK indexes on legacy betting tables. |
+| `migrations/20260604174814_betting_feature.sql` | Original `pin_ledger` (+ legacy `bet_lines` / `placed_bets`, since dropped). |
 | `migrations/20260604230656_auto_attach_updated_at_triggers.sql` | `set_updated_at` backfill + event-trigger auto-attach. |
-| `migrations/20260604230657_betting_server_side_integrity.sql` | `place_bet` / `sync_bet_lines_for_week` RPCs + RLS lockdown. |
-| `migrations/20260604232544_harden_function_search_path.sql` | Pinned `search_path` on functions. |
-| `migrations/20260605002715_betting_target_model.sql` | **The target model** (this document's §2). |
-| `app/src/utils/supabase/db.ts` | Typed query objects (legacy betting wired here). |
+| `migrations/20260605002715_betting_target_model.sql` | **The canonical model** (this document's §2). |
+| `migrations/20260605005517_ou_house_account_and_anti_tank.sql` | Phase 2 WS1 — `pin_ledger` house account (`is_house`/`bet_id`), `bet_legs_no_self_tank`, house seed. |
+| `migrations/20260605005644_ou_target_model_rpcs.sql` | Phase 2 WS2 — placement / settlement / cancel / edit RPCs (§5). |
+| `migrations/20260605010835_ou_sync_extra_games.sql` | Phase 2 — `sync_over_under_markets_for_week` + `extra_games` (team-gen game 3). |
+| `migrations/20260605011207_migrate_legacy_betting_to_target.sql` | Phase 2 WS5 — legacy history → canonical model; ledger `bet_id`/type backfill. |
+| `migrations/20260605011338_decommission_legacy_betting.sql` | Phase 2 WS6 — drop legacy tables / RPCs / trigger / `placed_bet_id`; prune type CHECK. |
+| `app/src/utils/supabase/db.ts` | Typed query objects (`betMarkets` / `bets` / `pinLedger` + RPC wrappers). |
+| `app/src/hooks/useBettingData.ts` | Normalizes the market/bet graph into flat `LineView` / `BetView`. |
 | `supabase/AUTH.md` | Auth / JWT / RLS architecture. |
+
+> The Phase 2 cutover (legacy `bet_lines` / `placed_bets` → this model) is recorded
+> in the `20260605005517`–`20260605011338` migrations and git history.
+
+---
+
+## 10. Verifying betting integrity (no test suite)
+
+Manual + SQL checks — run against a throwaway week / non-prod season after any
+change to the betting RPCs, the ledger, or the settlement math.
+
+1. **Placement.** Place an O/U bet in the app. Assert: one `bets` (`pending`) + one
+   `bet_legs` (`back`); a `bet_stake` ledger pair (player `−`, house `+`) summing to
+   0; the player's balance dropped by the stake; **over** on your own line is
+   allowed, **under** on your own line is rejected by both the UI and the
+   `bet_legs_no_self_tank` trigger.
+2. **Conservation invariant (SQL).** Every `bet_*` transfer nets to 0 across the
+   player + house rows, so for any season the ledger sum equals the faucets only:
+   ```sql
+   SELECT season_id,
+          SUM(amount)                                                                AS net,
+          SUM(amount) FILTER (WHERE type IN ('house_seed','score_credit','champion_bonus')) AS faucets
+   FROM public.pin_ledger
+   GROUP BY season_id;
+   -- net must equal faucets for every season. (Holds from the Phase 2 cutover
+   -- forward; pre-cutover migrated history was mint-on-win — see §4.)
+   ```
+3. **Settle win / loss / push.** Call `settle_market` with a value above / below /
+   equal to the line; assert bet `status`, the payout pair (win) / refund pair
+   (push) / no ledger (loss), correct balances, and that a re-run is a no-op.
+4. **Archive.** `settle_betting_for_week` credits `score_credit` once and settles
+   every open market exactly once; re-running is a no-op.
+5. **Cancel.** `cancel_bet` removes all ledger rows for the bet, restores the
+   balance exactly, and re-opens a market if it was the market's last bet.
+6. **RSVP sync.** RSVP a player **out** → their markets + bets are gone and any
+   bets are refunded; RSVP **in** → markets recreated; fully idempotent.
+7. **Advisors.** `supabase db lint` is clean and every betting FK is indexed with a
+   pinned `search_path` on all functions (§5–§6 conventions).
