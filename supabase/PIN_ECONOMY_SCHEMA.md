@@ -287,7 +287,8 @@ All `SECURITY DEFINER`, pinned `search_path`, identity from `auth.uid()`/`auth.j
 
 | RPC | Purpose |
 |---|---|
-| `sync_over_under_markets_for_week(week_id, extra_games default {})` | RSVP-driven create/refund of O/U markets + selections, derived from `rsvp` + `scores`. `extra_games` adds schedule games (team-gen game 3). Idempotent. `authenticated`. |
+| `sync_over_under_markets_for_week(week_id, extra_games default {})` | RSVP-driven create/refund of O/U markets + selections, derived from `rsvp` + `scores`. `extra_games` adds schedule games (team-gen game 3, or matchups admin "+ Add Game N"). Idempotent. `authenticated`. |
+| `remove_over_under_markets_for_game(week_id, game_number)` | **Admin.** Inverse of the sync's *create*: refund every bet on that week+game's O/U markets (delete the ledger pair[s] by `bet_id`, restoring balances — parlays touching the game refund whole) and drop the markets. Used when the matchups admin removes a schedule game (sync never prunes a removed game, since its target set only ever grows). |
 | `place_house_bet(selection_ids[], stake)` | Atomic, balance-checked, anti-tank-checked house bet; writes `bets` + `bet_legs` + the `bet_stake` double-entry pair. Parlay-shaped (O/U passes one selection). Returns `bets.id`. `authenticated`. |
 | `settle_market(market_id, result_value)` | **Admin.** Settle one O/U market: set selection results, derive leg results (back/lay), finalize bets, post payout/refund pairs. Idempotent. |
 | `settle_betting_for_week(week_id)` | **Admin.** On archive: credit `score_credit` (once) + settle every open O/U market against the subject's actual score. |
@@ -440,6 +441,7 @@ bets shipped as a pure-UI addition on top of the existing model:
 | `migrations/20260605011207_migrate_legacy_betting_to_target.sql` | Phase 2 WS5 — legacy history → canonical model; ledger `bet_id`/type backfill. |
 | `migrations/20260605011338_decommission_legacy_betting.sql` | Phase 2 WS6 — drop legacy tables / RPCs / trigger / `placed_bet_id`; prune type CHECK. |
 | `migrations/20260605120219_add_week_id_to_pin_ledger.sql` | Add `week_id` FK to `pin_ledger`; backfill existing rows; update `place_house_bet`, `settle_market_internal`, `settle_betting_for_week` to stamp it on new entries. |
+| `migrations/20260605215407_remove_ou_markets_for_game.sql` | `remove_over_under_markets_for_game(week_id, game_number)` — admin refund + teardown of a removed schedule game's O/U markets (inverse of the sync's create path). |
 | `app/src/utils/supabase/db.ts` | Typed query objects (`betMarkets` / `bets` / `pinLedger` + RPC wrappers). |
 | `app/src/hooks/useBettingData.ts` | Normalizes the market/bet graph into flat `LineView` / `BetView`. |
 | `supabase/AUTH.md` | Auth / JWT / RLS architecture. |

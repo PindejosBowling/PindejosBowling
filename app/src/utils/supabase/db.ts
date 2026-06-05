@@ -332,7 +332,7 @@ const MARKET_GRAPH =
   '*, subject:players!bet_markets_subject_player_id_fkey(name), bet_selections(*)'
 // Leg → selection → market(+subject, +week) graph, embedded under a bet.
 const LEG_GRAPH =
-  'bet_legs(*, bet_selections(*, bet_markets(*, subject:players!bet_markets_subject_player_id_fkey(name), weeks(week_number))))'
+  'bet_legs(*, bet_selections(*, bet_markets(*, subject:players!bet_markets_subject_player_id_fkey(name), weeks(week_number, seasons(number)))))'
 
 export const betMarkets = {
   // Open over_under markets for a week (Place Bets), with selections + subject.
@@ -345,6 +345,38 @@ export const betMarkets = {
       .eq('status', 'open')
       .order('game_number')
       .order('subject_player_id'),
+  // Active (open + closed-for-betting) over_under markets for a week, with
+  // selections + subject. Closed markets are games "in progress" — still shown on
+  // Place Bets (disabled) but no longer bettable. Excludes settled/void.
+  listActiveOUByWeek: (weekId: string) =>
+    supabase
+      .from('bet_markets')
+      .select(MARKET_GRAPH)
+      .eq('week_id', weekId)
+      .eq('market_type', 'over_under')
+      .in('status', ['open', 'closed'])
+      .order('game_number')
+      .order('subject_player_id'),
+  // game_number + status for a week's O/U markets — used to derive which games are
+  // "in progress" (closed for betting) without pulling the full market graph.
+  listOUStatusByWeek: (weekId: string) =>
+    supabase
+      .from('bet_markets')
+      .select('game_number, status')
+      .eq('week_id', weekId)
+      .eq('market_type', 'over_under'),
+  // Start/reopen a game's betting: flip every O/U market for a week+game between
+  // 'open' and 'closed' in one admin write. Closing blocks new bets (place_house_bet
+  // rejects non-open selections) but leaves settlement intact (settle_betting_for_week
+  // settles any market with status <> 'settled').
+  setOUStatusByWeekGame: (weekId: string, gameNumber: number, status: 'open' | 'closed') =>
+    supabase
+      .from('bet_markets')
+      .update({ status })
+      .eq('week_id', weekId)
+      .eq('market_type', 'over_under')
+      .eq('game_number', gameNumber)
+      .eq('status', status === 'closed' ? 'open' : 'closed'),
   // All over_under markets for a week (admin Bet Lines), with selections + subject.
   listOUByWeek: (weekId: string) =>
     supabase
@@ -362,6 +394,10 @@ export const betMarkets = {
   // passes none and the RPC defaults the target set to the established games / {1,2}.
   syncOUForWeek: (weekId: string, extraGames: number[] = []) =>
     supabase.rpc('sync_over_under_markets_for_week', { p_week_id: weekId, p_extra_games: extraGames }),
+  // Admin: refund every bet on a week+game's O/U markets and drop the markets —
+  // the inverse of syncOUForWeek's create, used when a schedule game is removed.
+  removeOUForGame: (weekId: string, gameNumber: number) =>
+    supabase.rpc('remove_over_under_markets_for_game', { p_week_id: weekId, p_game_number: gameNumber }),
   // Admin: settle one market against the subject's actual score.
   settle: (marketId: string, resultValue: number) =>
     supabase.rpc('settle_market', { p_market_id: marketId, p_result_value: resultValue }),

@@ -1,12 +1,11 @@
 import { useState, useEffect, useCallback } from 'react'
-import { weeks, teamSlots, games, scores, rsvp, seasons, seasonChampions } from '../utils/supabase/db'
+import { weeks, teamSlots, games, scores, rsvp, seasons, seasonChampions, betMarkets } from '../utils/supabase/db'
 
 export interface MatchupsPlayer {
   name: string
   slot: number
-  g1: number | ''
-  g2: number | ''
-  g3: number | ''
+  // Saved scores keyed by game number (1, 2, 3, … N) — supports arbitrary added games.
+  scores: Record<number, number | ''>
   isFill: boolean
   effectiveAvg: number
   teamSlotId: string
@@ -34,6 +33,8 @@ export function useMatchupsData() {
   const [weekId, setWeekId] = useState<string | null>(null)
   const [derived, setDerived] = useState<MatchupsDerived | null>(null)
   const [gameIdByNumber, setGameIdByNumber] = useState<Record<number, string>>({})
+  // Game numbers whose O/U betting markets are closed (game "in progress").
+  const [inProgressGames, setInProgressGames] = useState<number[]>([])
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -66,13 +67,25 @@ export function useMatchupsData() {
         ? startedSeasons[startedSeasons.length - 2]
         : startedSeasons[startedSeasons.length - 1]
 
-      const [slotsRes, scheduleRes, weekScoresRes, rsvpRes, prevScoresRes] = await Promise.all([
+      const [slotsRes, scheduleRes, weekScoresRes, rsvpRes, prevScoresRes, marketStatusRes] = await Promise.all([
         teamSlots.listByWeek(week.id),
         games.listByWeek(week.id),
         scores.listByWeek(week.id),
         rsvp.listByWeek(week.id),
         prevSeason ? scores.listBySeason(prevSeason.id) : Promise.resolve({ data: [] as any[] }),
+        betMarkets.listOUStatusByWeek(week.id),
       ])
+
+      // A game is "in progress" once its betting markets are closed.
+      setInProgressGames(
+        Array.from(
+          new Set(
+            (marketStatusRes.data ?? [])
+              .filter((m: any) => m.status === 'closed')
+              .map((m: any) => m.game_number as number)
+          )
+        )
+      )
 
       const slots = slotsRes.data ?? []
       const schedule = scheduleRes.data ?? []
@@ -130,9 +143,7 @@ export function useMatchupsData() {
         teams[teamName].players.push({
           name: slot.is_fill ? 'League Avg Fill' : (slot.players?.name ?? ''),
           slot: slot.slot,
-          g1: slotScores[1] !== undefined ? slotScores[1] : '',
-          g2: slotScores[2] !== undefined ? slotScores[2] : '',
-          g3: slotScores[3] !== undefined ? slotScores[3] : '',
+          scores: slotScores,
           isFill: slot.is_fill ?? false,
           effectiveAvg,
           teamSlotId: slot.id,
@@ -161,8 +172,15 @@ export function useMatchupsData() {
         }
       }
 
+      // Render a round per scheduled game number (not a hardcoded 1–3) so that
+      // arbitrary added games (4, 5, …) appear. Games with no resolvable pairing
+      // are skipped below.
+      const gameNumbers = Array.from(
+        new Set((schedule as any[]).map(g => g.game_number as number))
+      ).sort((a, b) => a - b)
+
       const rounds: MatchupsDerived['rounds'] = []
-      for (let g = 1; g <= 3; g++) {
+      for (const g of gameNumbers) {
         const names = Object.keys(teams).sort()
         const seen = new Set<string>()
         const pairings: { a: MatchupsTeam; b: MatchupsTeam | null }[] = []
@@ -189,5 +207,5 @@ export function useMatchupsData() {
     load()
   }, [load])
 
-  return { loading, weekId, derived, gameIdByNumber, reload: load }
+  return { loading, weekId, derived, gameIdByNumber, inProgressGames, reload: load }
 }

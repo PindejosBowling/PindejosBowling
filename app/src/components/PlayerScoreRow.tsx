@@ -7,9 +7,7 @@ interface PlayerScoreRowProps {
   player: {
     name: string
     slot: number
-    g1: any
-    g2: any
-    g3: any
+    scores: Record<number, any>
     isFill?: boolean
     teamSlotId: string
     isOut: boolean
@@ -26,7 +24,7 @@ export default function PlayerScoreRow({ player, gameNum, mode, leagueAvg }: Pla
 
   const expectedScore = player.effectiveAvg > 0 ? Math.round(player.effectiveAvg) : '—'
 
-  const rawScore = gameNum === 1 ? player.g1 : gameNum === 2 ? player.g2 : player.g3
+  const rawScore = player.scores[gameNum] ?? ''
   const pendingKey = `${player.teamSlotId}|${gameNum}`
   const pendingEntry = pendingScores[pendingKey]
 

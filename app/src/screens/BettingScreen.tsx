@@ -511,9 +511,18 @@ export default function BettingScreen() {
         {sortedGameNumbers.length > 0 ? (
           <>
             <Text style={[styles.sectionHeader, { marginTop: 24 }]}>THIS WEEK'S LINES</Text>
-            {sortedGameNumbers.map(gameNum => (
+            {sortedGameNumbers.map(gameNum => {
+              // Closing is all-or-nothing per game, so the whole game is in progress
+              // once any of its lines is closed.
+              const gameInProgress = linesByGame[gameNum].some(l => l.inProgress)
+              return (
               <View key={gameNum}>
                 <Text style={styles.gameLabel}>GAME {gameNum}</Text>
+                {gameInProgress && (
+                  <Text style={styles.inProgressNote}>
+                    The Pinsino does not take action on games in progress
+                  </Text>
+                )}
                 <View style={styles.card}>
                   {linesByGame[gameNum].map((line, idx) => {
                     const isLast = idx === linesByGame[gameNum].length - 1
@@ -521,12 +530,20 @@ export default function BettingScreen() {
                     const isOwnLine = line.subjectPlayerId === playerId
                     const slipLeg = parlayLegs.find(l => l.marketId === line.marketId)
                     return (
-                      <View key={line.marketId} style={[styles.lineRow, !isLast && styles.lineRowBorder]}>
+                      <View key={line.marketId} style={[styles.lineRow, !isLast && styles.lineRowBorder, gameInProgress && styles.lineRowInProgress]}>
                         <View style={styles.lineInfo}>
                           <Text style={styles.lineName}>{line.subjectName}</Text>
                           <Text style={styles.lineValue}>LINE  {line.line.toFixed(1)}</Text>
                         </View>
-                        {placeMode === 'parlay' ? (
+                        {gameInProgress ? (
+                          <View style={styles.pickBtns}>
+                            {(['over', 'under'] as Pick[]).map(p => (
+                              <View key={p} style={[styles.pickBtn, styles.pickBtnDisabled]}>
+                                <Text style={styles.pickBtnText}>{p.toUpperCase()}</Text>
+                              </View>
+                            ))}
+                          </View>
+                        ) : placeMode === 'parlay' ? (
                           <View style={styles.pickBtns}>
                             {(['over', 'under'] as Pick[]).map(p => {
                               const blocked = p === 'under' && isOwnLine
@@ -571,7 +588,8 @@ export default function BettingScreen() {
                   })}
                 </View>
               </View>
-            ))}
+              )
+            })}
           </>
         ) : (
           <View style={styles.emptyCard}>
@@ -850,6 +868,27 @@ export default function BettingScreen() {
                 <Text style={styles.detailValue}>{detailModal.bettorName}</Text>
               </View>
 
+              {detailModal.seasonNumber != null && (
+                <View style={styles.detailRow}>
+                  <Text style={styles.detailLabel}>SEASON</Text>
+                  <Text style={styles.detailValue}>{detailModal.seasonNumber}</Text>
+                </View>
+              )}
+
+              {detailModal.weekNumber != null && (
+                <View style={styles.detailRow}>
+                  <Text style={styles.detailLabel}>WEEK</Text>
+                  <Text style={styles.detailValue}>{detailModal.weekNumber}</Text>
+                </View>
+              )}
+
+              {detailModal.legCount === 1 && detailModal.gameNumber != null && (
+                <View style={styles.detailRow}>
+                  <Text style={styles.detailLabel}>GAME</Text>
+                  <Text style={styles.detailValue}>{detailModal.gameNumber}</Text>
+                </View>
+              )}
+
               {detailModal.legCount > 1 ? (
                 <View style={styles.detailRow}>
                   <Text style={styles.detailLabel}>LEGS ({detailModal.legCount})</Text>
@@ -1073,6 +1112,14 @@ const styles = StyleSheet.create({
   lineRowBorder: {
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
+  },
+  lineRowInProgress: { opacity: 0.5 },
+  inProgressNote: {
+    fontFamily: fonts.barlow,
+    fontSize: 12,
+    fontStyle: 'italic',
+    color: colors.gold,
+    marginBottom: 6,
   },
   lineInfo: { flex: 1 },
   lineName: {

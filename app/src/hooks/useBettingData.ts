@@ -10,6 +10,8 @@ export interface LineView {
   line: number
   overSelectionId?: string
   underSelectionId?: string
+  // Game in progress: market closed for betting, still shown but not bettable.
+  inProgress: boolean
 }
 
 // One resolved leg of a bet (a single backed over/under selection).
@@ -41,6 +43,7 @@ export interface BetView {
   marketStatus: string
   actualScore: number | null
   weekNumber: number | null
+  seasonNumber: number | null
   legs: LegView[]
   legCount: number
 }
@@ -81,6 +84,7 @@ export function normalizeBet(b: any): BetView {
     marketStatus: firstMkt?.status ?? '',
     actualScore: firstMkt?.result_value != null ? Number(firstMkt.result_value) : null,
     weekNumber: firstMkt?.weeks?.week_number ?? null,
+    seasonNumber: firstMkt?.weeks?.seasons?.number ?? null,
     legs,
     legCount: legs.length,
   }
@@ -97,6 +101,7 @@ function normalizeMarket(m: any): LineView {
     line: Number(over?.line ?? under?.line ?? 0),
     overSelectionId: over?.id,
     underSelectionId: under?.id,
+    inProgress: m.status === 'closed',
   }
 }
 
@@ -136,7 +141,7 @@ export function useBettingData(playerId: string | null) {
       let weekBetsData: any[] = []
       if (weekId) {
         fetches.push(
-          betMarkets.listOpenOUByWeek(weekId).then(({ data }) => {
+          betMarkets.listActiveOUByWeek(weekId).then(({ data }) => {
             marketsData = data ?? []
           }),
           bets.listByWeek(weekId).then(({ data }) => {

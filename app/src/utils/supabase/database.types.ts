@@ -12,6 +12,31 @@ export type Database = {
   __InternalSupabase: {
     PostgrestVersion: "14.5"
   }
+  graphql_public: {
+    Tables: {
+      [_ in never]: never
+    }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      graphql: {
+        Args: {
+          extensions?: Json
+          operationName?: string
+          query?: string
+          variables?: Json
+        }
+        Returns: Json
+      }
+    }
+    Enums: {
+      [_ in never]: never
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
+  }
   public: {
     Tables: {
       bet_legs: {
@@ -900,6 +925,10 @@ export type Database = {
         Args: { p_selection_ids: string[]; p_stake: number }
         Returns: string
       }
+      remove_over_under_markets_for_game: {
+        Args: { p_game_number: number; p_week_id: string }
+        Returns: undefined
+      }
       settle_betting_for_week: {
         Args: { p_week_id: string }
         Returns: undefined
@@ -1044,6 +1073,9 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
+  graphql_public: {
+    Enums: {},
+  },
   public: {
     Enums: {},
   },

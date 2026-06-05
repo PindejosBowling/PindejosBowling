@@ -23,7 +23,7 @@ import { useMatchupsData } from '../hooks/useMatchupsData'
 import { useUiStore } from '../stores/uiStore'
 import { usePendingStore } from '../stores/pendingStore'
 import { useAuthStore } from '../stores/authStore'
-import { scores, teams as teamsDb, games, weeks } from '../utils/supabase/db'
+import { scores, teams as teamsDb, games, weeks, betMarkets } from '../utils/supabase/db'
 import { colors, fonts, radius } from '../theme'
 
 // ---------------------------------------------------------------------------
@@ -53,7 +53,7 @@ const ARCHIVE_BAR_HEIGHT = 57
 // ---------------------------------------------------------------------------
 
 export default function MatchupsScreen() {
-  const { loading, weekId, derived, gameIdByNumber, reload } = useMatchupsData()
+  const { loading, weekId, derived, gameIdByNumber, inProgressGames, reload } = useMatchupsData()
   const { matchupsView, oddsRevealed, set: setUi } = useUiStore()
   const { pendingScores, set: setPending } = usePendingStore()
   const isAdmin = useAuthStore(s => s.role) === 'admin'
@@ -61,7 +61,14 @@ export default function MatchupsScreen() {
   const [showArchive, setShowArchive] = useState(false)
   const [addingGame, setAddingGame] = useState(false)
   const [removingGame, setRemovingGame] = useState(false)
+  const [openGames, setOpenGames] = useState<Record<number, boolean>>({})
+  const [startingGame, setStartingGame] = useState<number | null>(null)
   const { refreshing, onRefresh } = useRefresh(reload)
+
+  // All games collapsed by default; tapping a header toggles it open.
+  const isGameOpen = (num: number) => !!openGames[num]
+  const toggleGame = (num: number) =>
+    setOpenGames(prev => ({ ...prev, [num]: !prev[num] }))
 
   const isActive = !!derived
   const teams = derived?.teams ?? {}
@@ -70,11 +77,7 @@ export default function MatchupsScreen() {
 
   const hasSavedScores = isActive && Object.values(teams).some((team: any) =>
     team.players.some((p: any) =>
-      !p.isFill && (
-        (p.g1 !== '' && p.g1 > 0) ||
-        (p.g2 !== '' && p.g2 > 0) ||
-        (p.g3 !== '' && p.g3 > 0)
-      )
+      !p.isFill && Object.values(p.scores).some((v: any) => v !== '' && v > 0)
     )
   )
 
@@ -86,7 +89,7 @@ export default function MatchupsScreen() {
       const pending = pendingScores[key]
       if (pending) return s + (parseInt(pending) || 0)
       if (p.isFill) return s + (p.effectiveAvg > 0 ? Math.round(p.effectiveAvg) : 0)
-      const raw = gameNum === 1 ? p.g1 : gameNum === 2 ? p.g2 : p.g3
+      const raw = p.scores[gameNum] ?? ''
       return s + (parseInt(raw) || 0)
     }, 0)
   }
@@ -142,9 +145,27 @@ export default function MatchupsScreen() {
       )
       await Promise.all(slotIds.map(slotId => scores.remove(slotId, gameIdByNumber[maxGameNum])))
       await games.removeByWeekAndGame(weekId, maxGameNum)
+      // Inverse of addNextGame's market sync: refund + drop this game's O/U lines
+      // (sync never prunes a removed game, so this is the explicit teardown).
+      await betMarkets.removeOUForGame(weekId, maxGameNum)
       await reload()
     } finally {
       setRemovingGame(false)
+    }
+  }
+
+  // Start a game: close its betting markets (no more bets — the Pinsino takes no
+  // action on games in progress) and reveal the scores by expanding the game.
+  // Unstart reverses it, reopening the markets for betting.
+  async function setGameStarted(gameNum: number, started: boolean) {
+    if (!weekId) return
+    setStartingGame(gameNum)
+    try {
+      await betMarkets.setOUStatusByWeekGame(weekId, gameNum, started ? 'closed' : 'open')
+      if (started) setOpenGames(prev => ({ ...prev, [gameNum]: true }))
+      await reload()
+    } finally {
+      setStartingGame(null)
     }
   }
 
@@ -163,6 +184,10 @@ export default function MatchupsScreen() {
           team_b_id: p.b!.teamId,
         }))
       await games.insert(rows)
+      // Markets aren't derived from the games table — tell the betting system this
+      // schedule game now exists so it creates its RSVP-driven O/U lines (same call
+      // team-gen makes for game 3). Idempotent.
+      await betMarkets.syncOUForWeek(weekId, [nextGameNum])
       await reload()
     } finally {
       setAddingGame(false)
@@ -240,10 +265,42 @@ export default function MatchupsScreen() {
                   {/* Rounds */}
                   {rounds.map(round => (
                     <View key={round.num}>
-                      <View style={styles.matchHeader}>
+                      <TouchableOpacity
+                        style={styles.matchHeader}
+                        onPress={() => toggleGame(round.num)}
+                        activeOpacity={0.7}
+                      >
                         <Text style={styles.matchTitle}>Game {round.num}</Text>
-                      </View>
-                      {round.pairings.map((pairing, pi) => (
+                        <View style={styles.matchHeaderRight}>
+                          {isAdmin && (
+                            inProgressGames.includes(round.num) ? (
+                              <TouchableOpacity
+                                style={styles.unstartGameBtn}
+                                onPress={() => setGameStarted(round.num, false)}
+                                disabled={startingGame === round.num}
+                                activeOpacity={0.7}
+                              >
+                                <Text style={styles.unstartGameText}>
+                                  {startingGame === round.num ? 'Unstarting…' : 'Unstart Game'}
+                                </Text>
+                              </TouchableOpacity>
+                            ) : (
+                              <TouchableOpacity
+                                style={styles.startGameBtn}
+                                onPress={() => setGameStarted(round.num, true)}
+                                disabled={startingGame === round.num}
+                                activeOpacity={0.7}
+                              >
+                                <Text style={styles.startGameText}>
+                                  {startingGame === round.num ? 'Starting…' : 'Start Game'}
+                                </Text>
+                              </TouchableOpacity>
+                            )
+                          )}
+                          <Text style={styles.matchChevron}>{isGameOpen(round.num) ? '▾' : '▸'}</Text>
+                        </View>
+                      </TouchableOpacity>
+                      {isGameOpen(round.num) && round.pairings.map((pairing, pi) => (
                         <View key={pi} style={styles.matchupCard}>
                           {!pairing.b ? (
                             <View>
@@ -514,12 +571,53 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   matchHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     paddingVertical: 8,
+    paddingRight: 4,
     marginTop: 8,
     marginBottom: 4,
     borderLeftWidth: 3,
     borderLeftColor: colors.accent,
     paddingLeft: 10,
+  },
+  matchHeaderRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  matchChevron: {
+    fontFamily: fonts.barlowCondensed,
+    fontSize: 16,
+    color: colors.muted,
+  },
+  startGameBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: radius.cardSm,
+    borderWidth: 1,
+    borderColor: colors.accent,
+    backgroundColor: colors.accentDim,
+  },
+  startGameText: {
+    fontFamily: fonts.barlowCondensed,
+    fontSize: 12,
+    color: colors.accent,
+    letterSpacing: 0.5,
+  },
+  unstartGameBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: radius.cardSm,
+    borderWidth: 1,
+    borderColor: 'rgba(251,191,36,0.4)',
+  },
+  unstartGameText: {
+    fontFamily: fonts.barlowCondensed,
+    fontSize: 12,
+    letterSpacing: 0.5,
+    color: colors.gold,
   },
   matchTitle: {
     fontFamily: fonts.barlowCondensed,

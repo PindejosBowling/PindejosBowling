@@ -46,6 +46,7 @@ export default function BetRow({
           <>
             <Text style={styles.betSubject}>
               {bet.subjectName} · {bet.pick?.toUpperCase()} {bet.line.toFixed(1)}
+              {bet.gameNumber != null ? ` · G${bet.gameNumber}` : ''}
             </Text>
             <Text style={styles.betDetails}>
               {bet.bettorName}
