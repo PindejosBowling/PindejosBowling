@@ -68,6 +68,20 @@ export default function PlayerBettingDetailScreen() {
     { key: 'settled', label: 'Settled Bets' },
   ]
 
+  const summary = useMemo(() => {
+    let pincome = 0
+    let wagered = 0
+    let won = 0
+    let championBonus = 0
+    for (const e of ledger) {
+      if (e.type === 'score_credit') pincome += e.amount
+      else if (e.type === 'bet_stake') wagered += e.amount
+      else if (e.type === 'bet_payout') won += e.amount
+      else if (e.type === 'champion_bonus') championBonus += e.amount
+    }
+    return { pincome, wagered, won, championBonus }
+  }, [ledger])
+
   const bonusEntries = useMemo(
     () => ledger.filter(e => e.weekNumber === null),
     [ledger],
@@ -140,11 +154,40 @@ export default function PlayerBettingDetailScreen() {
       >
         <ScreenHeader title={name} onBack={() => navigation.goBack()} />
 
-        {/* Balance card */}
-        <View style={styles.balanceCard}>
-          <Text style={styles.balanceLabel}>YOUR BALANCE</Text>
-          <Text style={styles.balanceValue}>{balance.toLocaleString()}</Text>
-          <Text style={styles.balanceUnit}>PINS</Text>
+        {/* Summary card */}
+        <View style={styles.summaryCard}>
+          <View style={[styles.summaryRow, styles.summaryRowBorder]}>
+            <Text style={styles.summaryLabel}>PINCOME</Text>
+            <Text style={[styles.summaryValue, { color: colors.success }]}>
+              +{summary.pincome.toLocaleString()}
+            </Text>
+          </View>
+          <View style={[styles.summaryRow, styles.summaryRowBorder]}>
+            <Text style={styles.summaryLabel}>PINS WAGERED</Text>
+            <Text style={[styles.summaryValue, { color: colors.danger }]}>
+              {summary.wagered.toLocaleString()}
+            </Text>
+          </View>
+          <View style={[styles.summaryRow, styles.summaryRowBorder]}>
+            <Text style={styles.summaryLabel}>PINS WON</Text>
+            <Text style={[styles.summaryValue, { color: colors.success }]}>
+              +{summary.won.toLocaleString()}
+            </Text>
+          </View>
+          {summary.championBonus !== 0 && (
+            <View style={[styles.summaryRow, styles.summaryRowBorder]}>
+              <Text style={styles.summaryLabel}>CHAMPION BONUS</Text>
+              <Text style={[styles.summaryValue, { color: colors.gold }]}>
+                +{summary.championBonus.toLocaleString()}
+              </Text>
+            </View>
+          )}
+          <View style={styles.summaryRow}>
+            <Text style={[styles.summaryLabel, styles.summaryLabelTotal]}>PIN BALANCE</Text>
+            <Text style={[styles.summaryValue, styles.summaryValueTotal]}>
+              {balance.toLocaleString()}
+            </Text>
+          </View>
         </View>
 
         {/* View toggle */}
@@ -301,35 +344,43 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.bg },
   content: { paddingHorizontal: 16, paddingBottom: 40 },
 
-  balanceCard: {
+  summaryCard: {
     backgroundColor: colors.surface,
     borderRadius: radius.card,
     borderWidth: 1,
     borderColor: colors.border,
-    alignItems: 'center',
-    paddingVertical: 24,
+    paddingHorizontal: 18,
     marginTop: 8,
     marginBottom: 24,
   },
-  balanceLabel: {
-    fontFamily: fonts.barlowCondensed,
-    fontSize: 11,
-    letterSpacing: 2,
-    color: colors.muted,
-    marginBottom: 4,
+  summaryRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 14,
   },
-  balanceValue: {
-    fontFamily: fonts.barlowCondensedHeavy,
-    fontSize: 56,
-    color: colors.accent,
-    lineHeight: 60,
+  summaryRowBorder: {
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
   },
-  balanceUnit: {
+  summaryLabel: {
     fontFamily: fonts.barlowCondensed,
     fontSize: 13,
-    letterSpacing: 2,
+    letterSpacing: 1.5,
     color: colors.muted,
-    marginTop: 2,
+  },
+  summaryLabelTotal: {
+    color: colors.text,
+    fontSize: 15,
+  },
+  summaryValue: {
+    fontFamily: fonts.barlowCondensedHeavy,
+    fontSize: 20,
+    color: colors.text,
+  },
+  summaryValueTotal: {
+    fontSize: 26,
+    color: colors.accent,
   },
 
   viewToggle: { marginBottom: 20 },
