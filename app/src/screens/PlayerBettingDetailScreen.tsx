@@ -158,7 +158,7 @@ export default function PlayerBettingDetailScreen() {
             <>
               {bonusEntries.length > 0 && (
                 <View>
-                  <Text style={styles.bonusSectionLabel}>BONUSES</Text>
+                  <Text style={styles.gameLabel}>BONUSES</Text>
                   <View style={styles.card}>
                     {bonusEntries.map((entry, idx) => {
                       const isLast = idx === bonusEntries.length - 1
@@ -382,15 +382,6 @@ const styles = StyleSheet.create({
     marginBottom: 6,
     marginTop: 4,
   },
-  bonusSectionLabel: {
-    fontFamily: fonts.barlowCondensed,
-    fontSize: 13,
-    letterSpacing: 1,
-    color: colors.gold,
-    marginBottom: 6,
-    marginTop: 4,
-  },
-
   weekHeader: {
     flexDirection: 'row',
     alignItems: 'center',
