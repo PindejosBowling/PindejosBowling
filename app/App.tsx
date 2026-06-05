@@ -19,6 +19,7 @@ import RootNavigator from './src/navigation/RootNavigator'
 import LoginScreen from './src/screens/LoginScreen'
 import Toast from './src/components/Toast'
 import { useAuthStore } from './src/stores/authStore'
+import { useAvatarStore } from './src/stores/avatarStore'
 
 const BASE = 'PindejosBowling'
 
@@ -66,6 +67,11 @@ export default function App() {
   useEffect(() => {
     useAuthStore.getState().hydrate()
   }, [])
+
+  // Signed-URL avatar reads require an authenticated session, so load once signed in.
+  useEffect(() => {
+    if (role) useAvatarStore.getState().load()
+  }, [role])
 
   if (!fontsLoaded || !isHydrated) return null
 

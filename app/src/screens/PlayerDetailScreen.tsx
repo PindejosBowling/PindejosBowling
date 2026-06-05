@@ -23,6 +23,7 @@ import { initials } from '../utils/helpers'
 import LoadingView from '../components/LoadingView'
 import PillFilter from '../components/PillFilter'
 import ScreenHeader from '../components/ScreenHeader'
+import PlayerAvatar from '../components/PlayerAvatar'
 
 type PlayerDetailRoute = RouteProp<{ PlayerDetail: { name: string } }, 'PlayerDetail'>
 
@@ -110,6 +111,10 @@ export default function PlayerDetailScreen() {
           subtitle={currentTeam ?? undefined}
           onBack={() => navigation.goBack()}
         />
+
+        <View style={styles.avatarWrap}>
+          <PlayerAvatar name={name} size={96} />
+        </View>
 
         <PillFilter
           items={['all', ...playerSeasons.map(s => String(s.number))]}
@@ -335,6 +340,7 @@ function ExpandedTeam({ team }: { team: { team: string; players: { name: string;
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.bg },
   content: { paddingBottom: 40 },
+  avatarWrap: { alignItems: 'center', marginTop: 4, marginBottom: 12 },
 
   statGrid: {
     flexDirection: 'row',

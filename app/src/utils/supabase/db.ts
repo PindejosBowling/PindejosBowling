@@ -59,6 +59,19 @@ export const players = {
     supabase.from('players').update(data).eq('id', id),
 }
 
+// Player profile pictures live in the private "avatars" bucket.
+// Reads require auth → served via short-lived signed URLs; writes are admin-only (storage RLS).
+export const avatars = {
+  // Upsert a player's photo. `path` is the storage key (e.g. "<playerId>.jpg").
+  upload: (path: string, body: ArrayBuffer | Blob, contentType: string) =>
+    supabase.storage.from('avatars').upload(path, body, { upsert: true, contentType }),
+  remove: (path: string) =>
+    supabase.storage.from('avatars').remove([path]),
+  // Batch-sign a list of paths in one round-trip (default 1h expiry).
+  signedUrls: (paths: string[], expiresIn = 3600) =>
+    supabase.storage.from('avatars').createSignedUrls(paths, expiresIn),
+}
+
 export const registrations = {
   list: () =>
     supabase.from('registrations').select('*, players(id, name)'),
