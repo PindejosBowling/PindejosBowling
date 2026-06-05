@@ -49,7 +49,7 @@ export default function RootNavigator() {
       <Tab.Screen
         name="Betting"
         component={BettingScreen}
-        options={{ tabBarLabel: 'Betting', tabBarIcon: tabIcon('💰') }}
+        options={{ tabBarLabel: 'Pinsino', tabBarIcon: tabIcon('🏦') }}
       />
       <Tab.Screen
         name="More"
