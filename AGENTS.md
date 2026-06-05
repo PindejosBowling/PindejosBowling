@@ -313,6 +313,22 @@ const { refreshing, onRefresh } = useRefresh(reload)
 
 ---
 
+## Player Badges
+
+**File:** [src/utils/badges.ts](src/utils/badges.ts) + [src/components/PlayerBadges.tsx](src/components/PlayerBadges.tsx)
+
+Status emojis shown next to a player's name (e.g. 👑 next to the reigning champion in Standings). The system is a declarative **rule list**, not scattered inline conditions.
+
+- `badges.ts` holds the single `BADGE_RULES` array — the **source of truth** for every status → emoji mapping. Each rule is `{ key, emoji, label, applies(playerId, ctx) }`, where `applies` is a pure predicate over a `BadgeContext` (data the screen already loads — currently `lastSeasonChampionIds` + `standings`). `badgesForPlayer(playerId, ctx)` returns all matching `Badge`s.
+- Array order = display/priority order; a player can match multiple rules and show multiple emojis.
+- `PlayerBadges` is a thin presentational component that just joins the emojis.
+
+**To add a new emoji rule:** append one entry to `BADGE_RULES` in `badges.ts`. If the predicate needs data not yet in `BadgeContext`, add the field to the `BadgeContext` type, populate it where the context is built (e.g. the `badgesByPlayer` `useMemo` in StandingsScreen), and have the hook expose any new raw data. No screen render changes are needed — screens read badges via the `badgesByPlayer` map.
+
+> The champion badge is intentionally scoped to the **reigning** champion only — `useStandingsData` builds `championPlayerIds` from `seasons.getLastEnded()` → `seasonChampions.listBySeason()`, not all-time `seasonChampions.list()`.
+
+---
+
 ## State Management
 
 Four Zustand stores — all imported as `useXxxStore` hooks:
@@ -398,6 +414,7 @@ Central signed-URL cache for player profile pictures. `load()` fetches `players.
 |---|---|
 | `AppHeader` | App logo + current Week/Season badge, reads from Supabase (`weeks.getCurrent`, `seasons.getCurrent`). Top-right avatar is a `<PlayerAvatar>` opening `ProfileMenuModal` |
 | `PlayerAvatar` | Player profile picture (`{ name?, playerId?, size }`) — resolves a signed URL from `useAvatarStore` (by id, else by name) and renders `<Image>`, falling back to an `initials()` circle. Used in AppHeader, PlayerDetailScreen, ProfilePicturesScreen |
+| `PlayerBadges` | Renders a player's status emojis inline (`{ badges, style? }`) — takes a `Badge[]` from `badgesForPlayer()` and joins their emojis after the name. Renders nothing when empty. Used in StandingsScreen. See **Player Badges** |
 | `ScreenHeader` | Reusable titled header for inner screens |
 | `Toast` | Absolute-positioned animated toast, reads from `uiStore.toasts`. **Render a `<Toast />` inside any RN `<Modal>` that calls `showToast`** — the app-root `<Toast />` (App.tsx) sits behind the native modal layer and is occluded while a modal is open (see Key Patterns) |
 | `ConfirmBar` | Sticky bottom bar for pending saves (RSVP, scores) |
@@ -535,6 +552,7 @@ app/
 │   │   ├── uiStore.ts           # Ephemeral UI state + toast queue
 │   │   └── avatarStore.ts       # Signed-URL cache for player profile pictures
 │   ├── utils/
+│   │   ├── badges.ts            # BADGE_RULES + badgesForPlayer — status→emoji rule list (see Player Badges)
 │   │   ├── betLines.ts          # lineForAvg (floor+0.5), computeAvgById — shared bet-line avg/line logic
 │   │   ├── helpers.ts           # initials, timeAgo, combinations, spreadAndML
 │   │   └── supabase/
@@ -544,6 +562,7 @@ app/
 │   ├── components/
 │   │   ├── AppHeader.tsx
 │   │   ├── PlayerAvatar.tsx
+│   │   ├── PlayerBadges.tsx
 │   │   ├── ScreenHeader.tsx
 │   │   ├── Toast.tsx
 │   │   ├── ConfirmBar.tsx

@@ -14,11 +14,13 @@ import { StandingsStackParamList } from '../navigation/types'
 import AppHeader from '../components/AppHeader'
 import LoadingView from '../components/LoadingView'
 import PillFilter from '../components/PillFilter'
+import PlayerBadges from '../components/PlayerBadges'
+import { badgesForPlayer } from '../utils/badges'
 
 type Nav = NativeStackNavigationProp<StandingsStackParamList>
 
 export default function StandingsScreen() {
-  const { loading, seasonList, championPlayerIds, rawScores, rawSchedule, reload } = useStandingsData()
+  const { loading, seasonList, championPlayerIds, topPinBalancePlayerId, rawScores, rawSchedule, reload } = useStandingsData()
   const { standingsSeason, set } = useUiStore()
   const navigation = useNavigation<Nav>()
   const { refreshing, onRefresh } = useRefresh(reload)
@@ -44,6 +46,13 @@ export default function StandingsScreen() {
     () => computeStandingsFromSupabase(rawScores, rawSchedule, activeSeasonId),
     [rawScores, rawSchedule, activeSeasonId],
   )
+
+  const badgesByPlayer = useMemo(() => {
+    const ctx = { lastSeasonChampionIds: championPlayerIds, topPinBalancePlayerId, standings }
+    const map = new Map<string, ReturnType<typeof badgesForPlayer>>()
+    for (const row of standings) map.set(row.playerId, badgesForPlayer(row.playerId, ctx))
+    return map
+  }, [championPlayerIds, topPinBalancePlayerId, standings])
 
   const leagueAvg = useMemo(() => {
     const totalPins = standings.reduce((s, p) => s + p.pins, 0)
@@ -106,7 +115,7 @@ export default function StandingsScreen() {
               </View>
               <Text style={styles.playerName} numberOfLines={1}>
                 {item.name}
-                {championPlayerIds.has(item.playerId) ? ' 👑' : ''}
+                <PlayerBadges badges={badgesByPlayer.get(item.playerId) ?? []} />
               </Text>
               <Text style={styles.wlText}>{item.wins}–{item.losses}</Text>
               <Text style={styles.pinsText}>{item.pins}</Text>

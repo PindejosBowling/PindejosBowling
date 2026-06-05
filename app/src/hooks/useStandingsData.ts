@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect } from 'react'
-import { seasons, scores, games, seasonChampions } from '../utils/supabase/db'
+import { seasons, scores, games, seasonChampions, pinLedger } from '../utils/supabase/db'
 
 export interface StandingsRow {
   playerId: string
@@ -116,20 +116,41 @@ export function useStandingsData() {
   const [loading, setLoading] = useState(true)
   const [seasonList, setSeasonList] = useState<{ id: string; number: number }[]>([])
   const [championPlayerIds, setChampionPlayerIds] = useState<Set<string>>(new Set())
+  const [topPinBalancePlayerId, setTopPinBalancePlayerId] = useState<string | null>(null)
   const [rawScores, setRawScores] = useState<any[]>([])
   const [rawSchedule, setRawSchedule] = useState<any[]>([])
 
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const [seasonsRes, champRes, scoresRes, scheduleRes] = await Promise.all([
+      const [seasonsRes, lastEndedRes, currentRes, scoresRes, scheduleRes] = await Promise.all([
         seasons.list(),
-        seasonChampions.list(),
+        seasons.getLastEnded(),
+        seasons.getCurrent(),
         scores.listForStandings(),
         games.listForArchivedWeeks(),
       ])
       setSeasonList((seasonsRes.data ?? []).filter(s => !s.registration_open).map(s => ({ id: s.id, number: s.number })))
+      // Crown only the reigning champion(s) — winners of the most recently ended
+      // season — not everyone who has ever won a championship.
+      const lastEndedId = lastEndedRes.data?.id
+      const champRes = lastEndedId ? await seasonChampions.listBySeason(lastEndedId) : { data: [] }
       setChampionPlayerIds(new Set((champRes.data ?? []).map((c: any) => c.player_id)))
+      // Moneybag: the player with the highest pin balance (Σ amount) in the
+      // current active season. balance = SUM(amount) per player (house rows excluded).
+      const currentId = currentRes.data?.id
+      const ledgerRes = currentId ? await pinLedger.listBySeasonForLeaderboard(currentId) : { data: [] }
+      const balances = new Map<string, number>()
+      for (const row of (ledgerRes.data ?? []) as any[]) {
+        if (!row.player_id) continue
+        balances.set(row.player_id, (balances.get(row.player_id) ?? 0) + (row.amount ?? 0))
+      }
+      let topId: string | null = null
+      let topBal = -Infinity
+      for (const [pid, bal] of balances) {
+        if (bal > topBal) { topBal = bal; topId = pid }
+      }
+      setTopPinBalancePlayerId(topId)
       setRawScores(scoresRes.data ?? [])
       setRawSchedule(scheduleRes.data ?? [])
     } catch (e) {
@@ -141,5 +162,5 @@ export function useStandingsData() {
 
   useEffect(() => { load() }, [load])
 
-  return { loading, seasonList, championPlayerIds, rawScores, rawSchedule, reload: load }
+  return { loading, seasonList, championPlayerIds, topPinBalancePlayerId, rawScores, rawSchedule, reload: load }
 }
