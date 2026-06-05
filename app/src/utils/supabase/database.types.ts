@@ -12,31 +12,6 @@ export type Database = {
   __InternalSupabase: {
     PostgrestVersion: "14.5"
   }
-  graphql_public: {
-    Tables: {
-      [_ in never]: never
-    }
-    Views: {
-      [_ in never]: never
-    }
-    Functions: {
-      graphql: {
-        Args: {
-          extensions?: Json
-          operationName?: string
-          query?: string
-          variables?: Json
-        }
-        Returns: Json
-      }
-    }
-    Enums: {
-      [_ in never]: never
-    }
-    CompositeTypes: {
-      [_ in never]: never
-    }
-  }
   public: {
     Tables: {
       bet_legs: {
@@ -86,60 +61,6 @@ export type Database = {
             columns: ["selection_id"]
             isOneToOne: false
             referencedRelation: "bet_selections"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      bet_lines: {
-        Row: {
-          actual_score: number | null
-          created_at: string
-          game_number: number
-          id: string
-          is_open: boolean
-          line: number
-          player_id: string
-          result: string | null
-          updated_at: string
-          week_id: string
-        }
-        Insert: {
-          actual_score?: number | null
-          created_at?: string
-          game_number: number
-          id?: string
-          is_open?: boolean
-          line: number
-          player_id: string
-          result?: string | null
-          updated_at?: string
-          week_id: string
-        }
-        Update: {
-          actual_score?: number | null
-          created_at?: string
-          game_number?: number
-          id?: string
-          is_open?: boolean
-          line?: number
-          player_id?: string
-          result?: string | null
-          updated_at?: string
-          week_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "bet_lines_player_id_fkey"
-            columns: ["player_id"]
-            isOneToOne: false
-            referencedRelation: "players"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "bet_lines_week_id_fkey"
-            columns: ["week_id"]
-            isOneToOne: false
-            referencedRelation: "weeks"
             referencedColumns: ["id"]
           },
         ]
@@ -534,43 +455,46 @@ export type Database = {
       pin_ledger: {
         Row: {
           amount: number
+          bet_id: string | null
           created_at: string
           description: string
           id: string
-          placed_bet_id: string | null
-          player_id: string
+          is_house: boolean
+          player_id: string | null
           season_id: string
           type: string
           updated_at: string
         }
         Insert: {
           amount: number
+          bet_id?: string | null
           created_at?: string
           description: string
           id?: string
-          placed_bet_id?: string | null
-          player_id: string
+          is_house?: boolean
+          player_id?: string | null
           season_id: string
           type: string
           updated_at?: string
         }
         Update: {
           amount?: number
+          bet_id?: string | null
           created_at?: string
           description?: string
           id?: string
-          placed_bet_id?: string | null
-          player_id?: string
+          is_house?: boolean
+          player_id?: string | null
           season_id?: string
           type?: string
           updated_at?: string
         }
         Relationships: [
           {
-            foreignKeyName: "pin_ledger_placed_bet_id_fkey"
-            columns: ["placed_bet_id"]
+            foreignKeyName: "pin_ledger_bet_id_fkey"
+            columns: ["bet_id"]
             isOneToOne: false
-            referencedRelation: "placed_bets"
+            referencedRelation: "bets"
             referencedColumns: ["id"]
           },
           {
@@ -585,57 +509,6 @@ export type Database = {
             columns: ["season_id"]
             isOneToOne: false
             referencedRelation: "seasons"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      placed_bets: {
-        Row: {
-          bet_line_id: string
-          created_at: string
-          id: string
-          payout: number | null
-          pick: string
-          player_id: string
-          settled_at: string | null
-          updated_at: string
-          wager: number
-        }
-        Insert: {
-          bet_line_id: string
-          created_at?: string
-          id?: string
-          payout?: number | null
-          pick: string
-          player_id: string
-          settled_at?: string | null
-          updated_at?: string
-          wager: number
-        }
-        Update: {
-          bet_line_id?: string
-          created_at?: string
-          id?: string
-          payout?: number | null
-          pick?: string
-          player_id?: string
-          settled_at?: string | null
-          updated_at?: string
-          wager?: number
-        }
-        Relationships: [
-          {
-            foreignKeyName: "placed_bets_bet_line_id_fkey"
-            columns: ["bet_line_id"]
-            isOneToOne: false
-            referencedRelation: "bet_lines"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "placed_bets_player_id_fkey"
-            columns: ["player_id"]
-            isOneToOne: false
-            referencedRelation: "players"
             referencedColumns: ["id"]
           },
         ]
@@ -1003,30 +876,31 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      cancel_bet: { Args: { p_bet_id: string }; Returns: undefined }
       custom_access_token: { Args: { event: Json }; Returns: Json }
-      is_registered_player: { Args: { phone: string }; Returns: boolean }
-      place_bet: {
-        Args: { p_bet_line_id: string; p_pick: string; p_wager: number }
-        Returns: {
-          bet_line_id: string
-          created_at: string
-          id: string
-          payout: number | null
-          pick: string
-          player_id: string
-          settled_at: string | null
-          updated_at: string
-          wager: number
-        }
-        SetofOptions: {
-          from: "*"
-          to: "placed_bets"
-          isOneToOne: true
-          isSetofReturn: false
-        }
+      edit_over_under_line: {
+        Args: { p_line: number; p_market_id: string }
+        Returns: undefined
       }
-      sync_bet_lines_for_week: {
+      is_registered_player: { Args: { phone: string }; Returns: boolean }
+      place_house_bet: {
+        Args: { p_selection_ids: string[]; p_stake: number }
+        Returns: string
+      }
+      settle_betting_for_week: {
         Args: { p_week_id: string }
+        Returns: undefined
+      }
+      settle_market: {
+        Args: { p_market_id: string; p_result_value: number }
+        Returns: undefined
+      }
+      settle_market_internal: {
+        Args: { p_market_id: string; p_result_value: number }
+        Returns: undefined
+      }
+      sync_over_under_markets_for_week: {
+        Args: { p_extra_games?: number[]; p_week_id: string }
         Returns: undefined
       }
     }
@@ -1157,9 +1031,6 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
-  graphql_public: {
-    Enums: {},
-  },
   public: {
     Enums: {},
   },

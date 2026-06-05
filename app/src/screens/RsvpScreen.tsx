@@ -21,7 +21,7 @@ import {
   players as dbPlayers,
   rsvp as dbRsvp,
   weeks as dbWeeks,
-  betLines as dbBetLines,
+  betMarkets as dbBetMarkets,
 } from '../utils/supabase/db'
 import type { Tables } from '../utils/supabase/database.types'
 import { initials } from '../utils/helpers'
@@ -70,12 +70,12 @@ export default function RsvpScreen() {
   // are missing them, and refunds+removes lines for players no longer in.
   // Reads fresh state from Supabase rather than trusting component state.
   async function syncBetLines(wid: string) {
-    // Bet-line create/refund now runs entirely server-side (sync_bet_lines_for_week
-    // RPC), derived from rsvp + scores. This keeps a non-admin self-RSVP'ing out
-    // from needing direct bet_lines/placed_bets/pin_ledger write access — the
-    // tables are admin-only at the RLS layer; the SECURITY DEFINER RPC does the
-    // privileged work. Idempotent.
-    const { error } = await dbBetLines.syncForWeek(wid)
+    // O/U market create/refund runs entirely server-side (the
+    // sync_over_under_markets_for_week RPC), derived from rsvp + scores. This keeps
+    // a non-admin self-RSVP'ing out from needing direct bet_markets/bets/pin_ledger
+    // write access — the tables are admin-only at the RLS layer; the SECURITY
+    // DEFINER RPC does the privileged work (incl. refunding others' bets). Idempotent.
+    const { error } = await dbBetMarkets.syncOUForWeek(wid)
     if (error) {
       Alert.alert('Bet line sync failed', error.message ?? 'Could not update bet lines for the RSVP change.')
     }

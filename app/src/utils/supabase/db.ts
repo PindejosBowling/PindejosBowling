@@ -308,74 +308,91 @@ export const teamSlots = {
   // No week-scoped delete: deleting a week's teams cascades to its slots (see teams.removeByWeek).
 }
 
-export const betLines = {
-  listByWeek: (weekId: string) =>
+// ── Target betting model (markets → selections → bets → legs) ───────────────
+// The canonical over/under model. A market is one player×game×week O/U; its two
+// selections ('over'/'under') share a line. A bet is a stake with one bet_leg
+// per selection (single leg for O/U). Player write paths (place/cancel) and all
+// admin lifecycle steps go through SECURITY DEFINER RPCs; reads embed the whole
+// market/selection/leg graph in one round-trip. Subject embeds disambiguate the
+// two players FKs on bet_markets via the constraint name.
+const MARKET_GRAPH =
+  '*, subject:players!bet_markets_subject_player_id_fkey(name), bet_selections(*)'
+// Leg → selection → market(+subject, +week) graph, embedded under a bet.
+const LEG_GRAPH =
+  'bet_legs(*, bet_selections(*, bet_markets(*, subject:players!bet_markets_subject_player_id_fkey(name), weeks(week_number))))'
+
+export const betMarkets = {
+  // Open over_under markets for a week (Place Bets), with selections + subject.
+  listOpenOUByWeek: (weekId: string) =>
     supabase
-      .from('bet_lines')
-      .select('*, players(name)')
+      .from('bet_markets')
+      .select(MARKET_GRAPH)
       .eq('week_id', weekId)
-      .order('player_id')
-      .order('game_number'),
-  listOpenByWeek: (weekId: string) =>
+      .eq('market_type', 'over_under')
+      .eq('status', 'open')
+      .order('game_number')
+      .order('subject_player_id'),
+  // All over_under markets for a week (admin Bet Lines), with selections + subject.
+  listOUByWeek: (weekId: string) =>
     supabase
-      .from('bet_lines')
-      .select('*, players(name)')
+      .from('bet_markets')
+      .select(MARKET_GRAPH)
       .eq('week_id', weekId)
-      .eq('is_open', true)
-      .order('player_id')
-      .order('game_number'),
-  insert: (data: TablesInsert<'bet_lines'> | TablesInsert<'bet_lines'>[]) =>
-    supabase.from('bet_lines').insert(data).select(),
-  update: (id: string, data: TablesUpdate<'bet_lines'>) =>
-    supabase.from('bet_lines').update(data).eq('id', id),
-  remove: (id: string) =>
-    supabase.from('bet_lines').delete().eq('id', id),
-  // RSVP-driven line sync, server-side. The sync_bet_lines_for_week RPC
-  // (SECURITY DEFINER) derives the line set from rsvp + scores: it refunds and
-  // removes lines for players no longer "in" and creates lines (at the
-  // floor(avg)+0.5 rule) for in-players missing them. Idempotent; safe for a
-  // non-admin toggling their own RSVP. Replaces direct player-side line writes.
-  syncForWeek: (weekId: string) =>
-    supabase.rpc('sync_bet_lines_for_week', { p_week_id: weekId }),
+      .eq('market_type', 'over_under')
+      .order('game_number')
+      .order('subject_player_id'),
+  // Open/close toggle (admin direct write, permitted by admin RLS).
+  update: (id: string, data: TablesUpdate<'bet_markets'>) =>
+    supabase.from('bet_markets').update(data).eq('id', id),
+  // RSVP-driven create/refund of O/U markets (SECURITY DEFINER, server-side).
+  // extraGames adds schedule game numbers not yet present (team-gen game 3); RSVP
+  // passes none and the RPC defaults the target set to the established games / {1,2}.
+  syncOUForWeek: (weekId: string, extraGames: number[] = []) =>
+    supabase.rpc('sync_over_under_markets_for_week', { p_week_id: weekId, p_extra_games: extraGames }),
+  // Admin: settle one market against the subject's actual score.
+  settle: (marketId: string, resultValue: number) =>
+    supabase.rpc('settle_market', { p_market_id: marketId, p_result_value: resultValue }),
+  // Admin: credit scores + settle all open markets for an archived week.
+  settleForWeek: (weekId: string) =>
+    supabase.rpc('settle_betting_for_week', { p_week_id: weekId }),
+  // Admin: set a market's line (both selections) while it has no bets.
+  editLine: (marketId: string, line: number) =>
+    supabase.rpc('edit_over_under_line', { p_market_id: marketId, p_line: line }),
 }
 
-export const placedBets = {
+export const bets = {
+  // A player's bets with leg → selection → market(+subject), newest first.
   listByPlayer: (playerId: string) =>
     supabase
-      .from('placed_bets')
-      .select('*, bet_lines(week_id, player_id, game_number, line, result, actual_score, players(name))')
+      .from('bets')
+      .select('*, ' + LEG_GRAPH)
       .eq('player_id', playerId)
-      .order('created_at', { ascending: false }),
-  listByLine: (betLineId: string) =>
-    supabase
-      .from('placed_bets')
-      .select('*, players(name)')
-      .eq('bet_line_id', betLineId),
+      .order('placed_at', { ascending: false }),
+  // All bets with a leg on an over_under market in this week (Active Bets).
   listByWeek: (weekId: string) =>
     supabase
-      .from('placed_bets')
-      .select('*, players(name), bet_lines!inner(week_id, player_id, game_number, line, result, actual_score, players(name))')
-      .eq('bet_lines.week_id', weekId)
-      .order('created_at', { ascending: false }),
-  // All settled bets (settled_at set) for a season, via bet_lines → weeks.season_id
+      .from('bets')
+      .select(
+        '*, players(name), bet_legs!inner(*, bet_selections!inner(*, ' +
+        'bet_markets!inner(*, subject:players!bet_markets_subject_player_id_fkey(name))))'
+      )
+      .eq('bet_legs.bet_selections.bet_markets.week_id', weekId)
+      .eq('bet_legs.bet_selections.bet_markets.market_type', 'over_under')
+      .order('placed_at', { ascending: false }),
+  // All settled bets for a season (Settled Bets), with leg → selection → market(+week).
   listSettledBySeason: (seasonId: string) =>
     supabase
-      .from('placed_bets')
-      .select('*, players(name), bet_lines!inner(week_id, player_id, game_number, line, result, actual_score, players(name), weeks!inner(season_id, week_number))')
-      .eq('bet_lines.weeks.season_id', seasonId)
+      .from('bets')
+      .select('*, players(name), ' + LEG_GRAPH)
+      .eq('season_id', seasonId)
       .not('settled_at', 'is', null)
       .order('settled_at', { ascending: false }),
-  // Place a bet atomically + balance-checked, server-side. The place_bet RPC
-  // (SECURITY DEFINER) resolves the bettor from the JWT, validates the line is
-  // open, enforces min wager / balance / anti-tanking, then writes the
-  // placed_bet and its -wager bet_placed ledger entry in one transaction.
-  // Direct placed_bets/pin_ledger inserts are no longer permitted for players.
-  placeBet: (betLineId: string, pick: 'over' | 'under', wager: number) =>
-    supabase.rpc('place_bet', { p_bet_line_id: betLineId, p_pick: pick, p_wager: wager }),
-  update: (id: string, data: TablesUpdate<'placed_bets'>) =>
-    supabase.from('placed_bets').update(data).eq('id', id),
-  remove: (id: string) =>
-    supabase.from('placed_bets').delete().eq('id', id),
+  // Place a house bet atomically (SECURITY DEFINER); O/U passes one selection id.
+  place: (selectionIds: string[], stake: number) =>
+    supabase.rpc('place_house_bet', { p_selection_ids: selectionIds, p_stake: stake }),
+  // Admin: total undo of a placed bet (removes ledger rows + bet, re-opens market).
+  cancel: (betId: string) =>
+    supabase.rpc('cancel_bet', { p_bet_id: betId }),
 }
 
 export const pinLedger = {
@@ -386,17 +403,15 @@ export const pinLedger = {
       .eq('player_id', playerId)
       .eq('season_id', seasonId)
       .order('created_at', { ascending: false }),
+  // Leaderboard is player balances only — exclude house rows (player_id IS NULL).
   listBySeasonForLeaderboard: (seasonId: string) =>
     supabase
       .from('pin_ledger')
       .select('player_id, amount, players(name, is_active)')
-      .eq('season_id', seasonId),
+      .eq('season_id', seasonId)
+      .eq('is_house', false),
   insert: (data: TablesInsert<'pin_ledger'> | TablesInsert<'pin_ledger'>[]) =>
     supabase.from('pin_ledger').insert(data),
-  // Delete every ledger entry tied to a placed bet (bet_placed + any settlement
-  // entries) — used by the admin cancel-bet flow to fully undo a bet.
-  removeByPlacedBet: (placedBetId: string) =>
-    supabase.from('pin_ledger').delete().eq('placed_bet_id', placedBetId),
 }
 
 export const weeks = {

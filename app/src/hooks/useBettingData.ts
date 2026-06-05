@@ -1,21 +1,89 @@
 import { useState, useCallback, useEffect } from 'react'
-import { weeks, seasons, betLines, placedBets, pinLedger } from '../utils/supabase/db'
+import { weeks, seasons, betMarkets, bets, pinLedger } from '../utils/supabase/db'
+
+// A flattened over/under line (one market + its two selections).
+export interface LineView {
+  marketId: string
+  subjectPlayerId: string
+  subjectName: string
+  gameNumber: number
+  line: number
+  overSelectionId?: string
+  underSelectionId?: string
+}
+
+// A flattened single-leg O/U bet (market → selection → leg collapsed).
+export interface BetView {
+  id: string
+  playerId: string
+  bettorName: string
+  stake: number
+  status: string            // pending | won | lost | push | void | cancelled
+  settledAt: string | null
+  potentialPayout: number
+  pick: string              // selection key: 'over' | 'under'
+  line: number
+  gameNumber: number | null
+  subjectName: string
+  marketId: string
+  marketStatus: string
+  actualScore: number | null
+  weekNumber: number | null
+}
+
+// O/U bets are single-leg: collapse bet → leg → selection → market into a flat row.
+function normalizeBet(b: any): BetView {
+  const leg = b.bet_legs?.[0]
+  const sel = leg?.bet_selections
+  const mkt = sel?.bet_markets
+  return {
+    id: b.id,
+    playerId: b.player_id,
+    bettorName: b.players?.name ?? '—',
+    stake: b.stake,
+    status: b.status,
+    settledAt: b.settled_at,
+    potentialPayout: b.potential_payout,
+    pick: sel?.key ?? '',
+    line: Number(leg?.line_at_placement ?? sel?.line ?? 0),
+    gameNumber: mkt?.game_number ?? null,
+    subjectName: mkt?.subject?.name ?? '—',
+    marketId: mkt?.id ?? '',
+    marketStatus: mkt?.status ?? '',
+    actualScore: mkt?.result_value != null ? Number(mkt.result_value) : null,
+    weekNumber: mkt?.weeks?.week_number ?? null,
+  }
+}
+
+function normalizeMarket(m: any): LineView {
+  const over = m.bet_selections?.find((s: any) => s.key === 'over')
+  const under = m.bet_selections?.find((s: any) => s.key === 'under')
+  return {
+    marketId: m.id,
+    subjectPlayerId: m.subject_player_id,
+    subjectName: m.subject?.name ?? '—',
+    gameNumber: m.game_number,
+    line: Number(over?.line ?? under?.line ?? 0),
+    overSelectionId: over?.id,
+    underSelectionId: under?.id,
+  }
+}
 
 export function useBettingData(playerId: string | null) {
   const [loading, setLoading] = useState(true)
   const [balance, setBalance] = useState(0)
-  const [openLines, setOpenLines] = useState<any[]>([])
-  const [myBets, setMyBets] = useState<any[]>([])
+  const [openLines, setOpenLines] = useState<LineView[]>([])
+  const [myBets, setMyBets] = useState<BetView[]>([])
   // All bets placed by every player this week (for the "Active Bets" view)
-  const [weekBets, setWeekBets] = useState<any[]>([])
+  const [weekBets, setWeekBets] = useState<BetView[]>([])
   // All settled (won/lost/push) bets this season (for the "Settled Bets" view)
-  const [settledBets, setSettledBets] = useState<any[]>([])
+  const [settledBets, setSettledBets] = useState<BetView[]>([])
   // Season pin-balance scoreboard: active players sorted high → low
   const [leaderboard, setLeaderboard] = useState<{ playerId: string; name: string; balance: number; potential: number }[]>([])
   const [currentWeekId, setCurrentWeekId] = useState<string | null>(null)
   const [currentSeasonId, setCurrentSeasonId] = useState<string | null>(null)
-  // Set of bet_line ids the current player has already placed a bet on
-  const [myBetLineIds, setMyBetLineIds] = useState<Set<string>>(new Set())
+  // Set of market ids the current player has already placed a bet on
+  const [myBetMarketIds, setMyBetMarketIds] = useState<Set<string>>(new Set())
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -32,15 +100,15 @@ export function useBettingData(playerId: string | null) {
 
       const fetches: PromiseLike<any>[] = []
 
-      // Open bet lines + all placed bets for this week
-      let linesData: any[] = []
+      // Open O/U markets + all bets for this week
+      let marketsData: any[] = []
       let weekBetsData: any[] = []
       if (weekId) {
         fetches.push(
-          betLines.listOpenByWeek(weekId).then(({ data }) => {
-            linesData = data ?? []
+          betMarkets.listOpenOUByWeek(weekId).then(({ data }) => {
+            marketsData = data ?? []
           }),
-          placedBets.listByWeek(weekId).then(({ data }) => {
+          bets.listByWeek(weekId).then(({ data }) => {
             weekBetsData = data ?? []
           })
         )
@@ -54,19 +122,19 @@ export function useBettingData(playerId: string | null) {
           pinLedger.listBySeasonForLeaderboard(seasonId).then(({ data }) => {
             seasonLedger = data ?? []
           }),
-          placedBets.listSettledBySeason(seasonId).then(({ data }) => {
+          bets.listSettledBySeason(seasonId).then(({ data }) => {
             settledBetsData = data ?? []
           })
         )
       }
 
-      // Player's placed bets and ledger balance
-      let betsData: any[] = []
+      // Player's bets and ledger balance
+      let myBetsData: any[] = []
       let ledgerData: any[] = []
       if (playerId && seasonId) {
         fetches.push(
-          placedBets.listByPlayer(playerId).then(({ data }) => {
-            betsData = data ?? []
+          bets.listByPlayer(playerId).then(({ data }) => {
+            myBetsData = data ?? []
           }),
           pinLedger.listByPlayerSeason(playerId, seasonId).then(({ data }) => {
             ledgerData = data ?? []
@@ -76,10 +144,15 @@ export function useBettingData(playerId: string | null) {
 
       await Promise.all(fetches)
 
-      // Sum the season ledger per player, keep active players, sort high → low
+      const weekBetViews = weekBetsData.map(normalizeBet)
+      const myBetViews = myBetsData.map(normalizeBet)
+
+      // Sum the season ledger per player (house rows already excluded), keep
+      // active players, sort high → low.
       const byPlayer: Record<string, { playerId: string; name: string; balance: number; isActive: boolean }> = {}
       for (const e of seasonLedger) {
         const pid = e.player_id
+        if (!pid) continue
         if (!byPlayer[pid]) {
           byPlayer[pid] = {
             playerId: pid,
@@ -90,13 +163,13 @@ export function useBettingData(playerId: string | null) {
         }
         byPlayer[pid].balance += e.amount
       }
-      // Potential winnings: for each still-pending bet (not yet settled),
-      // a win adds wager×2 to the ledger (the wager was already debited at
-      // placement), so projected balance = current balance + Σ(wager×2).
+      // Potential winnings: each still-pending bet pays its potential_payout on a
+      // win (the stake was already debited at placement), so projected balance =
+      // current balance + Σ(potential_payout) over that player's pending bets.
       const pendingByPlayer: Record<string, number> = {}
-      for (const b of weekBetsData) {
-        if (b.settled_at == null) {
-          pendingByPlayer[b.player_id] = (pendingByPlayer[b.player_id] ?? 0) + b.wager * 2
+      for (const b of weekBetViews) {
+        if (b.status === 'pending') {
+          pendingByPlayer[b.playerId] = (pendingByPlayer[b.playerId] ?? 0) + b.potentialPayout
         }
       }
 
@@ -110,13 +183,13 @@ export function useBettingData(playerId: string | null) {
         }))
         .sort((a, b) => b.potential - a.potential)
 
-      setOpenLines(linesData)
-      setWeekBets(weekBetsData)
-      setSettledBets(settledBetsData)
+      setOpenLines(marketsData.map(normalizeMarket))
+      setWeekBets(weekBetViews)
+      setSettledBets(settledBetsData.map(normalizeBet))
       setLeaderboard(board)
-      setMyBets(betsData)
+      setMyBets(myBetViews)
       setBalance(ledgerData.reduce((sum, e) => sum + e.amount, 0))
-      setMyBetLineIds(new Set(betsData.map((b: any) => b.bet_line_id)))
+      setMyBetMarketIds(new Set(myBetViews.map(b => b.marketId)))
     } catch (e) {
       console.error('useBettingData error:', e)
     } finally {
@@ -126,5 +199,5 @@ export function useBettingData(playerId: string | null) {
 
   useEffect(() => { load() }, [load])
 
-  return { loading, balance, openLines, myBets, weekBets, settledBets, leaderboard, myBetLineIds, currentWeekId, currentSeasonId, reload: load }
+  return { loading, balance, openLines, myBets, weekBets, settledBets, leaderboard, myBetMarketIds, currentWeekId, currentSeasonId, reload: load }
 }

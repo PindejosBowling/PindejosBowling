@@ -19,11 +19,11 @@ import AppHeader from '../components/AppHeader'
 import LoadingView from '../components/LoadingView'
 import ToggleGroup from '../components/ToggleGroup'
 import Toast from '../components/Toast'
-import { useBettingData } from '../hooks/useBettingData'
+import { useBettingData, type BetView, type LineView } from '../hooks/useBettingData'
 import { useRefresh } from '../hooks/useRefresh'
 import { useAuthStore } from '../stores/authStore'
 import { useUiStore } from '../stores/uiStore'
-import { betLines, placedBets, pinLedger } from '../utils/supabase/db'
+import { betMarkets, bets } from '../utils/supabase/db'
 
 type Pick = 'over' | 'under'
 type View2 = 'leaderboard' | 'action' | 'place' | 'settled'
@@ -36,43 +36,40 @@ const VIEW_OPTIONS: { key: View2; label: string }[] = [
 ]
 
 interface BetModalState {
-  lineId: string
-  playerName: string
+  marketId: string
+  subjectName: string
   subjectPlayerId: string
   gameNumber: number
   line: number
+  overSelectionId?: string
+  underSelectionId?: string
   pick: Pick | null
   wager: string
 }
 
 interface SettleModalState {
-  lineId: string
+  marketId: string
   subjectName: string
-  gameNumber: number
+  gameNumber: number | null
   line: number
   actual: string
 }
 
-function resultBadge(result: string | null, pick: string) {
-  if (!result) return null
-  const won = pick === result
-  const push = result === 'push'
-  if (push) return { label: 'PUSH', color: colors.muted }
-  if (won) return { label: 'WON', color: colors.success }
-  return { label: 'LOST', color: colors.danger }
+// Badge from the bet's own status (the target model resolves outcome per bet).
+function resultBadge(status: string) {
+  if (status === 'push') return { label: 'PUSH', color: colors.muted }
+  if (status === 'won') return { label: 'WON', color: colors.success }
+  if (status === 'lost') return { label: 'LOST', color: colors.danger }
+  return null
 }
 
 // Total amount the player gets back, signed for display.
-// `payout` stores the net winnings (= wager at even odds), set at placement —
-// so the full return on a win/pending bet is payout + wager (winnings + stake back).
-// A push refunds the stake; a loss forfeits it.
-function betReturnText(bet: any): string {
-  const result = bet.bet_lines?.result ?? null
-  const stake = bet.wager
-  const profit = bet.payout ?? stake // fallback for any row missing payout
-  if (result === 'push') return `+${stake}`
-  if (result != null && result !== bet.pick) return `-${stake}`
-  return `+${profit + stake}` // won or still pending → full return
+// potential_payout = total returned on a win incl. the stake. A push refunds the
+// stake; a loss forfeits it; a pending bet shows its projected full return.
+function betReturnText(bet: BetView): string {
+  if (bet.status === 'push' || bet.status === 'void') return `+${bet.stake}`
+  if (bet.status === 'lost') return `-${bet.stake}`
+  return `+${bet.potentialPayout}` // won or still pending → full return
 }
 
 export default function BettingScreen() {
@@ -80,7 +77,7 @@ export default function BettingScreen() {
   const isAdmin = useAuthStore(s => s.role) === 'admin'
   const { showToast } = useUiStore()
 
-  const { loading, balance, openLines, myBets, weekBets, settledBets, leaderboard, myBetLineIds, currentSeasonId, reload } = useBettingData(playerId)
+  const { loading, balance, openLines, myBets, weekBets, settledBets, leaderboard, myBetMarketIds, reload } = useBettingData(playerId)
   const { refreshing, onRefresh } = useRefresh(reload)
 
   const [view, setView] = useState<View2>('leaderboard')
@@ -89,18 +86,16 @@ export default function BettingScreen() {
   const [settleModal, setSettleModal] = useState<SettleModalState | null>(null)
   const [settling, setSettling] = useState(false)
 
-  // Active = this week's bets that haven't been settled yet (settled ones move
-  // to the Settled Bets view once they have a settled_at).
-  const activeBets = useMemo(() => weekBets.filter(b => b.settled_at == null), [weekBets])
+  // Active = this week's still-pending bets (settled ones move to Settled Bets).
+  const activeBets = useMemo(() => weekBets.filter(b => b.status === 'pending'), [weekBets])
 
   // Group all of this week's active bets by game number (for the action view)
   const weekBetsByGame = useMemo(() => {
-    const map: Record<number, any[]> = {}
+    const map: Record<number, BetView[]> = {}
     for (const bet of activeBets) {
-      const gameNum = bet.bet_lines?.game_number
-      if (gameNum == null) continue
-      if (!map[gameNum]) map[gameNum] = []
-      map[gameNum].push(bet)
+      if (bet.gameNumber == null) continue
+      if (!map[bet.gameNumber]) map[bet.gameNumber] = []
+      map[bet.gameNumber].push(bet)
     }
     return map
   }, [activeBets])
@@ -110,17 +105,16 @@ export default function BettingScreen() {
     [weekBetsByGame],
   )
 
-  const totalWagered = useMemo(() => activeBets.reduce((s, b) => s + (b.wager ?? 0), 0), [activeBets])
-  const uniqueBettors = useMemo(() => new Set(activeBets.map(b => b.player_id)).size, [activeBets])
+  const totalWagered = useMemo(() => activeBets.reduce((s, b) => s + (b.stake ?? 0), 0), [activeBets])
+  const uniqueBettors = useMemo(() => new Set(activeBets.map(b => b.playerId)).size, [activeBets])
 
   // Group settled bets by week number (newest week first)
   const settledByWeek = useMemo(() => {
-    const map: Record<number, any[]> = {}
+    const map: Record<number, BetView[]> = {}
     for (const bet of settledBets) {
-      const wk = bet.bet_lines?.weeks?.week_number
-      if (wk == null) continue
-      if (!map[wk]) map[wk] = []
-      map[wk].push(bet)
+      if (bet.weekNumber == null) continue
+      if (!map[bet.weekNumber]) map[bet.weekNumber] = []
+      map[bet.weekNumber].push(bet)
     }
     return map
   }, [settledBets])
@@ -132,30 +126,32 @@ export default function BettingScreen() {
 
   // Group open lines by game_number
   const linesByGame = useMemo(() => {
-    const map: Record<number, any[]> = {}
+    const map: Record<number, LineView[]> = {}
     for (const line of openLines) {
-      if (!map[line.game_number]) map[line.game_number] = []
-      map[line.game_number].push(line)
+      if (!map[line.gameNumber]) map[line.gameNumber] = []
+      map[line.gameNumber].push(line)
     }
     return map
   }, [openLines])
 
   const sortedGameNumbers = useMemo(() => Object.keys(linesByGame).map(Number).sort(), [linesByGame])
 
-  function openBetModal(line: any, pick: Pick) {
+  function openBetModal(line: LineView, pick: Pick) {
     setModal({
-      lineId: line.id,
-      playerName: line.players?.name ?? 'Player',
-      subjectPlayerId: line.player_id,
-      gameNumber: line.game_number,
-      line: Number(line.line),
+      marketId: line.marketId,
+      subjectName: line.subjectName,
+      subjectPlayerId: line.subjectPlayerId,
+      gameNumber: line.gameNumber,
+      line: line.line,
+      overSelectionId: line.overSelectionId,
+      underSelectionId: line.underSelectionId,
       pick,
       wager: '',
     })
   }
 
   async function placeBet() {
-    if (!modal || !playerId || !currentSeasonId) return
+    if (!modal || !playerId) return
     const wagerNum = parseInt(modal.wager, 10)
     if (!modal.pick) { showToast('Choose over or under', 'error'); return }
     // Hard constraint: no betting the under on your own line (anti-tanking).
@@ -165,12 +161,15 @@ export default function BettingScreen() {
     if (isNaN(wagerNum) || wagerNum < 10) { showToast('Minimum wager is 10 pins', 'error'); return }
     if (wagerNum > balance) { showToast('Wager exceeds your balance', 'error'); return }
 
+    const selectionId = modal.pick === 'over' ? modal.overSelectionId : modal.underSelectionId
+    if (!selectionId) { showToast('Line unavailable', 'error'); return }
+
     setPlacing(true)
     try {
-      // Atomic + balance-checked, server-side (place_bet RPC). The bettor is
-      // resolved from the JWT and the -wager bet_placed ledger entry is written
-      // in the same transaction — the client no longer writes either row.
-      const { error: betErr } = await placedBets.placeBet(modal.lineId, modal.pick, wagerNum)
+      // Atomic + balance-checked, server-side (place_house_bet RPC). The bettor is
+      // resolved from the JWT and the double-entry stake ledger pair is written in
+      // the same transaction — the client no longer writes any betting rows.
+      const { error: betErr } = await bets.place([selectionId], wagerNum)
       if (betErr) { showToast(betErr.message, 'error'); return }
 
       showToast('Bet placed!', 'success')
@@ -183,39 +182,19 @@ export default function BettingScreen() {
     }
   }
 
-  async function cancelBet(bet: any) {
-    const betId = bet.id
-    const lineId = bet.bet_line_id
-    // Delete ledger entries first: pin_ledger.placed_bet_id is ON DELETE SET NULL,
-    // so removing the placed bet first would orphan (not delete) its ledger rows.
-    const { error: ledgerErr } = await pinLedger.removeByPlacedBet(betId)
-    if (ledgerErr) { showToast(ledgerErr.message, 'error'); return }
-
-    const { error: betErr } = await placedBets.remove(betId)
-    if (betErr) { showToast(betErr.message, 'error'); return }
-
-    // If this cancel removed the last bet from a settled line, un-settle the line
-    // (reopen + clear its result) so it can be bet on again — otherwise the line
-    // stays closed and disappears from Place Bets.
-    const lineWasSettled = bet.bet_lines?.result != null
-    if (lineWasSettled && lineId) {
-      const { data: remaining } = await placedBets.listByLine(lineId)
-      if (!remaining || remaining.length === 0) {
-        await betLines.update(lineId, { result: null, actual_score: null, is_open: true })
-      }
-    }
-
+  // Total undo, server-side (cancel_bet RPC): removes the bet's ledger pair(s) and
+  // the bet, and re-opens the market if it was the last bet on a settled one.
+  async function cancelBet(bet: BetView) {
+    const { error } = await bets.cancel(bet.id)
+    if (error) { showToast(error.message, 'error'); return }
     showToast('Bet canceled', 'success')
     await reload()
   }
 
-  function confirmCancelBet(bet: any) {
-    const bl = bet.bet_lines
-    const bettor = bet.players?.name ?? 'this player'
-    const subject = bl?.players?.name ?? '—'
+  function confirmCancelBet(bet: BetView) {
     Alert.alert(
       'Cancel this bet?',
-      `Remove ${bettor}'s ${bet.pick?.toUpperCase()} ${Number(bl?.line ?? 0).toFixed(1)} bet on ${subject} (Game ${bl?.game_number}). This fully reverses the bet's pin effect — restoring the balance to before it was placed — and cannot be undone.`,
+      `Remove ${bet.bettorName}'s ${bet.pick?.toUpperCase()} ${bet.line.toFixed(1)} bet on ${bet.subjectName} (Game ${bet.gameNumber}). This fully reverses the bet's pin effect — restoring the balance to before it was placed — and cannot be undone.`,
       [
         { text: 'Keep Bet', style: 'cancel' },
         { text: 'Cancel Bet', style: 'destructive', onPress: () => cancelBet(bet) },
@@ -223,21 +202,20 @@ export default function BettingScreen() {
     )
   }
 
-  function openSettleModal(bet: any) {
-    const bl = bet.bet_lines
+  function openSettleModal(bet: BetView) {
     setSettleModal({
-      lineId: bet.bet_line_id,
-      subjectName: bl?.players?.name ?? '—',
-      gameNumber: bl?.game_number,
-      line: Number(bl?.line ?? 0),
+      marketId: bet.marketId,
+      subjectName: bet.subjectName,
+      gameNumber: bet.gameNumber,
+      line: bet.line,
       actual: '',
     })
   }
 
-  // Manual single-line settlement — mirrors settleBettingForWeek (AdminArchiveModal)
-  // for one line: set the line result/score, then pay out every bet on it.
+  // Manual single-market settlement (settle_market RPC) — sets the result from the
+  // actual score and pays out every bet on the market in one transaction.
   async function settleBet() {
-    if (!settleModal || !currentSeasonId) return
+    if (!settleModal) return
     const actual = parseInt(settleModal.actual, 10)
     if (isNaN(actual) || actual < 0 || actual > 300) {
       showToast('Enter a valid score (0–300)', 'error'); return
@@ -245,48 +223,8 @@ export default function BettingScreen() {
 
     setSettling(true)
     try {
-      const line = settleModal.line
-      const result: 'over' | 'under' | 'push' =
-        actual > line ? 'over' : actual < line ? 'under' : 'push'
-
-      const { error: lineErr } = await betLines.update(settleModal.lineId, {
-        result, actual_score: actual, is_open: false,
-      })
-      if (lineErr) { showToast(lineErr.message, 'error'); return }
-
-      const { data: bets } = await placedBets.listByLine(settleModal.lineId)
-      const now = new Date().toISOString()
-      const ledgerEntries: any[] = []
-
-      for (const b of (bets ?? []) as any[]) {
-        const won = b.pick === result
-        const isPush = result === 'push'
-        const payout = won && !isPush ? b.wager : 0 // net winnings; push/loss = 0
-        const { error: betErr } = await placedBets.update(b.id, { payout, settled_at: now })
-        if (betErr) { showToast(betErr.message, 'error'); return }
-
-        if (isPush) {
-          ledgerEntries.push({
-            player_id: b.player_id, season_id: currentSeasonId, amount: b.wager,
-            type: 'bet_push',
-            description: `Push: ${settleModal.subjectName} at ${line} — Game ${settleModal.gameNumber}`,
-            placed_bet_id: b.id,
-          })
-        } else if (won) {
-          ledgerEntries.push({
-            player_id: b.player_id, season_id: currentSeasonId, amount: b.wager * 2,
-            type: 'bet_won',
-            description: `Won: ${settleModal.subjectName} ${result} ${line} — Game ${settleModal.gameNumber}`,
-            placed_bet_id: b.id,
-          })
-        }
-      }
-
-      if (ledgerEntries.length > 0) {
-        const { error: ledgerErr } = await pinLedger.insert(ledgerEntries)
-        if (ledgerErr) { showToast(ledgerErr.message, 'error'); return }
-      }
-
+      const { error } = await betMarkets.settle(settleModal.marketId, actual)
+      if (error) { showToast(error.message, 'error'); return }
       showToast('Bet settled', 'success')
       setSettleModal(null)
       await reload()
@@ -394,9 +332,8 @@ export default function BettingScreen() {
                 <View key={gameNum}>
                   <Text style={styles.gameLabel}>GAME {gameNum}</Text>
                   <View style={styles.card}>
-                    {weekBetsByGame[gameNum].map((bet: any, idx: number) => {
-                      const bl = bet.bet_lines
-                      const badge = resultBadge(bl?.result ?? null, bet.pick)
+                    {weekBetsByGame[gameNum].map((bet, idx) => {
+                      const badge = resultBadge(bet.status)
                       const isLast = idx === weekBetsByGame[gameNum].length - 1
                       return (
                         <View key={bet.id} style={[styles.betRow, !isLast && styles.lineRowBorder]}>
@@ -407,10 +344,10 @@ export default function BettingScreen() {
                             activeOpacity={0.7}
                           >
                             <View style={{ flex: 1 }}>
-                              <Text style={styles.betSubject}>{bet.players?.name ?? '—'}</Text>
+                              <Text style={styles.betSubject}>{bet.bettorName}</Text>
                               <Text style={styles.betDetails}>
-                                {bet.pick?.toUpperCase()} {Number(bl?.line ?? 0).toFixed(1)} · {bl?.players?.name ?? '—'}
-                                {bl?.actual_score != null ? `  ·  actual ${bl.actual_score}` : ''}
+                                {bet.pick?.toUpperCase()} {bet.line.toFixed(1)} · {bet.subjectName}
+                                {bet.actualScore != null ? `  ·  actual ${bet.actualScore}` : ''}
                               </Text>
                             </View>
                             <View style={styles.betRight}>
@@ -455,21 +392,21 @@ export default function BettingScreen() {
                 <Text style={styles.gameLabel}>GAME {gameNum}</Text>
                 <View style={styles.card}>
                   {linesByGame[gameNum].map((line, idx) => {
-                    const alreadyBet = myBetLineIds.has(line.id)
-                    const myBetForLine = myBets.find((b: any) => b.bet_line_id === line.id)
+                    const alreadyBet = myBetMarketIds.has(line.marketId)
+                    const myBetForLine = myBets.find(b => b.marketId === line.marketId)
                     const isLast = idx === linesByGame[gameNum].length - 1
                     // Anti-tanking: a player may not bet the under on their own line.
-                    const isOwnLine = line.player_id === playerId
+                    const isOwnLine = line.subjectPlayerId === playerId
                     return (
-                      <View key={line.id} style={[styles.lineRow, !isLast && styles.lineRowBorder]}>
+                      <View key={line.marketId} style={[styles.lineRow, !isLast && styles.lineRowBorder]}>
                         <View style={styles.lineInfo}>
-                          <Text style={styles.lineName}>{line.players?.name ?? '—'}</Text>
-                          <Text style={styles.lineValue}>LINE  {Number(line.line).toFixed(1)}</Text>
+                          <Text style={styles.lineName}>{line.subjectName}</Text>
+                          <Text style={styles.lineValue}>LINE  {line.line.toFixed(1)}</Text>
                         </View>
                         {alreadyBet ? (
                           <View style={styles.myBetChip}>
                             <Text style={styles.myBetChipText}>
-                              {myBetForLine?.pick?.toUpperCase()} · {myBetForLine?.wager}
+                              {myBetForLine?.pick?.toUpperCase()} · {myBetForLine?.stake}
                             </Text>
                           </View>
                         ) : (
@@ -511,19 +448,18 @@ export default function BettingScreen() {
           <>
             <Text style={[styles.sectionHeader, { marginTop: 24 }]}>MY BETS</Text>
             <View style={styles.card}>
-              {myBets.map((bet: any, idx: number) => {
-                const bl = bet.bet_lines
-                const badge = resultBadge(bl?.result ?? null, bet.pick)
+              {myBets.map((bet, idx) => {
+                const badge = resultBadge(bet.status)
                 const isLast = idx === myBets.length - 1
                 return (
                   <View key={bet.id} style={[styles.betRow, !isLast && styles.lineRowBorder]}>
                     <View style={{ flex: 1 }}>
                       <Text style={styles.betSubject}>
-                        {bl?.players?.name ?? '—'}  ·  Game {bl?.game_number}
+                        {bet.subjectName}  ·  Game {bet.gameNumber}
                       </Text>
                       <Text style={styles.betDetails}>
-                        {bet.pick?.toUpperCase()}  {Number(bl?.line ?? 0).toFixed(1)}
-                        {bl?.actual_score != null ? `  ·  actual ${bl.actual_score}` : ''}
+                        {bet.pick?.toUpperCase()}  {bet.line.toFixed(1)}
+                        {bet.actualScore != null ? `  ·  actual ${bet.actualScore}` : ''}
                       </Text>
                     </View>
                     <View style={styles.betRight}>
@@ -549,19 +485,18 @@ export default function BettingScreen() {
               <View key={wk}>
                 <Text style={styles.gameLabel}>WEEK {wk}</Text>
                 <View style={styles.card}>
-                  {settledByWeek[wk].map((bet: any, idx: number) => {
-                    const bl = bet.bet_lines
-                    const badge = resultBadge(bl?.result ?? null, bet.pick)
+                  {settledByWeek[wk].map((bet, idx) => {
+                    const badge = resultBadge(bet.status)
                     const isLast = idx === settledByWeek[wk].length - 1
                     return (
                       <View key={bet.id} style={[styles.betRow, !isLast && styles.lineRowBorder]}>
                         <View style={{ flex: 1 }}>
                           <Text style={styles.betSubject}>
-                            {bet.players?.name ?? '—'}  ·  Game {bl?.game_number}
+                            {bet.bettorName}  ·  Game {bet.gameNumber}
                           </Text>
                           <Text style={styles.betDetails}>
-                            {bet.pick?.toUpperCase()} {Number(bl?.line ?? 0).toFixed(1)} · {bl?.players?.name ?? '—'}
-                            {bl?.actual_score != null ? `  ·  actual ${bl.actual_score}` : ''}
+                            {bet.pick?.toUpperCase()} {bet.line.toFixed(1)} · {bet.subjectName}
+                            {bet.actualScore != null ? `  ·  actual ${bet.actualScore}` : ''}
                           </Text>
                         </View>
                         <View style={styles.betRight}>
@@ -606,7 +541,7 @@ export default function BettingScreen() {
             />
             <View style={styles.modalSheet}>
               <Text style={styles.modalTitle}>
-                {modal.playerName} — Game {modal.gameNumber}
+                {modal.subjectName} — Game {modal.gameNumber}
               </Text>
               <Text style={styles.modalLine}>LINE: {modal.line.toFixed(1)}</Text>
 
