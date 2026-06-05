@@ -211,6 +211,7 @@ Append-only event log. **`balance(player, season) = SUM(amount)`** over their ro
 | `id` uuid PK | |
 | `player_id` uuid → players | The account owner. **Nullable** — `NULL` for house rows. `ON DELETE CASCADE`. |
 | `season_id` uuid → seasons | `ON DELETE CASCADE`. |
+| `week_id` uuid → weeks | The week the entry belongs to. **Nullable** — `NULL` for `champion_bonus` (credited at season open before any week exists) and future `house_seed` rows. `ON DELETE SET NULL`. |
 | `amount` int | Signed. Credits positive, debits negative. |
 | `type` text | See lifecycle below. |
 | `description` text | Human-readable. |
@@ -227,15 +228,15 @@ Append-only event log. **`balance(player, season) = SUM(amount)`** over their ro
 Faucets are **mints** (player-only, no counterpart). Every `bet_*` transfer writes
 **two** rows with the same `bet_id` and opposite signs (player ↔ house), netting to 0.
 
-| Event | Player row | House row |
-|---|---|---|
-| Season opens | `+100` `champion_bonus` per prior-season champion | — |
-| Season opens | — | `0` `house_seed` (one per season; seed-0 policy, allowed negative) |
-| Week archived | `+score` `score_credit` per game per player (**dominant faucet**) | — |
-| Bet placed | `−stake` `bet_stake` | `+stake` `bet_stake` |
-| Bet won | `+potential_payout` `bet_payout` | `−potential_payout` `bet_payout` |
-| Bet push | `+stake` `bet_refund` | `−stake` `bet_refund` |
-| Bet loss | — (stake already debited) | — (house already holds the stake) |
+| Event | Player row | House row | `week_id` set? |
+|---|---|---|---|
+| Season opens | `+100` `champion_bonus` per prior-season champion | — | **NULL** (no week exists yet) |
+| Season opens | — | `0` `house_seed` (one per season; seed-0 policy, allowed negative) | **NULL** for new seasons; backfilled to week 1 for existing rows |
+| Week archived | `+score` `score_credit` per game per player (**dominant faucet**) | — | **YES** — the archived week |
+| Bet placed | `−stake` `bet_stake` | `+stake` `bet_stake` | **YES** — the market's week |
+| Bet won | `+potential_payout` `bet_payout` | `−potential_payout` `bet_payout` | **YES** — the market's week |
+| Bet push | `+stake` `bet_refund` | `−stake` `bet_refund` | **YES** — the market's week |
+| Bet loss | — (stake already debited) | — (house already holds the stake) | n/a |
 
 `potential_payout = floor(stake × Π(won-leg odds))` (single even-money O/U leg =
 `stake × 2`). Net player on win = profit; net house = `stake − payout`.
@@ -390,6 +391,7 @@ dropped (the `20260605005517`–`20260605011338` migrations + git history).
 | `migrations/20260605010835_ou_sync_extra_games.sql` | Phase 2 — `sync_over_under_markets_for_week` + `extra_games` (team-gen game 3). |
 | `migrations/20260605011207_migrate_legacy_betting_to_target.sql` | Phase 2 WS5 — legacy history → canonical model; ledger `bet_id`/type backfill. |
 | `migrations/20260605011338_decommission_legacy_betting.sql` | Phase 2 WS6 — drop legacy tables / RPCs / trigger / `placed_bet_id`; prune type CHECK. |
+| `migrations/20260605120219_add_week_id_to_pin_ledger.sql` | Add `week_id` FK to `pin_ledger`; backfill existing rows; update `place_house_bet`, `settle_market_internal`, `settle_betting_for_week` to stamp it on new entries. |
 | `app/src/utils/supabase/db.ts` | Typed query objects (`betMarkets` / `bets` / `pinLedger` + RPC wrappers). |
 | `app/src/hooks/useBettingData.ts` | Normalizes the market/bet graph into flat `LineView` / `BetView`. |
 | `supabase/AUTH.md` | Auth / JWT / RLS architecture. |
