@@ -33,6 +33,18 @@ type BettingNav = NativeStackNavigationProp<BettingStackParamList>
 
 type Pick = 'over' | 'under'
 type View2 = 'leaderboard' | 'action' | 'place' | 'settled'
+type PlaceMode = 'single' | 'parlay'
+
+// One leg staged in the parlay bet slip.
+interface ParlayLeg {
+  selectionId: string
+  marketId: string
+  subjectName: string
+  subjectPlayerId: string
+  gameNumber: number
+  line: number
+  pick: Pick
+}
 
 const VIEW_OPTIONS: { key: View2; label: string }[] = [
   { key: 'leaderboard', label: 'Leaderboard' },
@@ -84,10 +96,14 @@ export default function BettingScreen() {
   const { showToast } = useUiStore()
   const navigation = useNavigation<BettingNav>()
 
-  const { loading, balance, openLines, myBets, weekBets, settledBets, leaderboard, myBetMarketIds, reload } = useBettingData(playerId)
+  const { loading, balance, openLines, myBets, weekBets, settledBets, leaderboard, reload } = useBettingData(playerId)
   const { refreshing, onRefresh } = useRefresh(reload)
 
   const [view, setView] = useState<View2>('leaderboard')
+  const [placeMode, setPlaceMode] = useState<PlaceMode>('single')
+  const [parlayLegs, setParlayLegs] = useState<ParlayLeg[]>([])
+  const [parlayModalOpen, setParlayModalOpen] = useState(false)
+  const [parlayWager, setParlayWager] = useState('')
   const [modal, setModal] = useState<BetModalState | null>(null)
   const [placing, setPlacing] = useState(false)
   const [settleModal, setSettleModal] = useState<SettleModalState | null>(null)
@@ -97,11 +113,15 @@ export default function BettingScreen() {
   // Active = this week's still-pending bets (settled ones move to Settled Bets).
   const activeBets = useMemo(() => weekBets.filter(b => b.status === 'pending'), [weekBets])
 
-  // Group all of this week's active bets by game number (for the action view)
+  // Parlays span multiple games, so they get their own group; single bets bucket
+  // by their one game number.
+  const activeParlays = useMemo(() => activeBets.filter(b => b.legCount > 1), [activeBets])
+
+  // Group all of this week's active single bets by game number (for the action view)
   const weekBetsByGame = useMemo(() => {
     const map: Record<number, BetView[]> = {}
     for (const bet of activeBets) {
-      if (bet.gameNumber == null) continue
+      if (bet.legCount > 1 || bet.gameNumber == null) continue
       if (!map[bet.gameNumber]) map[bet.gameNumber] = []
       map[bet.gameNumber].push(bet)
     }
@@ -190,6 +210,64 @@ export default function BettingScreen() {
     }
   }
 
+  // ── Parlay slip ─────────────────────────────────────────────────────────
+  // All O/U selections sit at even money (2.000), so the fair combined odds of
+  // an N-leg parlay = 2^N and payout = floor(stake × 2^N). Push/void legs drop
+  // out at settlement (handled server-side), recomputing over the surviving legs.
+  const parlayOdds = useMemo(() => Math.pow(2, parlayLegs.length), [parlayLegs])
+
+  // Toggle a line's over/under in/out of the slip. One selection per market.
+  function toggleParlayLeg(line: LineView, pick: Pick) {
+    if (pick === 'under' && line.subjectPlayerId === playerId) {
+      showToast('Believe in yourself man', 'error'); return
+    }
+    const selectionId = pick === 'over' ? line.overSelectionId : line.underSelectionId
+    if (!selectionId) { showToast('Line unavailable', 'error'); return }
+
+    setParlayLegs(prev => {
+      const existing = prev.find(l => l.marketId === line.marketId)
+      // Tapping the already-selected side removes the leg.
+      if (existing && existing.pick === pick) return prev.filter(l => l.marketId !== line.marketId)
+      const without = prev.filter(l => l.marketId !== line.marketId)
+      return [...without, {
+        selectionId,
+        marketId: line.marketId,
+        subjectName: line.subjectName,
+        subjectPlayerId: line.subjectPlayerId,
+        gameNumber: line.gameNumber,
+        line: line.line,
+        pick,
+      }]
+    })
+  }
+
+  function removeParlayLeg(marketId: string) {
+    setParlayLegs(prev => prev.filter(l => l.marketId !== marketId))
+  }
+
+  async function placeParlay() {
+    if (!playerId) return
+    if (parlayLegs.length < 2) { showToast('A parlay needs at least 2 legs', 'error'); return }
+    const wagerNum = parseInt(parlayWager, 10)
+    if (isNaN(wagerNum) || wagerNum < 10) { showToast('Minimum wager is 10 pins', 'error'); return }
+    if (wagerNum > balance) { showToast('Wager exceeds your balance', 'error'); return }
+
+    setPlacing(true)
+    try {
+      const { error } = await bets.place(parlayLegs.map(l => l.selectionId), wagerNum)
+      if (error) { showToast(error.message, 'error'); return }
+      showToast('Parlay placed!', 'success')
+      setParlayModalOpen(false)
+      setParlayLegs([])
+      setParlayWager('')
+      await reload()
+    } catch {
+      showToast('Failed to place parlay', 'error')
+    } finally {
+      setPlacing(false)
+    }
+  }
+
   // Total undo, server-side (cancel_bet RPC): removes the bet's ledger pair(s) and
   // the bet, and re-opens the market if it was the last bet on a settled one.
   async function cancelBet(bet: BetView) {
@@ -258,7 +336,10 @@ export default function BettingScreen() {
     <SafeAreaView style={styles.safe} edges={['top']}>
       <AppHeader />
       <ScrollView
-        contentContainerStyle={styles.content}
+        contentContainerStyle={[
+          styles.content,
+          view === 'place' && placeMode === 'parlay' && parlayLegs.length > 0 && { paddingBottom: 96 },
+        ]}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.muted} />}
       >
         {/* Balance card */}
@@ -313,7 +394,7 @@ export default function BettingScreen() {
 
         {/* ── Active Bets ─────────────────────────────────────── */}
         {view === 'action' && (
-          actionGameNumbers.length > 0 ? (
+          actionGameNumbers.length > 0 || activeParlays.length > 0 ? (
             <>
               <View style={styles.summaryCard}>
                 <View style={styles.summaryItem}>
@@ -357,6 +438,27 @@ export default function BettingScreen() {
                   </View>
                 </View>
               ))}
+
+              {activeParlays.length > 0 && (
+                <View>
+                  <Text style={styles.gameLabel}>PARLAYS</Text>
+                  <View style={styles.card}>
+                    {activeParlays.map((bet, idx) => (
+                      <BetRow
+                        key={bet.id}
+                        bet={bet}
+                        isLast={idx === activeParlays.length - 1}
+                        badge={resultBadge(bet.status)}
+                        betReturnText={betReturnText(bet)}
+                        isAdmin={isAdmin}
+                        // Parlays span markets — no single-market settle; tap shows details.
+                        onPress={() => setDetailModal(bet)}
+                        onCancelPress={() => confirmCancelBet(bet)}
+                      />
+                    ))}
+                  </View>
+                </View>
+              )}
             </>
           ) : (
             <View style={styles.emptyCard}>
@@ -367,6 +469,20 @@ export default function BettingScreen() {
 
         {/* ── Place Bets ──────────────────────────────────────── */}
         {view === 'place' && <>
+        {/* Single / Parlay mode */}
+        <View style={styles.modeToggle}>
+          <ToggleGroup
+            options={[{ key: 'single', label: 'Single' }, { key: 'parlay', label: 'Parlay' }]}
+            value={placeMode}
+            onChange={(m: PlaceMode) => setPlaceMode(m)}
+          />
+        </View>
+        {placeMode === 'parlay' && (
+          <Text style={[styles.adminHint, { textAlign: 'center' }]}>
+            Tap lines to add legs · all must win · odds double with each leg
+          </Text>
+        )}
+
         {/* My bets */}
         {myBets.length > 0 && (
           <>
@@ -400,22 +516,34 @@ export default function BettingScreen() {
                 <Text style={styles.gameLabel}>GAME {gameNum}</Text>
                 <View style={styles.card}>
                   {linesByGame[gameNum].map((line, idx) => {
-                    const alreadyBet = myBetMarketIds.has(line.marketId)
-                    const myBetForLine = myBets.find(b => b.marketId === line.marketId)
                     const isLast = idx === linesByGame[gameNum].length - 1
                     // Anti-tanking: a player may not bet the under on their own line.
                     const isOwnLine = line.subjectPlayerId === playerId
+                    const slipLeg = parlayLegs.find(l => l.marketId === line.marketId)
                     return (
                       <View key={line.marketId} style={[styles.lineRow, !isLast && styles.lineRowBorder]}>
                         <View style={styles.lineInfo}>
                           <Text style={styles.lineName}>{line.subjectName}</Text>
                           <Text style={styles.lineValue}>LINE  {line.line.toFixed(1)}</Text>
                         </View>
-                        {alreadyBet ? (
-                          <View style={styles.myBetChip}>
-                            <Text style={styles.myBetChipText}>
-                              {myBetForLine?.pick?.toUpperCase()} · {myBetForLine?.stake}
-                            </Text>
+                        {placeMode === 'parlay' ? (
+                          <View style={styles.pickBtns}>
+                            {(['over', 'under'] as Pick[]).map(p => {
+                              const blocked = p === 'under' && isOwnLine
+                              const selected = slipLeg?.pick === p
+                              return (
+                                <TouchableOpacity
+                                  key={p}
+                                  style={[styles.pickBtn, selected && styles.pickBtnSelected, blocked && styles.pickBtnDisabled]}
+                                  onPress={() => toggleParlayLeg(line, p)}
+                                  activeOpacity={0.7}
+                                >
+                                  <Text style={[styles.pickBtnText, selected && styles.pickBtnTextSelected]}>
+                                    {p.toUpperCase()}
+                                  </Text>
+                                </TouchableOpacity>
+                              )
+                            })}
                           </View>
                         ) : (
                           <View style={styles.pickBtns}>
@@ -486,6 +614,32 @@ export default function BettingScreen() {
         )}
       </ScrollView>
 
+      {/* Parlay bet slip (sticky) */}
+      {view === 'place' && placeMode === 'parlay' && parlayLegs.length > 0 && (
+        <View style={styles.slipBar}>
+          <View style={styles.slipInfo}>
+            <Text style={styles.slipTitle}>
+              {parlayLegs.length}-LEG PARLAY · ×{parlayOdds}
+            </Text>
+            <Text style={styles.slipSub} numberOfLines={1}>
+              {parlayLegs.map(l => `${l.subjectName} ${l.pick.toUpperCase()}`).join(' · ')}
+            </Text>
+          </View>
+          <TouchableOpacity style={styles.slipClear} onPress={() => setParlayLegs([])} activeOpacity={0.7}>
+            <Text style={styles.slipClearText}>Clear</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.slipBuild, parlayLegs.length < 2 && styles.placeBtnDisabled]}
+            onPress={() => { if (parlayLegs.length >= 2) setParlayModalOpen(true) }}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.slipBuildText}>
+              {parlayLegs.length < 2 ? 'Add 2+' : 'Build'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
       {/* Bet placement modal */}
       {modal && (
         <Modal visible transparent animationType="slide" onRequestClose={() => !placing && setModal(null)}>
@@ -551,6 +705,68 @@ export default function BettingScreen() {
                 {placing
                   ? <ActivityIndicator size="small" color={colors.bg} />
                   : <Text style={styles.placeBtnText}>Place Bet</Text>}
+              </TouchableOpacity>
+            </View>
+          </KeyboardAvoidingView>
+          <Toast />
+        </Modal>
+      )}
+
+      {/* Parlay confirm modal */}
+      {parlayModalOpen && (
+        <Modal visible transparent animationType="slide" onRequestClose={() => !placing && setParlayModalOpen(false)}>
+          <KeyboardAvoidingView
+            style={styles.modalBackdrop}
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          >
+            <TouchableOpacity
+              style={StyleSheet.absoluteFill}
+              activeOpacity={1}
+              onPress={() => !placing && setParlayModalOpen(false)}
+            />
+            <View style={styles.modalSheet}>
+              <Text style={styles.modalTitle}>{parlayLegs.length}-Leg Parlay</Text>
+              <Text style={styles.modalLine}>ALL LEGS MUST WIN · PAYS ×{parlayOdds}</Text>
+
+              <View style={styles.parlayLegList}>
+                {parlayLegs.map(leg => (
+                  <View key={leg.marketId} style={styles.parlayLegRow}>
+                    <Text style={styles.parlayLegText} numberOfLines={1}>
+                      {leg.subjectName} · {leg.pick.toUpperCase()} {leg.line.toFixed(1)} · G{leg.gameNumber}
+                    </Text>
+                    <TouchableOpacity onPress={() => removeParlayLeg(leg.marketId)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                      <Text style={styles.parlayLegRemove}>✕</Text>
+                    </TouchableOpacity>
+                  </View>
+                ))}
+              </View>
+
+              <Text style={styles.wagerLabel}>WAGER (pins)</Text>
+              <TextInput
+                style={styles.wagerInput}
+                value={parlayWager}
+                onChangeText={v => setParlayWager(v.replace(/[^0-9]/g, ''))}
+                keyboardType="number-pad"
+                placeholder={`10 – ${maxWager}`}
+                placeholderTextColor={colors.muted2}
+                maxLength={6}
+              />
+              <Text style={styles.wagerHint}>
+                Balance: {balance} pins  ·  Min: 10
+                {parlayWager !== '' && !isNaN(parseInt(parlayWager, 10))
+                  ? `  ·  To win: ${(Math.floor(parseInt(parlayWager, 10) * parlayOdds)).toLocaleString()}`
+                  : ''}
+              </Text>
+
+              <TouchableOpacity
+                style={[styles.placeBtn, placing && styles.placeBtnDisabled]}
+                onPress={placeParlay}
+                disabled={placing}
+                activeOpacity={0.7}
+              >
+                {placing
+                  ? <ActivityIndicator size="small" color={colors.bg} />
+                  : <Text style={styles.placeBtnText}>Place Parlay</Text>}
               </TouchableOpacity>
             </View>
           </KeyboardAvoidingView>
@@ -630,27 +846,43 @@ export default function BettingScreen() {
                 <Text style={styles.detailValue}>{detailModal.bettorName}</Text>
               </View>
 
-              <View style={styles.detailRow}>
-                <Text style={styles.detailLabel}>SUBJECT</Text>
-                <Text style={styles.detailValue}>{detailModal.subjectName}</Text>
-              </View>
+              {detailModal.legCount > 1 ? (
+                <View style={styles.detailRow}>
+                  <Text style={styles.detailLabel}>LEGS ({detailModal.legCount})</Text>
+                  {detailModal.legs.map((leg, i) => (
+                    <Text key={i} style={[styles.detailValue, { marginTop: i === 0 ? 0 : 4 }]}>
+                      {leg.subjectName} · {leg.pick?.toUpperCase()} {leg.line.toFixed(1)}
+                      {leg.gameNumber != null ? ` · G${leg.gameNumber}` : ''}
+                      {leg.actualScore != null ? ` (${leg.actualScore})` : ''}
+                      {leg.result ? ` — ${leg.result.toUpperCase()}` : ''}
+                    </Text>
+                  ))}
+                </View>
+              ) : (
+                <>
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailLabel}>SUBJECT</Text>
+                    <Text style={styles.detailValue}>{detailModal.subjectName}</Text>
+                  </View>
 
-              <View style={styles.detailRow}>
-                <Text style={styles.detailLabel}>PICK</Text>
-                <Text style={styles.detailValue}>{detailModal.pick?.toUpperCase()}</Text>
-              </View>
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailLabel}>PICK</Text>
+                    <Text style={styles.detailValue}>{detailModal.pick?.toUpperCase()}</Text>
+                  </View>
 
-              <View style={styles.detailRow}>
-                <Text style={styles.detailLabel}>LINE</Text>
-                <Text style={styles.detailValue}>{detailModal.line.toFixed(1)}</Text>
-              </View>
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailLabel}>LINE</Text>
+                    <Text style={styles.detailValue}>{detailModal.line.toFixed(1)}</Text>
+                  </View>
+                </>
+              )}
 
               <View style={styles.detailRow}>
                 <Text style={styles.detailLabel}>WAGER</Text>
                 <Text style={styles.detailValue}>{detailModal.stake} pins</Text>
               </View>
 
-              {detailModal.actualScore != null && (
+              {detailModal.legCount === 1 && detailModal.actualScore != null && (
                 <View style={styles.detailRow}>
                   <Text style={styles.detailLabel}>ACTUAL SCORE</Text>
                   <Text style={styles.detailValue}>{detailModal.actualScore}</Text>
@@ -862,25 +1094,92 @@ const styles = StyleSheet.create({
     backgroundColor: colors.accentDim,
   },
   pickBtnDisabled: { borderColor: colors.border2, backgroundColor: 'transparent', opacity: 0.4 },
+  pickBtnSelected: { backgroundColor: colors.accent },
   pickBtnText: {
     fontFamily: fonts.barlowCondensed,
     fontSize: 12,
     color: colors.accent,
     letterSpacing: 0.5,
   },
-  myBetChip: {
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 8,
-    backgroundColor: colors.surface3,
+  pickBtnTextSelected: { color: colors.bg },
+
+  modeToggle: { marginBottom: 12 },
+
+  // Parlay sticky slip
+  slipBar: {
+    position: 'absolute',
+    left: 12,
+    right: 12,
+    bottom: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: colors.surface2,
+    borderRadius: radius.cardMd,
     borderWidth: 1,
-    borderColor: colors.border2,
+    borderColor: colors.accent,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
   },
-  myBetChipText: {
+  slipInfo: { flex: 1 },
+  slipTitle: {
+    fontFamily: fonts.barlowCondensedHeavy,
+    fontSize: 15,
+    color: colors.accent,
+    letterSpacing: 0.5,
+  },
+  slipSub: {
     fontFamily: fonts.barlowCondensed,
     fontSize: 12,
     color: colors.muted,
+    marginTop: 1,
+  },
+  slipClear: {
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+  },
+  slipClearText: {
+    fontFamily: fonts.barlowCondensed,
+    fontSize: 13,
+    color: colors.muted,
     letterSpacing: 0.5,
+  },
+  slipBuild: {
+    backgroundColor: colors.accent,
+    borderRadius: radius.cardSm,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+  },
+  slipBuildText: {
+    fontFamily: fonts.barlowCondensed,
+    fontSize: 14,
+    fontWeight: '700',
+    color: colors.bg,
+    letterSpacing: 0.5,
+  },
+
+  // Parlay confirm modal leg list
+  parlayLegList: { marginBottom: 16 },
+  parlayLegRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+    gap: 10,
+  },
+  parlayLegText: {
+    flex: 1,
+    fontFamily: fonts.barlowCondensed,
+    fontSize: 14,
+    color: colors.text,
+    letterSpacing: 0.3,
+  },
+  parlayLegRemove: {
+    fontFamily: fonts.barlowCondensed,
+    fontSize: 15,
+    color: colors.danger,
   },
   emptyCard: {
     backgroundColor: colors.surface,

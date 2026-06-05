@@ -12,7 +12,19 @@ export interface LineView {
   underSelectionId?: string
 }
 
-// A flattened single-leg O/U bet (market → selection → leg collapsed).
+// One resolved leg of a bet (a single backed over/under selection).
+export interface LegView {
+  subjectName: string
+  pick: string              // selection key: 'over' | 'under'
+  line: number
+  gameNumber: number | null
+  actualScore: number | null
+  result: string | null     // won | lost | push | void | null (pending)
+}
+
+// A flattened O/U bet. Single bets carry one leg; a parlay carries N. The
+// top-level pick/line/gameNumber/etc. mirror the first leg for single-bet
+// rendering paths; multi-leg consumers read `legs` / `legCount`.
 export interface BetView {
   id: string
   playerId: string
@@ -21,21 +33,38 @@ export interface BetView {
   status: string            // pending | won | lost | push | void | cancelled
   settledAt: string | null
   potentialPayout: number
-  pick: string              // selection key: 'over' | 'under'
+  pick: string              // first leg's selection key: 'over' | 'under'
   line: number
   gameNumber: number | null
   subjectName: string
-  marketId: string
+  marketId: string          // first leg's market
   marketStatus: string
   actualScore: number | null
   weekNumber: number | null
+  legs: LegView[]
+  legCount: number
 }
 
-// O/U bets are single-leg: collapse bet → leg → selection → market into a flat row.
+// Collapse bet → legs → selections → markets into a flat row. A single O/U bet
+// has one leg; a parlay has many (combined odds = Π of the legs' odds).
 export function normalizeBet(b: any): BetView {
-  const leg = b.bet_legs?.[0]
-  const sel = leg?.bet_selections
-  const mkt = sel?.bet_markets
+  const rawLegs: any[] = b.bet_legs ?? []
+  const legs: LegView[] = rawLegs.map((leg: any) => {
+    const sel = leg?.bet_selections
+    const mkt = sel?.bet_markets
+    return {
+      subjectName: mkt?.subject?.name ?? '—',
+      pick: sel?.key ?? '',
+      line: Number(leg?.line_at_placement ?? sel?.line ?? 0),
+      gameNumber: mkt?.game_number ?? null,
+      actualScore: mkt?.result_value != null ? Number(mkt.result_value) : null,
+      result: leg?.result ?? null,
+    }
+  })
+
+  const firstLeg = rawLegs[0]
+  const firstSel = firstLeg?.bet_selections
+  const firstMkt = firstSel?.bet_markets
   return {
     id: b.id,
     playerId: b.player_id,
@@ -44,14 +73,16 @@ export function normalizeBet(b: any): BetView {
     status: b.status,
     settledAt: b.settled_at,
     potentialPayout: b.potential_payout,
-    pick: sel?.key ?? '',
-    line: Number(leg?.line_at_placement ?? sel?.line ?? 0),
-    gameNumber: mkt?.game_number ?? null,
-    subjectName: mkt?.subject?.name ?? '—',
-    marketId: mkt?.id ?? '',
-    marketStatus: mkt?.status ?? '',
-    actualScore: mkt?.result_value != null ? Number(mkt.result_value) : null,
-    weekNumber: mkt?.weeks?.week_number ?? null,
+    pick: firstSel?.key ?? '',
+    line: Number(firstLeg?.line_at_placement ?? firstSel?.line ?? 0),
+    gameNumber: firstMkt?.game_number ?? null,
+    subjectName: firstMkt?.subject?.name ?? '—',
+    marketId: firstMkt?.id ?? '',
+    marketStatus: firstMkt?.status ?? '',
+    actualScore: firstMkt?.result_value != null ? Number(firstMkt.result_value) : null,
+    weekNumber: firstMkt?.weeks?.week_number ?? null,
+    legs,
+    legCount: legs.length,
   }
 }
 

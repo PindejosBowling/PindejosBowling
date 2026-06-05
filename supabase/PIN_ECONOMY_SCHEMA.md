@@ -14,6 +14,12 @@ tables or writing new betting flows.
 > `placed_bets_no_self_under` trigger were **removed** in the Phase 2 cutover (the
 > `20260605005517`–`20260605011338` migrations). All betting work now extends the
 > canonical model — see [Implementing a new bet type](#implementing-a-new-bet-type).
+>
+> **House parlays are also live** (multi-leg house bets, combined odds = Π(leg
+> odds) = `×2^N` on even-money O/U legs). This required **no schema or RPC change** —
+> the placement/settlement/cancel RPCs were parlay-shaped from the start; only the UI
+> was added. See [Roadmap → Parlays](#8-roadmap) for the mechanics and the fair-odds
+> / correlation caveats.
 
 ---
 
@@ -362,19 +368,61 @@ funded-house double-entry accounting; the app, RSVP sync, admin settlement, and
 team-gen are ported; legacy `bet_lines` / `placed_bets` / RPCs / trigger are
 dropped (the `20260605005517`–`20260605011338` migrations + git history).
 
+**Parlays — DONE (UI only, no schema/RPC change).** The placement/settlement RPCs
+were authored parlay-shaped from the start (leg arrays, combined odds = Π(leg
+`odds_at_placement`), push/void legs drop out at settlement), so multi-leg house
+bets shipped as a pure-UI addition on top of the existing model:
+
+- **Placement:** `place_house_bet(selection_ids[], stake)` already accepts N
+  selections → N `bet_legs` on one `bets` row. The combined `potential_payout` =
+  `floor(stake × Π(odds))`; with the live even-money O/U selections (`odds =
+  2.000`) an N-leg parlay pays **`×2^N`**.
+- **Settlement:** each leg settles when *its* market settles; `settle_market_internal`
+  leaves the bet `pending` until every leg is resolved, then a bet wins iff all
+  surviving legs win (push/void legs drop out and the payout is recomputed over the
+  remaining legs — see the [back/lay table](#back--lay-settlement-truth-table)).
+  A parlay therefore can't be settled from a single market in the admin UI; it
+  finalizes automatically as its last leg lands.
+- **Cancellation:** `cancel_bet(bet_id)` already reverses all of a bet's ledger
+  pair(s) regardless of leg count, so admin cancel works on parlays unchanged.
+- **UI:** the **Place Bets** tab has a Single/Parlay toggle; in Parlay mode the
+  open O/U lines feed a **bet slip** (one selection per market, anti-tank enforced
+  on the slip as well as the RPC/trigger), and a confirm modal places the whole
+  slip in one `place_house_bet` call. Parlays render as their own group in **Active
+  Bets** / **Settled Bets** (`BetView.legCount > 1`).
+
+> **Odds note — `2^N` is the *fair* (zero-EV) payout for independent even-money
+> legs, not a house giveaway.** Win probability shrinks as `(1/2)^N` exactly as the
+> payout grows as `2^N`, so EV nets to 0. Because Phase 2 ships **fair odds with no
+> vig**, the house has no cushion against legs that aren't truly 50/50. Two leaks to
+> watch (neither is a schema issue — both are pricing/integrity choices):
+> - **Mispriced lines.** The O/U line is `floor(avg)+0.5` from prior archived
+>   scores — an estimate of a skewed, non-stationary distribution. A leg whose true
+>   `P(win)` ≠ 0.5 is mildly +EV as a single but its edge compounds **exponentially**
+>   in a parlay.
+> - **Correlated legs.** The `Π(odds)` rule is only fair for *independent* legs. A
+>   single player's Overs **across multiple games in one night** are positively
+>   correlated (hot/cold night, lane condition), so `P(all over)` exceeds `Π(0.5)`
+>   while the parlay still only pays `×2^N` → underpriced → +EV. (A cross-market
+>   correlation — a player's Over + their team's moneyline — is the textbook case
+>   real books block, but moneyline isn't live yet, so it can't occur today.)
+
 **Next (schema already supports it):**
 
 1. **Peer bets** (`bet_offers` / `bet_matches`): `create_bet_offer`,
    `accept_bet_offer` RPCs + escrow settlement — all `SECURITY DEFINER`,
    integrity-checked, double-entry (peer is zero-sum between players, rake → house).
-2. **Parlays:** the placement/settlement RPCs are already parlay-shaped (leg
-   arrays, combined odds); only multi-leg UI is missing.
-3. **Moneyline / props:** new `bet_markets.market_type` + selections (§7).
+2. **Moneyline / props:** new `bet_markets.market_type` + selections (§7).
 
 ### Open product decisions (do not block the schema)
 - Peer **rake** percentage (`bet_matches.rake` defaults to 0).
 - House **vig** (sub-fair odds as a sink) vs fair odds + manual top-ups (Phase 2
-  ships fair `2.000`).
+  ships fair `2.000`). Pricing parlay legs below `2.000` (e.g. `1.90` → `×1.9^N`)
+  is the lever that turns the compounding parlay margin in the house's favor, the
+  way real books do.
+- **Parlay correlation guard:** whether to forbid multiple legs with the same
+  `subject_player_id` in one bet (kills the same-player-across-games +EV play). Not
+  yet enforced — parlays currently allow any distinct selections.
 - Offer **expiry / cancellation refund** rules.
 
 ---

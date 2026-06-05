@@ -24,15 +24,34 @@ export default function BetRow({
   const isPressable = !!onPress && isAdmin
   const showCancelBtn = !!onCancelPress && isAdmin
 
+  const isParlay = bet.legCount > 1
+
   const content = (
     <>
       <View style={{ flex: 1 }}>
-        <Text style={styles.betSubject}>
-          {bet.subjectName} · {bet.pick?.toUpperCase()} {bet.line.toFixed(1)}
-        </Text>
-        <Text style={styles.betDetails}>
-          {bet.bettorName}
-        </Text>
+        {isParlay ? (
+          <>
+            <Text style={styles.betSubject}>
+              {bet.bettorName} · PARLAY ({bet.legCount} legs)
+            </Text>
+            {bet.legs.map((leg, i) => (
+              <Text key={i} style={styles.betDetails}>
+                {leg.subjectName} · {leg.pick?.toUpperCase()} {leg.line.toFixed(1)}
+                {leg.gameNumber != null ? ` (G${leg.gameNumber})` : ''}
+                {leg.result ? ` — ${leg.result.toUpperCase()}` : ''}
+              </Text>
+            ))}
+          </>
+        ) : (
+          <>
+            <Text style={styles.betSubject}>
+              {bet.subjectName} · {bet.pick?.toUpperCase()} {bet.line.toFixed(1)}
+            </Text>
+            <Text style={styles.betDetails}>
+              {bet.bettorName}
+            </Text>
+          </>
+        )}
       </View>
       <View style={styles.betRight}>
         {badge ? (
