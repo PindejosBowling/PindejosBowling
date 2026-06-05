@@ -21,12 +21,10 @@ import {
   players as dbPlayers,
   rsvp as dbRsvp,
   weeks as dbWeeks,
-  betLines as dbBetLines,
-  pinLedger as dbPinLedger,
+  betMarkets as dbBetMarkets,
 } from '../utils/supabase/db'
 import type { Tables } from '../utils/supabase/database.types'
 import { initials } from '../utils/helpers'
-import { computeAvgById, lineForAvg } from '../utils/betLines'
 import { colors, fonts, radius } from '../theme'
 
 type Player = Tables<'players'>
@@ -72,56 +70,14 @@ export default function RsvpScreen() {
   // are missing them, and refunds+removes lines for players no longer in.
   // Reads fresh state from Supabase rather than trusting component state.
   async function syncBetLines(wid: string) {
-    try {
-      const [rsvpRes, linesRes] = await Promise.all([
-        dbRsvp.listByWeek(wid),
-        dbBetLines.listByWeek(wid),
-      ])
-      const rows = rsvpRes.data ?? []
-      const lines = linesRes.data ?? []
-      const inIds = new Set(rows.filter(r => r.status === 'in').map(r => r.player_id))
-
-      // Group existing lines by player; the established game set for the week is
-      // the distinct game_numbers already present (defaults to games 1 & 2 when
-      // none exist yet, so late In-joiners match the set incl. game 3 post-gen).
-      const gamesByPlayer = new Map<string, Set<number>>()
-      const targetGames = new Set<number>()
-      for (const l of lines) {
-        if (!gamesByPlayer.has(l.player_id)) gamesByPlayer.set(l.player_id, new Set())
-        gamesByPlayer.get(l.player_id)!.add(l.game_number)
-        targetGames.add(l.game_number)
-      }
-      if (targetGames.size === 0) { targetGames.add(1); targetGames.add(2) }
-
-      // Refund + remove: players with lines who are no longer "in".
-      const toCancel = [...gamesByPlayer.keys()].filter(pid => !inIds.has(pid))
-      if (toCancel.length > 0) {
-        const { error } = await dbPinLedger.cancelBetLinesForPlayers(wid, toCancel)
-        if (error) throw error
-      }
-
-      // Create: in-players missing any target game line.
-      const missing = [...inIds]
-        .map(pid => {
-          const have = gamesByPlayer.get(pid) ?? new Set<number>()
-          return { pid, need: [...targetGames].filter(g => !have.has(g)) }
-        })
-        .filter(m => m.need.length > 0)
-      if (missing.length > 0) {
-        const { avgById, leagueAvg } = await computeAvgById('current')
-        const insertRows = missing.flatMap(m =>
-          m.need.map(g => ({
-            week_id: wid,
-            player_id: m.pid,
-            game_number: g,
-            line: lineForAvg(avgById[m.pid] ?? leagueAvg),
-          })),
-        )
-        const { error } = await dbBetLines.insert(insertRows)
-        if (error) throw error
-      }
-    } catch (e: any) {
-      Alert.alert('Bet line sync failed', e?.message ?? 'Could not update bet lines for the RSVP change.')
+    // O/U market create/refund runs entirely server-side (the
+    // sync_over_under_markets_for_week RPC), derived from rsvp + scores. This keeps
+    // a non-admin self-RSVP'ing out from needing direct bet_markets/bets/pin_ledger
+    // write access — the tables are admin-only at the RLS layer; the SECURITY
+    // DEFINER RPC does the privileged work (incl. refunding others' bets). Idempotent.
+    const { error } = await dbBetMarkets.syncOUForWeek(wid)
+    if (error) {
+      Alert.alert('Bet line sync failed', error.message ?? 'Could not update bet lines for the RSVP change.')
     }
   }
 

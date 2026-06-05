@@ -8,105 +8,13 @@ import {
   ActivityIndicator,
 } from 'react-native'
 import { useUiStore } from '../stores/uiStore'
-import { weeks, scores, betLines, placedBets, pinLedger } from '../utils/supabase/db'
-import type { TablesInsert } from '../utils/supabase/database.types'
+import { weeks, betMarkets } from '../utils/supabase/db'
 import { colors, fonts, radius } from '../theme'
 import Toast from './Toast'
 
 interface Props {
   visible: boolean
   onClose: () => void
-}
-
-async function settleBettingForWeek(activeWeek: { id: string; season_id: string; week_number: number }) {
-  const [scoresRes, linesRes] = await Promise.all([
-    scores.listByWeekWithGames(activeWeek.id),
-    betLines.listOpenByWeek(activeWeek.id),
-  ])
-
-  const weekScores = (scoresRes.data ?? []) as any[]
-  const openLines = (linesRes.data ?? []) as any[]
-
-  // Build lookup: `${player_id}|${game_number}` → actual score
-  const scoreMap: Record<string, number> = {}
-  for (const s of weekScores) {
-    const pid = (s.team_slots as any)?.player_id
-    const gameNum = (s.games as any)?.game_number
-    if (pid && gameNum != null && s.score != null) {
-      scoreMap[`${pid}|${gameNum}`] = s.score
-    }
-  }
-
-  const ledgerEntries: TablesInsert<'pin_ledger'>[] = []
-
-  // Score credits: +score per game per player
-  for (const s of weekScores) {
-    const pid = (s.team_slots as any)?.player_id
-    const gameNum = (s.games as any)?.game_number
-    if (!pid || s.score == null) continue
-    ledgerEntries.push({
-      player_id: pid,
-      season_id: activeWeek.season_id,
-      amount: s.score,
-      type: 'score_credit',
-      description: `Week ${activeWeek.week_number} Game ${gameNum}: ${s.score} pins`,
-    })
-  }
-
-  // Settle open bet lines
-  const lineUpdates: Promise<any>[] = []
-  const betUpdates: Promise<any>[] = []
-
-  for (const line of openLines) {
-    const actualScore = scoreMap[`${line.player_id}|${line.game_number}`]
-    if (actualScore == null) {
-      // No score recorded — close line without result
-      lineUpdates.push(Promise.resolve(betLines.update(line.id, { is_open: false })))
-      continue
-    }
-
-    const result: 'over' | 'under' | 'push' =
-      actualScore > Number(line.line) ? 'over' :
-      actualScore < Number(line.line) ? 'under' : 'push'
-
-    lineUpdates.push(Promise.resolve(betLines.update(line.id, { result, actual_score: actualScore, is_open: false })))
-
-    // Settle placed bets on this line
-    const { data: bets } = await placedBets.listByLine(line.id)
-    const playerName = (line as any).players?.name ?? 'Player'
-    for (const bet of (bets ?? []) as any[]) {
-      const won = bet.pick === result
-      const isPush = result === 'push'
-      const payout = won && !isPush ? bet.wager : 0 // net winnings; push/loss = 0
-
-      betUpdates.push(Promise.resolve(placedBets.update(bet.id, { payout, settled_at: new Date().toISOString() })))
-
-      if (isPush) {
-        ledgerEntries.push({
-          player_id: bet.player_id,
-          season_id: activeWeek.season_id,
-          amount: bet.wager,
-          type: 'bet_push',
-          description: `Push: ${playerName} at ${line.line} — Game ${line.game_number}`,
-          placed_bet_id: bet.id,
-        })
-      } else if (won) {
-        ledgerEntries.push({
-          player_id: bet.player_id,
-          season_id: activeWeek.season_id,
-          amount: bet.wager * 2,
-          type: 'bet_won',
-          description: `Won: ${playerName} ${result} ${line.line} — Week ${activeWeek.week_number} Game ${line.game_number}`,
-          placed_bet_id: bet.id,
-        })
-      }
-    }
-  }
-
-  await Promise.all([...lineUpdates, ...betUpdates])
-  if (ledgerEntries.length > 0) {
-    await pinLedger.insert(ledgerEntries)
-  }
 }
 
 export default function AdminArchiveModal({ visible, onClose }: Props) {
@@ -131,8 +39,12 @@ export default function AdminArchiveModal({ visible, onClose }: Props) {
         return
       }
 
-      // Credit pin balances and settle bets for the archived week.
-      await settleBettingForWeek(activeWeek)
+      // Credit pin balances and settle all open O/U markets for the archived
+      // week, server-side (settle_betting_for_week RPC, admin-gated, double-entry).
+      const { error: settleErr } = await betMarkets.settleForWeek(activeWeek.id)
+      if (settleErr) {
+        showToast(`Week ${activeWeek.week_number} archived — settlement failed: ${settleErr.message}`, 'error')
+      }
 
       const { error: insertErr } = await weeks.insert({
         season_id: activeWeek.season_id,

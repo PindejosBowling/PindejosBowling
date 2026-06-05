@@ -11,9 +11,8 @@ import {
 } from 'react-native'
 import { usePendingStore } from '../stores/pendingStore'
 import { useUiStore } from '../stores/uiStore'
-import { weeks, rsvp, players, teamSlots, teams as teamsDb, games, scores, seasons, betLines } from '../utils/supabase/db'
+import { weeks, rsvp, players, teamSlots, teams as teamsDb, games, scores, seasons, betMarkets } from '../utils/supabase/db'
 import type { TablesInsert } from '../utils/supabase/database.types'
-import { computeAvgById, lineForAvg } from '../utils/betLines'
 import { colors, fonts, radius } from '../theme'
 import Toast from './Toast'
 
@@ -287,41 +286,16 @@ export default function AdminGenerateTeamsModal({ visible, onClose }: Props) {
       const { error: e5 } = await weeks.update(weekId, { is_confirmed: true })
       if (e5) throw e5
 
-      // Bet lines are owned by RSVP (games 1 & 2 already exist for every in-player).
-      // Team generation only ADDS lines for schedule game numbers that don't yet
-      // exist — in practice game 3 when numTeams ∈ {3, 5}. Lines reference weeks,
-      // not teams, so the teams.removeByWeek wipe above leaves RSVP lines intact.
-      const teamGameNums: Record<number, Set<number>> = {}
-      for (const s of buildSchedule(numTeams)) {
-        if (!teamGameNums[s.team_a]) teamGameNums[s.team_a] = new Set()
-        if (!teamGameNums[s.team_b]) teamGameNums[s.team_b] = new Set()
-        teamGameNums[s.team_a].add(s.game_number)
-        teamGameNums[s.team_b].add(s.game_number)
-      }
-      // Existing lines for the week, keyed `player_id|game_number`, to stay idempotent.
-      const existingLines = (await betLines.listByWeek(weekId)).data ?? []
-      const existingKeys = new Set(existingLines.map((l: any) => `${l.player_id}|${l.game_number}`))
-      // New lines default to current-season avg (locked product decision).
-      const { avgById, leagueAvg } = await computeAvgById('current')
-      const betLineRows: TablesInsert<'bet_lines'>[] = (genTeams as any[]).flatMap((team, tIdx) => {
-        const gameNums = teamGameNums[tIdx + 1] ?? new Set<number>()
-        return team.players.flatMap((player: GenPlayer) => {
-          if (player.isFill || !player.id) return []
-          return Array.from(gameNums).flatMap((gameNum: number) => {
-            if (existingKeys.has(`${player.id}|${gameNum}`)) return []
-            return [{
-              week_id: weekId,
-              player_id: player.id as string,
-              game_number: gameNum,
-              line: lineForAvg(avgById[player.id as string] ?? leagueAvg),
-            }]
-          })
-        })
-      })
-      if (betLineRows.length > 0) {
-        const { error: eBetLines } = await betLines.insert(betLineRows)
-        if (eBetLines) console.warn('Failed to create bet lines:', eBetLines.message)
-      }
+      // O/U markets are owned by RSVP (games 1 & 2 already exist for every
+      // in-player) and reference weeks not teams, so the teams.removeByWeek wipe
+      // above leaves them intact. Team generation only needs to ADD markets for any
+      // schedule game number not yet present — in practice game 3 when numTeams ∈
+      // {3, 5}. Pass the schedule's distinct game numbers to the sync RPC, which
+      // creates the missing markets server-side (current-season avg → floor+0.5),
+      // idempotently.
+      const scheduleGames = Array.from(new Set(buildSchedule(numTeams).map(s => s.game_number)))
+      const { error: eSync } = await betMarkets.syncOUForWeek(weekId, scheduleGames)
+      if (eSync) console.warn('Failed to sync O/U markets:', eSync.message)
 
       showToast('Teams saved', 'success')
       set({ genTeams: null, genSwapTarget: null })

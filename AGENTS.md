@@ -41,7 +41,9 @@ The client is configured via Expo environment variables that are set in `.env.lo
 
 ---
 
-## Database Schema (14 tables)
+## Database Schema (18 tables)
+
+> **Betting / pin economy is documented separately.** [supabase/PIN_ECONOMY_SCHEMA.md](supabase/PIN_ECONOMY_SCHEMA.md) is the **source of truth** for `pin_ledger` and the canonical betting tables (`bet_markets`, `bet_selections`, `bets`, `bet_legs`, `bet_offers`, `bet_matches`), the accounting model, the RPCs, and how to add a bet type. Read it before touching any `bet_*` / `pin_ledger` code. The rows below are a pointer only.
 
 | Table | Key columns |
 |---|---|
@@ -56,9 +58,8 @@ The client is configured via Expo environment variables that are set in `.env.lo
 | `season_champions` | `id`, `player_id`, `season_id` |
 | `registrations` | `id`, `season_id`, `player_id`, `created_at`, `updated_at` |
 | `board_posts` | `id`, `player_id`, `message`, `created_at` |
-| `bet_lines` | `id`, `week_id`, `player_id`, `game_number`, `line`, `is_open`, `result`, `actual_score`, `created_at`, `updated_at` |
-| `placed_bets` | `id`, `player_id`, `bet_line_id`, `pick`, `wager`, `payout`, `settled_at`, `created_at`, `updated_at` |
-| `pin_ledger` | `id`, `player_id`, `season_id`, `amount`, `type`, `description`, `placed_bet_id`, `created_at`, `updated_at` |
+| `pin_ledger` | `id`, `player_id` (nullable — `NULL` for house rows), `season_id`, `amount`, `type`, `description`, `is_house`, `bet_id`, `created_at`, `updated_at` |
+| **betting** (canonical model) | `bet_markets`, `bet_selections`, `bets`, `bet_legs`, `bet_offers`, `bet_matches` — columns + relationships in [supabase/PIN_ECONOMY_SCHEMA.md](supabase/PIN_ECONOMY_SCHEMA.md) §2 |
 
 **Key distinctions:**
 - `weeks.is_archived` — `true` once the week has been bowled and scores are final. All historical queries filter to archived weeks.
@@ -70,7 +71,7 @@ The client is configured via Expo environment variables that are set in `.env.lo
 - **`seasons.id` is a `uuid`** (`gen_random_uuid()`), like every other table — there are no integer/sequence keys in the schema. FKs `weeks.season_id`, `registrations.season_id`, `season_champions.season_id` are all `uuid`. In TypeScript a season id / `season_id` is a **`string`**.
 - **Season lifecycle = `registration_open` + `is_active`.** A new season starts in registration (`registration_open = true`, `is_active = false`); closing registration flips it to `registration_open = false`, `is_active = true` (the live/current season); ending it sets `is_active = false`. **The current season is the one that is `is_active = true` AND `registration_open = false`** — never "highest `number`". A partial unique index (`seasons_single_active`, `WHERE is_active`) enforces **at most one active season** at a time, so activating a new season while another is still active fails until the old one is ended.
 - **`registrations`** holds per-season player sign-ups, unique on `(season_id, player_id)`. `registrations.season_id` is `ON DELETE CASCADE` (deleting a season removes its sign-ups); `weeks`/`season_champions` season FKs are **not** cascade, so a season with weeks or champions cannot be deleted (an in-registration season has neither).
-- **Betting tables** (`bet_lines`, `placed_bets`, `pin_ledger`) support the pin-economy betting feature. `bet_lines` holds one per-player per-game over/under line per week (`UNIQUE (week_id, player_id, game_number)`). **Lines are derived from RSVP** (not team generation): on every RSVP save, lines for games 1 & 2 are created for each player who is **"in"** and removed (refunding any bets) for players no longer in — synced client-side in `RsvpScreen`. Team generation only **adds** lines for any extra schedule game number not yet present (game 3 when `numTeams ∈ {3,5}`). Lines are auto-settled when the week is archived. Line value = `Math.floor(avg) + 0.5` from the player's **current-season** average (league-avg fallback when sparse) — a half-pin line an integer score can never push. `placed_bets` holds each player's bet on a line (`UNIQUE (player_id, bet_line_id)`); even odds — win pays `wager × 2`, loss forfeits `wager`, push refunds `wager`; min wager 10 pins. **Anti-tanking: a player can never bet the `under` on their own line** (where `bet_lines.player_id = placed_bets.player_id`) — DB-enforced by the `placed_bets_no_self_under` BEFORE INSERT/UPDATE trigger, and blocked in the BettingScreen UI. `pin_ledger` is an append-only balance log; `balance = SUM(amount) WHERE player_id = X AND season_id = Y`. `bet_lines.week_id` and `placed_bets.bet_line_id` are `ON DELETE CASCADE`. `pin_ledger.placed_bet_id` is `ON DELETE SET NULL`. **Balance lifecycle:** season opens → `+100` (`champion_bonus`) for prior-season champions; week archived → `+score` per game (`score_credit`); bet placed → `−wager` (`bet_placed`); bet won → `+wager×2` (`bet_won`); push → `+wager` (`bet_push`); loss → no new entry (already debited).
+- **Betting + pin economy** run on the **canonical model** (`bet_markets` → `bet_selections` → `bets` → `bet_legs`, plus the deferred peer layer `bet_offers` / `bet_matches`) with funded-house **double-entry** accounting on `pin_ledger`. Over/under is the first consumer: one `bet_markets(market_type='over_under', subject_player_id, game_number)` per player×game×week with two `bet_selections` (`over`/`under`) sharing a `line`; a player's bet is a `bets` row + one `bet_legs`. Markets are derived from **RSVP** (server-side `sync_over_under_markets_for_week` RPC), line = `floor(avg)+0.5`, even odds (`2.000`), min stake 10. `pin_ledger` is the append-only balance log: per-player `balance = SUM(amount) WHERE player_id = X AND season_id = Y` (house rows have `player_id IS NULL` / `is_house = true` and are excluded). Anti-tanking (no backing `under` on your own market) is enforced by the `bet_legs_no_self_tank` trigger + the placement RPC + the UI. **Full details — accounting/lifecycle, every RPC, RLS, and how to add a bet type — are in [supabase/PIN_ECONOMY_SCHEMA.md](supabase/PIN_ECONOMY_SCHEMA.md); keep that doc, not this bullet, authoritative.**
 
 ---
 
@@ -116,7 +117,7 @@ The client is configured via Expo environment variables that are set in `.env.lo
 | Method | Description |
 |---|---|
 | `listByWeek(weekId)` | Scores for a live week (joins team_slots) |
-| `listByWeekWithGames(weekId)` | Non-fill scores for a week with `games(game_number)` join — used by archive settlement to match scores to bet lines |
+| `listByWeekWithGames(weekId)` | Non-fill scores for a week with `games(game_number)` join (settlement now runs server-side in `settle_betting_for_week`) |
 | `listBySeason(seasonId)` | Archived, non-fill scores for a season (for avg calc) |
 | `listAllArchived()` | All archived non-fill scores |
 | `listForStandings()` | Archived scores with full player/week/season join (standings, chemistry, past seasons) |
@@ -158,34 +159,32 @@ The client is configured via Expo environment variables that are set in `.env.lo
 | `update(id, data)` | Update season fields |
 | `remove(id)` | Delete a season by id (admin; registrations cascade) |
 
-### `betLines`
+### `betMarkets` (canonical over/under markets — see [PIN_ECONOMY_SCHEMA.md](supabase/PIN_ECONOMY_SCHEMA.md))
 | Method | Description |
 |---|---|
-| `listByWeek(weekId)` | All bet lines for a week with joined `players(name)`, ordered by player then game number |
-| `listOpenByWeek(weekId)` | Open (`is_open = true`) bet lines for a week with joined `players(name)` |
-| `insert(data)` | Insert one or many lines; chains `.select()` |
-| `update(id, data)` | Update a line (toggle `is_open`, edit `line` value, set `result`/`actual_score` on settlement) |
-| `remove(id)` | Delete a line by id |
+| `listOpenOUByWeek(weekId)` | Open `over_under` markets for a week with subject name + `bet_selections(*)` (Place Bets) |
+| `listOUByWeek(weekId)` | All `over_under` markets for a week with subject name + selections (admin Bet Lines) |
+| `update(id, data)` | Admin direct write — open/close a market (`status`) |
+| `syncOUForWeek(weekId, extraGames?)` | RPC `sync_over_under_markets_for_week` — RSVP-driven create/refund of markets; `extraGames` adds schedule games (team-gen game 3) |
+| `settle(marketId, resultValue)` | RPC `settle_market` (admin) — settle one market against the subject's actual score |
+| `settleForWeek(weekId)` | RPC `settle_betting_for_week` (admin) — credit `score_credit` + settle all open markets on archive |
+| `editLine(marketId, line)` | RPC `edit_over_under_line` (admin) — set the line on both selections (rejects if any bet exists) |
 
-### `placedBets`
+### `bets` (canonical stakes)
 | Method | Description |
 |---|---|
-| `listByPlayer(playerId)` | All bets by a player with nested `bet_lines` context (player name, game number, line, result) — newest first |
-| `listByLine(betLineId)` | All bets on a specific line with joined `players(name)` — used during settlement |
-| `listByWeek(weekId)` | All bets for a week (inner-joins through `bet_lines.week_id`) with player and line context |
-| `listSettledBySeason(seasonId)` | All settled bets (`settled_at` set) for a season, inner-joined through `bet_lines → weeks.season_id`, with player + line + week context; newest-settled first (Settled Bets view) |
-| `insert(data)` | Insert one bet; chains `.select().single()` to return the new row |
-| `update(id, data)` | Update a bet (set `payout` and `settled_at` on settlement) |
-| `remove(id)` | Delete a placed bet by id (admin cancel-bet flow) |
+| `listByPlayer(playerId)` | A player's bets with `bet_legs → bet_selections → bet_markets`(+subject, +week) — newest first |
+| `listByWeek(weekId)` | All bets with a leg on an `over_under` market in this week (Active Bets) |
+| `listSettledBySeason(seasonId)` | All settled bets for a season with the full leg/selection/market(+week) graph (Settled Bets) |
+| `place(selectionIds, stake)` | RPC `place_house_bet` — atomic, balance/anti-tank-checked; O/U passes one selection id |
+| `cancel(betId)` | RPC `cancel_bet` (admin) — total undo: removes ledger pair(s) + bet, re-opens a settled market if it was the last bet |
 
 ### `pinLedger`
 | Method | Description |
 |---|---|
 | `listByPlayerSeason(playerId, seasonId)` | All ledger entries for a player in a season — newest first. `SUM(amount)` = balance |
-| `listBySeasonForLeaderboard(seasonId)` | All entries for a season with joined `players(name, is_active)` — for building the pin-balance scoreboard (sum amount per player) |
-| `insert(data)` | Insert one or many entries (batch insert used by archive settlement and bet placement) |
-| `removeByPlacedBet(placedBetId)` | Delete every ledger entry tied to a placed bet (admin cancel-bet flow — fully undoes the bet) |
-| `cancelBetLinesForPlayers(weekId, playerIds)` | RPC `cancel_bet_lines_for_players` — for a week + set of players no longer "in", atomically refunds their bets (delete ledger rows → placed bets) and deletes their bet lines. `SECURITY DEFINER` so a non-admin self-RSVP'ing out can refund others' bets (bypasses `bet_lines`' no-DELETE RLS + admin-only `placed_bets`/`pin_ledger` DELETE). Used by the RSVP→bet-line sync |
+| `listBySeasonForLeaderboard(seasonId)` | Player entries (`is_house = false`) for a season with joined `players(name, is_active)` — for the pin-balance scoreboard |
+| `insert(data)` | Insert one or many entries (champion bonus). Betting transfers are written by the RPCs, not here |
 
 ### `teamSlots`
 | Method | Description |
@@ -268,8 +267,8 @@ Win/loss is determined by comparing **team totals** (all players on a team inclu
 | `usePlayerManagementData.ts` | `usePlayerManagementData` | — | PlayerManagementScreen |
 | `useRegistrationData.ts` | `useRegistrationData` | — | RegistrationScreen |
 | `useRefresh.ts` | `useRefresh(fn)` | — | All screens with pull-to-refresh |
-| `useBettingData.ts` | `useBettingData(playerId)` | — | BettingScreen — returns `{ balance, openLines, myBets, weekBets, settledBets, leaderboard, myBetLineIds, currentWeekId, currentSeasonId }` (`weekBets` = all players' placed bets this week via `placedBets.listByWeek`; `settledBets` = all settled bets this season via `placedBets.listSettledBySeason`; `leaderboard` = active players' season pin balances summed from the ledger, each with `potential` = balance + Σ(wager×2) over still-pending bets (the balance if all live bets win); sorted high → low by `potential`) |
-| `useBettingAdminData.ts` | `useBettingAdminData()` | — | BettingAdminScreen — returns `{ lines, betCountByLine, currentWeekId }` |
+| `useBettingData.ts` | `useBettingData(playerId)` (+ `LineView`, `BetView` types) | — | BettingScreen — returns `{ balance, openLines, myBets, weekBets, settledBets, leaderboard, myBetMarketIds, currentWeekId, currentSeasonId }`. Normalizes the market/bet graph into flat `LineView` / `BetView`. (`weekBets` = all players' bets this week via `bets.listByWeek`; `settledBets` = settled bets this season via `bets.listSettledBySeason`; `leaderboard` = active players' season pin balances from the ledger, each with `potential` = balance + Σ(`potential_payout`) over still-pending bets; sorted high → low by `potential`) |
+| `useBettingAdminData.ts` | `useBettingAdminData()` (+ `AdminLineView`) | — | BettingAdminScreen — returns `{ lines, betCountByMarket, currentWeekId }` (lines = `over_under` markets flattened) |
 
 > Stats hooks (`useStandingsData`, `usePastSeasonsData`, `usePastGamesData`, `useLeagueRecordsData`, `usePlayerDetailData`) build their `seasonList` from `seasons.list()` **filtered to started seasons** (`!registration_open`), so an in-registration season never appears as a stats filter or default. `useRegistrationData` keeps **all** seasons (registration UI needs them).
 
@@ -396,10 +395,10 @@ Ephemeral UI state — toggles, selections, toast queue. All fields via `set(par
 | `HistoricalTeamBlock` | Team block for displaying archived week rosters |
 | `ProfileMenuModal` | Bottom sheet opened from the avatar in `AppHeader` — shows player identity and per-user actions (My Profile, Log Out) |
 | `PlayerPickerModal` | Full-screen player search/select for H2H |
-| `AdminArchiveModal` | Confirm dialog — archives active week (`is_archived = true`, creates next week row), then runs `settleBettingForWeek`: credits pin scores to the ledger and auto-settles all open bet lines |
+| `AdminArchiveModal` | Confirm dialog — archives active week (`is_archived = true`, creates next week row), then calls the `settle_betting_for_week` RPC: credits game scores to the ledger and auto-settles all open O/U markets (double-entry) |
 | `AdminEndSeasonModal` | Confirm dialog — records season champions and marks the current season ended (`is_active = false`); reads the current season via `seasons.getCurrent()` |
 | `AdminOpenRegistrationModal` | Create the next season (`seasons.insert` with `registration_open = true`) and open its registration window; next number derived from `seasons.getLatest()`; credits +100 pin champion bonus to prior-season champions |
-| `AdminGenerateTeamsModal` | Generate balanced teams from RSVP list, preview swaps, write teams/slots/schedule to Supabase. **No longer the source of base bet lines** (those come from RSVP) — it only **adds** lines for schedule game numbers not yet present (game 3 when `numTeams ∈ {3,5}`), idempotently, using current-season avg → `floor+0.5` |
+| `AdminGenerateTeamsModal` | Generate balanced teams from RSVP list, preview swaps, write teams/slots/schedule to Supabase. **Not the source of base O/U markets** (those come from RSVP) — after gen it calls `sync_over_under_markets_for_week(weekId, scheduleGames)`, which adds markets for any schedule game number not yet present (game 3 when `numTeams ∈ {3,5}`), idempotently |
 
 ---
 
@@ -436,18 +435,13 @@ The app-root `<Toast />` (App.tsx) renders behind any React Native `<Modal>`, so
 `usePendingStore.pendingScores` holds unsaved score changes. `MatchupsScreen` renders them immediately and shows a `ConfirmBar`. On save, `scores.upsert` is called, then `reload()` refreshes from Supabase, then the pending buffer is cleared. On discard, pending is just cleared.
 
 ### Admin flows (all Supabase direct)
-- **Archive week** (`AdminArchiveModal`) — sets `weeks.update(id, { is_archived: true })`, runs `settleBettingForWeek` (credits game scores as `score_credit` ledger entries, resolves all open bet lines, pays out `bet_won`/`bet_push` ledger entries), then inserts a new week row for the next week number
+- **Archive week** (`AdminArchiveModal`) — sets `weeks.update(id, { is_archived: true })`, calls the `settle_betting_for_week` RPC (credits game scores as `score_credit`, settles all open O/U markets with double-entry payouts), then inserts a new week row for the next week number
 - **Add/edit player** (`PlayerManagementScreen`) — inline modal calls `players.insert` or `players.update`; first name, last name, and phone are all required
 - **End season** (`AdminEndSeasonModal`) — writes `season_champions.insert` for selected champions and sets `seasons.update(currentId, { is_active: false })`; the current season is resolved via `seasons.getCurrent()` (not the highest number)
 - **Open registration** (`AdminOpenRegistrationModal`) — `seasons.insert` for the next season with `registration_open = true, is_active = false`; the new number is `getLatest().number + 1`; after insert, queries `seasons.getLastEnded()` + `seasonChampions.listBySeason` and inserts `+100` `champion_bonus` ledger entries for each champion into the new season
 - **Registration management** (`RegistrationScreen`, admin) — open/close registration (`seasons.update` toggling `registration_open`/`is_active`), add/remove players via `registrations.insert`/`registrations.remove`, and **delete an open season** via `seasons.remove` (confirmed). Closing registration sets `is_active = true`, which fails if another season is already active (single-active index) — end the current season first
-- **RSVP → bet-line sync** (`RsvpScreen`) — after every RSVP mutation (`saveChanges`, `resetRSVP`) `syncBetLines(weekId)` runs: it reads fresh RSVP + `betLines.listByWeek`, then **creates** lines (default games 1 & 2, or the established game set if lines already exist — incl. game 3 post-gen) for in-players missing them at `lineForAvg(currentSeasonAvg)`, and **removes + refunds** lines for players no longer in via `pinLedger.cancelBetLinesForPlayers` (the `SECURITY DEFINER` RPC). Idempotent (relies on `UNIQUE(week_id,player_id,game_number)` + pre-filtering). Works for non-admins editing their own RSVP. Avg/line logic lives in [src/utils/betLines.ts](src/utils/betLines.ts) (`lineForAvg`, `computeAvgById`), shared with the team-gen modal and admin line editor
-- **Generate teams** (`AdminGenerateTeamsModal`) — reads RSVP + player avgs, computes balanced teams client-side, previews swaps, then wipes the week with a single `teams.removeByWeek` (cascades slots → games → scores) and writes `teams.insert` (capturing the new ids) → `team_slots.insert` + `games.insert` → `weeks.update(..., { is_confirmed: true })`. It does **not** create base bet lines (RSVP owns those, and `bet_lines` references `weeks` not `teams`, so the wipe leaves them intact) — it only **adds** lines for schedule game numbers not already present (game 3 when `numTeams ∈ {3,5}`), idempotently keyed on `player_id|game_number`, at `lineForAvg(currentSeasonAvg)`
-- **Edit bet line value** (`BettingAdminScreen`, admin) — tapping a line **with no bets and not yet settled** opens a modal to set its `line` value; offers candidates from current/previous/all-time player avg + current-season league avg (`computeAvgById` + `lineForAvg`) plus manual entry, persisting via `betLines.update(id, { line })`. Re-checks `placedBets.listByLine` is empty on save (guards against a bet placed since load)
-- **Place bet** (`BettingScreen`) — calls `placedBets.insert` then `pinLedger.insert` with `−wager` / `bet_placed`; balance is enforced client-side (max wager = current balance, min 10). A player cannot bet the `under` on their own line (anti-tanking): the row's UNDER button and the modal's UNDER toggle are blocked with a toast, the `placeBet` handler guards it, and the `placed_bets_no_self_under` DB trigger is the hard backstop
-- **Toggle bet line** (`BettingAdminScreen`) — calls `betLines.update(id, { is_open })` to open or close a line before bowling starts; settled lines (have a `result`) cannot be re-opened
-- **Settle bet** (`BettingScreen`, admin only) — tapping an active bet in the **Active Bets** view opens a modal to enter the subject's actual score; on confirm it manually settles that one bet line exactly like `settleBettingForWeek` does on archive: computes `result` from score vs `line`, sets `bet_lines.{result, actual_score, is_open=false}`, then for every placed bet on the line sets `placed_bets.{payout, settled_at}` and inserts `bet_won` (`+wager×2`) / `bet_push` (`+wager`) ledger entries (loss = no entry). Already-settled lines are skipped by the archive (it only settles `is_open` lines), so manual + auto settlement never double-pay. Does **not** credit `score_credit` (that's an archive-only concern). "Active" = `settled_at IS NULL`; settling moves the bet to the **Settled Bets** view
-- **Cancel placed bet** (`BettingScreen`, admin only) — an "✕" on each row in **both** the **Active Bets** and **Settled Bets** views (gated to `role === 'admin'`); after an `Alert` confirm it runs `pinLedger.removeByPlacedBet(betId)` **then** `placedBets.remove(betId)` (ledger first — `pin_ledger.placed_bet_id` is `ON DELETE SET NULL`, so deleting the bet first would orphan its ledger rows). This is a total undo — every ledger entry tied to the bet (`bet_placed` plus any `bet_won`/`bet_push` from settlement) is removed, restoring the player's balance to exactly what it was before the bet was placed; works identically whether the bet is still active or already settled. If canceling removes the **last** bet from a **settled** line, the line is un-settled (`betLines.update` → `result=null, actual_score=null, is_open=true`) so it becomes bettable again — otherwise a settled line would stay closed and vanish from Place Bets; a line that still has other bets is left settled. DB-enforced: admin-only `DELETE` RLS policies on `placed_bets`/`pin_ledger` (JWT `app_metadata.role = 'admin'`)
+- **Generate teams** (`AdminGenerateTeamsModal`) — reads RSVP + player avgs, computes balanced teams client-side, previews swaps, then wipes the week with a single `teams.removeByWeek` (cascades slots → games → scores) and writes `teams.insert` (capturing the new ids) → `team_slots.insert` + `games.insert` → `weeks.update(..., { is_confirmed: true })`. It does **not** create base O/U markets (RSVP owns those; markets reference `weeks` not `teams`, so the wipe leaves them intact) — after gen it calls `betMarkets.syncOUForWeek(weekId, scheduleGames)` to add any missing schedule game (game 3 when `numTeams ∈ {3,5}`), idempotently
+- **Betting flows** (`BettingScreen`, `BettingAdminScreen`, `RsvpScreen`) — RSVP→market sync, place bet, settle, cancel, edit line, open/close are all **server-side RPCs on the canonical model** (`sync_over_under_markets_for_week`, `place_house_bet`, `settle_market`, `cancel_bet`, `edit_over_under_line`, + admin `UPDATE bet_markets.status`). The UI mirrors the server guards (min stake 10, balance, anti-tanking). Avg/line candidate logic for the admin line editor lives in [src/utils/betLines.ts](src/utils/betLines.ts) (`lineForAvg`, `computeAvgById`). **For the exact mechanics of every flow, accounting, and integrity rules, see [supabase/PIN_ECONOMY_SCHEMA.md](supabase/PIN_ECONOMY_SCHEMA.md) §4–§5 — keep it authoritative.**
 
 ---
 

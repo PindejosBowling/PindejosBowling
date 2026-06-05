@@ -19,9 +19,9 @@ import { MoreStackParamList } from '../navigation/types'
 import ScreenHeader from '../components/ScreenHeader'
 import LoadingView from '../components/LoadingView'
 import Toast from '../components/Toast'
-import { useBettingAdminData } from '../hooks/useBettingAdminData'
+import { useBettingAdminData, type AdminLineView } from '../hooks/useBettingAdminData'
 import { useRefresh } from '../hooks/useRefresh'
-import { betLines as betLinesDb, placedBets as placedBetsDb } from '../utils/supabase/db'
+import { betMarkets } from '../utils/supabase/db'
 import { computeAvgById, lineForAvg } from '../utils/betLines'
 import { useUiStore } from '../stores/uiStore'
 
@@ -32,20 +32,20 @@ type Nav = NativeStackNavigationProp<MoreStackParamList>
 export default function BettingAdminScreen() {
   const navigation = useNavigation<Nav>()
   const { showToast } = useUiStore()
-  const { loading, lines, betCountByLine, reload } = useBettingAdminData()
+  const { loading, lines, betCountByMarket, reload } = useBettingAdminData()
   const { refreshing, onRefresh } = useRefresh(reload)
   const [toggling, setToggling] = useState<Record<string, boolean>>({})
 
-  // Line-value editing (only allowed before any bet is placed on the line).
-  const [editingLine, setEditingLine] = useState<any | null>(null)
+  // Line-value editing (only allowed before any bet is placed on the market).
+  const [editingLine, setEditingLine] = useState<AdminLineView | null>(null)
   const [candidates, setCandidates] = useState<LineCandidates>({})
   const [loadingCandidates, setLoadingCandidates] = useState(false)
   const [manualValue, setManualValue] = useState('')
   const [savingLine, setSavingLine] = useState(false)
 
-  async function openEdit(line: any) {
+  async function openEdit(line: AdminLineView) {
     setEditingLine(line)
-    setManualValue(String(Number(line.line)))
+    setManualValue(String(line.line))
     setCandidates({})
     setLoadingCandidates(true)
     try {
@@ -54,7 +54,7 @@ export default function BettingAdminScreen() {
         computeAvgById('previous'),
         computeAvgById('all'),
       ])
-      const pid = line.player_id
+      const pid = line.subjectPlayerId
       setCandidates({
         current: lineForAvg(cur.avgById[pid] ?? cur.leagueAvg),
         previous: lineForAvg(prev.avgById[pid] ?? prev.leagueAvg),
@@ -79,16 +79,9 @@ export default function BettingAdminScreen() {
     if (isNaN(val)) { showToast('Enter a valid line value', 'error'); return }
     setSavingLine(true)
     try {
-      // Re-check no bets exist (guards against a bet placed since the screen loaded).
-      const { data: bets, error: betsErr } = await placedBetsDb.listByLine(editingLine.id)
-      if (betsErr) { showToast(betsErr.message, 'error'); return }
-      if (bets && bets.length > 0) {
-        showToast('Line already has bets — cannot edit', 'error')
-        setEditingLine(null)
-        await reload()
-        return
-      }
-      const { error } = await betLinesDb.update(editingLine.id, { line: val })
+      // The RPC re-checks no bets exist on the market (guards against a bet placed
+      // since the screen loaded) and updates the line on both selections.
+      const { error } = await betMarkets.editLine(editingLine.marketId, val)
       if (error) { showToast(error.message, 'error'); return }
       setEditingLine(null)
       await reload()
@@ -102,10 +95,10 @@ export default function BettingAdminScreen() {
 
   // Group lines by game_number
   const linesByGame = useMemo(() => {
-    const map: Record<number, any[]> = {}
+    const map: Record<number, AdminLineView[]> = {}
     for (const line of lines) {
-      if (!map[line.game_number]) map[line.game_number] = []
-      map[line.game_number].push(line)
+      if (!map[line.gameNumber]) map[line.gameNumber] = []
+      map[line.gameNumber].push(line)
     }
     return map
   }, [lines])
@@ -115,16 +108,16 @@ export default function BettingAdminScreen() {
     [linesByGame]
   )
 
-  async function toggleLine(lineId: string, newValue: boolean) {
-    setToggling(prev => ({ ...prev, [lineId]: true }))
+  async function toggleLine(marketId: string, open: boolean) {
+    setToggling(prev => ({ ...prev, [marketId]: true }))
     try {
-      const { error } = await betLinesDb.update(lineId, { is_open: newValue })
+      const { error } = await betMarkets.update(marketId, { status: open ? 'open' : 'closed' })
       if (error) showToast(error.message, 'error')
       else await reload()
     } catch {
       showToast('Failed to update line', 'error')
     } finally {
-      setToggling(prev => ({ ...prev, [lineId]: false }))
+      setToggling(prev => ({ ...prev, [marketId]: false }))
     }
   }
 
@@ -148,20 +141,21 @@ export default function BettingAdminScreen() {
               <Text style={styles.gameLabel}>GAME {gameNum}</Text>
               <View style={styles.card}>
                 {linesByGame[gameNum].map((line, idx) => {
-                  const count = betCountByLine[line.id] ?? 0
+                  const count = betCountByMarket[line.marketId] ?? 0
                   const isLast = idx === linesByGame[gameNum].length - 1
+                  const settled = line.status === 'settled'
                   // Editable only before any bet is placed and before settlement.
-                  const editable = count === 0 && !line.result
+                  const editable = count === 0 && !settled
                   return (
-                    <View key={line.id} style={[styles.lineRow, !isLast && styles.lineRowBorder]}>
+                    <View key={line.marketId} style={[styles.lineRow, !isLast && styles.lineRowBorder]}>
                       <TouchableOpacity
                         style={{ flex: 1 }}
                         activeOpacity={editable ? 0.6 : 1}
                         onPress={editable ? () => openEdit(line) : undefined}
                       >
-                        <Text style={styles.playerName}>{line.players?.name ?? '—'}</Text>
+                        <Text style={styles.playerName}>{line.subjectName}</Text>
                         <Text style={styles.lineDetail}>
-                          LINE {Number(line.line).toFixed(1)}
+                          LINE {line.line.toFixed(1)}
                           {count > 0
                             ? `  ·  ${count} bet${count !== 1 ? 's' : ''}`
                             : '  ·  no bets'}
@@ -170,11 +164,11 @@ export default function BettingAdminScreen() {
                         </Text>
                       </TouchableOpacity>
                       <Switch
-                        value={line.is_open}
-                        onValueChange={v => toggleLine(line.id, v)}
-                        disabled={!!toggling[line.id] || !!line.result}
+                        value={line.status === 'open'}
+                        onValueChange={v => toggleLine(line.marketId, v)}
+                        disabled={!!toggling[line.marketId] || settled}
                         trackColor={{ false: colors.surface3, true: colors.accentDim }}
-                        thumbColor={line.is_open ? colors.accent : colors.muted}
+                        thumbColor={line.status === 'open' ? colors.accent : colors.muted}
                       />
                     </View>
                   )
@@ -191,7 +185,7 @@ export default function BettingAdminScreen() {
           <View style={styles.editSheet}>
             <Text style={styles.editTitle}>Edit Line</Text>
             <Text style={styles.editSubtitle}>
-              {editingLine?.players?.name ?? '—'} · Game {editingLine?.game_number}
+              {editingLine?.subjectName ?? '—'} · Game {editingLine?.gameNumber}
             </Text>
 
             <Text style={styles.editLabel}>SET FROM AVERAGE</Text>

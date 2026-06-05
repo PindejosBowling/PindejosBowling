@@ -5,8 +5,8 @@ import { colors } from '../theme'
 
 import MatchupsScreen from '../screens/MatchupsScreen'
 import RsvpScreen from '../screens/RsvpScreen'
-import BettingScreen from '../screens/BettingScreen'
 import StandingsStackNavigator from './StandingsStackNavigator'
+import BettingStackNavigator from './BettingStackNavigator'
 import MoreStackNavigator from './MoreStackNavigator'
 
 const Tab = createBottomTabNavigator()
@@ -34,7 +34,7 @@ export default function RootNavigator() {
       <Tab.Screen
         name="Standings"
         component={StandingsStackNavigator}
-        options={{ tabBarLabel: 'Standings', tabBarIcon: tabIcon('📊') }}
+        options={{ tabBarLabel: 'Standings', tabBarIcon: tabIcon('🏆') }}
       />
       <Tab.Screen
         name="RSVP"
@@ -44,12 +44,12 @@ export default function RootNavigator() {
       <Tab.Screen
         name="Matchups"
         component={MatchupsScreen}
-        options={{ tabBarLabel: 'This Week', tabBarIcon: tabIcon('🎳') }}
+        options={{ tabBarLabel: 'Matchups', tabBarIcon: tabIcon('🎳') }}
       />
       <Tab.Screen
         name="Betting"
-        component={BettingScreen}
-        options={{ tabBarLabel: 'Betting', tabBarIcon: tabIcon('💰') }}
+        component={BettingStackNavigator}
+        options={{ tabBarLabel: 'Pinsino', tabBarIcon: tabIcon('🏦') }}
       />
       <Tab.Screen
         name="More"
