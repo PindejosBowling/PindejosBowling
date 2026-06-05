@@ -31,16 +31,16 @@ export default function BetRow({
       <View style={{ flex: 1 }}>
         {isParlay ? (
           <>
-            <Text style={styles.betSubject}>
-              {bet.bettorName} · PARLAY ({bet.legCount} legs)
-            </Text>
             {bet.legs.map((leg, i) => (
-              <Text key={i} style={styles.betDetails}>
+              <Text key={i} style={styles.betSubject}>
                 {leg.subjectName} · {leg.pick?.toUpperCase()} {leg.line.toFixed(1)}
                 {leg.gameNumber != null ? ` (G${leg.gameNumber})` : ''}
                 {leg.result ? ` — ${leg.result.toUpperCase()}` : ''}
               </Text>
             ))}
+            <Text style={styles.betDetails}>
+              {bet.bettorName} · PARLAY ({bet.legCount} legs)
+            </Text>
           </>
         ) : (
           <>

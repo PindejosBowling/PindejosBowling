@@ -362,7 +362,7 @@ export default function BettingScreen() {
                 <Text style={[styles.sbHeaderCell, styles.sbRankCell]}>#</Text>
                 <Text style={[styles.sbHeaderCell, styles.sbNameCell]}>Bowler</Text>
                 <Text style={[styles.sbHeaderCell, styles.sbBalCell]}>Pins</Text>
-                <Text style={[styles.sbHeaderCell, styles.sbProjCell]}>If Win</Text>
+                <Text style={[styles.sbHeaderCell, styles.sbProjCell]}>Upside</Text>
               </View>
               {leaderboard.map((p, index) => {
                 const isMe = p.playerId === playerId
@@ -696,6 +696,8 @@ export default function BettingScreen() {
               />
               <Text style={styles.wagerHint}>Balance: {balance} pins  ·  Min: 10</Text>
 
+              <Text style={styles.modalWarning}>⚠ Bets can't be canceled once placed.</Text>
+
               <TouchableOpacity
                 style={[styles.placeBtn, placing && styles.placeBtnDisabled]}
                 onPress={placeBet}
@@ -757,6 +759,8 @@ export default function BettingScreen() {
                   ? `  ·  To win: ${(Math.floor(parseInt(parlayWager, 10) * parlayOdds)).toLocaleString()}`
                   : ''}
               </Text>
+
+              <Text style={styles.modalWarning}>⚠ Bets can't be canceled once placed.</Text>
 
               <TouchableOpacity
                 style={[styles.placeBtn, placing && styles.placeBtnDisabled]}
@@ -1283,6 +1287,12 @@ const styles = StyleSheet.create({
     color: colors.muted,
     marginTop: 6,
     marginBottom: 20,
+  },
+  modalWarning: {
+    fontFamily: fonts.barlow,
+    fontSize: 12,
+    color: colors.danger,
+    marginBottom: 16,
   },
   placeBtn: {
     backgroundColor: colors.accent,
