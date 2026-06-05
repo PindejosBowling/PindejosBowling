@@ -22,7 +22,7 @@ type RawScore = {
     team_id: string
     is_fill: boolean
     players: { id: string; name: string } | null
-    teams: { week_id: string; weeks: { season_id: string; is_archived: boolean } }
+    teams: { week_id: string; weeks: { season_id: string; week_number: number; is_archived: boolean } }
   }
 }
 
@@ -43,6 +43,7 @@ export function computeStandingsFromSupabase(
   rawScores: any[],
   rawSchedule: any[],
   seasonId: string | null,
+  maxWeekNumber?: number,
 ): StandingsRow[] {
   // Schedule lookup: "gameId|teamId" → opponentTeamId
   // Keyed per-team so multiple matchups in the same game round don't overwrite each other.
@@ -58,6 +59,7 @@ export function computeStandingsFromSupabase(
     const slot = row.team_slots
     if (!slot?.teams?.weeks?.is_archived) continue
     if (seasonId !== null && slot.teams.weeks.season_id !== seasonId) continue
+    if (maxWeekNumber !== undefined && slot.teams.weeks.week_number > maxWeekNumber) continue
     const key = `${row.game_id}|${slot.team_id}`
     teamTotals.set(key, (teamTotals.get(key) ?? 0) + (row.score ?? 0))
   }
@@ -79,6 +81,8 @@ export function computeStandingsFromSupabase(
     if (!player?.id || !player?.name) continue
     if (!slot.teams?.weeks?.is_archived) continue
     if (seasonId !== null && slot.teams.weeks.season_id !== seasonId) continue
+
+    if (maxWeekNumber !== undefined && slot.teams.weeks.week_number > maxWeekNumber) continue
 
     const myTeam = slot.team_id
     const oppTeam = scheduleMap.get(`${row.game_id}|${myTeam}`)
@@ -110,6 +114,49 @@ export function computeStandingsFromSupabase(
       avg: p.games > 0 ? p.pins / p.games : 0,
     }))
     .sort((a, b) => b.wins - a.wins || b.pins - a.pins)
+}
+
+export type RankMovement = 'up' | 'down' | 'same'
+
+/**
+ * Per-player rank movement vs. the previous archived week within a single season.
+ * Returns an empty map for all-time (seasonId === null) or when the season only
+ * has one archived week (e.g. week 1) — there is no prior week to compare against.
+ */
+export function computeRankMovement(
+  rawScores: any[],
+  rawSchedule: any[],
+  seasonId: string | null,
+): Map<string, RankMovement> {
+  const result = new Map<string, RankMovement>()
+  if (seasonId === null) return result
+
+  // Distinct archived week numbers in this season.
+  const weekNums = new Set<number>()
+  for (const row of rawScores as RawScore[]) {
+    const w = row.team_slots?.teams?.weeks
+    if (!w?.is_archived || w.season_id !== seasonId) continue
+    weekNums.add(w.week_number)
+  }
+  const sorted = Array.from(weekNums).sort((a, b) => a - b)
+  if (sorted.length < 2) return result // week 1 (or none) → no movement
+
+  const latest = sorted[sorted.length - 1]
+  const prior = sorted[sorted.length - 2]
+
+  const currentRank = new Map<string, number>()
+  computeStandingsFromSupabase(rawScores, rawSchedule, seasonId, latest)
+    .forEach((r, i) => currentRank.set(r.playerId, i))
+  const priorRank = new Map<string, number>()
+  computeStandingsFromSupabase(rawScores, rawSchedule, seasonId, prior)
+    .forEach((r, i) => priorRank.set(r.playerId, i))
+
+  for (const [playerId, cur] of currentRank) {
+    const prev = priorRank.get(playerId)
+    if (prev === undefined) continue // new this week → no arrow
+    result.set(playerId, cur < prev ? 'up' : cur > prev ? 'down' : 'same')
+  }
+  return result
 }
 
 export function useStandingsData() {

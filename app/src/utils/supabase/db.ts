@@ -126,7 +126,7 @@ export const scores = {
         'team_slots!inner(id, player_id, team_id, is_fill,' +
           'players(id, name),' +
           'teams!inner(week_id,' +
-            'weeks!inner(season_id, is_archived)' +
+            'weeks!inner(season_id, week_number, is_archived)' +
           ')' +
         ')'
       )
@@ -456,7 +456,7 @@ export const pinLedger = {
   listBySeasonForLeaderboard: (seasonId: string) =>
     supabase
       .from('pin_ledger')
-      .select('player_id, amount, players(name, is_active)')
+      .select('player_id, amount, created_at, players(name, is_active)')
       .eq('season_id', seasonId)
       .eq('is_house', false),
   insert: (data: TablesInsert<'pin_ledger'> | TablesInsert<'pin_ledger'>[]) =>

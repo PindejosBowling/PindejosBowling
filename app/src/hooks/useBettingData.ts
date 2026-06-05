@@ -114,8 +114,9 @@ export function useBettingData(playerId: string | null) {
   const [weekBets, setWeekBets] = useState<BetView[]>([])
   // All settled (won/lost/push) bets this season (for the "Settled Bets" view)
   const [settledBets, setSettledBets] = useState<BetView[]>([])
-  // Season pin-balance scoreboard: active players sorted high → low
-  const [leaderboard, setLeaderboard] = useState<{ playerId: string; name: string; balance: number; potential: number }[]>([])
+  // Season pin-balance scoreboard: active players sorted high → low.
+  // `movement` = rank change vs. the prior week (null = no prior week / new entry).
+  const [leaderboard, setLeaderboard] = useState<{ playerId: string; name: string; balance: number; potential: number; movement: 'up' | 'down' | 'same' | null }[]>([])
   const [currentWeekId, setCurrentWeekId] = useState<string | null>(null)
   const [currentSeasonId, setCurrentSeasonId] = useState<string | null>(null)
   // Set of market ids the current player has already placed a bet on
@@ -131,6 +132,9 @@ export function useBettingData(playerId: string | null) {
 
       const weekId = weekRes.data?.id ?? null
       const seasonId = seasonRes.data?.id ?? null
+      // The current week row is created the moment the prior week is archived, so
+      // its created_at is the cutoff between "last week's" ledger and this week's.
+      const weekStart = weekRes.data?.created_at ?? null
       setCurrentWeekId(weekId)
       setCurrentSeasonId(seasonId)
 
@@ -184,8 +188,9 @@ export function useBettingData(playerId: string | null) {
       const myBetViews = myBetsData.map(normalizeBet)
 
       // Sum the season ledger per player (house rows already excluded), keep
-      // active players, sort high → low.
-      const byPlayer: Record<string, { playerId: string; name: string; balance: number; isActive: boolean }> = {}
+      // active players, sort high → low. `priorBalance` sums only rows from before
+      // the current week started — the player's standing at the end of last week.
+      const byPlayer: Record<string, { playerId: string; name: string; balance: number; priorBalance: number; isActive: boolean }> = {}
       for (const e of seasonLedger) {
         const pid = e.player_id
         if (!pid) continue
@@ -194,10 +199,14 @@ export function useBettingData(playerId: string | null) {
             playerId: pid,
             name: e.players?.name ?? '—',
             balance: 0,
+            priorBalance: 0,
             isActive: e.players?.is_active ?? true,
           }
         }
         byPlayer[pid].balance += e.amount
+        if (weekStart && e.created_at && e.created_at < weekStart) {
+          byPlayer[pid].priorBalance += e.amount
+        }
       }
       // Potential winnings: each still-pending bet pays its potential_payout on a
       // win (the stake was already debited at placement), so projected balance =
@@ -209,8 +218,19 @@ export function useBettingData(playerId: string | null) {
         }
       }
 
-      const board = Object.values(byPlayer)
-        .filter(p => p.isActive)
+      const activePlayers = Object.values(byPlayer).filter(p => p.isActive)
+
+      // Prior-week ranking (by end-of-last-week balance). Only meaningful once
+      // there is a prior week to diff against — `weekStart` gates that.
+      const priorRank = new Map<string, number>()
+      if (weekStart) {
+        activePlayers
+          .slice()
+          .sort((a, b) => b.priorBalance - a.priorBalance)
+          .forEach((p, i) => priorRank.set(p.playerId, i))
+      }
+
+      const board = activePlayers
         .map(({ playerId, name, balance }) => ({
           playerId,
           name,
@@ -218,6 +238,12 @@ export function useBettingData(playerId: string | null) {
           potential: balance + (pendingByPlayer[playerId] ?? 0),
         }))
         .sort((a, b) => b.potential - a.potential)
+        .map((p, i) => {
+          const prev = priorRank.get(p.playerId)
+          const movement: 'up' | 'down' | 'same' | null =
+            prev === undefined ? null : i < prev ? 'up' : i > prev ? 'down' : 'same'
+          return { ...p, movement }
+        })
 
       setOpenLines(marketsData.map(normalizeMarket))
       setWeekBets(weekBetViews)

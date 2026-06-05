@@ -9,7 +9,7 @@ import { useNavigation } from '@react-navigation/native'
 import { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { colors, fonts, radius } from '../theme'
 import { useUiStore } from '../stores/uiStore'
-import { useStandingsData, computeStandingsFromSupabase } from '../hooks/useStandingsData'
+import { useStandingsData, computeStandingsFromSupabase, computeRankMovement } from '../hooks/useStandingsData'
 import { StandingsStackParamList } from '../navigation/types'
 import AppHeader from '../components/AppHeader'
 import LoadingView from '../components/LoadingView'
@@ -44,6 +44,11 @@ export default function StandingsScreen() {
 
   const standings = useMemo(
     () => computeStandingsFromSupabase(rawScores, rawSchedule, activeSeasonId),
+    [rawScores, rawSchedule, activeSeasonId],
+  )
+
+  const movementByPlayer = useMemo(
+    () => computeRankMovement(rawScores, rawSchedule, activeSeasonId),
     [rawScores, rawSchedule, activeSeasonId],
   )
 
@@ -116,6 +121,8 @@ export default function StandingsScreen() {
               <Text style={styles.playerName} numberOfLines={1}>
                 {item.name}
                 <PlayerBadges badges={badgesByPlayer.get(item.playerId) ?? []} />
+                {movementByPlayer.get(item.playerId) === 'up' && <Text style={[styles.moveText, styles.moveUp]}> ▲</Text>}
+                {movementByPlayer.get(item.playerId) === 'down' && <Text style={[styles.moveText, styles.moveDown]}> ▼</Text>}
               </Text>
               <Text style={styles.wlText}>{item.wins}–{item.losses}</Text>
               <Text style={styles.pinsText}>{item.pins}</Text>
@@ -219,6 +226,15 @@ const styles = StyleSheet.create({
     fontFamily: fonts.barlow,
     fontSize: 15,
     color: colors.text,
+  },
+  moveText: {
+    fontSize: 11,
+  },
+  moveUp: {
+    color: colors.success,
+  },
+  moveDown: {
+    color: colors.danger,
   },
   wlText: {
     width: 52,

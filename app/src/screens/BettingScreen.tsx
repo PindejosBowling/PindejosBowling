@@ -376,7 +376,11 @@ export default function BettingScreen() {
                     <View style={[styles.sbIconBox, index < 3 && styles.sbIconBoxTop]}>
                       <Text style={[styles.sbRankText, index < 3 && styles.sbRankTextTop]}>{index + 1}</Text>
                     </View>
-                    <Text style={[styles.sbName, isMe && styles.sbNameMe]} numberOfLines={1}>{p.name}</Text>
+                    <Text style={[styles.sbName, isMe && styles.sbNameMe]} numberOfLines={1}>
+                      {p.name}
+                      {p.movement === 'up' && <Text style={styles.moveUp}> ▲</Text>}
+                      {p.movement === 'down' && <Text style={styles.moveDown}> ▼</Text>}
+                    </Text>
                     <Text style={styles.sbBalance}>{p.balance.toLocaleString()}</Text>
                     <Text style={[styles.sbProjection, p.potential > p.balance && styles.sbProjectionLive]}>
                       {p.potential.toLocaleString()}
@@ -1050,6 +1054,8 @@ const styles = StyleSheet.create({
     color: colors.muted,
   },
   sbProjectionLive: { color: colors.success },
+  moveUp: { fontSize: 11, color: colors.success },
+  moveDown: { fontSize: 11, color: colors.danger },
 
   viewToggle: { marginBottom: 20 },
 
