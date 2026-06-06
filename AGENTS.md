@@ -172,6 +172,7 @@ The client is configured via Expo environment variables that are set in `.env.lo
 | Method | Description |
 |---|---|
 | `listOpenOUByWeek(weekId)` | Open `over_under` markets for a week with subject name + `bet_selections(*)` (Place Bets) |
+| `setOUStatusByWeekGame(weekId, gameNumber, status)` | Admin per-game open/close — flips all `over_under` markets for a week's game number to `'open'`/`'closed'` (only toggles rows currently in the opposite status) |
 | `syncOUForWeek(weekId, extraGames?)` | RPC `sync_over_under_markets_for_week` — RSVP-driven create/refund of markets; `extraGames` adds schedule games (team-gen game 3) |
 | `settle(marketId, resultValue)` | RPC `settle_market` (admin) — settle one market against the subject's actual score |
 | `settleForWeek(weekId)` | RPC `settle_betting_for_week` (admin) — credit `score_credit` + settle all open markets on archive |
