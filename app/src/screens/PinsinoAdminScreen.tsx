@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { View, Text, ScrollView, StyleSheet, RefreshControl, Alert } from 'react-native'
+import { View, Text, ScrollView, StyleSheet, RefreshControl, Alert, TouchableOpacity } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useNavigation } from '@react-navigation/native'
 import { NativeStackNavigationProp } from '@react-navigation/native-stack'
@@ -22,10 +22,9 @@ import { type BetView } from '../hooks/useBettingData'
 import { bets } from '../utils/supabase/db'
 
 type Nav = NativeStackNavigationProp<MoreStackParamList>
-type HouseView = 'statement' | 'activity' | 'pnl' | 'active' | 'settled'
+type HouseView = 'activity' | 'pnl' | 'active' | 'settled'
 
 const VIEW_OPTIONS: { key: HouseView; label: string }[] = [
-  { key: 'statement', label: 'Statement' },
   { key: 'activity', label: 'Activity' },
   { key: 'pnl', label: 'Weekly P&L' },
   { key: 'active', label: 'Active Bets' },
@@ -44,7 +43,8 @@ export default function PinsinoAdminScreen() {
   const { loading, balance, ledger, summary, weekPnl, exposure, stats, seasonNumber, weekBets, settledBets, reload } = useHouseBettingData()
   const { refreshing, onRefresh } = useRefresh(reload)
 
-  const [view, setView] = useState<HouseView>('statement')
+  const [view, setView] = useState<HouseView>('activity')
+  const [statementExpanded, setStatementExpanded] = useState(false)
   const [detailBet, setDetailBet] = useState<BetView | null>(null)
   const [settleBet, setSettleBet] = useState<BetView | null>(null)
 
@@ -115,39 +115,86 @@ export default function PinsinoAdminScreen() {
         />
         {seasonNumber != null && <Text style={styles.subtitle}>SEASON {seasonNumber} · THE HOUSE</Text>}
 
-        {/* Pincome Statement card — the house's side of the ledger */}
+        {/* House card — the house's side of the ledger. Tap HOUSE BALANCE to
+            collapse/expand the full breakdown (financials + betting record). */}
         <View style={styles.summaryCard}>
-          <View style={[styles.summaryRow, styles.summaryRowBorder]}>
-            <Text style={styles.summaryLabel}>STAKES TAKEN</Text>
-            <Text style={[styles.summaryValue, { color: colors.success }]}>{signed(summary.stakesTaken)}</Text>
-          </View>
-          <View style={[styles.summaryRow, styles.summaryRowBorder]}>
-            <Text style={styles.summaryLabel}>PAYOUTS</Text>
-            <Text style={[styles.summaryValue, { color: colors.danger }]}>{signed(summary.payouts)}</Text>
-          </View>
-          <View style={[styles.summaryRow, styles.summaryRowBorder]}>
-            <Text style={styles.summaryLabel}>REFUNDS</Text>
-            <Text style={[styles.summaryValue, { color: colors.danger }]}>{signed(summary.refunds)}</Text>
-          </View>
-          {summary.bonuses !== 0 && (
-            <View style={[styles.summaryRow, styles.summaryRowBorder]}>
-              <Text style={styles.summaryLabel}>BONUSES PAID</Text>
-              <Text style={[styles.summaryValue, { color: colors.gold }]}>{signed(summary.bonuses)}</Text>
-            </View>
+          {statementExpanded && (
+            <>
+              {/* ── Summary statistics ─────────────────────────── */}
+              <View style={[styles.summaryRow, styles.summaryRowBorder]}>
+                <Text style={styles.summaryLabel}>W–L–P (HOUSE)</Text>
+                <Text style={styles.summaryValue}>{stats.houseWins}–{stats.houseLosses}–{stats.pushes}</Text>
+              </View>
+              <View style={[styles.summaryRow, styles.summaryRowBorder]}>
+                <Text style={styles.summaryLabel}>BETS SETTLED</Text>
+                <Text style={styles.summaryValue}>{stats.settledCount.toLocaleString()}</Text>
+              </View>
+              <View style={[styles.summaryRow, styles.summaryRowBorder]}>
+                <Text style={styles.summaryLabel}>BIGGEST PAYOUT</Text>
+                <Text style={[styles.summaryValue, { color: colors.danger }]}>
+                  {stats.biggestPayout > 0 ? `−${stats.biggestPayout.toLocaleString()}` : '—'}
+                </Text>
+              </View>
+              <View style={[styles.summaryRow, styles.summaryRowBorder]}>
+                <Text style={styles.summaryLabel}>BIGGEST TAKE</Text>
+                <Text style={[styles.summaryValue, { color: colors.success }]}>
+                  {stats.biggestTake > 0 ? `+${stats.biggestTake.toLocaleString()}` : '—'}
+                </Text>
+              </View>
+              <View style={[styles.summaryRow, styles.summaryRowBorder]}>
+                <Text style={styles.summaryLabel}>HOLD</Text>
+                <Text style={[styles.summaryValue, stats.holdPct != null && { color: stats.holdPct >= 0 ? colors.success : colors.danger }]}>
+                  {stats.holdPct != null ? `${stats.holdPct.toFixed(1)}%` : '—'}
+                </Text>
+              </View>
+              <View style={styles.summaryRow}>
+                <Text style={styles.summaryLabel}>EXPOSURE (THIS WEEK)</Text>
+                <Text style={[styles.summaryValue, { color: colors.muted }]}>−{exposure.toLocaleString()}</Text>
+              </View>
+
+              {/* ── divider: stats above, ledger flows below ───── */}
+              <View style={styles.sectionDivider} />
+
+              {/* ── Ledger activity (feeds House Balance) ───────── */}
+              <View style={[styles.summaryRow, styles.summaryRowBorder]}>
+                <Text style={styles.summaryLabel}>STAKES TAKEN</Text>
+                <Text style={[styles.summaryValue, { color: colors.success }]}>{signed(summary.stakesTaken)}</Text>
+              </View>
+              <View style={[styles.summaryRow, styles.summaryRowBorder]}>
+                <Text style={styles.summaryLabel}>PAYOUTS</Text>
+                <Text style={[styles.summaryValue, { color: colors.danger }]}>{signed(summary.payouts)}</Text>
+              </View>
+              {summary.bonuses !== 0 && (
+                <View style={[styles.summaryRow, styles.summaryRowBorder]}>
+                  <Text style={styles.summaryLabel}>BONUSES PAID</Text>
+                  <Text style={[styles.summaryValue, { color: colors.gold }]}>{signed(summary.bonuses)}</Text>
+                </View>
+              )}
+            </>
           )}
-          <View style={[styles.summaryRow, styles.summaryRowBorder]}>
-            <Text style={styles.summaryLabel}>EXPOSURE (THIS WEEK)</Text>
-            <Text style={[styles.summaryValue, { color: colors.muted }]}>−{exposure.toLocaleString()}</Text>
-          </View>
-          <View style={styles.summaryRow}>
-            <Text style={[styles.summaryLabel, styles.summaryLabelTotal]}>HOUSE BALANCE</Text>
+          <TouchableOpacity
+            style={styles.summaryRow}
+            activeOpacity={0.7}
+            onPress={() => setStatementExpanded(e => !e)}
+          >
+            <Text style={[styles.summaryLabel, styles.summaryLabelTotal]}>
+              HOUSE BALANCE {statementExpanded ? '▴' : '▾'}
+            </Text>
             <Text style={[styles.summaryValue, styles.summaryValueTotal, { color: balance >= 0 ? colors.accent : colors.danger }]}>
               {balance.toLocaleString()}
             </Text>
-          </View>
+          </TouchableOpacity>
         </View>
 
-        {/* View toggle — scrollable: five pills overflow a phone width */}
+        {statementExpanded && (
+          <Text style={[styles.note, styles.statsNote]}>
+            Hold is the House's net betting take as a share of stakes wagered —
+            positive means the Pinsino is winning. Exposure above is what it would
+            owe if every open bet this week hits.
+          </Text>
+        )}
+
+        {/* View toggle — scrollable: four pills overflow a phone width */}
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -155,54 +202,6 @@ export default function PinsinoAdminScreen() {
         >
           <ToggleGroup options={VIEW_OPTIONS} value={view} onChange={setView} />
         </ScrollView>
-
-        {/* ── Statement (house performance) ─────────────────── */}
-        {view === 'statement' && (
-          stats.settledCount > 0 || stats.bettors > 0 ? (
-            <>
-              {/* Record + hold headline */}
-              <View style={styles.statGrid}>
-                <View style={styles.statBox}>
-                  <Text style={styles.statValue}>{stats.houseWins}–{stats.houseLosses}–{stats.pushes}</Text>
-                  <Text style={styles.statLabel}>W–L–P (HOUSE)</Text>
-                </View>
-                <View style={styles.statBox}>
-                  <Text style={[styles.statValue, stats.holdPct != null && { color: stats.holdPct >= 0 ? colors.success : colors.danger }]}>
-                    {stats.holdPct != null ? `${stats.holdPct.toFixed(1)}%` : '—'}
-                  </Text>
-                  <Text style={styles.statLabel}>HOLD</Text>
-                </View>
-              </View>
-
-              <View style={styles.card}>
-                <View style={[styles.ledgerRow, styles.ledgerRowBorder]}>
-                  <Text style={styles.ledgerDescription}>BETS SETTLED</Text>
-                  <Text style={styles.statRowValue}>{stats.settledCount.toLocaleString()}</Text>
-                </View>
-                <View style={[styles.ledgerRow, styles.ledgerRowBorder]}>
-                  <Text style={styles.ledgerDescription}>DISTINCT BETTORS</Text>
-                  <Text style={styles.statRowValue}>{stats.bettors.toLocaleString()}</Text>
-                </View>
-                <View style={styles.ledgerRow}>
-                  <Text style={styles.ledgerDescription}>BIGGEST PAYOUT</Text>
-                  <Text style={[styles.statRowValue, { color: colors.danger }]}>
-                    {stats.biggestPayout > 0 ? `−${stats.biggestPayout.toLocaleString()}` : '—'}
-                  </Text>
-                </View>
-              </View>
-
-              <Text style={styles.note}>
-                Hold is the House's net betting take as a share of stakes wagered —
-                positive means the Pinsino is winning. Exposure above is what it would
-                owe if every open bet this week hits.
-              </Text>
-            </>
-          ) : (
-            <View style={styles.emptyCard}>
-              <Text style={styles.emptyText}>No bets settled yet this season</Text>
-            </View>
-          )
-        )}
 
         {/* ── Activity (house ledger by week) ───────────────── */}
         {view === 'activity' && (
@@ -324,6 +323,14 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
   },
   summaryRowBorder: { borderBottomWidth: 1, borderBottomColor: colors.border },
+  sectionDivider: {
+    height: 6,
+    marginHorizontal: -18,
+    backgroundColor: colors.surface2,
+    borderTopWidth: 1,
+    borderBottomWidth: 1,
+    borderColor: colors.border2,
+  },
   summaryLabel: {
     fontFamily: fonts.barlowCondensed,
     fontSize: 13,
@@ -347,40 +354,7 @@ const styles = StyleSheet.create({
     lineHeight: 19,
     marginTop: 4,
   },
-
-  statGrid: {
-    flexDirection: 'row',
-    gap: 8,
-    marginBottom: 10,
-  },
-  statBox: {
-    flex: 1,
-    backgroundColor: colors.surface,
-    borderRadius: radius.cardMd,
-    borderWidth: 1,
-    borderColor: colors.border,
-    paddingVertical: 16,
-    alignItems: 'center',
-  },
-  statValue: {
-    fontFamily: fonts.barlowCondensedHeavy,
-    fontSize: 26,
-    color: colors.accent,
-    lineHeight: 28,
-  },
-  statLabel: {
-    fontFamily: fonts.barlowCondensed,
-    fontSize: 10,
-    letterSpacing: 1,
-    color: colors.muted,
-    marginTop: 4,
-  },
-  statRowValue: {
-    fontFamily: fonts.barlowCondensed,
-    fontSize: 16,
-    color: colors.text,
-    marginLeft: 10,
-  },
+  statsNote: { marginTop: -16, marginBottom: 20 },
 
   card: {
     backgroundColor: colors.surface,

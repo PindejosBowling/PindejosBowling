@@ -8,7 +8,6 @@ import { LedgerEntry } from './usePlayerBettingDetailData'
 export interface HouseSummary {
   stakesTaken: number  // Σ bet_stake  (+, stakes the house accepts)
   payouts: number      // Σ bet_payout (−, paid out on player wins)
-  refunds: number      // Σ bet_refund (−, refunded on pushes)
   bonuses: number      // Σ bonus      (−, house-funded bonuses paid out)
 }
 
@@ -25,12 +24,13 @@ export interface HouseStats {
   pushes: number         // refunded, no edge either way
   bettors: number        // distinct players who have bet this season
   biggestPayout: number  // largest single payout the house has made (a player win)
+  biggestTake: number    // largest single stake the house kept (a player loss)
   holdPct: number | null // house betting net ÷ stakes taken (null when no stakes)
 }
 
-const EMPTY_SUMMARY: HouseSummary = { stakesTaken: 0, payouts: 0, refunds: 0, bonuses: 0 }
+const EMPTY_SUMMARY: HouseSummary = { stakesTaken: 0, payouts: 0, bonuses: 0 }
 const EMPTY_STATS: HouseStats = {
-  settledCount: 0, houseWins: 0, houseLosses: 0, pushes: 0, bettors: 0, biggestPayout: 0, holdPct: null,
+  settledCount: 0, houseWins: 0, houseLosses: 0, pushes: 0, bettors: 0, biggestPayout: 0, biggestTake: 0, holdPct: null,
 }
 
 export function useHouseBettingData() {
@@ -101,7 +101,6 @@ export function useHouseBettingData() {
       for (const e of houseData) {
         if (e.type === 'bet_stake') nextSummary.stakesTaken += e.amount
         else if (e.type === 'bet_payout') nextSummary.payouts += e.amount
-        else if (e.type === 'bet_refund') nextSummary.refunds += e.amount
         else if (e.type === 'bonus') nextSummary.bonuses += e.amount
       }
 
@@ -132,6 +131,7 @@ export function useHouseBettingData() {
           if (b.potentialPayout > nextStats.biggestPayout) nextStats.biggestPayout = b.potentialPayout
         } else if (b.status === 'lost') {
           nextStats.houseWins += 1
+          if (b.stake > nextStats.biggestTake) nextStats.biggestTake = b.stake
         } else if (b.status === 'push' || b.status === 'void') {
           nextStats.pushes += 1
         }
@@ -141,8 +141,8 @@ export function useHouseBettingData() {
       for (const b of settledViews) bettorIds.add(b.playerId)
       for (const b of weekBetViews) bettorIds.add(b.playerId)
       nextStats.bettors = bettorIds.size
-      // Hold = house betting net (stakes minus payouts/refunds) ÷ stakes taken.
-      const bettingNet = nextSummary.stakesTaken + nextSummary.payouts + nextSummary.refunds
+      // Hold = house betting net (stakes minus payouts) ÷ stakes taken.
+      const bettingNet = nextSummary.stakesTaken + nextSummary.payouts
       nextStats.holdPct = nextSummary.stakesTaken > 0
         ? (bettingNet / nextSummary.stakesTaken) * 100
         : null
