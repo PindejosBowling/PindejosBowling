@@ -217,7 +217,7 @@ Append-only event log. **`balance(player, season) = SUM(amount)`** over their ro
 | `id` uuid PK | |
 | `player_id` uuid → players | The account owner. **Nullable** — `NULL` for house rows. `ON DELETE CASCADE`. |
 | `season_id` uuid → seasons | `ON DELETE CASCADE`. |
-| `week_id` uuid → weeks | The week the entry belongs to. **Nullable** — `NULL` for `champion_bonus` (credited at season open before any week exists) and future `house_seed` rows. `ON DELETE SET NULL`. |
+| `week_id` uuid → weeks | The week the entry belongs to. **Nullable** — `NULL` for `bonus` rows (credited at season open before any week exists). `ON DELETE SET NULL`. |
 | `amount` int | Signed. Credits positive, debits negative. |
 | `type` text | See lifecycle below. |
 | `description` text | Human-readable. |
@@ -231,14 +231,15 @@ Append-only event log. **`balance(player, season) = SUM(amount)`** over their ro
 
 #### Ledger lifecycle (double-entry)
 
-Faucets are **mints** (player-only, no counterpart). Every `bet_*` transfer writes
-**two** rows with the same `bet_id` and opposite signs (player ↔ house), netting to 0.
+`score_credit` is the only **mint** (player-only, no counterpart). Every `bet_*`
+transfer **and every `bonus`** writes **two** rows with opposite signs (player ↔
+house), netting to 0 — `bet_*` pairs share a `bet_id`; bonuses are paired by
+season at credit time.
 
 | Event | Player row | House row | `week_id` set? |
 |---|---|---|---|
-| Season opens | `+100` `champion_bonus` per prior-season champion | — | **NULL** (no week exists yet) |
-| Season opens | — | `0` `house_seed` (one per season; seed-0 policy, allowed negative) | **NULL** for new seasons; backfilled to week 1 for existing rows |
-| Week archived | `+score` `score_credit` per game per player (**dominant faucet**) | — | **YES** — the archived week |
+| Season opens | `+100` `bonus` per prior-season champion | `−100` `bonus` (house-funded) | **NULL** (no week exists yet) |
+| Week archived | `+score` `score_credit` per game per player (**only faucet**) | — | **YES** — the archived week |
 | Bet placed | `−stake` `bet_stake` | `+stake` `bet_stake` | **YES** — the market's week |
 | Bet won | `+potential_payout` `bet_payout` | `−potential_payout` `bet_payout` | **YES** — the market's week |
 | Bet push | `+stake` `bet_refund` | `−stake` `bet_refund` | **YES** — the market's week |
@@ -247,16 +248,22 @@ Faucets are **mints** (player-only, no counterpart). Every `bet_*` transfer writ
 `potential_payout = floor(stake × Π(won-leg odds))` (single even-money O/U leg =
 `stake × 2`). Net player on win = profit; net house = `stake − payout`.
 
-> The economy is **inflationary by design** via `score_credit` (every game score
-> becomes pins). Only `bet_*` movements balance against the house; the faucets do
-> not. A house **vig** (sub-fair odds) is the available sink; Phase 2 ships fair
+> `bonus` is the generalized, **house-funded** bonus type (formerly the player-only
+> `champion_bonus` mint). Each bonus credit is debited from the house, so bonuses
+> are paid *out of house income* rather than minted — they net to zero and the
+> house balance reflects them. The `house_seed` type has been **dropped** (it was a
+> per-season amount-0 marker with no balance impact and no code path).
+
+> The economy's only inflation is `score_credit` (every game score becomes pins).
+> `bonus` and `bet_*` movements balance against the house; only `score_credit`
+> mints. A house **vig** (sub-fair odds) is the available sink; Phase 2 ships fair
 > even odds (`2.000`).
 
 **Conservation invariant (post-cutover):** for any season,
-`SUM(pin_ledger.amount) = SUM(house_seed) + SUM(score_credit) + SUM(champion_bonus)`
-— every `bet_*` transfer nets to 0 across the player + house rows. (Holds from the
-Phase 2 cutover forward; legacy history migrated in WS5 was mint-on-win and has no
-house counter-rows, by design.)
+`SUM(pin_ledger.amount) = SUM(score_credit)` — every `bet_*` transfer and every
+`bonus` nets to 0 across the player + house rows. (Holds from the Phase 2 cutover
+forward; legacy history migrated in WS5 was mint-on-win and has no house
+counter-rows, by design.)
 
 **Settlement math:**
 - **House single back:** win → house pays `stake × odds`; loss → house keeps the
@@ -460,15 +467,16 @@ change to the betting RPCs, the ledger, or the settlement math.
    0; the player's balance dropped by the stake; **over** on your own line is
    allowed, **under** on your own line is rejected by both the UI and the
    `bet_legs_no_self_tank` trigger.
-2. **Conservation invariant (SQL).** Every `bet_*` transfer nets to 0 across the
-   player + house rows, so for any season the ledger sum equals the faucets only:
+2. **Conservation invariant (SQL).** Every `bet_*` transfer and every `bonus` nets
+   to 0 across the player + house rows, so for any season the ledger sum equals the
+   lone mint (`score_credit`):
    ```sql
    SELECT season_id,
-          SUM(amount)                                                                AS net,
-          SUM(amount) FILTER (WHERE type IN ('house_seed','score_credit','champion_bonus')) AS faucets
+          SUM(amount)                                                  AS net,
+          SUM(amount) FILTER (WHERE type = 'score_credit')             AS mint
    FROM public.pin_ledger
    GROUP BY season_id;
-   -- net must equal faucets for every season. (Holds from the Phase 2 cutover
+   -- net must equal mint for every season. (Holds from the Phase 2 cutover
    -- forward; pre-cutover migrated history was mint-on-win — see §4.)
    ```
 3. **Settle win / loss / push.** Call `settle_market` with a value above / below /

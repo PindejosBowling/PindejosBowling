@@ -107,14 +107,28 @@ export default function AdminOpenRegistrationModal({ visible, onClose, onCreated
       if (newSeasonRes.data && lastEndedRes.data) {
         const { data: champions } = await seasonChampions.listBySeason(lastEndedRes.data.id)
         if (champions && champions.length > 0) {
+          const seasonId = newSeasonRes.data!.id
+          const desc = `Season ${lastEndedRes.data!.number} champion bonus`
+          // Bonuses are house-funded: each +100 player credit is paired with a
+          // -100 house debit so the bonus nets to zero across the economy.
           await pinLedger.insert(
-            champions.map(c => ({
-              player_id: c.player_id,
-              season_id: newSeasonRes.data!.id,
-              amount: 100,
-              type: 'champion_bonus' as const,
-              description: `Season ${lastEndedRes.data!.number} champion bonus`,
-            }))
+            champions.flatMap(c => [
+              {
+                player_id: c.player_id,
+                season_id: seasonId,
+                amount: 100,
+                type: 'bonus' as const,
+                description: desc,
+              },
+              {
+                player_id: null,
+                season_id: seasonId,
+                is_house: true,
+                amount: -100,
+                type: 'bonus' as const,
+                description: `House-funded: ${desc}`,
+              },
+            ])
           )
         }
       }

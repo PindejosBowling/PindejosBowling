@@ -437,6 +437,15 @@ export const pinLedger = {
       .eq('player_id', playerId)
       .eq('season_id', seasonId)
       .order('created_at', { ascending: false }),
+  // House-side rows for a season (the betting counterparty + bonus funder).
+  // Admin-only screen; RLS already permits authenticated SELECT on all rows.
+  listHouseBySeason: (seasonId: string) =>
+    supabase
+      .from('pin_ledger')
+      .select('*, weeks(week_number)')
+      .eq('season_id', seasonId)
+      .eq('is_house', true)
+      .order('created_at', { ascending: false }),
   // Leaderboard is player balances only — exclude house rows (player_id IS NULL).
   listBySeasonForLeaderboard: (seasonId: string) =>
     supabase

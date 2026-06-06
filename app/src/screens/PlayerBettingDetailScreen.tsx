@@ -72,14 +72,14 @@ export default function PlayerBettingDetailScreen() {
     let pincome = 0
     let wagered = 0
     let won = 0
-    let championBonus = 0
+    let bonus = 0
     for (const e of ledger) {
       if (e.type === 'score_credit') pincome += e.amount
       else if (e.type === 'bet_stake') wagered += e.amount
       else if (e.type === 'bet_payout') won += e.amount
-      else if (e.type === 'champion_bonus') championBonus += e.amount
+      else if (e.type === 'bonus') bonus += e.amount
     }
-    return { pincome, wagered, won, championBonus }
+    return { pincome, wagered, won, bonus }
   }, [ledger])
 
   const bonusEntries = useMemo(
@@ -174,11 +174,11 @@ export default function PlayerBettingDetailScreen() {
               +{summary.won.toLocaleString()}
             </Text>
           </View>
-          {summary.championBonus !== 0 && (
+          {summary.bonus !== 0 && (
             <View style={[styles.summaryRow, styles.summaryRowBorder]}>
-              <Text style={styles.summaryLabel}>CHAMPION BONUS</Text>
+              <Text style={styles.summaryLabel}>BONUSES</Text>
               <Text style={[styles.summaryValue, { color: colors.gold }]}>
-                +{summary.championBonus.toLocaleString()}
+                +{summary.bonus.toLocaleString()}
               </Text>
             </View>
           )}
