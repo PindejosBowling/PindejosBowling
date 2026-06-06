@@ -27,7 +27,7 @@ import BetDetailModal, { resultBadge, betReturnText } from '../components/BetDet
 import LineRow from '../components/LineRow'
 import LineRowContainer from '../components/LineRowContainer'
 import {
-  useBettingData,
+  usePinsinoData,
   selectionBetsAgainstSubject,
   lineGroup,
   lineCategory,
@@ -37,14 +37,14 @@ import {
   type LineGroup,
   type LineCategory,
   type SelectionView,
-} from '../hooks/useBettingData'
+} from '../hooks/usePinsinoData'
 import { useRefresh } from '../hooks/useRefresh'
 import { useAuthStore } from '../stores/authStore'
 import { useUiStore } from '../stores/uiStore'
 import { bets } from '../utils/supabase/db'
-import { BettingStackParamList } from '../navigation/types'
+import { PinsinoStackParamList } from '../navigation/types'
 
-type BettingNav = NativeStackNavigationProp<BettingStackParamList>
+type PinsinoNav = NativeStackNavigationProp<PinsinoStackParamList>
 
 type View2 = 'leaderboard' | 'action' | 'place' | 'settled'
 type PlaceMode = 'single' | 'parlay'
@@ -76,13 +76,13 @@ interface BetModalState {
   wager: string
 }
 
-export default function BettingScreen() {
+export default function PinsinoScreen() {
   const playerId = useAuthStore(s => s.playerId)
   const playerName = useAuthStore(s => s.playerName)
   const { showToast } = useUiStore()
-  const navigation = useNavigation<BettingNav>()
+  const navigation = useNavigation<PinsinoNav>()
 
-  const { loading, balance, openLines, myBets, weekBets, settledBets, leaderboard, reload } = useBettingData(playerId)
+  const { loading, balance, openLines, myBets, weekBets, settledBets, leaderboard, reload } = usePinsinoData(playerId)
   const { refreshing, onRefresh } = useRefresh(reload)
 
   const [view, setView] = useState<View2>('leaderboard')
@@ -241,7 +241,7 @@ export default function BettingScreen() {
         <TouchableOpacity
           style={styles.balanceCard}
           onPress={() => {
-            if (playerId) navigation.navigate('PlayerBettingDetail', { playerId, name: playerName ?? 'Me' })
+            if (playerId) navigation.navigate('PlayerPinsino', { playerId, name: playerName ?? 'Me' })
           }}
           activeOpacity={0.7}
           disabled={!playerId}
@@ -272,7 +272,7 @@ export default function BettingScreen() {
                   <TouchableOpacity
                     key={p.playerId}
                     style={[styles.sbRow, index < leaderboard.length - 1 && styles.sbRowBorder]}
-                    onPress={() => navigation.navigate('PlayerBettingDetail', { playerId: p.playerId, name: p.name })}
+                    onPress={() => navigation.navigate('PlayerPinsino', { playerId: p.playerId, name: p.name })}
                     activeOpacity={0.7}
                   >
                     <View style={[styles.sbIconBox, index < 3 && styles.sbIconBoxTop]}>

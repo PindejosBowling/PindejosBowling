@@ -1,6 +1,6 @@
 import { Modal, View, Text, TouchableOpacity, StyleSheet } from 'react-native'
 import { colors, fonts, radius } from '../theme'
-import type { BetView } from '../hooks/useBettingData'
+import type { BetView } from '../hooks/usePinsinoData'
 
 // Badge from the bet's own status (the target model resolves outcome per bet).
 export function resultBadge(status: string) {

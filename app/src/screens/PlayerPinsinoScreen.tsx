@@ -5,7 +5,7 @@ import { useRoute, useNavigation } from '@react-navigation/native'
 import { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { RouteProp } from '@react-navigation/native'
 import { colors, fonts, radius } from '../theme'
-import { BettingStackParamList } from '../navigation/types'
+import { PinsinoStackParamList } from '../navigation/types'
 import AppHeader from '../components/AppHeader'
 import ScreenHeader from '../components/ScreenHeader'
 import LoadingView from '../components/LoadingView'
@@ -14,23 +14,23 @@ import BetRow from '../components/BetRow'
 import LedgerRow from '../components/LedgerRow'
 import { resultBadge, betReturnText } from '../components/BetDetailModal'
 import { useRefresh } from '../hooks/useRefresh'
-import { usePlayerBettingDetailData, LedgerEntry } from '../hooks/usePlayerBettingDetailData'
-import { BetView } from '../hooks/useBettingData'
+import { usePlayerPinsinoData, LedgerEntry } from '../hooks/usePlayerPinsinoData'
+import { BetView } from '../hooks/usePinsinoData'
 
-type PlayerBettingDetailRoute = RouteProp<
-  { PlayerBettingDetail: { playerId: string; name: string } },
-  'PlayerBettingDetail'
+type PlayerPinsinoRoute = RouteProp<
+  { PlayerPinsino: { playerId: string; name: string } },
+  'PlayerPinsino'
 >
-type PlayerBettingDetailNav = NativeStackNavigationProp<BettingStackParamList>
+type PlayerPinsinoNav = NativeStackNavigationProp<PinsinoStackParamList>
 
 type DetailView = 'activity' | 'open' | 'settled'
 
-export default function PlayerBettingDetailScreen() {
-  const route = useRoute<PlayerBettingDetailRoute>()
-  const navigation = useNavigation<PlayerBettingDetailNav>()
+export default function PlayerPinsinoScreen() {
+  const route = useRoute<PlayerPinsinoRoute>()
+  const navigation = useNavigation<PlayerPinsinoNav>()
   const { playerId, name } = route.params
 
-  const { loading, balance, ledger, openBets, settledBets, reload } = usePlayerBettingDetailData(playerId)
+  const { loading, balance, ledger, openBets, settledBets, reload } = usePlayerPinsinoData(playerId)
   const { refreshing, onRefresh } = useRefresh(reload)
 
   const [view, setView] = useState<DetailView>('activity')

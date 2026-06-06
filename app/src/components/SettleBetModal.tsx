@@ -15,7 +15,7 @@ import { colors, fonts, radius } from '../theme'
 import Toast from './Toast'
 import { useUiStore } from '../stores/uiStore'
 import { betMarkets } from '../utils/supabase/db'
-import type { BetView } from '../hooks/useBettingData'
+import type { BetView } from '../hooks/usePinsinoData'
 
 interface SettleBetModalProps {
   // The bet to settle. Each leg has its own market (over_under is one market per

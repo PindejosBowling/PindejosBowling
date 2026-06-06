@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect } from 'react'
 import { seasons, bets, pinLedger } from '../utils/supabase/db'
-import { BetView, normalizeBet } from './useBettingData'
+import { BetView, normalizeBet } from './usePinsinoData'
 
 export interface LedgerEntry {
   id: string
@@ -12,7 +12,7 @@ export interface LedgerEntry {
   bet: BetView | null   // populated for bet_stake / bet_payout / bet_refund rows
 }
 
-export function usePlayerBettingDetailData(playerId: string | null) {
+export function usePlayerPinsinoData(playerId: string | null) {
   const [loading, setLoading] = useState(true)
   const [balance, setBalance] = useState(0)
   const [ledger, setLedger] = useState<LedgerEntry[]>([])
@@ -91,7 +91,7 @@ export function usePlayerBettingDetailData(playerId: string | null) {
       setOpenBets(openBetViews)
       setSettledBets(settledBetViews)
     } catch (e) {
-      console.error('usePlayerBettingDetailData error:', e)
+      console.error('usePlayerPinsinoData error:', e)
     } finally {
       setLoading(false)
     }

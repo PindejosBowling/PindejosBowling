@@ -14,11 +14,11 @@ import SettledBetsView from '../components/SettledBetsView'
 import BetDetailModal from '../components/BetDetailModal'
 import SettleBetModal from '../components/SettleBetModal'
 import { useRefresh } from '../hooks/useRefresh'
-import { useHouseBettingData } from '../hooks/useHouseBettingData'
+import { useHousePinsinoData } from '../hooks/useHousePinsinoData'
 import { useAuthStore } from '../stores/authStore'
 import { useUiStore } from '../stores/uiStore'
-import { LedgerEntry } from '../hooks/usePlayerBettingDetailData'
-import { type BetView } from '../hooks/useBettingData'
+import { LedgerEntry } from '../hooks/usePlayerPinsinoData'
+import { type BetView } from '../hooks/usePinsinoData'
 import { bets } from '../utils/supabase/db'
 
 type Nav = NativeStackNavigationProp<MoreStackParamList>
@@ -40,7 +40,7 @@ export default function PinsinoAdminScreen() {
   const isAdmin = useAuthStore(s => s.role) === 'admin'
   const { showToast } = useUiStore()
 
-  const { loading, balance, ledger, summary, weekPnl, exposure, stats, seasonNumber, weekBets, settledBets, reload } = useHouseBettingData()
+  const { loading, balance, ledger, summary, weekPnl, exposure, stats, seasonNumber, weekBets, settledBets, reload } = useHousePinsinoData()
   const { refreshing, onRefresh } = useRefresh(reload)
 
   const [view, setView] = useState<HouseView>('activity')

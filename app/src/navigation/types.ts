@@ -18,7 +18,7 @@ export type StandingsStackParamList = {
   PlayerDetail: { name: string }
 }
 
-export type BettingStackParamList = {
-  BettingHome: undefined
-  PlayerBettingDetail: { playerId: string; name: string }
+export type PinsinoStackParamList = {
+  PinsinoHome: undefined
+  PlayerPinsino: { playerId: string; name: string }
 }

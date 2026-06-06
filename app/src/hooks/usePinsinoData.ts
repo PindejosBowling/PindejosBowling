@@ -192,7 +192,7 @@ function normalizeMarket(m: any): LineView {
   }
 }
 
-export function useBettingData(playerId: string | null) {
+export function usePinsinoData(playerId: string | null) {
   const [loading, setLoading] = useState(true)
   const [balance, setBalance] = useState(0)
   const [openLines, setOpenLines] = useState<LineView[]>([])
@@ -351,7 +351,7 @@ export function useBettingData(playerId: string | null) {
       setBalance(ledgerData.reduce((sum, e) => sum + e.amount, 0))
       setMyBetMarketIds(new Set(myBetViews.map(b => b.marketId)))
     } catch (e) {
-      console.error('useBettingData error:', e)
+      console.error('usePinsinoData error:', e)
     } finally {
       setLoading(false)
     }

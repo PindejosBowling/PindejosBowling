@@ -3,7 +3,7 @@ import { View, Text, StyleSheet } from 'react-native'
 import { colors, fonts, radius } from '../theme'
 import BetRow from './BetRow'
 import { resultBadge, betReturnText } from './BetDetailModal'
-import type { BetView } from '../hooks/useBettingData'
+import type { BetView } from '../hooks/usePinsinoData'
 
 interface SettledBetsViewProps {
   // All settled (won/lost/push) bets this season.

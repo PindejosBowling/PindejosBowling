@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native'
 import { colors, fonts } from '../theme'
-import type { LedgerEntry } from '../hooks/usePlayerBettingDetailData'
+import type { LedgerEntry } from '../hooks/usePlayerPinsinoData'
 import BetDetailModal from './BetDetailModal'
 
 interface LedgerRowProps {
