@@ -172,12 +172,9 @@ The client is configured via Expo environment variables that are set in `.env.lo
 | Method | Description |
 |---|---|
 | `listOpenOUByWeek(weekId)` | Open `over_under` markets for a week with subject name + `bet_selections(*)` (Place Bets) |
-| `listOUByWeek(weekId)` | All `over_under` markets for a week with subject name + selections (admin Bet Lines) |
-| `update(id, data)` | Admin direct write — open/close a market (`status`) |
 | `syncOUForWeek(weekId, extraGames?)` | RPC `sync_over_under_markets_for_week` — RSVP-driven create/refund of markets; `extraGames` adds schedule games (team-gen game 3) |
 | `settle(marketId, resultValue)` | RPC `settle_market` (admin) — settle one market against the subject's actual score |
 | `settleForWeek(weekId)` | RPC `settle_betting_for_week` (admin) — credit `score_credit` + settle all open markets on archive |
-| `editLine(marketId, line)` | RPC `edit_over_under_line` (admin) — set the line on both selections (rejects if any bet exists) |
 
 ### `bets` (canonical stakes)
 | Method | Description |
@@ -277,7 +274,6 @@ Win/loss is determined by comparing **team totals** (all players on a team inclu
 | `useRegistrationData.ts` | `useRegistrationData` | — | RegistrationScreen |
 | `useRefresh.ts` | `useRefresh(fn)` | — | All screens with pull-to-refresh |
 | `useBettingData.ts` | `useBettingData(playerId)` (+ `LineView`, `BetView` types) | — | BettingScreen — returns `{ balance, openLines, myBets, weekBets, settledBets, leaderboard, myBetMarketIds, currentWeekId, currentSeasonId }`. Normalizes the market/bet graph into flat `LineView` / `BetView`. (`weekBets` = all players' bets this week via `bets.listByWeek`; `settledBets` = settled bets this season via `bets.listSettledBySeason`; `leaderboard` = active players' season pin balances from the ledger, each with `potential` = balance + Σ(`potential_payout`) over still-pending bets; sorted high → low by `potential`) |
-| `useBettingAdminData.ts` | `useBettingAdminData()` (+ `AdminLineView`) | — | BettingAdminScreen — returns `{ lines, betCountByMarket, currentWeekId }` (lines = `over_under` markets flattened) |
 
 > Stats hooks (`useStandingsData`, `usePastSeasonsData`, `usePastGamesData`, `useLeagueRecordsData`, `usePlayerDetailData`) build their `seasonList` from `seasons.list()` **filtered to started seasons** (`!registration_open`), so an in-registration season never appears as a stats filter or default. `useRegistrationData` keeps **all** seasons (registration UI needs them).
 
@@ -373,7 +369,7 @@ Central signed-URL cache for player profile pictures. `load()` fetches `players.
 | Betting | BettingScreen | `Betting` |
 | More | MoreStackNavigator | `More` |
 
-> The **Betting** tab is a top-level bottom-tab screen (after This Week). It renders `AppHeader` (no back button) like the other tabs. `BettingAdminScreen` remains in the More stack (admin "Bet Lines").
+> The **Betting** tab is a top-level bottom-tab screen (after This Week). It renders `AppHeader` (no back button) like the other tabs.
 
 **Standings tab** is a native stack navigator:
 
@@ -397,9 +393,8 @@ Central signed-URL cache for player profile pictures. `load()` fetches `players.
 | `ProfilePictures` | ProfilePicturesScreen — admin uploads/deletes player profile photos on behalf of any player (admin only) |
 | `PastGames` | PastGamesScreen — browse historical week rosters and scores by season |
 | `Registration` | RegistrationScreen — per-season sign-ups; admins open/close registration, manage the roster, and delete an open season |
-| `BettingAdmin` | BettingAdminScreen — toggle bet lines open/closed for current week, shows bet counts per line, and edit a line's value while it has no bets (admin only) |
 
-**Betting tab** (top-level, after This Week) — BettingScreen: balance card + four toggled views (horizontally-scrollable pills): **Leaderboard** (default; pin-balance scoreboard of active players, season balances summed from the ledger, Standings-style, with an "If Win" column = projected balance if all that player's still-pending bets win, sorted descending by that projection), **Place Bets** (open per-game over/under lines, bet placement modal, my bets history), **Active Bets** (league-wide summary of all players' *unsettled* bets this week, grouped by game; admins tap a bet to manually settle its line), and **Settled Bets** (all settled won/lost/push bets this season, grouped by week, newest first).
+**Betting tab** (top-level, after This Week) — BettingScreen: balance card + four toggled views (horizontally-scrollable pills): **Leaderboard** (default; pin-balance scoreboard of active players, season balances summed from the ledger, Standings-style, with an "Upside" column = projected balance if all that player's still-pending bets win, sorted descending by that projection), **Place Bets** (open per-game over/under lines, bet placement modal, my bets history), **Active Bets** (league-wide summary of all players' *unsettled* bets this week, grouped by game; admins tap a bet to manually settle its line), and **Settled Bets** (all settled won/lost/push bets this season, grouped by week, newest first).
 
 **Cross-tab navigation to PlayerDetail** (e.g. from More tab):
 ```tsx
@@ -472,7 +467,7 @@ The app-root `<Toast />` (App.tsx) renders behind any React Native `<Modal>`, so
 - **Open registration** (`AdminOpenRegistrationModal`) — `seasons.insert` for the next season with `registration_open = true, is_active = false`; the new number is `getLatest().number + 1`; after insert, queries `seasons.getLastEnded()` + `seasonChampions.listBySeason` and inserts `+100` `champion_bonus` ledger entries for each champion into the new season
 - **Registration management** (`RegistrationScreen`, admin) — open/close registration (`seasons.update` toggling `registration_open`/`is_active`), add/remove players via `registrations.insert`/`registrations.remove`, and **delete an open season** via `seasons.remove` (confirmed). Closing registration sets `is_active = true`, which fails if another season is already active (single-active index) — end the current season first
 - **Generate teams** (`AdminGenerateTeamsModal`) — reads RSVP + player avgs, computes balanced teams client-side, previews swaps, then wipes the week with a single `teams.removeByWeek` (cascades slots → games → scores) and writes `teams.insert` (capturing the new ids) → `team_slots.insert` + `games.insert` → `weeks.update(..., { is_confirmed: true })`. It does **not** create base O/U markets (RSVP owns those; markets reference `weeks` not `teams`, so the wipe leaves them intact) — after gen it calls `betMarkets.syncOUForWeek(weekId, scheduleGames)` to add any missing schedule game (game 3 when `numTeams ∈ {3,5}`), idempotently
-- **Betting flows** (`BettingScreen`, `BettingAdminScreen`, `RsvpScreen`) — RSVP→market sync, place bet, settle, cancel, edit line, open/close are all **server-side RPCs on the canonical model** (`sync_over_under_markets_for_week`, `place_house_bet`, `settle_market`, `cancel_bet`, `edit_over_under_line`, + admin `UPDATE bet_markets.status`). The UI mirrors the server guards (min stake 10, balance, anti-tanking). Avg/line candidate logic for the admin line editor lives in [src/utils/betLines.ts](src/utils/betLines.ts) (`lineForAvg`, `computeAvgById`). **For the exact mechanics of every flow, accounting, and integrity rules, see [supabase/PIN_ECONOMY_SCHEMA.md](supabase/PIN_ECONOMY_SCHEMA.md) §4–§5 — keep it authoritative.**
+- **Betting flows** (`BettingScreen`, `RsvpScreen`, `MatchupsScreen`) — RSVP→market sync, place bet, settle, cancel, open/close are all **server-side RPCs on the canonical model** (`sync_over_under_markets_for_week`, `place_house_bet`, `settle_market`, `cancel_bet`) plus an admin per-game open/close write (`betMarkets.setOUStatusByWeekGame`). The UI mirrors the server guards (min stake 10, balance, anti-tanking). **For the exact mechanics of every flow, accounting, and integrity rules, see [supabase/PIN_ECONOMY_SCHEMA.md](supabase/PIN_ECONOMY_SCHEMA.md) §4–§5 — keep it authoritative.**
 
 ---
 
@@ -529,7 +524,6 @@ app/
 ├── src/
 │   ├── theme.ts                 # colors, fonts, radius
 │   ├── hooks/
-│   │   ├── useBettingAdminData.ts  # Lines + bet counts for BettingAdminScreen
 │   │   ├── useBettingData.ts    # Balance + open lines + my bets for BettingScreen
 │   │   ├── useChemistryData.ts  # Chemistry data + computeChemistryFromSupabase
 │   │   ├── useH2HData.ts        # H2H data + computeH2HFromSupabase
@@ -553,7 +547,6 @@ app/
 │   │   └── avatarStore.ts       # Signed-URL cache for player profile pictures
 │   ├── utils/
 │   │   ├── badges.ts            # BADGE_RULES + badgesForPlayer — status→emoji rule list (see Player Badges)
-│   │   ├── betLines.ts          # lineForAvg (floor+0.5), computeAvgById — shared bet-line avg/line logic
 │   │   ├── helpers.ts           # initials, timeAgo, combinations, spreadAndML
 │   │   └── supabase/
 │   │       ├── client.ts        # Supabase client (env-var configured)
@@ -593,7 +586,6 @@ app/
 │       ├── HeadToHeadScreen.tsx     # 1v1 player comparison
 │       ├── ChemistryScreen.tsx      # Pair/trio win-rate analysis
 │       ├── PastSeasonsScreen.tsx    # Past seasons — season-by-season summary
-│       ├── BettingAdminScreen.tsx   # Admin: toggle bet lines open/closed
 │       ├── BettingScreen.tsx        # Balance, open O/U lines, bet placement, my bets
 │       ├── TrashBoardScreen.tsx     # Fun message board
 │       └── PlayoffsScreen.tsx       # Admin: playoffs bracket

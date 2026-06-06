@@ -5,7 +5,6 @@ import {
   Text,
   TouchableOpacity,
   ScrollView,
-  Switch,
   ActivityIndicator,
   StyleSheet,
 } from 'react-native'
@@ -97,7 +96,7 @@ function ToggleGroup<T extends string>({
 export default function AdminGenerateTeamsModal({ visible, onClose }: Props) {
   const { showToast } = useUiStore()
   const {
-    genNumTeams, genTeamSize, genAvgSource, genFillMode, genFillToSize,
+    genNumTeams, genTeamSize, genAvgSource,
     genTeams, genSwapTarget, set,
   } = usePendingStore()
 
@@ -124,7 +123,12 @@ export default function AdminGenerateTeamsModal({ visible, onClose }: Props) {
       if (week) {
         setWeekId(week.id)
         const rsvpRes = await rsvp.listByWeek(week.id)
-        setWeekRsvps(rsvpRes.data ?? [])
+        const rsvps = rsvpRes.data ?? []
+        setWeekRsvps(rsvps)
+        // Default to two teams, sized to absorb the existing "In" RSVPs.
+        const inCount = rsvps.filter((r: any) => r.status === 'in').length
+        const teamSize = Math.max(2, Math.min(5, Math.floor(inCount / 2)))
+        set({ genNumTeams: 2, genTeamSize: teamSize, genAvgSource: 'current-season', genTeams: null })
       } else {
         setWeekId(null)
         setWeekRsvps([])
@@ -172,26 +176,28 @@ export default function AdminGenerateTeamsModal({ visible, onClose }: Props) {
       const playerAvgById: Record<string, number> = Object.fromEntries(
         Object.entries(byPlayer).map(([pid, { pins, games }]) => [pid, games > 0 ? pins / games : 0])
       )
-      const avgVals = Object.values(playerAvgById)
-      const leagueAvg = avgVals.length > 0 ? avgVals.reduce((a, b) => a + b, 0) / avgVals.length : 130
+      // League avg is games-weighted (total pins / total games), matching the
+      // Standings banner — not the unweighted mean of per-player averages.
+      const totals = Object.values(byPlayer).reduce(
+        (acc, { pins, games }) => ({ pins: acc.pins + pins, games: acc.games + games }),
+        { pins: 0, games: 0 },
+      )
+      const leagueAvg = totals.games > 0 ? totals.pins / totals.games : 130
 
-      // Split roster into available (in) and MIA
+      // Only "In" players are drafted. Empty slots needed to even out the teams
+      // are left as null-player fills carrying the league average (Season 1 style).
       const inIds = new Set(weekRsvps.filter((r: any) => r.status === 'in').map((r: any) => r.player_id))
-      const realPlayers: GenPlayer[] = []
-      const miaPlayers: GenPlayer[] = []
-
-      for (const player of activePlayers) {
-        const sourceAvg = playerAvgById[player.id]
-        if (inIds.has(player.id)) {
-          realPlayers.push({ id: player.id, name: player.name, avg: sourceAvg ?? leagueAvg, isFill: false, status: 'in' })
-        } else {
-          const miaAvg = genFillMode === 'League Avg' ? leagueAvg : (sourceAvg ?? leagueAvg)
-          miaPlayers.push({ id: player.id, name: player.name, avg: miaAvg, isFill: false, status: 'out' })
-        }
-      }
+      const realPlayers: GenPlayer[] = activePlayers
+        .filter((player: any) => inIds.has(player.id))
+        .map((player: any) => ({
+          id: player.id,
+          name: player.name,
+          avg: playerAvgById[player.id] ?? leagueAvg,
+          isFill: false,
+          status: 'in' as const,
+        }))
 
       realPlayers.sort((a, b) => b.avg - a.avg)
-      miaPlayers.sort((a, b) => b.avg - a.avg)
 
       // Snake draft
       const teamsArr: { players: GenPlayer[] }[] = Array.from({ length: genNumTeams }, () => ({ players: [] }))
@@ -204,18 +210,14 @@ export default function AdminGenerateTeamsModal({ visible, onClose }: Props) {
         else { tIdx--; if (tIdx < 0) { tIdx = 0; forward = true } }
       }
 
-      const useReal = realPlayers.slice(0, totalSlots)
-      useReal.forEach(distribute)
-      if (useReal.length < totalSlots && !genFillToSize) {
-        miaPlayers.slice(0, totalSlots - useReal.length).forEach(distribute)
-      }
-      if (genFillToSize) {
-        teamsArr.forEach(t => {
-          while (t.players.length < genTeamSize) {
-            t.players.push({ id: null, name: 'League Avg Fill', avg: leagueAvg, isFill: true, status: 'fill' })
-          }
-        })
-      }
+      realPlayers.slice(0, totalSlots).forEach(distribute)
+
+      // Pad each short team with a null-player League Avg fill.
+      teamsArr.forEach(t => {
+        while (t.players.length < genTeamSize) {
+          t.players.push({ id: null, name: 'League Avg Fill', avg: leagueAvg, isFill: true, status: 'fill' })
+        }
+      })
 
       set({ genTeams: teamsArr, genSwapTarget: null })
     } catch {
@@ -357,36 +359,14 @@ export default function AdminGenerateTeamsModal({ visible, onClose }: Props) {
                 />
               </View>
 
-              <View style={styles.controlRow}>
-                <Text style={styles.controlLabel}>Fill MIA Players With</Text>
-                <ToggleGroup
-                  options={[
-                    { key: 'League Avg', label: 'League Avg' },
-                    { key: 'Their Avg', label: 'Their Avg' },
-                  ]}
-                  value={genFillMode}
-                  onChange={v => set({ genFillMode: v })}
-                />
-              </View>
-
-              <View style={styles.switchRow}>
-                <Switch
-                  value={genFillToSize}
-                  onValueChange={v => set({ genFillToSize: v })}
-                  trackColor={{ false: colors.surface3, true: colors.accentDim }}
-                  thumbColor={genFillToSize ? colors.accent : colors.muted}
-                />
-                <Text style={styles.switchLabel}>Pad short teams with league avg placeholders</Text>
-              </View>
-
               <View style={styles.availRow}>
                 <Text style={styles.availText}>
                   Need <Text style={styles.availAccent}>{requiredCount}</Text> players ·{' '}
                   <Text style={{ color: availCount >= requiredCount ? colors.success : colors.danger, fontFamily: fonts.barlow, fontSize: 12 }}>
                     {availCount} available
                   </Text>
-                  {availCount < requiredCount && !genFillToSize ? (
-                    <Text style={{ color: colors.danger }}> · Short {requiredCount - availCount}</Text>
+                  {availCount < requiredCount ? (
+                    <Text style={{ color: colors.muted }}> · {requiredCount - availCount} league-avg fill{requiredCount - availCount !== 1 ? 's' : ''}</Text>
                   ) : null}
                 </Text>
               </View>
@@ -427,10 +407,7 @@ export default function AdminGenerateTeamsModal({ visible, onClose }: Props) {
                               League Avg Fill<Text style={styles.fillTag}> FILL</Text>
                             </Text>
                           ) : (
-                            <Text style={styles.playerName}>
-                              {player.name}
-                              {player.status === 'out' ? <Text style={styles.outTag}> OUT</Text> : null}
-                            </Text>
+                            <Text style={styles.playerName}>{player.name}</Text>
                           )}
                         </View>
                         <Text style={styles.playerAvg}>{player.avg.toFixed(1)}</Text>
@@ -562,20 +539,6 @@ const styles = StyleSheet.create({
   toggleBtnTextActive: {
     color: colors.accent,
   },
-  switchRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    backgroundColor: colors.surface3,
-    borderRadius: radius.cardSm,
-    padding: 10,
-  },
-  switchLabel: {
-    fontFamily: fonts.barlowCondensed,
-    fontSize: 13,
-    color: colors.text,
-    flex: 1,
-  },
   availRow: {
     paddingVertical: 2,
   },
@@ -667,12 +630,6 @@ const styles = StyleSheet.create({
     fontFamily: fonts.barlow,
     fontSize: 13,
     color: colors.text,
-  },
-  outTag: {
-    fontFamily: fonts.barlowCondensed,
-    fontSize: 10,
-    color: colors.danger,
-    letterSpacing: 1,
   },
   fillTag: {
     fontFamily: fonts.barlowCondensed,

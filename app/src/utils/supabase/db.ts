@@ -126,7 +126,7 @@ export const scores = {
         'team_slots!inner(id, player_id, team_id, is_fill,' +
           'players(id, name),' +
           'teams!inner(week_id,' +
-            'weeks!inner(season_id, is_archived)' +
+            'weeks!inner(season_id, week_number, is_archived)' +
           ')' +
         ')'
       )
@@ -332,7 +332,7 @@ const MARKET_GRAPH =
   '*, subject:players!bet_markets_subject_player_id_fkey(name), bet_selections(*)'
 // Leg → selection → market(+subject, +week) graph, embedded under a bet.
 const LEG_GRAPH =
-  'bet_legs(*, bet_selections(*, bet_markets(*, subject:players!bet_markets_subject_player_id_fkey(name), weeks(week_number))))'
+  'bet_legs(*, bet_selections(*, bet_markets(*, subject:players!bet_markets_subject_player_id_fkey(name), weeks(week_number, seasons(number)))))'
 
 export const betMarkets = {
   // Open over_under markets for a week (Place Bets), with selections + subject.
@@ -345,32 +345,53 @@ export const betMarkets = {
       .eq('status', 'open')
       .order('game_number')
       .order('subject_player_id'),
-  // All over_under markets for a week (admin Bet Lines), with selections + subject.
-  listOUByWeek: (weekId: string) =>
+  // Active (open + closed-for-betting) over_under markets for a week, with
+  // selections + subject. Closed markets are games "in progress" — still shown on
+  // Place Bets (disabled) but no longer bettable. Excludes settled/void.
+  listActiveOUByWeek: (weekId: string) =>
     supabase
       .from('bet_markets')
       .select(MARKET_GRAPH)
       .eq('week_id', weekId)
       .eq('market_type', 'over_under')
+      .in('status', ['open', 'closed'])
       .order('game_number')
       .order('subject_player_id'),
-  // Open/close toggle (admin direct write, permitted by admin RLS).
-  update: (id: string, data: TablesUpdate<'bet_markets'>) =>
-    supabase.from('bet_markets').update(data).eq('id', id),
+  // game_number + status for a week's O/U markets — used to derive which games are
+  // "in progress" (closed for betting) without pulling the full market graph.
+  listOUStatusByWeek: (weekId: string) =>
+    supabase
+      .from('bet_markets')
+      .select('game_number, status')
+      .eq('week_id', weekId)
+      .eq('market_type', 'over_under'),
+  // Start/reopen a game's betting: flip every O/U market for a week+game between
+  // 'open' and 'closed' in one admin write. Closing blocks new bets (place_house_bet
+  // rejects non-open selections) but leaves settlement intact (settle_betting_for_week
+  // settles any market with status <> 'settled').
+  setOUStatusByWeekGame: (weekId: string, gameNumber: number, status: 'open' | 'closed') =>
+    supabase
+      .from('bet_markets')
+      .update({ status })
+      .eq('week_id', weekId)
+      .eq('market_type', 'over_under')
+      .eq('game_number', gameNumber)
+      .eq('status', status === 'closed' ? 'open' : 'closed'),
   // RSVP-driven create/refund of O/U markets (SECURITY DEFINER, server-side).
   // extraGames adds schedule game numbers not yet present (team-gen game 3); RSVP
   // passes none and the RPC defaults the target set to the established games / {1,2}.
   syncOUForWeek: (weekId: string, extraGames: number[] = []) =>
     supabase.rpc('sync_over_under_markets_for_week', { p_week_id: weekId, p_extra_games: extraGames }),
+  // Admin: refund every bet on a week+game's O/U markets and drop the markets —
+  // the inverse of syncOUForWeek's create, used when a schedule game is removed.
+  removeOUForGame: (weekId: string, gameNumber: number) =>
+    supabase.rpc('remove_over_under_markets_for_game', { p_week_id: weekId, p_game_number: gameNumber }),
   // Admin: settle one market against the subject's actual score.
   settle: (marketId: string, resultValue: number) =>
     supabase.rpc('settle_market', { p_market_id: marketId, p_result_value: resultValue }),
   // Admin: credit scores + settle all open markets for an archived week.
   settleForWeek: (weekId: string) =>
     supabase.rpc('settle_betting_for_week', { p_week_id: weekId }),
-  // Admin: set a market's line (both selections) while it has no bets.
-  editLine: (marketId: string, line: number) =>
-    supabase.rpc('edit_over_under_line', { p_market_id: marketId, p_line: line }),
 }
 
 export const bets = {
@@ -416,11 +437,20 @@ export const pinLedger = {
       .eq('player_id', playerId)
       .eq('season_id', seasonId)
       .order('created_at', { ascending: false }),
+  // House-side rows for a season (the betting counterparty + bonus funder).
+  // Admin-only screen; RLS already permits authenticated SELECT on all rows.
+  listHouseBySeason: (seasonId: string) =>
+    supabase
+      .from('pin_ledger')
+      .select('*, weeks(week_number)')
+      .eq('season_id', seasonId)
+      .eq('is_house', true)
+      .order('created_at', { ascending: false }),
   // Leaderboard is player balances only — exclude house rows (player_id IS NULL).
   listBySeasonForLeaderboard: (seasonId: string) =>
     supabase
       .from('pin_ledger')
-      .select('player_id, amount, players(name, is_active)')
+      .select('player_id, amount, type, created_at, players(name, is_active)')
       .eq('season_id', seasonId)
       .eq('is_house', false),
   insert: (data: TablesInsert<'pin_ledger'> | TablesInsert<'pin_ledger'>[]) =>

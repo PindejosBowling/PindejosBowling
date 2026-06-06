@@ -10,9 +10,23 @@ export interface LineView {
   line: number
   overSelectionId?: string
   underSelectionId?: string
+  // Game in progress: market closed for betting, still shown but not bettable.
+  inProgress: boolean
 }
 
-// A flattened single-leg O/U bet (market → selection → leg collapsed).
+// One resolved leg of a bet (a single backed over/under selection).
+export interface LegView {
+  subjectName: string
+  pick: string              // selection key: 'over' | 'under'
+  line: number
+  gameNumber: number | null
+  actualScore: number | null
+  result: string | null     // won | lost | push | void | null (pending)
+}
+
+// A flattened O/U bet. Single bets carry one leg; a parlay carries N. The
+// top-level pick/line/gameNumber/etc. mirror the first leg for single-bet
+// rendering paths; multi-leg consumers read `legs` / `legCount`.
 export interface BetView {
   id: string
   playerId: string
@@ -21,21 +35,39 @@ export interface BetView {
   status: string            // pending | won | lost | push | void | cancelled
   settledAt: string | null
   potentialPayout: number
-  pick: string              // selection key: 'over' | 'under'
+  pick: string              // first leg's selection key: 'over' | 'under'
   line: number
   gameNumber: number | null
   subjectName: string
-  marketId: string
+  marketId: string          // first leg's market
   marketStatus: string
   actualScore: number | null
   weekNumber: number | null
+  seasonNumber: number | null
+  legs: LegView[]
+  legCount: number
 }
 
-// O/U bets are single-leg: collapse bet → leg → selection → market into a flat row.
+// Collapse bet → legs → selections → markets into a flat row. A single O/U bet
+// has one leg; a parlay has many (combined odds = Π of the legs' odds).
 export function normalizeBet(b: any): BetView {
-  const leg = b.bet_legs?.[0]
-  const sel = leg?.bet_selections
-  const mkt = sel?.bet_markets
+  const rawLegs: any[] = b.bet_legs ?? []
+  const legs: LegView[] = rawLegs.map((leg: any) => {
+    const sel = leg?.bet_selections
+    const mkt = sel?.bet_markets
+    return {
+      subjectName: mkt?.subject?.name ?? '—',
+      pick: sel?.key ?? '',
+      line: Number(leg?.line_at_placement ?? sel?.line ?? 0),
+      gameNumber: mkt?.game_number ?? null,
+      actualScore: mkt?.result_value != null ? Number(mkt.result_value) : null,
+      result: leg?.result ?? null,
+    }
+  })
+
+  const firstLeg = rawLegs[0]
+  const firstSel = firstLeg?.bet_selections
+  const firstMkt = firstSel?.bet_markets
   return {
     id: b.id,
     playerId: b.player_id,
@@ -44,14 +76,17 @@ export function normalizeBet(b: any): BetView {
     status: b.status,
     settledAt: b.settled_at,
     potentialPayout: b.potential_payout,
-    pick: sel?.key ?? '',
-    line: Number(leg?.line_at_placement ?? sel?.line ?? 0),
-    gameNumber: mkt?.game_number ?? null,
-    subjectName: mkt?.subject?.name ?? '—',
-    marketId: mkt?.id ?? '',
-    marketStatus: mkt?.status ?? '',
-    actualScore: mkt?.result_value != null ? Number(mkt.result_value) : null,
-    weekNumber: mkt?.weeks?.week_number ?? null,
+    pick: firstSel?.key ?? '',
+    line: Number(firstLeg?.line_at_placement ?? firstSel?.line ?? 0),
+    gameNumber: firstMkt?.game_number ?? null,
+    subjectName: firstMkt?.subject?.name ?? '—',
+    marketId: firstMkt?.id ?? '',
+    marketStatus: firstMkt?.status ?? '',
+    actualScore: firstMkt?.result_value != null ? Number(firstMkt.result_value) : null,
+    weekNumber: firstMkt?.weeks?.week_number ?? null,
+    seasonNumber: firstMkt?.weeks?.seasons?.number ?? null,
+    legs,
+    legCount: legs.length,
   }
 }
 
@@ -66,6 +101,7 @@ function normalizeMarket(m: any): LineView {
     line: Number(over?.line ?? under?.line ?? 0),
     overSelectionId: over?.id,
     underSelectionId: under?.id,
+    inProgress: m.status === 'closed',
   }
 }
 
@@ -78,8 +114,9 @@ export function useBettingData(playerId: string | null) {
   const [weekBets, setWeekBets] = useState<BetView[]>([])
   // All settled (won/lost/push) bets this season (for the "Settled Bets" view)
   const [settledBets, setSettledBets] = useState<BetView[]>([])
-  // Season pin-balance scoreboard: active players sorted high → low
-  const [leaderboard, setLeaderboard] = useState<{ playerId: string; name: string; balance: number; potential: number }[]>([])
+  // Season pin-balance scoreboard: active players sorted high → low.
+  // `movement` = rank change vs. the prior week (null = no prior week / new entry).
+  const [leaderboard, setLeaderboard] = useState<{ playerId: string; name: string; balance: number; potential: number; movement: 'up' | 'down' | 'same' | null }[]>([])
   const [currentWeekId, setCurrentWeekId] = useState<string | null>(null)
   const [currentSeasonId, setCurrentSeasonId] = useState<string | null>(null)
   // Set of market ids the current player has already placed a bet on
@@ -105,7 +142,7 @@ export function useBettingData(playerId: string | null) {
       let weekBetsData: any[] = []
       if (weekId) {
         fetches.push(
-          betMarkets.listOpenOUByWeek(weekId).then(({ data }) => {
+          betMarkets.listActiveOUByWeek(weekId).then(({ data }) => {
             marketsData = data ?? []
           }),
           bets.listByWeek(weekId).then(({ data }) => {
@@ -147,9 +184,21 @@ export function useBettingData(playerId: string | null) {
       const weekBetViews = weekBetsData.map(normalizeBet)
       const myBetViews = myBetsData.map(normalizeBet)
 
+      // Cutoff for "last week's results": the most recent settlement (score_credit)
+      // timestamp in the season ledger. priorBalance sums only rows strictly before
+      // it — i.e. each player's standing *before* last week's scores posted. Derived
+      // from the ledger itself (not weeks.created_at) so it survives inconsistent
+      // backfill timestamps. null = no settled week yet → no baseline to diff.
+      let settleCutoff: string | null = null
+      for (const e of seasonLedger) {
+        if (e.type === 'score_credit' && e.created_at && (!settleCutoff || e.created_at > settleCutoff)) {
+          settleCutoff = e.created_at
+        }
+      }
+
       // Sum the season ledger per player (house rows already excluded), keep
       // active players, sort high → low.
-      const byPlayer: Record<string, { playerId: string; name: string; balance: number; isActive: boolean }> = {}
+      const byPlayer: Record<string, { playerId: string; name: string; balance: number; priorBalance: number; isActive: boolean }> = {}
       for (const e of seasonLedger) {
         const pid = e.player_id
         if (!pid) continue
@@ -158,10 +207,14 @@ export function useBettingData(playerId: string | null) {
             playerId: pid,
             name: e.players?.name ?? '—',
             balance: 0,
+            priorBalance: 0,
             isActive: e.players?.is_active ?? true,
           }
         }
         byPlayer[pid].balance += e.amount
+        if (settleCutoff && e.created_at && e.created_at < settleCutoff) {
+          byPlayer[pid].priorBalance += e.amount
+        }
       }
       // Potential winnings: each still-pending bet pays its potential_payout on a
       // win (the stake was already debited at placement), so projected balance =
@@ -173,8 +226,22 @@ export function useBettingData(playerId: string | null) {
         }
       }
 
-      const board = Object.values(byPlayer)
-        .filter(p => p.isActive)
+      const activePlayers = Object.values(byPlayer).filter(p => p.isActive)
+
+      // Prior-week ranking (by balance before last week's results posted). Skip it
+      // entirely when the baseline is degenerate — no settled week, or every prior
+      // balance is identical (the all-backfilled-at-once state) — so we don't draw
+      // arrows off an arbitrary tie-break order.
+      const priorRank = new Map<string, number>()
+      const distinctPrior = new Set(activePlayers.map(p => p.priorBalance))
+      if (settleCutoff && distinctPrior.size > 1) {
+        activePlayers
+          .slice()
+          .sort((a, b) => b.priorBalance - a.priorBalance)
+          .forEach((p, i) => priorRank.set(p.playerId, i))
+      }
+
+      const board = activePlayers
         .map(({ playerId, name, balance }) => ({
           playerId,
           name,
@@ -182,6 +249,12 @@ export function useBettingData(playerId: string | null) {
           potential: balance + (pendingByPlayer[playerId] ?? 0),
         }))
         .sort((a, b) => b.potential - a.potential)
+        .map((p, i) => {
+          const prev = priorRank.get(p.playerId)
+          const movement: 'up' | 'down' | 'same' | null =
+            prev === undefined ? null : i < prev ? 'up' : i > prev ? 'down' : 'same'
+          return { ...p, movement }
+        })
 
       setOpenLines(marketsData.map(normalizeMarket))
       setWeekBets(weekBetViews)

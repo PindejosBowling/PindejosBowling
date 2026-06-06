@@ -14,7 +14,7 @@ import PlayerManagementScreen from '../screens/PlayerManagementScreen'
 import ProfilePicturesScreen from '../screens/ProfilePicturesScreen'
 import PastGamesScreen from '../screens/PastGamesScreen'
 import RegistrationScreen from '../screens/RegistrationScreen'
-import BettingAdminScreen from '../screens/BettingAdminScreen'
+import PinsinoAdminScreen from '../screens/PinsinoAdminScreen'
 
 const Stack = createNativeStackNavigator<MoreStackParamList>()
 
@@ -37,7 +37,7 @@ export default function MoreStackNavigator() {
       <Stack.Screen name="ProfilePictures" component={ProfilePicturesScreen} options={{ title: 'Profile Pictures' }} />
       <Stack.Screen name="PastGames" component={PastGamesScreen} options={{ title: 'Past Games' }} />
       <Stack.Screen name="Registration" component={RegistrationScreen} options={{ title: 'Registration' }} />
-      <Stack.Screen name="BettingAdmin" component={BettingAdminScreen} options={{ title: 'Bet Lines' }} />
+      <Stack.Screen name="PinsinoAdmin" component={PinsinoAdminScreen} options={{ title: 'Pinsino Admin' }} />
     </Stack.Navigator>
   )
 }

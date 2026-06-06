@@ -10,7 +10,7 @@ export type MoreStackParamList = {
   ProfilePictures: undefined
   PastGames: undefined
   Registration: undefined
-  BettingAdmin: undefined
+  PinsinoAdmin: undefined
 }
 
 export type StandingsStackParamList = {
