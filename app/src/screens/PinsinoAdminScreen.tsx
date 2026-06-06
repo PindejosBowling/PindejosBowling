@@ -15,9 +15,10 @@ type Nav = NativeStackNavigationProp<MoreStackParamList>
 const TILE_WIDTH = (Dimensions.get('window').width - 48) / 3
 
 // Subpage menu tiles (groundwork for more admin subpages — add one line each)
-const MENU_TILES: { icon: string; label: string; route: 'PinsinoAccounting' | 'PinsinoSportsbook' }[] = [
+const MENU_TILES: { icon: string; label: string; route: 'PinsinoAccounting' | 'PinsinoSportsbook' | 'LoanSharkAdmin' }[] = [
   { icon: '📒', label: 'Accounting', route: 'PinsinoAccounting' },
   { icon: '🏟️', label: 'Sportsbook', route: 'PinsinoSportsbook' },
+  { icon: '🦈', label: 'Loan Shark', route: 'LoanSharkAdmin' },
 ]
 
 export default function PinsinoAdminScreen() {

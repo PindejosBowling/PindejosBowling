@@ -276,6 +276,10 @@ export const seasons = {
     supabase.from('seasons').update(data).eq('id', id),
   remove: (id: string) =>
     supabase.from('seasons').delete().eq('id', id),
+  // Admin: pay down active loans at season close (min(balance, debt)) before the
+  // season is marked ended, so final standings reflect post-settlement net worth.
+  settleLoansForClose: (seasonId: string) =>
+    supabase.rpc('settle_loans_for_season_close', { p_season_id: seasonId }),
 }
 
 export const teams = {
@@ -427,6 +431,71 @@ export const bets = {
   // Admin: total undo of a placed bet (removes ledger rows + bet, re-opens market).
   cancel: (betId: string) =>
     supabase.rpc('cancel_bet', { p_bet_id: betId }),
+}
+
+// ── Loan Shark (loan_products → loans → loan_ledger) ────────────────────────
+// Immutable historical loan offers; a loan is lifecycle-only (balance derived
+// from loan_ledger SUM(amount)). All player write paths (take/repay) and admin
+// cancel go through SECURITY DEFINER RPCs; reads embed the product graph.
+export const loanProducts = {
+  list: () =>
+    supabase.from('loan_products').select('*').order('sort_order'),
+  // is_active filter only; full availability (window, max_uses, season) is
+  // re-checked server-side in take_loan.
+  listAvailable: () =>
+    supabase.from('loan_products').select('*').eq('is_active', true).order('sort_order'),
+}
+
+export const loans = {
+  // A player's loans (any status) with their product, newest first.
+  listByPlayer: (playerId: string) =>
+    supabase
+      .from('loans')
+      .select('*, loan_products(*)')
+      .eq('player_id', playerId)
+      .order('issued_at', { ascending: false }),
+  // Active loans in a season (id + player) — feeds the net-worth leaderboard.
+  listActiveBySeason: (seasonId: string) =>
+    supabase
+      .from('loans')
+      .select('id, player_id')
+      .eq('season_id', seasonId)
+      .eq('status', 'active'),
+  // Active loans in a season with player + product (admin list).
+  listActiveDetailed: (seasonId: string) =>
+    supabase
+      .from('loans')
+      .select('*, players(name), loan_products(display_name, borrow_amount)')
+      .eq('season_id', seasonId)
+      .eq('status', 'active')
+      .order('issued_at', { ascending: false }),
+  take: (productId: string) =>
+    supabase.rpc('take_loan', { p_loan_product_id: productId }),
+  repay: (loanId: string, amount: number) =>
+    supabase.rpc('repay_loan', { p_loan_id: loanId, p_amount: amount }),
+  // Admin: destructive rollback — removes the loan's pin + debt rows and the loan.
+  cancel: (loanId: string) =>
+    supabase.rpc('cancel_loan', { p_loan_id: loanId }),
+}
+
+export const loanLedger = {
+  // A player's debt event history for a season (newest first) — the borrower's
+  // payment history. SUM(amount) over a loan's rows = outstanding debt.
+  listByPlayerSeason: (playerId: string, seasonId: string) =>
+    supabase
+      .from('loan_ledger')
+      .select('*, weeks(week_number)')
+      .eq('player_id', playerId)
+      .eq('season_id', seasonId)
+      .order('created_at', { ascending: false }),
+  // All debt rows for active loans in a season — summed per player for the
+  // net-worth leaderboard's Debt column.
+  listActiveBySeason: (seasonId: string) =>
+    supabase
+      .from('loan_ledger')
+      .select('player_id, amount, loan_id, loans!inner(status)')
+      .eq('season_id', seasonId)
+      .eq('loans.status', 'active'),
 }
 
 export const pinLedger = {

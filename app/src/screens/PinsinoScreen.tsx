@@ -24,8 +24,9 @@ type PinsinoNav = NativeStackNavigationProp<PinsinoStackParamList>
 const TILE_WIDTH = (Dimensions.get('window').width - 48) / 3
 
 // Subpage menu tiles (groundwork for more Pinsino subpages — add one line each)
-const MENU_TILES: { icon: string; label: string; route: 'PinsinoLeaderboard' | 'Sportsbook' }[] = [
+const MENU_TILES: { icon: string; label: string; route: 'PinsinoLeaderboard' | 'Sportsbook' | 'LoanShark' }[] = [
   { icon: '🏟️', label: 'Sportsbook', route: 'Sportsbook' },
+  { icon: '🦈', label: 'Loan Shark', route: 'LoanShark' },
 ]
 
 export default function PinsinoScreen() {
@@ -33,7 +34,7 @@ export default function PinsinoScreen() {
   const playerName = useAuthStore(s => s.playerName)
   const navigation = useNavigation<PinsinoNav>()
 
-  const { loading, balance, leaderboard, reload } = usePinsinoData(playerId)
+  const { loading, balance, debt, netWorth, leaderboard, reload } = usePinsinoData(playerId)
   const { refreshing, onRefresh } = useRefresh(reload)
 
   if (loading) return <LoadingView label="Loading…" />
@@ -57,6 +58,15 @@ export default function PinsinoScreen() {
           <Text style={styles.balanceLabel}>YOUR BALANCE</Text>
           <Text style={styles.balanceValue}>{balance.toLocaleString()}</Text>
           <Text style={styles.balanceUnit}>PINS</Text>
+          {debt > 0 && (
+            <View style={styles.netRow}>
+              <Text style={styles.owedText}>OWED −{debt.toLocaleString()}</Text>
+              <Text style={styles.netDivider}>·</Text>
+              <Text style={[styles.netText, netWorth < 0 && styles.netTextNeg]}>
+                NET {netWorth.toLocaleString()}
+              </Text>
+            </View>
+          )}
         </TouchableOpacity>
 
         {/* Top 3 leaderboard — always visible on the landing page */}
@@ -128,6 +138,26 @@ const styles = StyleSheet.create({
     color: colors.muted,
     marginTop: 2,
   },
+  netRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 10,
+  },
+  owedText: {
+    fontFamily: fonts.barlowCondensed,
+    fontSize: 13,
+    letterSpacing: 1,
+    color: colors.danger,
+  },
+  netDivider: { color: colors.muted2, fontSize: 13 },
+  netText: {
+    fontFamily: fonts.barlowCondensed,
+    fontSize: 13,
+    letterSpacing: 1,
+    color: colors.text,
+  },
+  netTextNeg: { color: colors.danger },
 
   sectionHeader: {
     flexDirection: 'row',

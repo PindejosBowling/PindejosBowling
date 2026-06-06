@@ -27,6 +27,14 @@ function actionLabel(type: string, perspective: 'player' | 'house'): string {
       return 'PINCOME'
     case 'bonus':
       return 'BONUS'
+    case 'loan_issued':
+      return perspective === 'house' ? 'LOAN ISSUED' : 'LOAN ADVANCE'
+    case 'loan_manual_repayment':
+      return perspective === 'house' ? 'REPAYMENT RECEIVED' : 'REPAYMENT'
+    case 'loan_weekly_garnishment':
+      return perspective === 'house' ? 'GARNISHMENT' : 'GARNISHED'
+    case 'loan_season_close_settlement':
+      return perspective === 'house' ? 'SEASON-CLOSE COLLECTION' : 'SEASON-CLOSE PAYMENT'
     default:
       return type.replace(/_/g, ' ').toUpperCase()
   }
