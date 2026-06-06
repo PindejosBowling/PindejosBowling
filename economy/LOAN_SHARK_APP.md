@@ -5,7 +5,7 @@ Handoff spec for the **app layer** (`app/src`) of the Loan Shark feature.
 **Prerequisite:** the database spec (`economy/LOAN_SHARK_DB.md`) is fully applied
 (`supabase db push`) **and** `app/src/utils/supabase/database.types.ts` has been
 regenerated — follow the type-regeneration step in `PAGE_CREATION.md`. The new
-tables (`loan_products`, `loans`, `debt_ledger`), the `pin_ledger.debt_ledger_id`
+tables (`loan_products`, `loans`, `loan_ledger`), the `pin_ledger.loan_ledger_id`
 column, and the RPCs (`take_loan`, `repay_loan`, `cancel_loan`,
 `settle_loans_for_season_close`) must exist in the generated types before starting.
 
@@ -47,13 +47,13 @@ export const loans = {
   cancel:(loanId: string)             => supabase.rpc('cancel_loan', { p_loan_id: loanId }),
 }
 
-export const debtLedger = {
+export const loanLedger = {
   listByPlayerSeason: (playerId: string, seasonId: string) =>   // borrower payment history
-    supabase.from('debt_ledger').select('*, weeks(week_number)')
+    supabase.from('loan_ledger').select('*, weeks(week_number)')
       .eq('player_id', playerId).eq('season_id', seasonId)
       .order('created_at', { ascending: false }),
   listActiveBySeason: (seasonId: string) =>   // debt-per-player for the leaderboard
-    supabase.from('debt_ledger').select('player_id, amount, loan_id, loans!inner(status)')
+    supabase.from('loan_ledger').select('player_id, amount, loan_id, loans!inner(status)')
       .eq('season_id', seasonId).eq('loans.status', 'active'),
 }
 ```
@@ -61,17 +61,17 @@ export const debtLedger = {
 Add a `seasons.settleLoansForClose` (or extend the existing season-close call site)
 wrapper: `supabase.rpc('settle_loans_for_season_close', { p_season_id })`.
 
-> Confirm the exact embed syntax for `debt_ledger → loans` against the regenerated
+> Confirm the exact embed syntax for `loan_ledger → loans` against the regenerated
 > types; the `loans!inner(status)` filter mirrors how `pinLedger.listBySeasonForLeaderboard`
 > joins `players`. If the embed filter is awkward, instead fetch active loan ids via
-> `loans.listActiveBySeason` and sum `debt_ledger` rows for those loan ids client-side.
+> `loans.listActiveBySeason` and sum `loan_ledger` rows for those loan ids client-side.
 
 ---
 
 ## 2. Net worth on the leaderboard (v1) — design §8.1
 
 ### `app/src/hooks/usePinsinoData.ts`
-- Fetch per-player active-loan debt for the current season (`debtLedger.listActiveBySeason`),
+- Fetch per-player active-loan debt for the current season (`loanLedger.listActiveBySeason`),
   build a `debtByPlayer: Record<playerId, number>` (sum of `amount`).
 - Extend each leaderboard entry with `debt` and `netWorth = balance − debt`, and
   **change the sort key to `netWorth`** (descending). Keep `potential` (upside) for
@@ -106,8 +106,8 @@ wrapper: `supabase.rpc('settle_loans_for_season_close', { p_season_id })`.
 ```
 - Resolve current season (`seasons.getCurrent()`), player balance (sum
   `pinLedger.listByPlayerSeason`), the player's loans (`loans.listByPlayer` → the
-  one with `status='active'`), and that loan's `debt_ledger` history
-  (`debtLedger.listByPlayerSeason`); outstanding = sum of its `amount`.
+  one with `status='active'`), and that loan's `loan_ledger` history
+  (`loanLedger.listByPlayerSeason`); outstanding = sum of its `amount`.
 - No memoization in the hook (project rule); screen derives display via `useMemo`.
 
 ### `app/src/screens/LoanSharkScreen.tsx` (new, Pinsino stack)
@@ -115,7 +115,7 @@ Layout (design §8.2):
 - **Current loan / debt panel** (when `activeLoan`): product name, outstanding debt,
   weekly interest + garnishment rates (private to borrower, §8.1), a **manual
   repayment form** (numeric input → `loans.repay`), and a collapsible payment
-  history from `debt_ledger` (labels per type: BORROWED / REPAYMENT / GARNISHED /
+  history from `loan_ledger` (labels per type: BORROWED / REPAYMENT / GARNISHED /
   INTEREST / SEASON-CLOSE).
 - **Available products** (when no active loan, since v1 = one loan at a time §3.3):
   one card per available product — borrow amount, weekly interest, garnishment rate,
@@ -162,7 +162,7 @@ Layout (design §8.2):
 - `app/src/hooks/usePlayerPinsinoData.ts` + `useHousePinsinoData.ts`: the existing
   `LedgerEntry` normalization already passes unknown types through with their raw
   `description`; just confirm the new types flow through and `LedgerRow` labels them.
-  `weekly_interest` lives in `debt_ledger` only, so it appears in the borrower's loan
+  `weekly_interest` lives in `loan_ledger` only, so it appears in the borrower's loan
   payment history (§3), **not** in these pin-ledger Activity views.
 
 ---
@@ -174,7 +174,7 @@ Layout (design §8.2):
   matching the other admin screens).
 - List active loans (player name, product, outstanding debt). Fetch via a new
   `loans.listActiveDetailed` (or reuse `loans.listActiveBySeason` joined to players +
-  summed `debt_ledger`) — add the query to `db.ts` as needed.
+  summed `loan_ledger`) — add the query to `db.ts` as needed.
 - Each row has a destructive **Cancel** (✕) → confirm → `loans.cancel(loanId)` →
   toast + reload. Mirror the cancel UX in `PinsinoSportsbookScreen`. `<Toast/>` inside
   any modal used.

@@ -9,7 +9,7 @@ import Toast from '../components/Toast'
 import { useRefresh } from '../hooks/useRefresh'
 import { useAuthStore } from '../stores/authStore'
 import { useUiStore } from '../stores/uiStore'
-import { seasons, loans, debtLedger } from '../utils/supabase/db'
+import { seasons, loans, loanLedger } from '../utils/supabase/db'
 
 interface AdminLoanRow {
   loanId: string
@@ -35,10 +35,10 @@ export default function LoanSharkAdminScreen() {
 
       const [loansRes, debtRes] = await Promise.all([
         loans.listActiveDetailed(seasonId),
-        debtLedger.listActiveBySeason(seasonId),
+        loanLedger.listActiveBySeason(seasonId),
       ])
 
-      // Outstanding debt per loan = SUM(debt_ledger.amount) over its rows.
+      // Outstanding debt per loan = SUM(loan_ledger.amount) over its rows.
       const debtByLoan: Record<string, number> = {}
       for (const d of debtRes.data ?? []) {
         debtByLoan[(d as any).loan_id] = (debtByLoan[(d as any).loan_id] ?? 0) + (d as any).amount

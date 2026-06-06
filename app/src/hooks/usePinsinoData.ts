@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect } from 'react'
-import { weeks, seasons, betMarkets, bets, pinLedger, debtLedger, loans } from '../utils/supabase/db'
+import { weeks, seasons, betMarkets, bets, pinLedger, loanLedger, loans } from '../utils/supabase/db'
 
 // One bettable side of a market (a single `bet_selections` row, flattened).
 // Generic over market_type — over/under is the first consumer, but the shape
@@ -262,7 +262,7 @@ export function usePinsinoData(playerId: string | null) {
       // Season-wide ledger for the pin-balance scoreboard + settled bets history
       let seasonLedger: any[] = []
       let settledBetsData: any[] = []
-      // Per-player active-loan debt (sum of debt_ledger rows on active loans)
+      // Per-player active-loan debt (sum of loan_ledger rows on active loans)
       let seasonDebt: any[] = []
       if (seasonId) {
         fetches.push(
@@ -272,7 +272,7 @@ export function usePinsinoData(playerId: string | null) {
           bets.listSettledBySeason(seasonId).then(({ data }) => {
             settledBetsData = data ?? []
           }),
-          debtLedger.listActiveBySeason(seasonId).then(({ data }) => {
+          loanLedger.listActiveBySeason(seasonId).then(({ data }) => {
             seasonDebt = data ?? []
           })
         )
@@ -349,7 +349,7 @@ export function usePinsinoData(playerId: string | null) {
         }
       }
 
-      // Per-player active-loan debt (sum of debt_ledger amounts on active loans).
+      // Per-player active-loan debt (sum of loan_ledger amounts on active loans).
       const debtByPlayer: Record<string, number> = {}
       for (const d of seasonDebt) {
         if (!d.player_id) continue

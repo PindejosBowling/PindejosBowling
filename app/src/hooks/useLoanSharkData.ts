@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect } from 'react'
-import { seasons, pinLedger, loans, loanProducts, debtLedger } from '../utils/supabase/db'
+import { seasons, pinLedger, loans, loanProducts, loanLedger } from '../utils/supabase/db'
 import type { Tables } from '../utils/supabase/database.types'
 
 export type LoanProductView = Tables<'loan_products'> & {
@@ -9,7 +9,7 @@ export type LoanProductView = Tables<'loan_products'> & {
 
 export interface DebtLedgerEntry {
   id: string
-  amount: number          // signed (see debt_ledger sign convention)
+  amount: number          // signed (see loan_ledger sign convention)
   type: string            // loan_issued | manual_repayment | weekly_garnishment | weekly_interest | season_close_settlement
   description: string
   created_at: string
@@ -19,7 +19,7 @@ export interface DebtLedgerEntry {
 export interface ActiveLoanView {
   loanId: string
   product: Tables<'loan_products'>
-  outstanding: number     // SUM(debt_ledger.amount) over the loan
+  outstanding: number     // SUM(loan_ledger.amount) over the loan
   paymentHistory: DebtLedgerEntry[]
 }
 
@@ -68,7 +68,7 @@ export function useLoanSharkData(playerId: string | null) {
       const activeRow = myLoansData.find((l: any) => l.status === 'active')
       let active: ActiveLoanView | null = null
       if (activeRow && playerId && seasonId) {
-        const { data: debtRows } = await debtLedger.listByPlayerSeason(playerId, seasonId)
+        const { data: debtRows } = await loanLedger.listByPlayerSeason(playerId, seasonId)
         const rows = (debtRows ?? []).filter((d: any) => d.loan_id === activeRow.id)
         const outstanding = rows.reduce((sum: number, d: any) => sum + d.amount, 0)
         active = {

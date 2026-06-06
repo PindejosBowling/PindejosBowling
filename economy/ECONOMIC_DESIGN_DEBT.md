@@ -46,10 +46,10 @@ pin_balance(player, season) = SUM(pin_ledger.amount)
 
 A player’s outstanding debt is the sum of active loan debt for that season.
 
-Debt is derived from the new `debt_ledger`:
+Debt is derived from the new `loan_ledger`:
 
 ```text
-loan_balance(loan) = SUM(debt_ledger.amount)
+loan_balance(loan) = SUM(loan_ledger.amount)
 ```
 
 For v1, a player may only have one active loan, but the schema should not hard-code that assumption.
@@ -198,7 +198,7 @@ Interest is calculated after weekly garnishment has already reduced the loan bal
 interest_amount = ceil(remaining_debt_after_garnishment * weekly_interest_rate)
 ```
 
-Interest creates a `debt_ledger` event only. It does not create a `pin_ledger` event because no pins move when interest accrues.
+Interest creates a `loan_ledger` event only. It does not create a `pin_ledger` event because no pins move when interest accrues.
 
 ### 5.2 No Debt Cap
 
@@ -452,7 +452,7 @@ The debt feature uses four main structures:
 pin_ledger     = actual pin movements
 loan_products  = immutable historical Loan Shark offers
 loans          = issued loan accounts and lifecycle state
-debt_ledger    = append-only debt balance events
+loan_ledger    = append-only debt balance events
 ```
 
 ### 9.1 Existing `pin_ledger`
@@ -481,13 +481,13 @@ Weekly interest does not create a `pin_ledger` event.
 The only new loan-specific metadata required on `pin_ledger` is a nullable link to the corresponding debt ledger event:
 
 ```text
-debt_ledger_id uuid NULL -> debt_ledger.id
+loan_ledger_id uuid NULL -> loan_ledger.id
 ```
 
 All other loan metadata can be derived through:
 
 ```text
-pin_ledger -> debt_ledger -> loans -> loan_products
+pin_ledger -> loan_ledger -> loans -> loan_products
 ```
 
 ### 9.2 `loan_products`
@@ -591,7 +591,7 @@ EXECUTE FUNCTION prevent_loan_product_term_updates();
 
 `loans` tracks issued loan accounts and lifecycle state.
 
-It does not store current debt. Current debt is derived from `debt_ledger`.
+It does not store current debt. Current debt is derived from `loan_ledger`.
 
 Recommended columns:
 
@@ -618,14 +618,14 @@ Allowed statuses:
 
 Do not include `voided` or `admin_cancelled`. Admin cancellation is destructive rollback.
 
-### 9.5 `debt_ledger`
+### 9.5 `loan_ledger`
 
-`debt_ledger` is the append-only event log for debt balances.
+`loan_ledger` is the append-only event log for debt balances.
 
 Debt is derived exactly like pin balances:
 
 ```text
-loan_balance(loan) = SUM(debt_ledger.amount)
+loan_balance(loan) = SUM(loan_ledger.amount)
 ```
 
 Recommended columns:
@@ -643,7 +643,7 @@ Recommended columns:
 | `pin_ledger_id` uuid nullable -> pin_ledger | Present when the debt event corresponds to actual pin movement. |
 | `created_at` timestamp | |
 
-V1 `debt_ledger.type` values:
+V1 `loan_ledger.type` values:
 
 ```text
 loan_issued
@@ -738,7 +738,7 @@ Loan issuance for capped products should be atomic:
 4. Confirm `issued_count < max_uses`.
 5. Create the `loans` row.
 6. Create the `pin_ledger` loan issuance rows.
-7. Create the `debt_ledger` loan issuance row.
+7. Create the `loan_ledger` loan issuance row.
 8. Commit transaction.
 
 This prevents multiple players from simultaneously claiming the final limited-use offer.
@@ -756,7 +756,7 @@ When a player takes a loan:
 3. If `max_uses` is set, enforce cap transactionally.
 4. Create `loans` row with `status = active`.
 5. Create `pin_ledger` entry or entries representing House-to-player transfer.
-6. Create `debt_ledger` entry with `type = loan_issued` and `amount = borrow_amount`.
+6. Create `loan_ledger` entry with `type = loan_issued` and `amount = borrow_amount`.
 7. Link the loan issuance pin event to the debt event.
 8. Emit optional vague activity feed event.
 
@@ -783,13 +783,13 @@ Debt ledger amount:
 When a player manually repays debt:
 
 1. Confirm player has an active loan.
-2. Derive outstanding loan balance from `SUM(debt_ledger.amount)`.
+2. Derive outstanding loan balance from `SUM(loan_ledger.amount)`.
 3. Validate repayment amount:
    - positive whole-pin integer,
    - not greater than outstanding debt,
    - not greater than player available balance.
 4. Create `pin_ledger` player-to-House transfer.
-5. Create `debt_ledger` event with negative amount.
+5. Create `loan_ledger` event with negative amount.
 6. Link the pin event to the debt event.
 7. If derived loan balance becomes zero, update `loans.status = paid_off` and set `paid_off_at`.
 
@@ -816,7 +816,7 @@ Debt ledger amount:
 During weekly settlement, for each active loan:
 
 1. Calculate weekly bowling pincome for the player.
-2. Derive outstanding debt from `SUM(debt_ledger.amount)`.
+2. Derive outstanding debt from `SUM(loan_ledger.amount)`.
 3. If outstanding debt is zero, mark paid off if needed and skip.
 4. Calculate:
 
@@ -827,7 +827,7 @@ actual_garnishment = min(calculated_garnishment, outstanding_debt)
 
 5. If actual garnishment is greater than zero:
    - create `pin_ledger` transfer to House,
-   - create `debt_ledger` negative event,
+   - create `loan_ledger` negative event,
    - link the events.
 6. If loan balance is now zero:
    - mark loan `paid_off`,
@@ -864,7 +864,7 @@ After garnishment during weekly settlement:
 interest_amount = ceil(remaining_debt * weekly_interest_rate)
 ```
 
-4. Create `debt_ledger` event with positive amount.
+4. Create `loan_ledger` event with positive amount.
 5. Do not create a `pin_ledger` event.
 
 Debt ledger event type:
@@ -893,7 +893,7 @@ season_close_payment = min(available_balance, outstanding_debt)
 
 4. If payment is greater than zero:
    - create `pin_ledger` player-to-House transfer,
-   - create `debt_ledger` negative event,
+   - create `loan_ledger` negative event,
    - link the events.
 5. Mark loan `season_closed`.
 6. Calculate final net worth after settlement.
@@ -930,7 +930,7 @@ This matches the existing bet-cancellation behavior.
 When an admin cancels a loan, the system deletes:
 
 1. The `loans` row.
-2. All related `debt_ledger` rows.
+2. All related `loan_ledger` rows.
 3. All related `pin_ledger` rows linked through those debt ledger entries.
 
 The result should be as if the loan never existed.
@@ -962,7 +962,7 @@ type = loan_issued
 amount = +borrow_amount for player-side entry
 ```
 
-`debt_ledger`:
+`loan_ledger`:
 
 ```text
 type = loan_issued
@@ -979,7 +979,7 @@ type = loan_manual_repayment
 amount = -repayment_amount for player-side entry
 ```
 
-`debt_ledger`:
+`loan_ledger`:
 
 ```text
 type = manual_repayment
@@ -989,7 +989,7 @@ pin_ledger_id = linked repayment pin event
 
 ### Weekly Interest
 
-`debt_ledger` only:
+`loan_ledger` only:
 
 ```text
 type = weekly_interest
@@ -1025,7 +1025,7 @@ For current in-season standings:
 ```sql
 SELECT l.player_id, l.season_id, SUM(dl.amount) AS outstanding_debt
 FROM loans l
-JOIN debt_ledger dl ON dl.loan_id = l.id
+JOIN loan_ledger dl ON dl.loan_id = l.id
 WHERE l.status = 'active'
 GROUP BY l.player_id, l.season_id;
 ```
@@ -1122,8 +1122,8 @@ Mandatory confirmation screen. Immediate repayment is allowed before interest ac
 
 - [ ] Create `loan_products` table.
 - [ ] Create `loans` table.
-- [ ] Create `debt_ledger` table.
-- [ ] Add nullable `debt_ledger_id` reference to `pin_ledger` if compatible with existing schema.
+- [ ] Create `loan_ledger` table.
+- [ ] Add nullable `loan_ledger_id` reference to `pin_ledger` if compatible with existing schema.
 - [ ] Add database trigger to protect immutable `loan_products` fields.
 - [ ] Implement transaction-level enforcement for `max_uses`.
 - [ ] Seed v1 loan products.
@@ -1172,7 +1172,7 @@ The implementation should preserve the existing ledger-first philosophy:
 
 ```text
 pin_balance = SUM(pin_ledger.amount)
-loan_balance = SUM(debt_ledger.amount)
+loan_balance = SUM(loan_ledger.amount)
 net_worth = pin_balance - loan_balance
 ```
 

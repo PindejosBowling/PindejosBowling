@@ -21,7 +21,7 @@ import { useAuthStore } from '../stores/authStore'
 import { useUiStore } from '../stores/uiStore'
 import { loans } from '../utils/supabase/db'
 
-// debt_ledger type → display label for the payment history.
+// loan_ledger type → display label for the payment history.
 const DEBT_TYPE_LABEL: Record<string, string> = {
   loan_issued: 'BORROWED',
   manual_repayment: 'REPAYMENT',

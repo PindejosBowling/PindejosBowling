@@ -435,7 +435,49 @@ export type Database = {
           },
         ]
       }
-      debt_ledger: {
+      games: {
+        Row: {
+          created_at: string
+          game_number: number
+          id: string
+          team_a_id: string
+          team_b_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          game_number: number
+          id?: string
+          team_a_id: string
+          team_b_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          game_number?: number
+          id?: string
+          team_a_id?: string
+          team_b_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "games_team_a_id_fkey"
+            columns: ["team_a_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "games_team_b_id_fkey"
+            columns: ["team_b_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      loan_ledger: {
         Row: {
           amount: number
           created_at: string
@@ -477,80 +519,38 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "debt_ledger_loan_id_fkey"
+            foreignKeyName: "loan_ledger_loan_id_fkey"
             columns: ["loan_id"]
             isOneToOne: false
             referencedRelation: "loans"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "debt_ledger_pin_ledger_id_fkey"
+            foreignKeyName: "loan_ledger_pin_ledger_id_fkey"
             columns: ["pin_ledger_id"]
             isOneToOne: false
             referencedRelation: "pin_ledger"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "debt_ledger_player_id_fkey"
+            foreignKeyName: "loan_ledger_player_id_fkey"
             columns: ["player_id"]
             isOneToOne: false
             referencedRelation: "players"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "debt_ledger_season_id_fkey"
+            foreignKeyName: "loan_ledger_season_id_fkey"
             columns: ["season_id"]
             isOneToOne: false
             referencedRelation: "seasons"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "debt_ledger_week_id_fkey"
+            foreignKeyName: "loan_ledger_week_id_fkey"
             columns: ["week_id"]
             isOneToOne: false
             referencedRelation: "weeks"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      games: {
-        Row: {
-          created_at: string
-          game_number: number
-          id: string
-          team_a_id: string
-          team_b_id: string
-          updated_at: string
-        }
-        Insert: {
-          created_at?: string
-          game_number: number
-          id?: string
-          team_a_id: string
-          team_b_id: string
-          updated_at?: string
-        }
-        Update: {
-          created_at?: string
-          game_number?: number
-          id?: string
-          team_a_id?: string
-          team_b_id?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "games_team_a_id_fkey"
-            columns: ["team_a_id"]
-            isOneToOne: false
-            referencedRelation: "teams"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "games_team_b_id_fkey"
-            columns: ["team_b_id"]
-            isOneToOne: false
-            referencedRelation: "teams"
             referencedColumns: ["id"]
           },
         ]
@@ -686,10 +686,10 @@ export type Database = {
           amount: number
           bet_id: string | null
           created_at: string
-          debt_ledger_id: string | null
           description: string
           id: string
           is_house: boolean
+          loan_ledger_id: string | null
           player_id: string | null
           season_id: string
           type: string
@@ -700,10 +700,10 @@ export type Database = {
           amount: number
           bet_id?: string | null
           created_at?: string
-          debt_ledger_id?: string | null
           description: string
           id?: string
           is_house?: boolean
+          loan_ledger_id?: string | null
           player_id?: string | null
           season_id: string
           type: string
@@ -714,10 +714,10 @@ export type Database = {
           amount?: number
           bet_id?: string | null
           created_at?: string
-          debt_ledger_id?: string | null
           description?: string
           id?: string
           is_house?: boolean
+          loan_ledger_id?: string | null
           player_id?: string | null
           season_id?: string
           type?: string
@@ -733,10 +733,10 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "pin_ledger_debt_ledger_id_fkey"
-            columns: ["debt_ledger_id"]
+            foreignKeyName: "pin_ledger_loan_ledger_id_fkey"
+            columns: ["loan_ledger_id"]
             isOneToOne: false
-            referencedRelation: "debt_ledger"
+            referencedRelation: "loan_ledger"
             referencedColumns: ["id"]
           },
           {

@@ -45,8 +45,8 @@ From `PIN_ECONOMY_SCHEMA.md` §5–§6 — non-negotiable:
 One logical change per migration file. Recommended sequence (timestamps assigned by
 the CLI):
 
-1. `loan_shark_tables` — `loan_products`, `loans`, `debt_ledger` + indexes + RLS.
-2. `pin_ledger_loan_support` — `debt_ledger_id` column + index, extend type CHECK.
+1. `loan_shark_tables` — `loan_products`, `loans`, `loan_ledger` + indexes + RLS.
+2. `pin_ledger_loan_support` — `loan_ledger_id` column + index, extend type CHECK.
 3. `loan_products_immutable_terms` — immutability trigger.
 4. `loan_shark_rpcs` — `take_loan`, `repay_loan`, `process_weekly_loans`, `settle_loans_for_season_close`, `cancel_loan`.
 5. `settle_betting_for_week_loans` — `CREATE OR REPLACE` to `PERFORM process_weekly_loans` at the end.
@@ -82,7 +82,7 @@ Immutable historical offers. **No `product_key`** — `id` is canonical (§9.2.1
 Index: `season_id`.
 
 ### `loans` (§9.4)
-Lifecycle only — **no stored balance** (derived from `debt_ledger`).
+Lifecycle only — **no stored balance** (derived from `loan_ledger`).
 
 | Column | Type / notes |
 |---|---|
@@ -100,7 +100,7 @@ Indexes: `player_id`, `season_id`, `loan_product_id`. Do **not** add a DB unique
 constraint enforcing one active loan — that is an application-layer + RPC rule
 (§3.3), kept out of the DB so future versions can allow multiple.
 
-### `debt_ledger` (§9.5)
+### `loan_ledger` (§9.5)
 Append-only debt event log. **`loan_balance(loan) = SUM(amount)`.**
 
 | Column | Type / notes |
@@ -128,12 +128,12 @@ Indexes: `loan_id`, `player_id`, `season_id`, `week_id`, `pin_ledger_id`.
 | `weekly_interest` | + | interest |
 | `season_close_settlement` | − | season-close payment |
 
-> Note: `debt_ledger.pin_ledger_id` and `pin_ledger.debt_ledger_id` are mutually
-> referential. Create `debt_ledger` **without** the FK to `pin_ledger` if ordering
-> is awkward, or add the `pin_ledger.debt_ledger_id` column (step 2) after both
-> tables exist and set `debt_ledger.pin_ledger_id`'s FK in the same migration. Both
+> Note: `loan_ledger.pin_ledger_id` and `pin_ledger.loan_ledger_id` are mutually
+> referential. Create `loan_ledger` **without** the FK to `pin_ledger` if ordering
+> is awkward, or add the `pin_ledger.loan_ledger_id` column (step 2) after both
+> tables exist and set `loan_ledger.pin_ledger_id`'s FK in the same migration. Both
 > are nullable, so insert order inside the RPCs is: insert pin rows → insert debt
-> row referencing the player pin row → `UPDATE` the two pin rows' `debt_ledger_id`.
+> row referencing the player pin row → `UPDATE` the two pin rows' `loan_ledger_id`.
 
 ### RLS (mirror the `bet_*` policies)
 On all three tables: `ENABLE ROW LEVEL SECURITY`. Reads open to `anon` +
@@ -150,8 +150,8 @@ In `pin_ledger_loan_support`:
 
 ```sql
 ALTER TABLE public.pin_ledger
-  ADD COLUMN debt_ledger_id uuid REFERENCES public.debt_ledger(id) ON DELETE SET NULL;
-CREATE INDEX pin_ledger_debt_ledger_id_idx ON public.pin_ledger (debt_ledger_id);
+  ADD COLUMN loan_ledger_id uuid REFERENCES public.loan_ledger(id) ON DELETE SET NULL;
+CREATE INDEX pin_ledger_loan_ledger_id_idx ON public.pin_ledger (loan_ledger_id);
 ```
 
 **Extend the existing `pin_ledger.type` CHECK** (drop + re-add) to add the four
@@ -166,9 +166,9 @@ loan_weekly_garnishment
 loan_season_close_settlement
 ```
 
-**Cancel-friendliness convention:** in every loan transfer, stamp `debt_ledger_id`
+**Cancel-friendliness convention:** in every loan transfer, stamp `loan_ledger_id`
 on **both** the player row and the house row (mirrors `bet_id` on both bet rows).
-`cancel_loan` then deletes all pin rows by `debt_ledger_id`, getting both sides.
+`cancel_loan` then deletes all pin rows by `loan_ledger_id`, getting both sides.
 
 ---
 
@@ -188,7 +188,7 @@ All in `loan_shark_rpcs`. Model the structure on `place_house_bet` /
 `settle_market_internal` / `cancel_bet`. Balance is always derived:
 `SELECT COALESCE(SUM(amount),0) FROM public.pin_ledger WHERE player_id = X AND season_id = Y`.
 Outstanding debt is always derived:
-`SELECT COALESCE(SUM(amount),0) FROM public.debt_ledger WHERE loan_id = L`.
+`SELECT COALESCE(SUM(amount),0) FROM public.loan_ledger WHERE loan_id = L`.
 
 ### `take_loan(p_loan_product_id uuid) RETURNS uuid` — `authenticated` (§11.1, §10.1)
 1. Resolve `v_player_id` from `auth.uid()` (RAISE if no player).
@@ -200,8 +200,8 @@ Outstanding debt is always derived:
    - player: `+borrow_amount`, `is_house=false`
    - house: `−borrow_amount`, `is_house=true`
    Capture the player row id `v_pin_id`.
-7. INSERT `debt_ledger` (`type='loan_issued'`, `amount = +borrow_amount`, `pin_ledger_id = v_pin_id`), capture `v_debt_id`.
-8. `UPDATE` both pin rows `SET debt_ledger_id = v_debt_id`.
+7. INSERT `loan_ledger` (`type='loan_issued'`, `amount = +borrow_amount`, `pin_ledger_id = v_pin_id`), capture `v_debt_id`.
+8. `UPDATE` both pin rows `SET loan_ledger_id = v_debt_id`.
 9. `RETURN v_loan_id`.
 
 ### `repay_loan(p_loan_id uuid, p_amount int) RETURNS void` — `authenticated` (§11.2)
@@ -209,19 +209,19 @@ Outstanding debt is always derived:
 2. Derive outstanding debt + player balance.
 3. Validate: `p_amount` is a positive integer, `<= outstanding`, `<= balance`.
 4. INSERT pin pair (`type='loan_manual_repayment'`, player `−p_amount` / house `+p_amount`, `week_id` = current week), capture player pin id.
-5. INSERT `debt_ledger` (`type='manual_repayment'`, `amount = -p_amount`, `pin_ledger_id`), update both pin rows' `debt_ledger_id`.
+5. INSERT `loan_ledger` (`type='manual_repayment'`, `amount = -p_amount`, `pin_ledger_id`), update both pin rows' `loan_ledger_id`.
 6. If new outstanding = 0 → `UPDATE loans SET status='paid_off', paid_off_at = now()`.
 
 ### `process_weekly_loans(p_week_id uuid) RETURNS void` — admin-gated (§5, §11.3–11.4)
 Called by `settle_betting_for_week` (which is already admin-gated) and idempotent.
 For each `active` loan whose `season_id` = the week's season:
-1. **Idempotency guard** — `CONTINUE` if a `debt_ledger` row already exists with this `loan_id` and `week_id` and `type IN ('weekly_garnishment','weekly_interest')`.
+1. **Idempotency guard** — `CONTINUE` if a `loan_ledger` row already exists with this `loan_id` and `week_id` and `type IN ('weekly_garnishment','weekly_interest')`.
 2. Weekly bowling pincome = `SUM(amount) FROM pin_ledger WHERE player_id = loan.player_id AND week_id = p_week_id AND type = 'score_credit'` (these are the rows `settle_betting_for_week` just minted).
 3. Derive outstanding debt; if 0 → `UPDATE loans SET status='paid_off', paid_off_at=now()` and `CONTINUE` (no interest).
 4. `calculated = ceil(pincome * garnishment_rate)` (use `CEIL(... )::int`); `garnish = LEAST(calculated, outstanding)`.
-5. If `garnish > 0`: pin pair (`type='loan_weekly_garnishment'`, player `−garnish` / house `+garnish`, `week_id = p_week_id`) + `debt_ledger` (`type='weekly_garnishment'`, `amount = -garnish`, link both).
+5. If `garnish > 0`: pin pair (`type='loan_weekly_garnishment'`, player `−garnish` / house `+garnish`, `week_id = p_week_id`) + `loan_ledger` (`type='weekly_garnishment'`, `amount = -garnish`, link both).
 6. Recompute outstanding. If 0 → mark `paid_off` and **skip interest**.
-7. Else `interest = CEIL(remaining * weekly_interest_rate)::int`; if `> 0` INSERT `debt_ledger` only (`type='weekly_interest'`, `amount = +interest`, `week_id = p_week_id`, `pin_ledger_id = NULL`). **No pin row** — no pins move on interest.
+7. Else `interest = CEIL(remaining * weekly_interest_rate)::int`; if `> 0` INSERT `loan_ledger` only (`type='weekly_interest'`, `amount = +interest`, `week_id = p_week_id`, `pin_ledger_id = NULL`). **No pin row** — no pins move on interest.
 
 Rounding: both garnishment and interest use `CEIL` (§5.5). Garnishment is applied
 **before** interest (§5.1). `REVOKE … FROM PUBLIC, anon`; it's invoked internally by
@@ -233,7 +233,7 @@ reviewer prefers; gate the body on admin role regardless.
 For each `active` loan in the season:
 1. Derive outstanding debt + player balance.
 2. `payment = LEAST(balance, outstanding)`.
-3. If `payment > 0`: pin pair (`type='loan_season_close_settlement'`, player `−payment` / house `+payment`, `week_id` = the season's last week or NULL) + `debt_ledger` (`type='season_close_settlement'`, `amount = -payment`, link both).
+3. If `payment > 0`: pin pair (`type='loan_season_close_settlement'`, player `−payment` / house `+payment`, `week_id` = the season's last week or NULL) + `loan_ledger` (`type='season_close_settlement'`, `amount = -payment`, link both).
 4. `UPDATE loans SET status='season_closed', season_closed_at = now()`.
    (Residual debt stays on the ledger → contributes to negative final net worth, §7.2.)
 
@@ -241,8 +241,8 @@ For each `active` loan in the season:
 Destructive rollback, mirrors `cancel_bet`:
 ```sql
 DELETE FROM public.pin_ledger
- WHERE debt_ledger_id IN (SELECT id FROM public.debt_ledger WHERE loan_id = p_loan_id);
-DELETE FROM public.debt_ledger WHERE loan_id = p_loan_id;   -- (or rely on FK cascade from loans)
+ WHERE loan_ledger_id IN (SELECT id FROM public.loan_ledger WHERE loan_id = p_loan_id);
+DELETE FROM public.loan_ledger WHERE loan_id = p_loan_id;   -- (or rely on FK cascade from loans)
 DELETE FROM public.loans WHERE id = p_loan_id;
 ```
 Result: derived pin balance and derived debt return to their no-loan state.
@@ -290,8 +290,8 @@ Use a throwaway / non-prod season. SQL reads via `supabase db query --linked`.
 1. **Schema/advisors** — `supabase db lint` clean; every new FK indexed; all 5
    functions have a pinned `search_path`; the immutability trigger rejects an UPDATE
    that changes `borrow_amount`.
-2. **take_loan** — balance up by `borrow_amount`; `SUM(debt_ledger)=borrow_amount`;
-   the two `loan_issued` pin rows net to 0 and both carry the same `debt_ledger_id`;
+2. **take_loan** — balance up by `borrow_amount`; `SUM(loan_ledger)=borrow_amount`;
+   the two `loan_issued` pin rows net to 0 and both carry the same `loan_ledger_id`;
    a second `take_loan` while one loan is `active` raises.
 3. **repay_loan** — partial then full; rejects `> debt` and `> balance`; full repay
    flips `loans.status='paid_off'` with `paid_off_at`.
@@ -303,7 +303,7 @@ Use a throwaway / non-prod season. SQL reads via `supabase db query --linked`.
 5. **Missed week** — player with no `score_credit` that week: no garnishment row,
    interest assessed on full balance.
 6. **season close** — `settle_loans_for_season_close` pays `min(balance, debt)`;
-   residual debt remains on `debt_ledger`; loan marked `season_closed`.
+   residual debt remains on `loan_ledger`; loan marked `season_closed`.
 7. **cancel_loan** — all pin + debt rows for the loan gone; derived balance + debt
    back to pre-loan state.
 8. **Conservation invariant (§10.2)** — `SUM(pin_ledger.amount)` per season still

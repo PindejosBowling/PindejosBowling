@@ -433,9 +433,9 @@ export const bets = {
     supabase.rpc('cancel_bet', { p_bet_id: betId }),
 }
 
-// ── Loan Shark (loan_products → loans → debt_ledger) ────────────────────────
+// ── Loan Shark (loan_products → loans → loan_ledger) ────────────────────────
 // Immutable historical loan offers; a loan is lifecycle-only (balance derived
-// from debt_ledger SUM(amount)). All player write paths (take/repay) and admin
+// from loan_ledger SUM(amount)). All player write paths (take/repay) and admin
 // cancel go through SECURITY DEFINER RPCs; reads embed the product graph.
 export const loanProducts = {
   list: () =>
@@ -478,12 +478,12 @@ export const loans = {
     supabase.rpc('cancel_loan', { p_loan_id: loanId }),
 }
 
-export const debtLedger = {
+export const loanLedger = {
   // A player's debt event history for a season (newest first) — the borrower's
   // payment history. SUM(amount) over a loan's rows = outstanding debt.
   listByPlayerSeason: (playerId: string, seasonId: string) =>
     supabase
-      .from('debt_ledger')
+      .from('loan_ledger')
       .select('*, weeks(week_number)')
       .eq('player_id', playerId)
       .eq('season_id', seasonId)
@@ -492,7 +492,7 @@ export const debtLedger = {
   // net-worth leaderboard's Debt column.
   listActiveBySeason: (seasonId: string) =>
     supabase
-      .from('debt_ledger')
+      .from('loan_ledger')
       .select('player_id, amount, loan_id, loans!inner(status)')
       .eq('season_id', seasonId)
       .eq('loans.status', 'active'),
