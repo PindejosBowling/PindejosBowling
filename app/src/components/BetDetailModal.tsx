@@ -10,13 +10,18 @@ export function resultBadge(status: string) {
   return null
 }
 
-// Total amount the player gets back, signed for display.
+// Signed return on a bet, from the chosen perspective.
 // potential_payout = total returned on a win incl. the stake. A push refunds the
 // stake; a loss forfeits it; a pending bet shows its projected full return.
-export function betReturnText(bet: BetView): string {
-  if (bet.status === 'push' || bet.status === 'void') return `+${bet.stake}`
-  if (bet.status === 'lost') return `-${bet.stake}`
-  return `+${bet.potentialPayout}` // won or still pending → full return
+// The house's return is the exact opposite of the player's (the house pays the
+// payout, keeps the lost stake, refunds the push), so 'house' negates the sign.
+export function betReturnText(bet: BetView, perspective: 'player' | 'house' = 'player'): string {
+  let amount: number
+  if (bet.status === 'push' || bet.status === 'void') amount = bet.stake
+  else if (bet.status === 'lost') amount = -bet.stake
+  else amount = bet.potentialPayout // won or still pending → full return
+  if (perspective === 'house') amount = -amount
+  return `${amount >= 0 ? '+' : ''}${amount}`
 }
 
 interface BetDetailModalProps {

@@ -8,6 +8,10 @@ import type { BetView } from '../hooks/useBettingData'
 interface SettledBetsViewProps {
   // All settled (won/lost/push) bets this season.
   bets: BetView[]
+  // Whose side the returns are shown from. 'house' (Pinsino Admin) negates each
+  // signed return so a player loss reads positive for the house, aligning with
+  // the Pincome statement. Defaults to 'player' (the public Pinsino tab).
+  perspective?: 'player' | 'house'
   // Row tap — opens the shared bet details overlay.
   onBetPress?: (bet: BetView) => void
   // When provided, each row gets an inline cancel (✕) affordance (admin only).
@@ -16,7 +20,7 @@ interface SettledBetsViewProps {
 
 // Shared "Settled Bets" surface: this season's settled bets grouped by week
 // (newest first). Read-only on the Pinsino tab; cancellable on Pinsino Admin.
-export default function SettledBetsView({ bets, onBetPress, onCancelBet }: SettledBetsViewProps) {
+export default function SettledBetsView({ bets, perspective = 'player', onBetPress, onCancelBet }: SettledBetsViewProps) {
   const byWeek = useMemo(() => {
     const map: Record<number, BetView[]> = {}
     for (const bet of bets) {
@@ -52,7 +56,7 @@ export default function SettledBetsView({ bets, onBetPress, onCancelBet }: Settl
                 bet={bet}
                 isLast={idx === byWeek[wk].length - 1}
                 badge={resultBadge(bet.status)}
-                betReturnText={betReturnText(bet)}
+                betReturnText={betReturnText(bet, perspective)}
                 onPress={onBetPress ? () => onBetPress(bet) : undefined}
                 onCancelPress={onCancelBet ? () => onCancelBet(bet) : undefined}
               />

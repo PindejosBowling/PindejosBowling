@@ -84,6 +84,7 @@ export function closedBettingNote(line: LineView): string {
 
 // One resolved leg of a bet (a single backed over/under selection).
 export interface LegView {
+  marketId: string          // the leg's market — settled independently (admin settle)
   subjectName: string
   pick: string              // selection key: 'over' | 'under'
   line: number
@@ -124,6 +125,7 @@ export function normalizeBet(b: any): BetView {
     const sel = leg?.bet_selections
     const mkt = sel?.bet_markets
     return {
+      marketId: mkt?.id ?? '',
       subjectName: mkt?.subject?.name ?? '—',
       pick: sel?.key ?? '',
       line: Number(leg?.line_at_placement ?? sel?.line ?? 0),

@@ -8,6 +8,10 @@ import type { BetView } from '../hooks/useBettingData'
 interface ActiveBetsViewProps {
   // This week's still-pending bets (settled ones belong in SettledBetsView).
   bets: BetView[]
+  // Whose side the returns are shown from. 'house' (Pinsino Admin) negates each
+  // signed return, so a pending bet reads as the house's exposure rather than the
+  // bettor's potential winnings. Defaults to 'player' (the public Pinsino tab).
+  perspective?: 'player' | 'house'
   // Optional helper line under the summary card (e.g. an admin hint).
   hint?: string
   // Single-bet tap (read-only → details; admin → settle the line).
@@ -23,6 +27,7 @@ interface ActiveBetsViewProps {
 // public Pinsino tab (read-only) and the Pinsino Admin screen (with actions).
 export default function ActiveBetsView({
   bets,
+  perspective = 'player',
   hint,
   onBetPress,
   onParlayPress,
@@ -87,7 +92,7 @@ export default function ActiveBetsView({
                 bet={bet}
                 isLast={idx === byGame[gameNum].length - 1}
                 badge={resultBadge(bet.status)}
-                betReturnText={betReturnText(bet)}
+                betReturnText={betReturnText(bet, perspective)}
                 onPress={onBetPress ? () => onBetPress(bet) : undefined}
                 onCancelPress={onCancelBet ? () => onCancelBet(bet) : undefined}
               />
@@ -106,7 +111,7 @@ export default function ActiveBetsView({
                 bet={bet}
                 isLast={idx === parlays.length - 1}
                 badge={resultBadge(bet.status)}
-                betReturnText={betReturnText(bet)}
+                betReturnText={betReturnText(bet, perspective)}
                 onPress={onParlayPress ? () => onParlayPress(bet) : undefined}
                 onCancelPress={onCancelBet ? () => onCancelBet(bet) : undefined}
               />

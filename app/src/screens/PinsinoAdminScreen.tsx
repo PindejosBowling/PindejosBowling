@@ -262,9 +262,10 @@ export default function PinsinoAdminScreen() {
         {view === 'active' && (
           <ActiveBetsView
             bets={activeBets}
-            hint="Tap a bet to settle its line · ✕ to cancel a bet"
+            perspective="house"
+            hint="Tap a bet to settle its line(s) · ✕ to cancel a bet"
             onBetPress={setSettleBet}
-            onParlayPress={setDetailBet}
+            onParlayPress={setSettleBet}
             onCancelBet={confirmCancelBet}
           />
         )}
@@ -273,6 +274,7 @@ export default function PinsinoAdminScreen() {
         {view === 'settled' && (
           <SettledBetsView
             bets={settledBets}
+            perspective="house"
             onBetPress={setDetailBet}
             onCancelBet={confirmCancelBet}
           />
