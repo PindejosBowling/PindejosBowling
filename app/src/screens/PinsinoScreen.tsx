@@ -24,8 +24,8 @@ const TILE_WIDTH = (Dimensions.get('window').width - 48) / 3
 
 // Subpage menu tiles (groundwork for more Pinsino subpages — add one line each)
 const MENU_TILES: { icon: string; label: string; route: 'PinsinoLeaderboard' | 'Sportsbook' }[] = [
-  { icon: '📊', label: 'Leaderboard', route: 'PinsinoLeaderboard' },
-  { icon: '🎰', label: 'Sportsbook', route: 'Sportsbook' },
+  { icon: '🎩', label: 'Titans of Pindustry', route: 'PinsinoLeaderboard' },
+  { icon: '🏟️', label: 'Sportsbook', route: 'Sportsbook' },
 ]
 
 export default function PinsinoScreen() {

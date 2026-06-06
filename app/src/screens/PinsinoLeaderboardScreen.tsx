@@ -27,7 +27,7 @@ export default function PinsinoLeaderboardScreen() {
         contentContainerStyle={styles.content}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.muted} />}
       >
-        <ScreenHeader title="Leaderboard" onBack={() => navigation.goBack()} />
+        <ScreenHeader title="Titans of Pindustry" onBack={() => navigation.goBack()} />
 
         {leaderboard.length > 0 ? (
           <View style={styles.sbCard}>
