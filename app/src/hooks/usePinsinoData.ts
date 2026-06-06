@@ -122,9 +122,9 @@ export interface LeaderboardEntry {
   playerId: string
   name: string
   balance: number
+  wagers: number        // sum of stakes on pending bets (already debited from balance)
   debt: number          // outstanding active-loan debt (≥ 0)
-  netWorth: number      // balance − debt
-  potential: number
+  netWorth: number      // balance + wagers − debt
   movement: 'up' | 'down' | 'same' | null
 }
 
@@ -339,13 +339,12 @@ export function usePinsinoData(playerId: string | null) {
           byPlayer[pid].priorBalance += e.amount
         }
       }
-      // Potential winnings: each still-pending bet pays its potential_payout on a
-      // win (the stake was already debited at placement), so projected balance =
-      // current balance + Σ(potential_payout) over that player's pending bets.
-      const pendingByPlayer: Record<string, number> = {}
+      // Sum of stakes on pending bets per player. Stakes are already debited from
+      // balance at placement, so this recovers the at-risk portion for display.
+      const wagersByPlayer: Record<string, number> = {}
       for (const b of weekBetViews) {
         if (b.status === 'pending') {
-          pendingByPlayer[b.playerId] = (pendingByPlayer[b.playerId] ?? 0) + b.potentialPayout
+          wagersByPlayer[b.playerId] = (wagersByPlayer[b.playerId] ?? 0) + b.stake
         }
       }
 
@@ -373,14 +372,15 @@ export function usePinsinoData(playerId: string | null) {
 
       const board = activePlayers
         .map(({ playerId, name, balance }) => {
+          const wagers = wagersByPlayer[playerId] ?? 0
           const debt = debtByPlayer[playerId] ?? 0
           return {
             playerId,
             name,
             balance,
+            wagers,
             debt,
-            netWorth: balance - debt,
-            potential: balance + (pendingByPlayer[playerId] ?? 0),
+            netWorth: balance + wagers - debt,
           }
         })
         .sort((a, b) => b.netWorth - a.netWorth)
