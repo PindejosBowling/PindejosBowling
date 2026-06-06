@@ -27,6 +27,8 @@ export default function PinsinoLeaderboardTable({ leaderboard, playerId, onRowPr
         <Text style={[styles.sbHeaderCell, styles.sbRankCell]}>#</Text>
         <Text style={[styles.sbHeaderCell, styles.sbNameCell]}>Titan</Text>
         <Text style={[styles.sbHeaderCell, styles.sbBalCell]}>Pins</Text>
+        <Text style={[styles.sbHeaderCell, styles.sbDebtCell]}>Debt</Text>
+        <Text style={[styles.sbHeaderCell, styles.sbNetCell]}>Net</Text>
         <Text style={[styles.sbHeaderCell, styles.sbProjCell]}>Upside</Text>
       </View>
       {rows.map((p, index) => {
@@ -47,6 +49,10 @@ export default function PinsinoLeaderboardTable({ leaderboard, playerId, onRowPr
               {p.movement === 'down' && <Text style={styles.moveDown}> ▼</Text>}
             </Text>
             <Text style={styles.sbBalance}>{p.balance.toLocaleString()}</Text>
+            <Text style={styles.sbDebt}>{p.debt > 0 ? `−${p.debt.toLocaleString()}` : ''}</Text>
+            <Text style={[styles.sbNet, p.netWorth < 0 && styles.sbNetNegative]}>
+              {p.netWorth.toLocaleString()}
+            </Text>
             <Text style={[styles.sbProjection, p.potential > p.balance && styles.sbProjectionLive]}>
               {p.potential.toLocaleString()}
             </Text>
@@ -85,6 +91,8 @@ const styles = StyleSheet.create({
   sbRankCell: { width: 32 },
   sbNameCell: { flex: 1 },
   sbBalCell: { width: 56, textAlign: 'right' },
+  sbDebtCell: { width: 56, textAlign: 'right' },
+  sbNetCell: { width: 56, textAlign: 'right' },
   sbProjCell: { width: 56, textAlign: 'right' },
   sbRow: {
     flexDirection: 'row',
@@ -114,6 +122,21 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: colors.text,
   },
+  sbDebt: {
+    width: 56,
+    textAlign: 'right',
+    fontFamily: fonts.barlowCondensed,
+    fontSize: 15,
+    color: colors.danger,
+  },
+  sbNet: {
+    width: 56,
+    textAlign: 'right',
+    fontFamily: fonts.barlowCondensed,
+    fontSize: 15,
+    color: colors.text,
+  },
+  sbNetNegative: { color: colors.danger },
   sbProjection: {
     width: 56,
     textAlign: 'right',

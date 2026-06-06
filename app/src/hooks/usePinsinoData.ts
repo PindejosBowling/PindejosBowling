@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect } from 'react'
-import { weeks, seasons, betMarkets, bets, pinLedger } from '../utils/supabase/db'
+import { weeks, seasons, betMarkets, bets, pinLedger, debtLedger, loans } from '../utils/supabase/db'
 
 // One bettable side of a market (a single `bet_selections` row, flattened).
 // Generic over market_type — over/under is the first consumer, but the shape
@@ -122,8 +122,17 @@ export interface LeaderboardEntry {
   playerId: string
   name: string
   balance: number
+  debt: number          // outstanding active-loan debt (≥ 0)
+  netWorth: number      // balance − debt
   potential: number
   movement: 'up' | 'down' | 'same' | null
+}
+
+// Summary of the caller's own active loan, surfaced for the Pinsino hub.
+export interface ActiveLoanSummary {
+  loanId: string
+  productName: string
+  outstanding: number
 }
 
 // Collapse bet → legs → selections → markets into a flat row. A single O/U bet
@@ -217,6 +226,9 @@ export function usePinsinoData(playerId: string | null) {
   const [currentSeasonId, setCurrentSeasonId] = useState<string | null>(null)
   // Set of market ids the current player has already placed a bet on
   const [myBetMarketIds, setMyBetMarketIds] = useState<Set<string>>(new Set())
+  // Caller's own loan figures (net-worth context near the balance card)
+  const [debt, setDebt] = useState(0)
+  const [activeLoan, setActiveLoan] = useState<ActiveLoanSummary | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -250,6 +262,8 @@ export function usePinsinoData(playerId: string | null) {
       // Season-wide ledger for the pin-balance scoreboard + settled bets history
       let seasonLedger: any[] = []
       let settledBetsData: any[] = []
+      // Per-player active-loan debt (sum of debt_ledger rows on active loans)
+      let seasonDebt: any[] = []
       if (seasonId) {
         fetches.push(
           pinLedger.listBySeasonForLeaderboard(seasonId).then(({ data }) => {
@@ -257,6 +271,19 @@ export function usePinsinoData(playerId: string | null) {
           }),
           bets.listSettledBySeason(seasonId).then(({ data }) => {
             settledBetsData = data ?? []
+          }),
+          debtLedger.listActiveBySeason(seasonId).then(({ data }) => {
+            seasonDebt = data ?? []
+          })
+        )
+      }
+
+      // Caller's own active loan (for the net-worth context on the hub)
+      let myLoansData: any[] = []
+      if (playerId) {
+        fetches.push(
+          loans.listByPlayer(playerId).then(({ data }) => {
+            myLoansData = data ?? []
           })
         )
       }
@@ -322,6 +349,13 @@ export function usePinsinoData(playerId: string | null) {
         }
       }
 
+      // Per-player active-loan debt (sum of debt_ledger amounts on active loans).
+      const debtByPlayer: Record<string, number> = {}
+      for (const d of seasonDebt) {
+        if (!d.player_id) continue
+        debtByPlayer[d.player_id] = (debtByPlayer[d.player_id] ?? 0) + d.amount
+      }
+
       const activePlayers = Object.values(byPlayer).filter(p => p.isActive)
 
       // Prior-week ranking (by balance before last week's results posted). Skip it
@@ -338,19 +372,39 @@ export function usePinsinoData(playerId: string | null) {
       }
 
       const board = activePlayers
-        .map(({ playerId, name, balance }) => ({
-          playerId,
-          name,
-          balance,
-          potential: balance + (pendingByPlayer[playerId] ?? 0),
-        }))
-        .sort((a, b) => b.potential - a.potential)
+        .map(({ playerId, name, balance }) => {
+          const debt = debtByPlayer[playerId] ?? 0
+          return {
+            playerId,
+            name,
+            balance,
+            debt,
+            netWorth: balance - debt,
+            potential: balance + (pendingByPlayer[playerId] ?? 0),
+          }
+        })
+        .sort((a, b) => b.netWorth - a.netWorth)
         .map((p, i) => {
           const prev = priorRank.get(p.playerId)
           const movement: 'up' | 'down' | 'same' | null =
             prev === undefined ? null : i < prev ? 'up' : i > prev ? 'down' : 'same'
           return { ...p, movement }
         })
+
+      // Caller's own loan figures. Outstanding is the per-player active-loan debt
+      // already summed for the leaderboard; the active loan row carries its product.
+      const myDebt = playerId ? (debtByPlayer[playerId] ?? 0) : 0
+      const myActiveLoan = myLoansData.find((l: any) => l.status === 'active')
+      setDebt(myDebt)
+      setActiveLoan(
+        myActiveLoan
+          ? {
+              loanId: myActiveLoan.id,
+              productName: myActiveLoan.loan_products?.display_name ?? '—',
+              outstanding: myDebt,
+            }
+          : null
+      )
 
       setOpenLines(marketsData.map(normalizeMarket))
       setWeekBets(weekBetViews)
@@ -368,5 +422,5 @@ export function usePinsinoData(playerId: string | null) {
 
   useEffect(() => { load() }, [load])
 
-  return { loading, balance, openLines, myBets, weekBets, settledBets, leaderboard, myBetMarketIds, currentWeekId, currentSeasonId, reload: load }
+  return { loading, balance, debt, netWorth: balance - debt, activeLoan, openLines, myBets, weekBets, settledBets, leaderboard, myBetMarketIds, currentWeekId, currentSeasonId, reload: load }
 }

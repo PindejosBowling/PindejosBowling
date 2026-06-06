@@ -41,6 +41,12 @@ export default function AdminEndSeasonModal({ visible, onClose }: Props) {
     if (!season) return
     setSaving(true)
     try {
+      // Pay down active loans (min(balance, debt)) before the season is marked
+      // ended, so final standings reflect post-settlement net worth. Abort on
+      // error — don't close a season with unsettled loans.
+      const { error: loanError } = await seasons.settleLoansForClose(season.id)
+      if (loanError) { showToast(loanError.message, 'error'); setSaving(false); return }
+
       const { error: seasonError } = await seasons.update(season.id, { is_active: false })
       if (seasonError) { showToast(seasonError.message, 'error'); setSaving(false); return }
 

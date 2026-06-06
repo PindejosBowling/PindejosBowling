@@ -435,6 +435,84 @@ export type Database = {
           },
         ]
       }
+      debt_ledger: {
+        Row: {
+          amount: number
+          created_at: string
+          description: string
+          id: string
+          loan_id: string
+          pin_ledger_id: string | null
+          player_id: string
+          season_id: string
+          type: string
+          updated_at: string
+          week_id: string | null
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          description: string
+          id?: string
+          loan_id: string
+          pin_ledger_id?: string | null
+          player_id: string
+          season_id: string
+          type: string
+          updated_at?: string
+          week_id?: string | null
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          description?: string
+          id?: string
+          loan_id?: string
+          pin_ledger_id?: string | null
+          player_id?: string
+          season_id?: string
+          type?: string
+          updated_at?: string
+          week_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "debt_ledger_loan_id_fkey"
+            columns: ["loan_id"]
+            isOneToOne: false
+            referencedRelation: "loans"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "debt_ledger_pin_ledger_id_fkey"
+            columns: ["pin_ledger_id"]
+            isOneToOne: false
+            referencedRelation: "pin_ledger"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "debt_ledger_player_id_fkey"
+            columns: ["player_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "debt_ledger_season_id_fkey"
+            columns: ["season_id"]
+            isOneToOne: false
+            referencedRelation: "seasons"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "debt_ledger_week_id_fkey"
+            columns: ["week_id"]
+            isOneToOne: false
+            referencedRelation: "weeks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       games: {
         Row: {
           created_at: string
@@ -477,11 +555,138 @@ export type Database = {
           },
         ]
       }
+      loan_products: {
+        Row: {
+          available_from: string | null
+          available_until: string | null
+          borrow_amount: number
+          created_at: string
+          description: string
+          display_name: string
+          garnishment_rate: number
+          id: string
+          is_active: boolean
+          max_uses: number | null
+          risk_level: string
+          season_id: string | null
+          sort_order: number
+          special_warning_text: string | null
+          updated_at: string
+          weekly_interest_rate: number
+        }
+        Insert: {
+          available_from?: string | null
+          available_until?: string | null
+          borrow_amount: number
+          created_at?: string
+          description: string
+          display_name: string
+          garnishment_rate: number
+          id?: string
+          is_active?: boolean
+          max_uses?: number | null
+          risk_level: string
+          season_id?: string | null
+          sort_order?: number
+          special_warning_text?: string | null
+          updated_at?: string
+          weekly_interest_rate: number
+        }
+        Update: {
+          available_from?: string | null
+          available_until?: string | null
+          borrow_amount?: number
+          created_at?: string
+          description?: string
+          display_name?: string
+          garnishment_rate?: number
+          id?: string
+          is_active?: boolean
+          max_uses?: number | null
+          risk_level?: string
+          season_id?: string | null
+          sort_order?: number
+          special_warning_text?: string | null
+          updated_at?: string
+          weekly_interest_rate?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "loan_products_season_id_fkey"
+            columns: ["season_id"]
+            isOneToOne: false
+            referencedRelation: "seasons"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      loans: {
+        Row: {
+          created_at: string
+          id: string
+          issued_at: string
+          loan_product_id: string
+          paid_off_at: string | null
+          player_id: string
+          season_closed_at: string | null
+          season_id: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          issued_at?: string
+          loan_product_id: string
+          paid_off_at?: string | null
+          player_id: string
+          season_closed_at?: string | null
+          season_id: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          issued_at?: string
+          loan_product_id?: string
+          paid_off_at?: string | null
+          player_id?: string
+          season_closed_at?: string | null
+          season_id?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "loans_loan_product_id_fkey"
+            columns: ["loan_product_id"]
+            isOneToOne: false
+            referencedRelation: "loan_products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "loans_player_id_fkey"
+            columns: ["player_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "loans_season_id_fkey"
+            columns: ["season_id"]
+            isOneToOne: false
+            referencedRelation: "seasons"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       pin_ledger: {
         Row: {
           amount: number
           bet_id: string | null
           created_at: string
+          debt_ledger_id: string | null
           description: string
           id: string
           is_house: boolean
@@ -495,6 +700,7 @@ export type Database = {
           amount: number
           bet_id?: string | null
           created_at?: string
+          debt_ledger_id?: string | null
           description: string
           id?: string
           is_house?: boolean
@@ -508,6 +714,7 @@ export type Database = {
           amount?: number
           bet_id?: string | null
           created_at?: string
+          debt_ledger_id?: string | null
           description?: string
           id?: string
           is_house?: boolean
@@ -523,6 +730,13 @@ export type Database = {
             columns: ["bet_id"]
             isOneToOne: false
             referencedRelation: "bets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pin_ledger_debt_ledger_id_fkey"
+            columns: ["debt_ledger_id"]
+            isOneToOne: false
+            referencedRelation: "debt_ledger"
             referencedColumns: ["id"]
           },
           {
@@ -915,18 +1129,28 @@ export type Database = {
     }
     Functions: {
       cancel_bet: { Args: { p_bet_id: string }; Returns: undefined }
+      cancel_loan: { Args: { p_loan_id: string }; Returns: undefined }
       custom_access_token: { Args: { event: Json }; Returns: Json }
       is_registered_player: { Args: { phone: string }; Returns: boolean }
       place_house_bet: {
         Args: { p_selection_ids: string[]; p_stake: number }
         Returns: string
       }
+      process_weekly_loans: { Args: { p_week_id: string }; Returns: undefined }
       remove_over_under_markets_for_game: {
         Args: { p_game_number: number; p_week_id: string }
         Returns: undefined
       }
+      repay_loan: {
+        Args: { p_amount: number; p_loan_id: string }
+        Returns: undefined
+      }
       settle_betting_for_week: {
         Args: { p_week_id: string }
+        Returns: undefined
+      }
+      settle_loans_for_season_close: {
+        Args: { p_season_id: string }
         Returns: undefined
       }
       settle_market: {
@@ -941,6 +1165,7 @@ export type Database = {
         Args: { p_extra_games?: number[]; p_week_id: string }
         Returns: undefined
       }
+      take_loan: { Args: { p_loan_product_id: string }; Returns: string }
     }
     Enums: {
       [_ in never]: never
