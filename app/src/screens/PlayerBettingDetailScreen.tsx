@@ -11,6 +11,8 @@ import ScreenHeader from '../components/ScreenHeader'
 import LoadingView from '../components/LoadingView'
 import ToggleGroup from '../components/ToggleGroup'
 import BetRow from '../components/BetRow'
+import LedgerRow from '../components/LedgerRow'
+import { resultBadge, betReturnText } from '../components/BetDetailModal'
 import { useRefresh } from '../hooks/useRefresh'
 import { usePlayerBettingDetailData, LedgerEntry } from '../hooks/usePlayerBettingDetailData'
 import { BetView } from '../hooks/useBettingData'
@@ -22,24 +24,6 @@ type PlayerBettingDetailRoute = RouteProp<
 type PlayerBettingDetailNav = NativeStackNavigationProp<BettingStackParamList>
 
 type DetailView = 'activity' | 'open' | 'settled'
-
-function resultBadge(status: string) {
-  if (status === 'push') return { label: 'PUSH', color: colors.muted }
-  if (status === 'won') return { label: 'WON', color: colors.success }
-  if (status === 'lost') return { label: 'LOST', color: colors.danger }
-  return null
-}
-
-function betReturnText(bet: BetView): string {
-  if (bet.status === 'push' || bet.status === 'void') return `+${bet.stake}`
-  if (bet.status === 'lost') return `-${bet.stake}`
-  return `+${bet.potentialPayout}`
-}
-
-function formatDate(dateStr: string): string {
-  const date = new Date(dateStr)
-  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-}
 
 export default function PlayerBettingDetailScreen() {
   const route = useRoute<PlayerBettingDetailRoute>()
@@ -203,21 +187,14 @@ export default function PlayerBettingDetailScreen() {
                 <View>
                   <Text style={styles.gameLabel}>BONUSES</Text>
                   <View style={styles.card}>
-                    {bonusEntries.map((entry, idx) => {
-                      const isLast = idx === bonusEntries.length - 1
-                      const isPositive = entry.amount > 0
-                      return (
-                        <View key={entry.id} style={[styles.ledgerRow, !isLast && styles.ledgerRowBorder]}>
-                          <View style={styles.ledgerInfo}>
-                            <Text style={styles.ledgerDescription}>{entry.description}</Text>
-                            <Text style={styles.ledgerDate}>{formatDate(entry.created_at)}</Text>
-                          </View>
-                          <Text style={[styles.ledgerAmount, { color: isPositive ? colors.success : colors.danger }]}>
-                            {isPositive ? '+' : ''}{entry.amount}
-                          </Text>
-                        </View>
-                      )
-                    })}
+                    {bonusEntries.map((entry, idx) => (
+                      <LedgerRow
+                        key={entry.id}
+                        entry={entry}
+                        perspective="player"
+                        isLast={idx === bonusEntries.length - 1}
+                      />
+                    ))}
                   </View>
                 </View>
               )}
@@ -227,21 +204,14 @@ export default function PlayerBettingDetailScreen() {
                   <View key={weekNum}>
                     <Text style={styles.gameLabel}>WEEK {weekNum}</Text>
                     <View style={styles.card}>
-                      {entries.map((entry, idx) => {
-                        const isLast = idx === entries.length - 1
-                        const isPositive = entry.amount > 0
-                        return (
-                          <View key={entry.id} style={[styles.ledgerRow, !isLast && styles.ledgerRowBorder]}>
-                            <View style={styles.ledgerInfo}>
-                              <Text style={styles.ledgerDescription}>{entry.description}</Text>
-                              <Text style={styles.ledgerDate}>{formatDate(entry.created_at)}</Text>
-                            </View>
-                            <Text style={[styles.ledgerAmount, { color: isPositive ? colors.success : colors.danger }]}>
-                              {isPositive ? '+' : ''}{entry.amount}
-                            </Text>
-                          </View>
-                        )
-                      })}
+                      {entries.map((entry, idx) => (
+                        <LedgerRow
+                          key={entry.id}
+                          entry={entry}
+                          perspective="player"
+                          isLast={idx === entries.length - 1}
+                        />
+                      ))}
                     </View>
                   </View>
                 )
@@ -271,7 +241,6 @@ export default function PlayerBettingDetailScreen() {
                           isLast={isLast}
                           badge={null}
                           betReturnText={betReturnText(bet)}
-                          isAdmin={false}
                         />
                       )
                     })}
@@ -319,7 +288,6 @@ export default function PlayerBettingDetailScreen() {
                               isLast={isLast}
                               badge={badge}
                               betReturnText={betReturnText(bet)}
-                              isAdmin={false}
                             />
                           )
                         })}
@@ -392,37 +360,6 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     marginBottom: 10,
     overflow: 'hidden',
-  },
-
-  ledgerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    justifyContent: 'space-between',
-  },
-  ledgerRowBorder: {
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  ledgerInfo: { flex: 1 },
-  ledgerDescription: {
-    fontFamily: fonts.barlowCondensed,
-    fontSize: 14,
-    color: colors.text,
-    letterSpacing: 0.3,
-  },
-  ledgerDate: {
-    fontFamily: fonts.barlow,
-    fontSize: 12,
-    color: colors.muted,
-    marginTop: 2,
-  },
-  ledgerAmount: {
-    fontFamily: fonts.barlowCondensed,
-    fontSize: 14,
-    letterSpacing: 0.5,
-    marginLeft: 10,
   },
 
   gameLabel: {

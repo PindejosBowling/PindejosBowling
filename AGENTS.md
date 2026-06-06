@@ -172,6 +172,7 @@ The client is configured via Expo environment variables that are set in `.env.lo
 | Method | Description |
 |---|---|
 | `listOpenOUByWeek(weekId)` | Open `over_under` markets for a week with subject name + `bet_selections(*)` (Place Bets) |
+| `setOUStatusByWeekGame(weekId, gameNumber, status)` | Admin per-game open/close — flips all `over_under` markets for a week's game number to `'open'`/`'closed'` (only toggles rows currently in the opposite status) |
 | `syncOUForWeek(weekId, extraGames?)` | RPC `sync_over_under_markets_for_week` — RSVP-driven create/refund of markets; `extraGames` adds schedule games (team-gen game 3) |
 | `settle(marketId, resultValue)` | RPC `settle_market` (admin) — settle one market against the subject's actual score |
 | `settleForWeek(weekId)` | RPC `settle_betting_for_week` (admin) — credit `score_credit` + settle all open markets on archive |
@@ -188,7 +189,8 @@ The client is configured via Expo environment variables that are set in `.env.lo
 ### `pinLedger`
 | Method | Description |
 |---|---|
-| `listByPlayerSeason(playerId, seasonId)` | All ledger entries for a player in a season — newest first. `SUM(amount)` = balance |
+| `listByPlayerSeason(playerId, seasonId)` | All ledger entries for a player in a season — newest first. `SUM(amount)` = balance. Embeds `weeks(week_number)` + the bet graph (`bets(*, players(name), <LEG_GRAPH>)`) off `bet_id` so a `bet_*` row can render full bet detail (see **Betting display components**) |
+| `listHouseBySeason(seasonId)` | House-side rows for a season (`is_house = true`) — the betting counterparty + bonus funder. Same `weeks` + bet-graph embed as above. Drives PinsinoAdminScreen |
 | `listBySeasonForLeaderboard(seasonId)` | Player entries (`is_house = false`) for a season with joined `players(name, is_active)` — for the pin-balance scoreboard |
 | `insert(data)` | Insert one or many entries (champion bonus). Betting transfers are written by the RPCs, not here |
 
@@ -273,7 +275,9 @@ Win/loss is determined by comparing **team totals** (all players on a team inclu
 | `usePlayerManagementData.ts` | `usePlayerManagementData` | — | PlayerManagementScreen |
 | `useRegistrationData.ts` | `useRegistrationData` | — | RegistrationScreen |
 | `useRefresh.ts` | `useRefresh(fn)` | — | All screens with pull-to-refresh |
-| `useBettingData.ts` | `useBettingData(playerId)` (+ `LineView`, `BetView` types) | — | BettingScreen — returns `{ balance, openLines, myBets, weekBets, settledBets, leaderboard, myBetMarketIds, currentWeekId, currentSeasonId }`. Normalizes the market/bet graph into flat `LineView` / `BetView`. (`weekBets` = all players' bets this week via `bets.listByWeek`; `settledBets` = settled bets this season via `bets.listSettledBySeason`; `leaderboard` = active players' season pin balances from the ledger, each with `potential` = balance + Σ(`potential_payout`) over still-pending bets; sorted high → low by `potential`) |
+| `useBettingData.ts` | `useBettingData(playerId)` (+ `LineView`, `BetView`, `LegView` types; `normalizeBet` compute fn) | `normalizeBet(raw)` — collapse a bet → legs → selections → markets graph into a flat `BetView` | BettingScreen — returns `{ balance, openLines, myBets, weekBets, settledBets, leaderboard, myBetMarketIds, currentWeekId, currentSeasonId }`. Normalizes the market/bet graph into flat `LineView` / `BetView`. (`weekBets` = all players' bets this week via `bets.listByWeek`; `settledBets` = settled bets this season via `bets.listSettledBySeason`; `leaderboard` = active players' season pin balances from the ledger, each with `potential` = balance + Σ(`potential_payout`) over still-pending bets; sorted high → low by `potential`) |
+| `usePlayerBettingDetailData.ts` | `usePlayerBettingDetailData(playerId)` (+ `LedgerEntry` type) | — | PlayerBettingDetailScreen — one player's betting record. Returns `{ balance, ledger, openBets, settledBets }`. `ledger` is `LedgerEntry[]` (each with `weekNumber` + a normalized `bet` for `bet_*` rows); `openBets`/`settledBets` are `BetView[]`. **`LedgerEntry` is the shared ledger-row type** imported by `useHouseBettingData` + both ledger screens |
+| `useHouseBettingData.ts` | `useHouseBettingData()` (+ `HouseSummary`, `WeekPnl`, `HouseStats` types) | — | PinsinoAdminScreen — the **house** side of the pin economy (`is_house` rows). Returns `{ balance, ledger, summary, weekPnl, exposure, stats, seasonNumber, weekBets, settledBets }` for the current season: `summary` = stakes/payouts/refunds/bonuses, `weekPnl` = per-week house net, `exposure` = Σ potential payout over this week's pending bets, `stats` = settled record + hold%, `weekBets`/`settledBets` = the normalized `BetView[]` (already fetched for exposure/stats) that feed the screen's `ActiveBetsView` / `SettledBetsView`. Reuses `LedgerEntry` / `normalizeBet` |
 
 > Stats hooks (`useStandingsData`, `usePastSeasonsData`, `usePastGamesData`, `useLeagueRecordsData`, `usePlayerDetailData`) build their `seasonList` from `seasons.list()` **filtered to started seasons** (`!registration_open`), so an in-registration season never appears as a stats filter or default. `useRegistrationData` keeps **all** seasons (registration UI needs them).
 
@@ -366,10 +370,17 @@ Central signed-URL cache for player profile pictures. `load()` fetches `players.
 | Standings | StandingsStackNavigator | `Standings` |
 | RSVP | RsvpScreen | `RSVP` |
 | This Week | MatchupsScreen | `Matchups` |
-| Betting | BettingScreen | `Betting` |
+| Pinsino | BettingStackNavigator | `Betting` |
 | More | MoreStackNavigator | `More` |
 
-> The **Betting** tab is a top-level bottom-tab screen (after This Week). It renders `AppHeader` (no back button) like the other tabs.
+> The **Pinsino** tab (route `Betting`, label "Pinsino", 🏦 icon) is a native stack navigator (after This Week). Its `BettingHome` screen renders `AppHeader` (no back button) like the other tabs.
+
+**Pinsino (Betting) tab** is a native stack navigator:
+
+| Route | Screen |
+|---|---|
+| `BettingHome` | BettingScreen — balance card + the four toggled betting views |
+| `PlayerBettingDetail` | PlayerBettingDetailScreen — one player's betting record; receives `{ playerId, name }` (opened by tapping a leaderboard row) |
 
 **Standings tab** is a native stack navigator:
 
@@ -393,8 +404,11 @@ Central signed-URL cache for player profile pictures. `load()` fetches `players.
 | `ProfilePictures` | ProfilePicturesScreen — admin uploads/deletes player profile photos on behalf of any player (admin only) |
 | `PastGames` | PastGamesScreen — browse historical week rosters and scores by season |
 | `Registration` | RegistrationScreen — per-season sign-ups; admins open/close registration, manage the roster, and delete an open season |
+| `PinsinoAdmin` | PinsinoAdminScreen — **admin-only** house ledger: Pincome Statement, Activity (house-side ledger rows), Weekly P&L, plus **Active Bets** and **Settled Bets** (the same `ActiveBetsView` / `SettledBetsView` surfaces the public Pinsino tab renders, but wired with admin settle/cancel actions) for the current season (the house side of the pin economy) |
 
-**Betting tab** (top-level, after This Week) — BettingScreen: balance card + four toggled views (horizontally-scrollable pills): **Leaderboard** (default; pin-balance scoreboard of active players, season balances summed from the ledger, Standings-style, with an "Upside" column = projected balance if all that player's still-pending bets win, sorted descending by that projection), **Place Bets** (open per-game over/under lines, bet placement modal, my bets history), **Active Bets** (league-wide summary of all players' *unsettled* bets this week, grouped by game; admins tap a bet to manually settle its line), and **Settled Bets** (all settled won/lost/push bets this season, grouped by week, newest first).
+**BettingHome views** — BettingScreen renders a balance card + four toggled views (horizontally-scrollable pills): **Leaderboard** (default; pin-balance scoreboard of active players, season balances summed from the ledger, Standings-style, with an "Upside" column = projected balance if all that player's still-pending bets win, sorted descending by that projection — **tap a row → `PlayerBettingDetail`**), **Place Bets** (open per-game over/under lines, single or parlay bet placement, my bets history), **Active Bets** (league-wide summary of all players' *unsettled* bets this week, grouped by game) and **Settled Bets** (all settled won/lost/push bets this season, grouped by week, newest first). The **Active/Settled views are read-only here for everyone** — they render the shared `ActiveBetsView` / `SettledBetsView` and any row tap just opens `BetDetailModal`. **Settling and cancelling live on PinsinoAdminScreen, not here** (see **Betting display components**).
+
+**PlayerBettingDetailScreen** (`Betting` stack) and **PinsinoAdminScreen** (`More` stack) are the two opposite sides of one player↔house ledger. Each has an **Activity** view built from `LedgerRow` (player `perspective` vs. house `perspective`); PlayerBettingDetail adds Open / Settled Bets tabs (`BetRow`), PinsinoAdmin adds Statement / Weekly P&L **and the admin-actionable Active / Settled Bets surfaces** (tap an active single bet → `SettleBetModal`; ✕ on any bet → cancel via `cancel_bet`).
 
 **Cross-tab navigation to PlayerDetail** (e.g. from More tab):
 ```tsx
@@ -425,6 +439,21 @@ Central signed-URL cache for player profile pictures. `load()` fetches `players.
 | `AdminEndSeasonModal` | Confirm dialog — records season champions and marks the current season ended (`is_active = false`); reads the current season via `seasons.getCurrent()` |
 | `AdminOpenRegistrationModal` | Create the next season (`seasons.insert` with `registration_open = true`) and open its registration window; next number derived from `seasons.getLatest()`; credits +100 pin champion bonus to prior-season champions |
 | `AdminGenerateTeamsModal` | Generate balanced teams from RSVP list, preview swaps, write teams/slots/schedule to Supabase. **Not the source of base O/U markets** (those come from RSVP) — after gen it calls `sync_over_under_markets_for_week(weekId, scheduleGames)`, which adds markets for any schedule game number not yet present (game 3 when `numTeams ∈ {3,5}`), idempotently |
+
+### Betting display components
+
+These render the betting/pin-economy UI and are reused across the Betting tab, the Pinsino Admin screen, and the two ledger screens. They all consume the flat `BetView` (from `useBettingData.ts`) so a bet looks identical everywhere it appears. **`ActiveBetsView` and `SettledBetsView` are the shared "list of bets" surfaces** — both BettingScreen (read-only) and PinsinoAdminScreen (admin-actionable) render the same component; the *only* difference is which callbacks they pass.
+
+| Component | Purpose |
+|---|---|
+| `ActiveBetsView` | Shared **Active Bets** surface (`{ bets, hint?, onBetPress?, onParlayPress?, onCancelBet? }`). Renders a wager summary (BETS / PINS WAGERED / BETTORS) + this week's pending bets grouped by game (parlays bucketed on their own), each via `BetRow`. Self-contained grouping. Callbacks are optional: BettingScreen passes `onBetPress`/`onParlayPress` = open `BetDetailModal` (read-only); PinsinoAdmin passes `onBetPress` = open `SettleBetModal`, `onParlayPress` = details, `onCancelBet` = confirm-cancel, plus a `hint` |
+| `SettledBetsView` | Shared **Settled Bets** surface (`{ bets, onBetPress?, onCancelBet? }`). This season's settled bets grouped by week (newest first), each via `BetRow`. BettingScreen passes `onBetPress` = details; PinsinoAdmin adds `onCancelBet` = confirm-cancel |
+| `SettleBetModal` | Admin single-market settlement overlay (`{ bet, onClose, onSettled }`). Self-contained: takes an actual-score input, calls `settle_market` via `betMarkets.settle(bet.marketId, score)`, toasts, and calls `onSettled` (reload). **Mount conditionally** (`{settleBet && <SettleBetModal …/>}`) so the input resets between opens. Used only by PinsinoAdminScreen |
+| `BetRow` | One bet row in a betting list (`{ bet, isLast, badge, betReturnText, onPress?, onCancelPress? }`). Renders a single bet or parlay — `subject · PICK line · G#`, or one line per leg — with its status badge (or `PENDING`) and signed return. **Presentational**: the row is tappable when given an `onPress` and shows an inline cancel (✕) when given an `onCancelPress` — callers gate those (read-only surfaces omit them; admin surfaces pass them). Used by `ActiveBetsView` / `SettledBetsView` and in BettingScreen (My Bets) / PlayerBettingDetailScreen (Open / Settled Bets) |
+| `LedgerRow` | One `pin_ledger` activity row (`{ entry, perspective, isLast }`) — the **single shared renderer for both ledger surfaces**. Shows the bet specifics when the entry carries an associated `bet` (`subject · PICK line · G#`, or per-leg for parlays), else the raw `description`; plus an **action label** derived from `(type, perspective)` (`BET PLACED`/`BET TAKEN`, `WINNING PAYOUT`, `PUSH · REFUND`, `GAME SCORE`, `BONUS`), the bettor name on the house side, the date, and the signed amount (gold for bonuses). `perspective` = `'player'` \| `'house'`. **Bet-backed rows are tappable** and open the shared `BetDetailModal`; mint rows (score / bonus) render as static `View`s. Used in PlayerBettingDetailScreen (Activity) + PinsinoAdminScreen (Activity) |
+| `BetDetailModal` | Shared **"Bet Details" overlay** (`{ bet: BetView \| null, onClose }`; renders `null` when `bet` is null). The canonical single-bet breakdown: bettor / season / week, a **consolidated leg view for 1+ legs** (a single bet is just one leg — labeled `SELECTION`, parlays `LEGS (N)`), then wager / status / return. Each leg shows `subject · PICK line · G#` and, once settled, a ` -- ` divider followed by the leg's actual score **color-coded to its win/loss/push outcome** (status word is not repeated — the bet `status` row reports it once). Also **exports the `resultBadge(status)` and `betReturnText(bet)` helpers** (status→badge color/label; signed return text) reused by BetRow callers. Opened from `BetRow` taps (BettingScreen + PinsinoAdminScreen Active/Settled) and `LedgerRow` taps (both ledger Activity tabs) |
+
+> **Ledger Activity is bet-aware.** `pinLedger.listByPlayerSeason` / `listHouseBySeason` embed the bet graph (`bets(*, players(name), <LEG_GRAPH>)`) off `pin_ledger.bet_id`; the hooks (`usePlayerBettingDetailData`, `useHouseBettingData`) normalize it onto each `LedgerEntry.bet` via `normalizeBet`, so a `bet_*` ledger row can render the same bet detail (and open the same overlay) as the Bets tabs. `score_credit` / `bonus` rows have no `bet_id` → `bet` is `null`.
 
 ---
 
@@ -524,7 +553,9 @@ app/
 ├── src/
 │   ├── theme.ts                 # colors, fonts, radius
 │   ├── hooks/
-│   │   ├── useBettingData.ts    # Balance + open lines + my bets for BettingScreen
+│   │   ├── useBettingData.ts    # Balance + open lines + my bets for BettingScreen (+ normalizeBet, BetView)
+│   │   ├── usePlayerBettingDetailData.ts  # One player's balance/ledger/bets (+ shared LedgerEntry type)
+│   │   ├── useHouseBettingData.ts  # House-side ledger + summary/P&L/stats for PinsinoAdminScreen
 │   │   ├── useChemistryData.ts  # Chemistry data + computeChemistryFromSupabase
 │   │   ├── useH2HData.ts        # H2H data + computeH2HFromSupabase
 │   │   ├── useLeagueRecordsData.ts  # League records + computeLeagueRecordsFromSupabase
@@ -539,8 +570,9 @@ app/
 │   ├── navigation/
 │   │   ├── RootNavigator.tsx    # Bottom tab navigator
 │   │   ├── StandingsStackNavigator.tsx  # Stack: StandingsList → PlayerDetail
-│   │   ├── MoreStackNavigator.tsx       # Stack: MoreHome + tools
-│   │   └── types.ts             # MoreStackParamList, StandingsStackParamList
+│   │   ├── BettingStackNavigator.tsx    # Stack: BettingHome → PlayerBettingDetail
+│   │   ├── MoreStackNavigator.tsx       # Stack: MoreHome + tools (incl. PinsinoAdmin)
+│   │   └── types.ts             # MoreStackParamList, StandingsStackParamList, BettingStackParamList
 │   ├── stores/
 │   │   ├── pendingStore.ts      # Optimistic edit buffer (scores, RSVPs, team gen state)
 │   │   ├── uiStore.ts           # Ephemeral UI state + toast queue
@@ -563,6 +595,12 @@ app/
 │   │   ├── ToggleGroup.tsx
 │   │   ├── PlayerScoreRow.tsx
 │   │   ├── OddsBlock.tsx
+│   │   ├── BetRow.tsx            # One bet/parlay row in betting lists (see Betting display components)
+│   │   ├── ActiveBetsView.tsx    # Shared Active Bets surface (read-only on Pinsino, actionable on PinsinoAdmin)
+│   │   ├── SettledBetsView.tsx   # Shared Settled Bets surface (read-only on Pinsino, cancellable on PinsinoAdmin)
+│   │   ├── SettleBetModal.tsx    # Admin single-market settlement overlay (settle_market RPC)
+│   │   ├── LedgerRow.tsx         # One pin_ledger activity row, shared by both ledger screens
+│   │   ├── BetDetailModal.tsx    # Shared "Bet Details" overlay + resultBadge/betReturnText helpers
 │   │   ├── LoadingView.tsx
 │   │   ├── HistoricalTeamBlock.tsx
 │   │   ├── ProfileMenuModal.tsx
@@ -586,7 +624,9 @@ app/
 │       ├── HeadToHeadScreen.tsx     # 1v1 player comparison
 │       ├── ChemistryScreen.tsx      # Pair/trio win-rate analysis
 │       ├── PastSeasonsScreen.tsx    # Past seasons — season-by-season summary
-│       ├── BettingScreen.tsx        # Balance, open O/U lines, bet placement, my bets
+│       ├── BettingScreen.tsx        # Balance, leaderboard, open O/U lines, bet placement, active/settled bets
+│       ├── PlayerBettingDetailScreen.tsx  # One player's betting record: Activity / Open / Settled
+│       ├── PinsinoAdminScreen.tsx   # Admin: house ledger — Statement / Activity / Weekly P&L / Active Bets / Settled Bets (with settle + cancel actions)
 │       ├── TrashBoardScreen.tsx     # Fun message board
 │       └── PlayoffsScreen.tsx       # Admin: playoffs bracket
 ```

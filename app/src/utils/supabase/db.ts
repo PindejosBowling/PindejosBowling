@@ -433,7 +433,7 @@ export const pinLedger = {
   listByPlayerSeason: (playerId: string, seasonId: string) =>
     supabase
       .from('pin_ledger')
-      .select('*, weeks(week_number)')
+      .select('*, weeks(week_number), bets(*, players(name), ' + LEG_GRAPH + ')')
       .eq('player_id', playerId)
       .eq('season_id', seasonId)
       .order('created_at', { ascending: false }),
@@ -442,7 +442,7 @@ export const pinLedger = {
   listHouseBySeason: (seasonId: string) =>
     supabase
       .from('pin_ledger')
-      .select('*, weeks(week_number)')
+      .select('*, weeks(week_number), bets(*, players(name), ' + LEG_GRAPH + ')')
       .eq('season_id', seasonId)
       .eq('is_house', true)
       .order('created_at', { ascending: false }),

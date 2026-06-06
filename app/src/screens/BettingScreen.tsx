@@ -11,7 +11,6 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
-  Alert,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useNavigation } from '@react-navigation/native'
@@ -22,11 +21,14 @@ import LoadingView from '../components/LoadingView'
 import ToggleGroup from '../components/ToggleGroup'
 import Toast from '../components/Toast'
 import BetRow from '../components/BetRow'
+import ActiveBetsView from '../components/ActiveBetsView'
+import SettledBetsView from '../components/SettledBetsView'
+import BetDetailModal, { resultBadge, betReturnText } from '../components/BetDetailModal'
 import { useBettingData, type BetView, type LineView } from '../hooks/useBettingData'
 import { useRefresh } from '../hooks/useRefresh'
 import { useAuthStore } from '../stores/authStore'
 import { useUiStore } from '../stores/uiStore'
-import { betMarkets, bets } from '../utils/supabase/db'
+import { bets } from '../utils/supabase/db'
 import { BettingStackParamList } from '../navigation/types'
 
 type BettingNav = NativeStackNavigationProp<BettingStackParamList>
@@ -65,34 +67,8 @@ interface BetModalState {
   wager: string
 }
 
-interface SettleModalState {
-  marketId: string
-  subjectName: string
-  gameNumber: number | null
-  line: number
-  actual: string
-}
-
-// Badge from the bet's own status (the target model resolves outcome per bet).
-function resultBadge(status: string) {
-  if (status === 'push') return { label: 'PUSH', color: colors.muted }
-  if (status === 'won') return { label: 'WON', color: colors.success }
-  if (status === 'lost') return { label: 'LOST', color: colors.danger }
-  return null
-}
-
-// Total amount the player gets back, signed for display.
-// potential_payout = total returned on a win incl. the stake. A push refunds the
-// stake; a loss forfeits it; a pending bet shows its projected full return.
-function betReturnText(bet: BetView): string {
-  if (bet.status === 'push' || bet.status === 'void') return `+${bet.stake}`
-  if (bet.status === 'lost') return `-${bet.stake}`
-  return `+${bet.potentialPayout}` // won or still pending → full return
-}
-
 export default function BettingScreen() {
   const playerId = useAuthStore(s => s.playerId)
-  const isAdmin = useAuthStore(s => s.role) === 'admin'
   const { showToast } = useUiStore()
   const navigation = useNavigation<BettingNav>()
 
@@ -106,51 +82,12 @@ export default function BettingScreen() {
   const [parlayWager, setParlayWager] = useState('')
   const [modal, setModal] = useState<BetModalState | null>(null)
   const [placing, setPlacing] = useState(false)
-  const [settleModal, setSettleModal] = useState<SettleModalState | null>(null)
-  const [settling, setSettling] = useState(false)
   const [detailModal, setDetailModal] = useState<BetView | null>(null)
 
   // Active = this week's still-pending bets (settled ones move to Settled Bets).
+  // The public tab is read-only: Active/Settled rows just open the details overlay
+  // (settling/cancelling lives on the Pinsino Admin screen).
   const activeBets = useMemo(() => weekBets.filter(b => b.status === 'pending'), [weekBets])
-
-  // Parlays span multiple games, so they get their own group; single bets bucket
-  // by their one game number.
-  const activeParlays = useMemo(() => activeBets.filter(b => b.legCount > 1), [activeBets])
-
-  // Group all of this week's active single bets by game number (for the action view)
-  const weekBetsByGame = useMemo(() => {
-    const map: Record<number, BetView[]> = {}
-    for (const bet of activeBets) {
-      if (bet.legCount > 1 || bet.gameNumber == null) continue
-      if (!map[bet.gameNumber]) map[bet.gameNumber] = []
-      map[bet.gameNumber].push(bet)
-    }
-    return map
-  }, [activeBets])
-
-  const actionGameNumbers = useMemo(
-    () => Object.keys(weekBetsByGame).map(Number).sort((a, b) => a - b),
-    [weekBetsByGame],
-  )
-
-  const totalWagered = useMemo(() => activeBets.reduce((s, b) => s + (b.stake ?? 0), 0), [activeBets])
-  const uniqueBettors = useMemo(() => new Set(activeBets.map(b => b.playerId)).size, [activeBets])
-
-  // Group settled bets by week number (newest week first)
-  const settledByWeek = useMemo(() => {
-    const map: Record<number, BetView[]> = {}
-    for (const bet of settledBets) {
-      if (bet.weekNumber == null) continue
-      if (!map[bet.weekNumber]) map[bet.weekNumber] = []
-      map[bet.weekNumber].push(bet)
-    }
-    return map
-  }, [settledBets])
-
-  const settledWeekNumbers = useMemo(
-    () => Object.keys(settledByWeek).map(Number).sort((a, b) => b - a),
-    [settledByWeek],
-  )
 
   // Group open lines by game_number
   const linesByGame = useMemo(() => {
@@ -268,67 +205,7 @@ export default function BettingScreen() {
     }
   }
 
-  // Total undo, server-side (cancel_bet RPC): removes the bet's ledger pair(s) and
-  // the bet, and re-opens the market if it was the last bet on a settled one.
-  async function cancelBet(bet: BetView) {
-    const { error } = await bets.cancel(bet.id)
-    if (error) { showToast(error.message, 'error'); return }
-    showToast('Bet canceled', 'success')
-    await reload()
-  }
-
-  function confirmCancelBet(bet: BetView) {
-    Alert.alert(
-      'Cancel this bet?',
-      `Remove ${bet.bettorName}'s ${bet.pick?.toUpperCase()} ${bet.line.toFixed(1)} bet on ${bet.subjectName} (Game ${bet.gameNumber}). This fully reverses the bet's pin effect — restoring the balance to before it was placed — and cannot be undone.`,
-      [
-        { text: 'Keep Bet', style: 'cancel' },
-        { text: 'Cancel Bet', style: 'destructive', onPress: () => cancelBet(bet) },
-      ],
-    )
-  }
-
-  function openSettleModal(bet: BetView) {
-    setSettleModal({
-      marketId: bet.marketId,
-      subjectName: bet.subjectName,
-      gameNumber: bet.gameNumber,
-      line: bet.line,
-      actual: '',
-    })
-  }
-
-  // Manual single-market settlement (settle_market RPC) — sets the result from the
-  // actual score and pays out every bet on the market in one transaction.
-  async function settleBet() {
-    if (!settleModal) return
-    const actual = parseInt(settleModal.actual, 10)
-    if (isNaN(actual) || actual < 0 || actual > 300) {
-      showToast('Enter a valid score (0–300)', 'error'); return
-    }
-
-    setSettling(true)
-    try {
-      const { error } = await betMarkets.settle(settleModal.marketId, actual)
-      if (error) { showToast(error.message, 'error'); return }
-      showToast('Bet settled', 'success')
-      setSettleModal(null)
-      await reload()
-    } catch {
-      showToast('Failed to settle bet', 'error')
-    } finally {
-      setSettling(false)
-    }
-  }
-
   const maxWager = balance
-  const settlePreview = settleModal && settleModal.actual !== ''
-    ? (() => {
-        const a = parseInt(settleModal.actual, 10)
-        if (isNaN(a)) return null
-        return a > settleModal.line ? 'OVER' : a < settleModal.line ? 'UNDER' : 'PUSH'
-      })()
-    : null
 
   if (loading) return <LoadingView label="Loading…" />
 
@@ -396,79 +273,13 @@ export default function BettingScreen() {
           )
         )}
 
-        {/* ── Active Bets ─────────────────────────────────────── */}
+        {/* ── Active Bets (read-only; tap a row for details) ──── */}
         {view === 'action' && (
-          actionGameNumbers.length > 0 || activeParlays.length > 0 ? (
-            <>
-              <View style={styles.summaryCard}>
-                <View style={styles.summaryItem}>
-                  <Text style={styles.summaryValue}>{activeBets.length}</Text>
-                  <Text style={styles.summaryLabel}>BETS</Text>
-                </View>
-                <View style={styles.summaryDivider} />
-                <View style={styles.summaryItem}>
-                  <Text style={styles.summaryValue}>{totalWagered.toLocaleString()}</Text>
-                  <Text style={styles.summaryLabel}>PINS WAGERED</Text>
-                </View>
-                <View style={styles.summaryDivider} />
-                <View style={styles.summaryItem}>
-                  <Text style={styles.summaryValue}>{uniqueBettors}</Text>
-                  <Text style={styles.summaryLabel}>BETTORS</Text>
-                </View>
-              </View>
-
-              {isAdmin && <Text style={styles.adminHint}>Tap a bet to settle it</Text>}
-
-              {actionGameNumbers.map(gameNum => (
-                <View key={gameNum}>
-                  <Text style={styles.gameLabel}>GAME {gameNum}</Text>
-                  <View style={styles.card}>
-                    {weekBetsByGame[gameNum].map((bet, idx) => {
-                      const badge = resultBadge(bet.status)
-                      const isLast = idx === weekBetsByGame[gameNum].length - 1
-                      return (
-                        <BetRow
-                          key={bet.id}
-                          bet={bet}
-                          isLast={isLast}
-                          badge={badge}
-                          betReturnText={betReturnText(bet)}
-                          isAdmin={isAdmin}
-                          onPress={() => isAdmin ? openSettleModal(bet) : setDetailModal(bet)}
-                          onCancelPress={() => confirmCancelBet(bet)}
-                        />
-                      )
-                    })}
-                  </View>
-                </View>
-              ))}
-
-              {activeParlays.length > 0 && (
-                <View>
-                  <Text style={styles.gameLabel}>PARLAYS</Text>
-                  <View style={styles.card}>
-                    {activeParlays.map((bet, idx) => (
-                      <BetRow
-                        key={bet.id}
-                        bet={bet}
-                        isLast={idx === activeParlays.length - 1}
-                        badge={resultBadge(bet.status)}
-                        betReturnText={betReturnText(bet)}
-                        isAdmin={isAdmin}
-                        // Parlays span markets — no single-market settle; tap shows details.
-                        onPress={() => setDetailModal(bet)}
-                        onCancelPress={() => confirmCancelBet(bet)}
-                      />
-                    ))}
-                  </View>
-                </View>
-              )}
-            </>
-          ) : (
-            <View style={styles.emptyCard}>
-              <Text style={styles.emptyText}>No bets placed yet this week</Text>
-            </View>
-          )
+          <ActiveBetsView
+            bets={activeBets}
+            onBetPress={setDetailModal}
+            onParlayPress={setDetailModal}
+          />
         )}
 
         {/* ── Place Bets ──────────────────────────────────────── */}
@@ -502,7 +313,6 @@ export default function BettingScreen() {
                     isLast={isLast}
                     badge={badge}
                     betReturnText={betReturnText(bet)}
-                    isAdmin={isAdmin}
                     onPress={() => setDetailModal(bet)}
                   />
                 )
@@ -602,37 +412,9 @@ export default function BettingScreen() {
         )}
         </>}
 
-        {/* ── Settled Bets ────────────────────────────────────── */}
+        {/* ── Settled Bets (read-only; tap a row for details) ─── */}
         {view === 'settled' && (
-          settledWeekNumbers.length > 0 ? (
-            settledWeekNumbers.map(wk => (
-              <View key={wk}>
-                <Text style={styles.gameLabel}>WEEK {wk}</Text>
-                <View style={styles.card}>
-                  {settledByWeek[wk].map((bet, idx) => {
-                    const badge = resultBadge(bet.status)
-                    const isLast = idx === settledByWeek[wk].length - 1
-                    return (
-                      <BetRow
-                        key={bet.id}
-                        bet={bet}
-                        isLast={isLast}
-                        badge={badge}
-                        betReturnText={betReturnText(bet)}
-                        isAdmin={isAdmin}
-                        onPress={() => setDetailModal(bet)}
-                        onCancelPress={() => confirmCancelBet(bet)}
-                      />
-                    )
-                  })}
-                </View>
-              </View>
-            ))
-          ) : (
-            <View style={styles.emptyCard}>
-              <Text style={styles.emptyText}>No settled bets yet</Text>
-            </View>
-          )
+          <SettledBetsView bets={settledBets} onBetPress={setDetailModal} />
         )}
       </ScrollView>
 
@@ -800,157 +582,8 @@ export default function BettingScreen() {
         </Modal>
       )}
 
-      {/* Admin: settle bet modal */}
-      {settleModal && (
-        <Modal visible transparent animationType="slide" onRequestClose={() => !settling && setSettleModal(null)}>
-          <KeyboardAvoidingView
-            style={styles.modalBackdrop}
-            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          >
-            <TouchableOpacity
-              style={StyleSheet.absoluteFill}
-              activeOpacity={1}
-              onPress={() => !settling && setSettleModal(null)}
-            />
-            <View style={styles.modalSheet}>
-              <Text style={styles.modalTitle}>
-                Settle — {settleModal.subjectName} Game {settleModal.gameNumber}
-              </Text>
-              <Text style={styles.modalLine}>LINE: {settleModal.line.toFixed(1)}</Text>
-
-              <Text style={styles.wagerLabel}>ACTUAL SCORE</Text>
-              <TextInput
-                style={styles.wagerInput}
-                value={settleModal.actual}
-                onChangeText={v => setSettleModal(m => m ? { ...m, actual: v.replace(/[^0-9]/g, '') } : m)}
-                keyboardType="number-pad"
-                placeholder="0 – 300"
-                placeholderTextColor={colors.muted2}
-                maxLength={3}
-              />
-              <Text style={styles.wagerHint}>
-                {settlePreview
-                  ? `Result: ${settlePreview} — resolves all bets on this line`
-                  : `${settleModal.subjectName}'s actual score for game ${settleModal.gameNumber}`}
-              </Text>
-
-              <TouchableOpacity
-                style={[styles.placeBtn, settling && styles.placeBtnDisabled]}
-                onPress={settleBet}
-                disabled={settling}
-                activeOpacity={0.7}
-              >
-                {settling
-                  ? <ActivityIndicator size="small" color={colors.bg} />
-                  : <Text style={styles.placeBtnText}>Settle Bet</Text>}
-              </TouchableOpacity>
-            </View>
-          </KeyboardAvoidingView>
-          <Toast />
-        </Modal>
-      )}
-
       {/* Bet details modal */}
-      {detailModal && (
-        <Modal visible transparent animationType="fade" onRequestClose={() => setDetailModal(null)}>
-          <TouchableOpacity
-            style={styles.detailModalBackdrop}
-            activeOpacity={1}
-            onPress={() => setDetailModal(null)}
-          />
-          <View style={styles.detailModalContainer}>
-            <View style={styles.detailModalContent}>
-              <View style={styles.detailModalHeader}>
-                <Text style={styles.detailModalTitle}>Bet Details</Text>
-                <TouchableOpacity onPress={() => setDetailModal(null)}>
-                  <Text style={styles.detailModalClose}>✕</Text>
-                </TouchableOpacity>
-              </View>
-
-              <View style={styles.detailRow}>
-                <Text style={styles.detailLabel}>BETTOR</Text>
-                <Text style={styles.detailValue}>{detailModal.bettorName}</Text>
-              </View>
-
-              {detailModal.seasonNumber != null && (
-                <View style={styles.detailRow}>
-                  <Text style={styles.detailLabel}>SEASON</Text>
-                  <Text style={styles.detailValue}>{detailModal.seasonNumber}</Text>
-                </View>
-              )}
-
-              {detailModal.weekNumber != null && (
-                <View style={styles.detailRow}>
-                  <Text style={styles.detailLabel}>WEEK</Text>
-                  <Text style={styles.detailValue}>{detailModal.weekNumber}</Text>
-                </View>
-              )}
-
-              {detailModal.legCount === 1 && detailModal.gameNumber != null && (
-                <View style={styles.detailRow}>
-                  <Text style={styles.detailLabel}>GAME</Text>
-                  <Text style={styles.detailValue}>{detailModal.gameNumber}</Text>
-                </View>
-              )}
-
-              {detailModal.legCount > 1 ? (
-                <View style={styles.detailRow}>
-                  <Text style={styles.detailLabel}>LEGS ({detailModal.legCount})</Text>
-                  {detailModal.legs.map((leg, i) => (
-                    <Text key={i} style={[styles.detailValue, { marginTop: i === 0 ? 0 : 4 }]}>
-                      {leg.subjectName} · {leg.pick?.toUpperCase()} {leg.line.toFixed(1)}
-                      {leg.gameNumber != null ? ` · G${leg.gameNumber}` : ''}
-                      {leg.actualScore != null ? ` (${leg.actualScore})` : ''}
-                      {leg.result ? ` — ${leg.result.toUpperCase()}` : ''}
-                    </Text>
-                  ))}
-                </View>
-              ) : (
-                <>
-                  <View style={styles.detailRow}>
-                    <Text style={styles.detailLabel}>SUBJECT</Text>
-                    <Text style={styles.detailValue}>{detailModal.subjectName}</Text>
-                  </View>
-
-                  <View style={styles.detailRow}>
-                    <Text style={styles.detailLabel}>PICK</Text>
-                    <Text style={styles.detailValue}>{detailModal.pick?.toUpperCase()}</Text>
-                  </View>
-
-                  <View style={styles.detailRow}>
-                    <Text style={styles.detailLabel}>LINE</Text>
-                    <Text style={styles.detailValue}>{detailModal.line.toFixed(1)}</Text>
-                  </View>
-                </>
-              )}
-
-              <View style={styles.detailRow}>
-                <Text style={styles.detailLabel}>WAGER</Text>
-                <Text style={styles.detailValue}>{detailModal.stake} pins</Text>
-              </View>
-
-              {detailModal.legCount === 1 && detailModal.actualScore != null && (
-                <View style={styles.detailRow}>
-                  <Text style={styles.detailLabel}>ACTUAL SCORE</Text>
-                  <Text style={styles.detailValue}>{detailModal.actualScore}</Text>
-                </View>
-              )}
-
-              <View style={styles.detailRow}>
-                <Text style={styles.detailLabel}>STATUS</Text>
-                <Text style={[styles.detailValue, { color: resultBadge(detailModal.status)?.color || colors.muted }]}>
-                  {resultBadge(detailModal.status)?.label || 'PENDING'}
-                </Text>
-              </View>
-
-              <View style={styles.detailRow}>
-                <Text style={styles.detailLabel}>RETURN</Text>
-                <Text style={styles.detailValue}>{betReturnText(detailModal)} pins</Text>
-              </View>
-            </View>
-          </View>
-        </Modal>
-      )}
+      <BetDetailModal bet={detailModal} onClose={() => setDetailModal(null)} />
     </SafeAreaView>
   )
 }
@@ -1058,32 +691,6 @@ const styles = StyleSheet.create({
   moveDown: { fontSize: 11, color: colors.danger },
 
   viewToggle: { marginBottom: 20 },
-
-  summaryCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.surface,
-    borderRadius: radius.cardMd,
-    borderWidth: 1,
-    borderColor: colors.border,
-    paddingVertical: 16,
-    marginBottom: 16,
-  },
-  summaryItem: { flex: 1, alignItems: 'center' },
-  summaryValue: {
-    fontFamily: fonts.barlowCondensedHeavy,
-    fontSize: 26,
-    color: colors.accent,
-    lineHeight: 28,
-  },
-  summaryLabel: {
-    fontFamily: fonts.barlowCondensed,
-    fontSize: 10,
-    letterSpacing: 1,
-    color: colors.muted,
-    marginTop: 2,
-  },
-  summaryDivider: { width: 1, alignSelf: 'stretch', backgroundColor: colors.border },
 
   sectionHeader: {
     fontFamily: fonts.barlowCondensed,
@@ -1363,54 +970,4 @@ const styles = StyleSheet.create({
   },
 
   // Bet details modal
-  detailModalBackdrop: {
-    ...StyleSheet.absoluteFill,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-  },
-  detailModalContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-  },
-  detailModalContent: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.card,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 24,
-    width: '100%',
-  },
-  detailModalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 24,
-  },
-  detailModalTitle: {
-    fontFamily: fonts.barlowCondensed,
-    fontSize: 20,
-    fontWeight: '700',
-    color: colors.text,
-  },
-  detailModalClose: {
-    fontFamily: fonts.barlowCondensed,
-    fontSize: 20,
-    color: colors.muted,
-  },
-  detailRow: {
-    marginBottom: 16,
-  },
-  detailLabel: {
-    fontFamily: fonts.barlowCondensed,
-    fontSize: 11,
-    letterSpacing: 1.5,
-    color: colors.muted,
-    marginBottom: 6,
-  },
-  detailValue: {
-    fontFamily: fonts.barlowCondensed,
-    fontSize: 16,
-    color: colors.text,
-  },
 })
