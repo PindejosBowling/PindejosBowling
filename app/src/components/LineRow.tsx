@@ -1,6 +1,6 @@
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native'
 import { colors, fonts } from '../theme'
-import type { LineView, SelectionView } from '../hooks/useBettingData'
+import type { LineView, SelectionView } from '../hooks/usePinsinoData'
 
 // Per-selection visual state the caller computes (it owns the betting context —
 // balance, slip contents, anti-tank rules). Purely cosmetic: `disabled` dims a

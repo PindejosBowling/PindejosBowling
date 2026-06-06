@@ -1,10 +1,10 @@
 import { useState, useCallback, useEffect } from 'react'
 import { seasons, weeks, bets, pinLedger } from '../utils/supabase/db'
-import { normalizeBet, type BetView } from './useBettingData'
-import { LedgerEntry } from './usePlayerBettingDetailData'
+import { normalizeBet, type BetView } from './usePinsinoData'
+import { LedgerEntry } from './usePlayerPinsinoData'
 
 // The house side of the pin economy — the literal other side of
-// usePlayerBettingDetailData. House rows are `is_house = true` / `player_id NULL`.
+// usePlayerPinsinoData. House rows are `is_house = true` / `player_id NULL`.
 export interface HouseSummary {
   stakesTaken: number  // Σ bet_stake  (+, stakes the house accepts)
   payouts: number      // Σ bet_payout (−, paid out on player wins)
@@ -33,7 +33,7 @@ const EMPTY_STATS: HouseStats = {
   settledCount: 0, houseWins: 0, houseLosses: 0, pushes: 0, bettors: 0, biggestPayout: 0, biggestTake: 0, holdPct: null,
 }
 
-export function useHouseBettingData() {
+export function useHousePinsinoData() {
   const [loading, setLoading] = useState(true)
   const [balance, setBalance] = useState(0)
   const [ledger, setLedger] = useState<LedgerEntry[]>([])
@@ -156,7 +156,7 @@ export function useHouseBettingData() {
       setWeekBets(weekBetViews)
       setSettledBets(settledViews)
     } catch (e) {
-      console.error('useHouseBettingData error:', e)
+      console.error('useHousePinsinoData error:', e)
     } finally {
       setLoading(false)
     }

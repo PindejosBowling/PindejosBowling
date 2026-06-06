@@ -16,7 +16,7 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { useNavigation } from '@react-navigation/native'
 import { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { colors, fonts, radius } from '../theme'
-import AppHeader from '../components/AppHeader'
+import ScreenHeader from '../components/ScreenHeader'
 import LoadingView from '../components/LoadingView'
 import ToggleGroup from '../components/ToggleGroup'
 import Toast from '../components/Toast'
@@ -27,7 +27,7 @@ import BetDetailModal, { resultBadge, betReturnText } from '../components/BetDet
 import LineRow from '../components/LineRow'
 import LineRowContainer from '../components/LineRowContainer'
 import {
-  useBettingData,
+  usePinsinoData,
   selectionBetsAgainstSubject,
   lineGroup,
   lineCategory,
@@ -37,16 +37,16 @@ import {
   type LineGroup,
   type LineCategory,
   type SelectionView,
-} from '../hooks/useBettingData'
+} from '../hooks/usePinsinoData'
 import { useRefresh } from '../hooks/useRefresh'
 import { useAuthStore } from '../stores/authStore'
 import { useUiStore } from '../stores/uiStore'
 import { bets } from '../utils/supabase/db'
-import { BettingStackParamList } from '../navigation/types'
+import { PinsinoStackParamList } from '../navigation/types'
 
-type BettingNav = NativeStackNavigationProp<BettingStackParamList>
+type PinsinoNav = NativeStackNavigationProp<PinsinoStackParamList>
 
-type View2 = 'leaderboard' | 'action' | 'place' | 'settled'
+type View2 = 'action' | 'place' | 'settled'
 type PlaceMode = 'single' | 'parlay'
 
 // One leg staged in the parlay bet slip. Generic over market_type — a leg is a
@@ -64,7 +64,6 @@ interface ParlayLeg {
 }
 
 const VIEW_OPTIONS: { key: View2; label: string }[] = [
-  { key: 'leaderboard', label: 'Leaderboard' },
   { key: 'place', label: 'Place Bets' },
   { key: 'action', label: 'Active Bets' },
   { key: 'settled', label: 'Settled Bets' },
@@ -76,16 +75,15 @@ interface BetModalState {
   wager: string
 }
 
-export default function BettingScreen() {
+export default function SportsbookScreen() {
   const playerId = useAuthStore(s => s.playerId)
-  const playerName = useAuthStore(s => s.playerName)
   const { showToast } = useUiStore()
-  const navigation = useNavigation<BettingNav>()
+  const navigation = useNavigation<PinsinoNav>()
 
-  const { loading, balance, openLines, myBets, weekBets, settledBets, leaderboard, reload } = useBettingData(playerId)
+  const { loading, balance, openLines, myBets, weekBets, settledBets, reload } = usePinsinoData(playerId)
   const { refreshing, onRefresh } = useRefresh(reload)
 
-  const [view, setView] = useState<View2>('leaderboard')
+  const [view, setView] = useState<View2>('place')
   const [placeMode, setPlaceMode] = useState<PlaceMode>('single')
   const [parlayLegs, setParlayLegs] = useState<ParlayLeg[]>([])
   const [parlayModalOpen, setParlayModalOpen] = useState(false)
@@ -229,7 +227,6 @@ export default function BettingScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
-      <AppHeader />
       <ScrollView
         contentContainerStyle={[
           styles.content,
@@ -237,66 +234,12 @@ export default function BettingScreen() {
         ]}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.muted} />}
       >
-        {/* Balance card — tap to view your own betting record */}
-        <TouchableOpacity
-          style={styles.balanceCard}
-          onPress={() => {
-            if (playerId) navigation.navigate('PlayerBettingDetail', { playerId, name: playerName ?? 'Me' })
-          }}
-          activeOpacity={0.7}
-          disabled={!playerId}
-        >
-          <Text style={styles.balanceLabel}>YOUR BALANCE</Text>
-          <Text style={styles.balanceValue}>{balance.toLocaleString()}</Text>
-          <Text style={styles.balanceUnit}>PINS</Text>
-        </TouchableOpacity>
+        <ScreenHeader title="Sportsbook" onBack={() => navigation.goBack()} />
 
         {/* View toggle */}
         <View style={styles.viewToggle}>
           <ToggleGroup options={VIEW_OPTIONS} value={view} onChange={setView} />
         </View>
-
-        {/* ── Leaderboard ─────────────────────────────────────── */}
-        {view === 'leaderboard' && (
-          leaderboard.length > 0 ? (
-            <View style={styles.sbCard}>
-              <View style={styles.sbHeaderRow}>
-                <Text style={[styles.sbHeaderCell, styles.sbRankCell]}>#</Text>
-                <Text style={[styles.sbHeaderCell, styles.sbNameCell]}>Bowler</Text>
-                <Text style={[styles.sbHeaderCell, styles.sbBalCell]}>Pins</Text>
-                <Text style={[styles.sbHeaderCell, styles.sbProjCell]}>Upside</Text>
-              </View>
-              {leaderboard.map((p, index) => {
-                const isMe = p.playerId === playerId
-                return (
-                  <TouchableOpacity
-                    key={p.playerId}
-                    style={[styles.sbRow, index < leaderboard.length - 1 && styles.sbRowBorder]}
-                    onPress={() => navigation.navigate('PlayerBettingDetail', { playerId: p.playerId, name: p.name })}
-                    activeOpacity={0.7}
-                  >
-                    <View style={[styles.sbIconBox, index < 3 && styles.sbIconBoxTop]}>
-                      <Text style={[styles.sbRankText, index < 3 && styles.sbRankTextTop]}>{index + 1}</Text>
-                    </View>
-                    <Text style={[styles.sbName, isMe && styles.sbNameMe]} numberOfLines={1}>
-                      {p.name}
-                      {p.movement === 'up' && <Text style={styles.moveUp}> ▲</Text>}
-                      {p.movement === 'down' && <Text style={styles.moveDown}> ▼</Text>}
-                    </Text>
-                    <Text style={styles.sbBalance}>{p.balance.toLocaleString()}</Text>
-                    <Text style={[styles.sbProjection, p.potential > p.balance && styles.sbProjectionLive]}>
-                      {p.potential.toLocaleString()}
-                    </Text>
-                  </TouchableOpacity>
-                )
-              })}
-            </View>
-          ) : (
-            <View style={styles.emptyCard}>
-              <Text style={styles.emptyText}>No pin balances yet</Text>
-            </View>
-          )
-        )}
 
         {/* ── Active Bets (read-only; tap a row for details) ──── */}
         {view === 'action' && (
@@ -587,104 +530,6 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.bg },
   content: { paddingHorizontal: 16, paddingBottom: 40 },
 
-  balanceCard: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.card,
-    borderWidth: 1,
-    borderColor: colors.border,
-    alignItems: 'center',
-    paddingVertical: 24,
-    marginTop: 8,
-    marginBottom: 24,
-  },
-  balanceLabel: {
-    fontFamily: fonts.barlowCondensed,
-    fontSize: 11,
-    letterSpacing: 2,
-    color: colors.muted,
-    marginBottom: 4,
-  },
-  balanceValue: {
-    fontFamily: fonts.barlowCondensedHeavy,
-    fontSize: 56,
-    color: colors.accent,
-    lineHeight: 60,
-  },
-  balanceUnit: {
-    fontFamily: fonts.barlowCondensed,
-    fontSize: 13,
-    letterSpacing: 2,
-    color: colors.muted,
-    marginTop: 2,
-  },
-
-  // Pin-balance scoreboard (mirrors StandingsScreen)
-  sbCard: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.card,
-    borderWidth: 1,
-    borderColor: colors.border,
-    overflow: 'hidden',
-    marginBottom: 20,
-  },
-  sbHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  sbHeaderCell: {
-    fontFamily: fonts.barlowCondensed,
-    fontSize: 11,
-    color: colors.muted,
-    textTransform: 'uppercase',
-    letterSpacing: 1.5,
-  },
-  sbRankCell: { width: 32 },
-  sbNameCell: { flex: 1 },
-  sbBalCell: { width: 56, textAlign: 'right' },
-  sbProjCell: { width: 56, textAlign: 'right' },
-  sbRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-  },
-  sbRowBorder: { borderBottomWidth: 1, borderBottomColor: colors.border },
-  sbIconBox: {
-    width: 24,
-    height: 24,
-    borderRadius: 6,
-    backgroundColor: colors.surface2,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 8,
-  },
-  sbIconBoxTop: { backgroundColor: colors.accentDim },
-  sbRankText: { fontFamily: fonts.barlowCondensed, fontSize: 12, color: colors.muted },
-  sbRankTextTop: { color: colors.accent },
-  sbName: { flex: 1, fontFamily: fonts.barlow, fontSize: 15, color: colors.text },
-  sbNameMe: { color: colors.accent },
-  sbBalance: {
-    width: 56,
-    textAlign: 'right',
-    fontFamily: fonts.barlowCondensed,
-    fontSize: 15,
-    color: colors.text,
-  },
-  sbProjection: {
-    width: 56,
-    textAlign: 'right',
-    fontFamily: fonts.barlowCondensed,
-    fontSize: 15,
-    color: colors.muted,
-  },
-  sbProjectionLive: { color: colors.success },
-  moveUp: { fontSize: 11, color: colors.success },
-  moveDown: { fontSize: 11, color: colors.danger },
-
   viewToggle: { marginBottom: 20 },
 
   sectionHeader: {
@@ -912,6 +757,4 @@ const styles = StyleSheet.create({
     color: colors.bg,
     letterSpacing: 0.5,
   },
-
-  // Bet details modal
 })

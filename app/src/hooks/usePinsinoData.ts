@@ -117,6 +117,15 @@ export interface BetView {
   legCount: number
 }
 
+// One row in the season pin-balance scoreboard (Titans of Pindustry).
+export interface LeaderboardEntry {
+  playerId: string
+  name: string
+  balance: number
+  potential: number
+  movement: 'up' | 'down' | 'same' | null
+}
+
 // Collapse bet → legs → selections → markets into a flat row. A single O/U bet
 // has one leg; a parlay has many (combined odds = Π of the legs' odds).
 export function normalizeBet(b: any): BetView {
@@ -192,7 +201,7 @@ function normalizeMarket(m: any): LineView {
   }
 }
 
-export function useBettingData(playerId: string | null) {
+export function usePinsinoData(playerId: string | null) {
   const [loading, setLoading] = useState(true)
   const [balance, setBalance] = useState(0)
   const [openLines, setOpenLines] = useState<LineView[]>([])
@@ -203,7 +212,7 @@ export function useBettingData(playerId: string | null) {
   const [settledBets, setSettledBets] = useState<BetView[]>([])
   // Season pin-balance scoreboard: active players sorted high → low.
   // `movement` = rank change vs. the prior week (null = no prior week / new entry).
-  const [leaderboard, setLeaderboard] = useState<{ playerId: string; name: string; balance: number; potential: number; movement: 'up' | 'down' | 'same' | null }[]>([])
+  const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([])
   const [currentWeekId, setCurrentWeekId] = useState<string | null>(null)
   const [currentSeasonId, setCurrentSeasonId] = useState<string | null>(null)
   // Set of market ids the current player has already placed a bet on
@@ -351,7 +360,7 @@ export function useBettingData(playerId: string | null) {
       setBalance(ledgerData.reduce((sum, e) => sum + e.amount, 0))
       setMyBetMarketIds(new Set(myBetViews.map(b => b.marketId)))
     } catch (e) {
-      console.error('useBettingData error:', e)
+      console.error('usePinsinoData error:', e)
     } finally {
       setLoading(false)
     }

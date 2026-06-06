@@ -1,6 +1,6 @@
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native'
 import { colors, fonts } from '../theme'
-import type { BetView } from '../hooks/useBettingData'
+import type { BetView } from '../hooks/usePinsinoData'
 
 interface BetRowProps {
   bet: BetView
