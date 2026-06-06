@@ -24,7 +24,20 @@ import BetRow from '../components/BetRow'
 import ActiveBetsView from '../components/ActiveBetsView'
 import SettledBetsView from '../components/SettledBetsView'
 import BetDetailModal, { resultBadge, betReturnText } from '../components/BetDetailModal'
-import { useBettingData, type BetView, type LineView } from '../hooks/useBettingData'
+import LineRow from '../components/LineRow'
+import LineRowContainer from '../components/LineRowContainer'
+import {
+  useBettingData,
+  selectionBetsAgainstSubject,
+  lineGroup,
+  lineCategory,
+  closedBettingNote,
+  type BetView,
+  type LineView,
+  type LineGroup,
+  type LineCategory,
+  type SelectionView,
+} from '../hooks/useBettingData'
 import { useRefresh } from '../hooks/useRefresh'
 import { useAuthStore } from '../stores/authStore'
 import { useUiStore } from '../stores/uiStore'
@@ -33,19 +46,21 @@ import { BettingStackParamList } from '../navigation/types'
 
 type BettingNav = NativeStackNavigationProp<BettingStackParamList>
 
-type Pick = 'over' | 'under'
 type View2 = 'leaderboard' | 'action' | 'place' | 'settled'
 type PlaceMode = 'single' | 'parlay'
 
-// One leg staged in the parlay bet slip.
+// One leg staged in the parlay bet slip. Generic over market_type — a leg is a
+// chosen selection on a market, not an over/under-specific pick.
 interface ParlayLeg {
   selectionId: string
+  selectionKey: string
+  selectionLabel: string
   marketId: string
   subjectName: string
-  subjectPlayerId: string
-  gameNumber: number
-  line: number
-  pick: Pick
+  subjectPlayerId: string | null
+  marketType: string
+  gameNumber: number | null
+  line: number | null
 }
 
 const VIEW_OPTIONS: { key: View2; label: string }[] = [
@@ -56,19 +71,14 @@ const VIEW_OPTIONS: { key: View2; label: string }[] = [
 ]
 
 interface BetModalState {
-  marketId: string
-  subjectName: string
-  subjectPlayerId: string
-  gameNumber: number
-  line: number
-  overSelectionId?: string
-  underSelectionId?: string
-  pick: Pick | null
+  line: LineView
+  selectedId: string | null
   wager: string
 }
 
 export default function BettingScreen() {
   const playerId = useAuthStore(s => s.playerId)
+  const playerName = useAuthStore(s => s.playerName)
   const { showToast } = useUiStore()
   const navigation = useNavigation<BettingNav>()
 
@@ -89,52 +99,62 @@ export default function BettingScreen() {
   // (settling/cancelling lives on the Pinsino Admin screen).
   const activeBets = useMemo(() => weekBets.filter(b => b.status === 'pending'), [weekBets])
 
-  // Group open lines by game_number
-  const linesByGame = useMemo(() => {
-    const map: Record<number, LineView[]> = {}
+  // Two-level grouping for the board: game group (GAME 1, …, SEASON) → line
+  // category (Player Over/Unders, …). Each category renders one collapsible
+  // LineRowContainer, so a single game can carry several independently-collapsed
+  // line types. Both levels are market-type-aware, so the screen stays agnostic.
+  const lineGroups = useMemo(() => {
+    const games = new Map<string, {
+      group: LineGroup
+      categories: Map<string, { category: LineCategory; lines: LineView[] }>
+    }>()
     for (const line of openLines) {
-      if (!map[line.gameNumber]) map[line.gameNumber] = []
-      map[line.gameNumber].push(line)
+      const group = lineGroup(line)
+      let g = games.get(group.key)
+      if (!g) { g = { group, categories: new Map() }; games.set(group.key, g) }
+      const category = lineCategory(line)
+      let c = g.categories.get(category.key)
+      if (!c) { c = { category, lines: [] }; g.categories.set(category.key, c) }
+      c.lines.push(line)
     }
-    return map
+    return Array.from(games.values())
+      .sort((a, b) => a.group.sortOrder - b.group.sortOrder)
+      .map(g => ({
+        group: g.group,
+        categories: Array.from(g.categories.values()).sort((a, b) => a.category.sortOrder - b.category.sortOrder),
+      }))
   }, [openLines])
 
-  const sortedGameNumbers = useMemo(() => Object.keys(linesByGame).map(Number).sort(), [linesByGame])
+  // Anti-tanking, market-type-aware: backing the side that bets against your own
+  // performance (the `under` on your own line) is blocked.
+  function isSelfTank(line: LineView, sel: SelectionView): boolean {
+    return line.subjectPlayerId === playerId && selectionBetsAgainstSubject(line.marketType, sel.key)
+  }
 
-  function openBetModal(line: LineView, pick: Pick) {
-    setModal({
-      marketId: line.marketId,
-      subjectName: line.subjectName,
-      subjectPlayerId: line.subjectPlayerId,
-      gameNumber: line.gameNumber,
-      line: line.line,
-      overSelectionId: line.overSelectionId,
-      underSelectionId: line.underSelectionId,
-      pick,
-      wager: '',
-    })
+  // Single mode: tapping a selection opens the wager sheet (pre-picked to that
+  // side). Own-against side always toasts; below-min balance is a silent no-op.
+  function onSingleSelect(line: LineView, sel: SelectionView) {
+    if (isSelfTank(line, sel)) { showToast("Believe in yourself man", 'error'); return }
+    if (balance < 10) return
+    setModal({ line, selectedId: sel.selectionId, wager: '' })
   }
 
   async function placeBet() {
     if (!modal || !playerId) return
+    const sel = modal.line.selections.find(s => s.selectionId === modal.selectedId)
+    if (!sel) { showToast('Choose a selection', 'error'); return }
+    // Hard constraint: no backing the side against your own performance (anti-tanking).
+    if (isSelfTank(modal.line, sel)) { showToast("Believe in yourself man", 'error'); return }
     const wagerNum = parseInt(modal.wager, 10)
-    if (!modal.pick) { showToast('Choose over or under', 'error'); return }
-    // Hard constraint: no betting the under on your own line (anti-tanking).
-    if (modal.pick === 'under' && modal.subjectPlayerId === playerId) {
-      showToast("Believe in yourself man", 'error'); return
-    }
     if (isNaN(wagerNum) || wagerNum < 10) { showToast('Minimum wager is 10 pins', 'error'); return }
     if (wagerNum > balance) { showToast('Wager exceeds your balance', 'error'); return }
-
-    const selectionId = modal.pick === 'over' ? modal.overSelectionId : modal.underSelectionId
-    if (!selectionId) { showToast('Line unavailable', 'error'); return }
 
     setPlacing(true)
     try {
       // Atomic + balance-checked, server-side (place_house_bet RPC). The bettor is
       // resolved from the JWT and the double-entry stake ledger pair is written in
       // the same transaction — the client no longer writes any betting rows.
-      const { error: betErr } = await bets.place([selectionId], wagerNum)
+      const { error: betErr } = await bets.place([sel.selectionId], wagerNum)
       if (betErr) { showToast(betErr.message, 'error'); return }
 
       showToast('Bet placed!', 'success')
@@ -153,27 +173,25 @@ export default function BettingScreen() {
   // out at settlement (handled server-side), recomputing over the surviving legs.
   const parlayOdds = useMemo(() => Math.pow(2, parlayLegs.length), [parlayLegs])
 
-  // Toggle a line's over/under in/out of the slip. One selection per market.
-  function toggleParlayLeg(line: LineView, pick: Pick) {
-    if (pick === 'under' && line.subjectPlayerId === playerId) {
-      showToast('Believe in yourself man', 'error'); return
-    }
-    const selectionId = pick === 'over' ? line.overSelectionId : line.underSelectionId
-    if (!selectionId) { showToast('Line unavailable', 'error'); return }
+  // Toggle a selection in/out of the slip. One selection per market.
+  function toggleParlayLeg(line: LineView, sel: SelectionView) {
+    if (isSelfTank(line, sel)) { showToast('Believe in yourself man', 'error'); return }
 
     setParlayLegs(prev => {
       const existing = prev.find(l => l.marketId === line.marketId)
       // Tapping the already-selected side removes the leg.
-      if (existing && existing.pick === pick) return prev.filter(l => l.marketId !== line.marketId)
+      if (existing && existing.selectionId === sel.selectionId) return prev.filter(l => l.marketId !== line.marketId)
       const without = prev.filter(l => l.marketId !== line.marketId)
       return [...without, {
-        selectionId,
+        selectionId: sel.selectionId,
+        selectionKey: sel.key,
+        selectionLabel: sel.label,
         marketId: line.marketId,
         subjectName: line.subjectName,
         subjectPlayerId: line.subjectPlayerId,
+        marketType: line.marketType,
         gameNumber: line.gameNumber,
-        line: line.line,
-        pick,
+        line: sel.line ?? line.line,
       }]
     })
   }
@@ -219,12 +237,19 @@ export default function BettingScreen() {
         ]}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.muted} />}
       >
-        {/* Balance card */}
-        <View style={styles.balanceCard}>
+        {/* Balance card — tap to view your own betting record */}
+        <TouchableOpacity
+          style={styles.balanceCard}
+          onPress={() => {
+            if (playerId) navigation.navigate('PlayerBettingDetail', { playerId, name: playerName ?? 'Me' })
+          }}
+          activeOpacity={0.7}
+          disabled={!playerId}
+        >
           <Text style={styles.balanceLabel}>YOUR BALANCE</Text>
           <Text style={styles.balanceValue}>{balance.toLocaleString()}</Text>
           <Text style={styles.balanceUnit}>PINS</Text>
-        </View>
+        </TouchableOpacity>
 
         {/* View toggle */}
         <View style={styles.viewToggle}>
@@ -322,88 +347,52 @@ export default function BettingScreen() {
         )}
 
         {/* Open lines */}
-        {sortedGameNumbers.length > 0 ? (
+        {lineGroups.length > 0 ? (
           <>
             <Text style={[styles.sectionHeader, { marginTop: 24 }]}>THIS WEEK'S LINES</Text>
-            {sortedGameNumbers.map(gameNum => {
-              // Closing is all-or-nothing per game, so the whole game is in progress
-              // once any of its lines is closed.
-              const gameInProgress = linesByGame[gameNum].some(l => l.inProgress)
-              return (
-              <View key={gameNum}>
-                <Text style={styles.gameLabel}>GAME {gameNum}</Text>
-                {gameInProgress && (
-                  <Text style={styles.inProgressNote}>
-                    The Pinsino does not take action on games in progress
-                  </Text>
-                )}
-                <View style={styles.card}>
-                  {linesByGame[gameNum].map((line, idx) => {
-                    const isLast = idx === linesByGame[gameNum].length - 1
-                    // Anti-tanking: a player may not bet the under on their own line.
-                    const isOwnLine = line.subjectPlayerId === playerId
-                    const slipLeg = parlayLegs.find(l => l.marketId === line.marketId)
-                    return (
-                      <View key={line.marketId} style={[styles.lineRow, !isLast && styles.lineRowBorder, gameInProgress && styles.lineRowInProgress]}>
-                        <View style={styles.lineInfo}>
-                          <Text style={styles.lineName}>{line.subjectName}</Text>
-                          <Text style={styles.lineValue}>LINE  {line.line.toFixed(1)}</Text>
-                        </View>
-                        {gameInProgress ? (
-                          <View style={styles.pickBtns}>
-                            {(['over', 'under'] as Pick[]).map(p => (
-                              <View key={p} style={[styles.pickBtn, styles.pickBtnDisabled]}>
-                                <Text style={styles.pickBtnText}>{p.toUpperCase()}</Text>
-                              </View>
-                            ))}
-                          </View>
-                        ) : placeMode === 'parlay' ? (
-                          <View style={styles.pickBtns}>
-                            {(['over', 'under'] as Pick[]).map(p => {
-                              const blocked = p === 'under' && isOwnLine
-                              const selected = slipLeg?.pick === p
-                              return (
-                                <TouchableOpacity
-                                  key={p}
-                                  style={[styles.pickBtn, selected && styles.pickBtnSelected, blocked && styles.pickBtnDisabled]}
-                                  onPress={() => toggleParlayLeg(line, p)}
-                                  activeOpacity={0.7}
-                                >
-                                  <Text style={[styles.pickBtnText, selected && styles.pickBtnTextSelected]}>
-                                    {p.toUpperCase()}
-                                  </Text>
-                                </TouchableOpacity>
-                              )
-                            })}
-                          </View>
-                        ) : (
-                          <View style={styles.pickBtns}>
-                            <TouchableOpacity
-                              style={[styles.pickBtn, balance < 10 && styles.pickBtnDisabled]}
-                              onPress={() => balance >= 10 && openBetModal(line, 'over')}
-                              activeOpacity={0.7}
-                            >
-                              <Text style={styles.pickBtnText}>OVER</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity
-                              style={[styles.pickBtn, (balance < 10 || isOwnLine) && styles.pickBtnDisabled]}
-                              onPress={() => {
-                                if (isOwnLine) { showToast("Believe in yourself man", 'error'); return }
-                                if (balance >= 10) openBetModal(line, 'under')
-                              }}
-                              activeOpacity={0.7}
-                            >
-                              <Text style={styles.pickBtnText}>UNDER</Text>
-                            </TouchableOpacity>
-                          </View>
-                        )}
-                      </View>
-                    )
-                  })}
-                </View>
+            {lineGroups.map(({ group, categories }) => (
+              <View key={group.key}>
+                <Text style={styles.gameLabel}>{group.label}</Text>
+                {categories.map(({ category, lines }) => {
+                  // Closing is all-or-nothing per game, so a category is in
+                  // progress once any of its lines is closed.
+                  const groupInProgress = lines.some(l => l.inProgress)
+                  return (
+                    <LineRowContainer
+                      key={category.key}
+                      title={category.label}
+                      count={lines.length}
+                      note={groupInProgress ? closedBettingNote(lines[0]) : undefined}
+                      defaultCollapsed
+                      rows={lines.map(line => {
+                        const slipLeg = parlayLegs.find(l => l.marketId === line.marketId)
+                        return {
+                          key: line.marketId,
+                          // Keep a line visible while collapsed if it's in the
+                          // parlay slip — lets players build across sections.
+                          pinned: placeMode === 'parlay' && !!slipLeg,
+                          render: (isLast: boolean) => (
+                            <LineRow
+                              line={line}
+                              isLast={isLast}
+                              inProgress={groupInProgress}
+                              onSelect={sel =>
+                                placeMode === 'parlay' ? toggleParlayLeg(line, sel) : onSingleSelect(line, sel)
+                              }
+                              selectionState={sel =>
+                                placeMode === 'parlay'
+                                  ? { selected: slipLeg?.selectionId === sel.selectionId, disabled: isSelfTank(line, sel) }
+                                  : { disabled: balance < 10 || isSelfTank(line, sel) }
+                              }
+                            />
+                          ),
+                        }
+                      })}
+                    />
+                  )
+                })}
               </View>
-              )
-            })}
+            ))}
           </>
         ) : (
           <View style={styles.emptyCard}>
@@ -426,7 +415,7 @@ export default function BettingScreen() {
               {parlayLegs.length}-LEG PARLAY · ×{parlayOdds}
             </Text>
             <Text style={styles.slipSub} numberOfLines={1}>
-              {parlayLegs.map(l => `${l.subjectName} ${l.pick.toUpperCase()}`).join(' · ')}
+              {parlayLegs.map(l => `${l.subjectName} ${l.selectionLabel.toUpperCase()}`).join(' · ')}
             </Text>
           </View>
           <TouchableOpacity style={styles.slipClear} onPress={() => setParlayLegs([])} activeOpacity={0.7}>
@@ -458,30 +447,34 @@ export default function BettingScreen() {
             />
             <View style={styles.modalSheet}>
               <Text style={styles.modalTitle}>
-                {modal.subjectName} — Game {modal.gameNumber}
+                {modal.line.subjectName}
+                {modal.line.gameNumber != null ? ` — Game ${modal.line.gameNumber}` : ''}
               </Text>
-              <Text style={styles.modalLine}>LINE: {modal.line.toFixed(1)}</Text>
+              {modal.line.line != null && (
+                <Text style={styles.modalLine}>LINE: {modal.line.line.toFixed(1)}</Text>
+              )}
 
               <View style={styles.pickToggle}>
-                {(['over', 'under'] as Pick[]).map(p => {
-                  // Anti-tanking: can't pick under on your own line.
-                  const blocked = p === 'under' && modal.subjectPlayerId === playerId
+                {modal.line.selections.map(sel => {
+                  // Anti-tanking: can't back the side against your own performance.
+                  const blocked = isSelfTank(modal.line, sel)
+                  const active = modal.selectedId === sel.selectionId
                   return (
                     <TouchableOpacity
-                      key={p}
+                      key={sel.selectionId}
                       style={[
                         styles.pickToggleBtn,
-                        modal.pick === p && styles.pickToggleBtnActive,
+                        active && styles.pickToggleBtnActive,
                         blocked && styles.pickToggleBtnDisabled,
                       ]}
                       onPress={() => {
                         if (blocked) { showToast("Believe in yourself man", 'error'); return }
-                        setModal(m => m ? { ...m, pick: p } : m)
+                        setModal(m => m ? { ...m, selectedId: sel.selectionId } : m)
                       }}
                       activeOpacity={0.7}
                     >
-                      <Text style={[styles.pickToggleBtnText, modal.pick === p && styles.pickToggleBtnTextActive]}>
-                        {p.toUpperCase()}
+                      <Text style={[styles.pickToggleBtnText, active && styles.pickToggleBtnTextActive]}>
+                        {(sel.label || sel.key).toUpperCase()}
                       </Text>
                     </TouchableOpacity>
                   )
@@ -538,7 +531,9 @@ export default function BettingScreen() {
                 {parlayLegs.map(leg => (
                   <View key={leg.marketId} style={styles.parlayLegRow}>
                     <Text style={styles.parlayLegText} numberOfLines={1}>
-                      {leg.subjectName} · {leg.pick.toUpperCase()} {leg.line.toFixed(1)} · G{leg.gameNumber}
+                      {leg.subjectName} · {leg.selectionLabel.toUpperCase()}
+                      {leg.line != null ? ` ${leg.line.toFixed(1)}` : ''}
+                      {leg.gameNumber != null ? ` · G${leg.gameNumber}` : ''}
                     </Text>
                     <TouchableOpacity onPress={() => removeParlayLeg(leg.marketId)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
                       <Text style={styles.parlayLegRemove}>✕</Text>
@@ -699,14 +694,6 @@ const styles = StyleSheet.create({
     color: colors.muted,
     marginBottom: 8,
   },
-  gameLabel: {
-    fontFamily: fonts.barlowCondensed,
-    fontSize: 13,
-    letterSpacing: 1,
-    color: colors.accent,
-    marginBottom: 6,
-    marginTop: 4,
-  },
   card: {
     backgroundColor: colors.surface,
     borderRadius: radius.cardMd,
@@ -715,57 +702,14 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     overflow: 'hidden',
   },
-  lineRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    gap: 10,
-  },
-  lineRowBorder: {
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  lineRowInProgress: { opacity: 0.5 },
-  inProgressNote: {
-    fontFamily: fonts.barlow,
-    fontSize: 12,
-    fontStyle: 'italic',
-    color: colors.gold,
-    marginBottom: 6,
-  },
-  lineInfo: { flex: 1 },
-  lineName: {
+  gameLabel: {
     fontFamily: fonts.barlowCondensed,
-    fontSize: 15,
-    color: colors.text,
-    letterSpacing: 0.3,
-  },
-  lineValue: {
-    fontFamily: fonts.barlowCondensed,
-    fontSize: 12,
-    color: colors.muted,
-    marginTop: 1,
-    letterSpacing: 0.5,
-  },
-  pickBtns: { flexDirection: 'row', gap: 6 },
-  pickBtn: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: colors.accent,
-    backgroundColor: colors.accentDim,
-  },
-  pickBtnDisabled: { borderColor: colors.border2, backgroundColor: 'transparent', opacity: 0.4 },
-  pickBtnSelected: { backgroundColor: colors.accent },
-  pickBtnText: {
-    fontFamily: fonts.barlowCondensed,
-    fontSize: 12,
+    fontSize: 13,
+    letterSpacing: 1,
     color: colors.accent,
-    letterSpacing: 0.5,
+    marginTop: 8,
+    marginBottom: 8,
   },
-  pickBtnTextSelected: { color: colors.bg },
 
   modeToggle: { marginBottom: 12 },
 

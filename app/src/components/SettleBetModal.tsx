@@ -9,6 +9,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
+  ScrollView,
 } from 'react-native'
 import { colors, fonts, radius } from '../theme'
 import Toast from './Toast'
@@ -17,39 +18,65 @@ import { betMarkets } from '../utils/supabase/db'
 import type { BetView } from '../hooks/useBettingData'
 
 interface SettleBetModalProps {
-  // The bet whose line is being settled. Settling resolves *every* bet on that
-  // market (over_under is one market per player×game). Mount conditionally
-  // (`{bet && <SettleBetModal …/>}`) so the input resets between opens.
+  // The bet to settle. Each leg has its own market (over_under is one market per
+  // player×game), and settling a market resolves *every* bet on it. A single is
+  // just the one-leg case; a parlay settles all its legs and finalizes once the
+  // last lands. Mount conditionally (`{bet && <SettleBetModal …/>}`) so the
+  // inputs reset between opens.
   bet: BetView
   onClose: () => void
   onSettled: () => void
 }
 
-// Admin manual single-market settlement (settle_market RPC) — sets the result
-// from the subject's actual score and pays out every bet on the line at once.
+// over/under result from an actual score vs. the line.
+function previewResult(value: string, line: number): string | null {
+  if (value === '') return null
+  const a = parseInt(value, 10)
+  if (isNaN(a)) return null
+  return a > line ? 'OVER' : a < line ? 'UNDER' : 'PUSH'
+}
+
+// Admin manual settlement (settle_market RPC, idempotent). One score input per
+// leg; already-settled legs (a market resolved by another bet or week archive)
+// show locked. Settling each leg's market pays out every bet on that line and,
+// for a parlay, finalizes the bet once the last leg lands.
 export default function SettleBetModal({ bet, onClose, onSettled }: SettleBetModalProps) {
   const { showToast } = useUiStore()
-  const [actual, setActual] = useState('')
+  // Per-leg actual-score inputs, keyed by leg index.
+  const [scores, setScores] = useState<Record<number, string>>({})
   const [settling, setSettling] = useState(false)
 
-  const preview = actual !== ''
-    ? (() => {
-        const a = parseInt(actual, 10)
-        if (isNaN(a)) return null
-        return a > bet.line ? 'OVER' : a < bet.line ? 'UNDER' : 'PUSH'
-      })()
-    : null
+  const isParlay = bet.legCount > 1
 
   async function settle() {
-    const a = parseInt(actual, 10)
-    if (isNaN(a) || a < 0 || a > 300) {
-      showToast('Enter a valid score (0–300)', 'error'); return
+    // Collect the unsettled legs, validating each entered score.
+    const toSettle: { marketId: string; value: number }[] = []
+    for (let i = 0; i < bet.legs.length; i++) {
+      const leg = bet.legs[i]
+      if (leg.actualScore != null) continue // already settled — locked
+      const a = parseInt(scores[i] ?? '', 10)
+      if (isNaN(a) || a < 0 || a > 300) {
+        showToast(`Enter a valid score (0–300) for ${leg.subjectName}`, 'error')
+        return
+      }
+      toSettle.push({ marketId: leg.marketId, value: a })
     }
+
+    if (toSettle.length === 0) {
+      showToast('Nothing left to settle on this bet', 'error')
+      return
+    }
+
     setSettling(true)
     try {
-      const { error } = await betMarkets.settle(bet.marketId, a)
-      if (error) { showToast(error.message, 'error'); return }
-      showToast('Bet settled', 'success')
+      // Settle each leg's market in turn. settle_market is idempotent, so a
+      // leg already resolved by an earlier call is a no-op; the parlay finalizes
+      // automatically as its last leg lands.
+      for (const { marketId, value } of toSettle) {
+        const { error } = await betMarkets.settle(marketId, value)
+        if (error) { showToast(error.message, 'error'); return }
+      }
+      showToast(isParlay ? 'Parlay settled' : 'Bet settled', 'success')
       onSettled()
       onClose()
     } catch {
@@ -72,25 +99,52 @@ export default function SettleBetModal({ bet, onClose, onSettled }: SettleBetMod
         />
         <View style={styles.modalSheet}>
           <Text style={styles.modalTitle}>
-            Settle — {bet.subjectName} Game {bet.gameNumber}
+            {isParlay ? `Settle ${bet.legCount}-Leg Parlay` : `Settle — ${bet.subjectName} Game ${bet.gameNumber}`}
           </Text>
-          <Text style={styles.modalLine}>LINE: {bet.line.toFixed(1)}</Text>
+          <Text style={styles.modalSubtitle}>
+            {isParlay
+              ? `${bet.bettorName} · enter each leg's actual score`
+              : `LINE: ${bet.line.toFixed(1)}`}
+          </Text>
 
-          <Text style={styles.wagerLabel}>ACTUAL SCORE</Text>
-          <TextInput
-            style={styles.wagerInput}
-            value={actual}
-            onChangeText={v => setActual(v.replace(/[^0-9]/g, ''))}
-            keyboardType="number-pad"
-            placeholder="0 – 300"
-            placeholderTextColor={colors.muted2}
-            maxLength={3}
-          />
-          <Text style={styles.wagerHint}>
-            {preview
-              ? `Result: ${preview} — resolves all bets on this line`
-              : `${bet.subjectName}'s actual score for game ${bet.gameNumber}`}
-          </Text>
+          <ScrollView style={styles.legs} keyboardShouldPersistTaps="handled">
+            {bet.legs.map((leg, i) => {
+              const settled = leg.actualScore != null
+              const value = scores[i] ?? ''
+              const preview = previewResult(value, leg.line)
+              return (
+                <View key={i} style={[styles.legBlock, i > 0 && styles.legBlockBorder]}>
+                  <Text style={styles.legSubject}>
+                    {leg.subjectName} · {leg.pick?.toUpperCase()} {leg.line.toFixed(1)}
+                    {leg.gameNumber != null ? ` · G${leg.gameNumber}` : ''}
+                  </Text>
+                  {settled ? (
+                    <Text style={styles.legSettled}>
+                      Settled · actual {leg.actualScore}
+                      {leg.result ? ` (${leg.result.toUpperCase()})` : ''}
+                    </Text>
+                  ) : (
+                    <>
+                      <TextInput
+                        style={styles.wagerInput}
+                        value={value}
+                        onChangeText={v => setScores(s => ({ ...s, [i]: v.replace(/[^0-9]/g, '') }))}
+                        keyboardType="number-pad"
+                        placeholder="0 – 300"
+                        placeholderTextColor={colors.muted2}
+                        maxLength={3}
+                      />
+                      <Text style={styles.wagerHint}>
+                        {preview
+                          ? `Result: ${preview} — resolves all bets on this line`
+                          : `${leg.subjectName}'s actual score${leg.gameNumber != null ? ` for game ${leg.gameNumber}` : ''}`}
+                      </Text>
+                    </>
+                  )}
+                </View>
+              )
+            })}
+          </ScrollView>
 
           <TouchableOpacity
             style={[styles.placeBtn, settling && styles.placeBtnDisabled]}
@@ -100,7 +154,7 @@ export default function SettleBetModal({ bet, onClose, onSettled }: SettleBetMod
           >
             {settling
               ? <ActivityIndicator size="small" color={colors.bg} />
-              : <Text style={styles.placeBtnText}>Settle Bet</Text>}
+              : <Text style={styles.placeBtnText}>{isParlay ? 'Settle Parlay' : 'Settle Bet'}</Text>}
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
@@ -131,19 +185,27 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     marginBottom: 4,
   },
-  modalLine: {
+  modalSubtitle: {
     fontFamily: fonts.barlowCondensed,
     fontSize: 14,
     color: colors.muted,
     letterSpacing: 1,
-    marginBottom: 20,
+    marginBottom: 16,
   },
-  wagerLabel: {
+  legs: { maxHeight: 360 },
+  legBlock: { paddingVertical: 14 },
+  legBlockBorder: { borderTopWidth: 1, borderTopColor: colors.border },
+  legSubject: {
     fontFamily: fonts.barlowCondensed,
-    fontSize: 11,
-    letterSpacing: 1.5,
-    color: colors.muted,
-    marginBottom: 6,
+    fontSize: 15,
+    color: colors.text,
+    letterSpacing: 0.3,
+    marginBottom: 8,
+  },
+  legSettled: {
+    fontFamily: fonts.barlow,
+    fontSize: 13,
+    color: colors.success,
   },
   wagerInput: {
     backgroundColor: colors.surface2,
@@ -162,13 +224,13 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: colors.muted,
     marginTop: 6,
-    marginBottom: 20,
   },
   placeBtn: {
     backgroundColor: colors.accent,
     borderRadius: radius.cardSm,
     paddingVertical: 14,
     alignItems: 'center',
+    marginTop: 20,
   },
   placeBtnDisabled: { opacity: 0.4 },
   placeBtnText: {

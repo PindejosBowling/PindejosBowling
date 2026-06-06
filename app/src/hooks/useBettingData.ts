@@ -1,21 +1,90 @@
 import { useState, useCallback, useEffect } from 'react'
 import { weeks, seasons, betMarkets, bets, pinLedger } from '../utils/supabase/db'
 
-// A flattened over/under line (one market + its two selections).
+// One bettable side of a market (a single `bet_selections` row, flattened).
+// Generic over market_type — over/under is the first consumer, but the shape
+// carries any side (over/under, yes/no, a moneyline pick, …) so new market
+// types reuse it without bespoke fields.
+export interface SelectionView {
+  selectionId: string
+  key: string            // stable side key: 'over' | 'under' | 'yes' | a player id, …
+  label: string          // display label ('Over', 'Under', …)
+  line: number | null    // this side's total/handicap (the O/U number); null if n/a
+  odds: number           // decimal odds (2.000 = even money)
+}
+
+// A flattened bettable market (one market + its selections). Generic over
+// market_type so a single row component renders every line kind.
 export interface LineView {
   marketId: string
-  subjectPlayerId: string
+  marketType: string         // 'over_under' | 'moneyline' | 'prop'
+  title: string
+  subjectPlayerId: string | null
   subjectName: string
-  gameNumber: number
-  line: number
-  overSelectionId?: string
-  underSelectionId?: string
+  gameNumber: number | null
+  line: number | null        // shared line when every selection shares one (O/U); else null
+  selections: SelectionView[]
   // Game in progress: market closed for betting, still shown but not bettable.
   inProgress: boolean
 }
 
+// Anti-tanking: a player may never back the side that bets *against* their own
+// performance (the `under` on their own O/U line). Encodes the market-type
+// semantics in one place — new market types declare their "against the subject"
+// side here.
+export function selectionBetsAgainstSubject(marketType: string, selectionKey: string): boolean {
+  if (marketType === 'over_under') return selectionKey === 'under'
+  return false
+}
+
+// The section a line is bucketed under on the Place Bets board. Per-game markets
+// group by game number; markets with no game (season-long / futures) share one
+// group. New market kinds slot in here without the screen knowing their shape.
+export interface LineGroup {
+  key: string        // stable grouping key (also the React key)
+  label: string      // section header — "GAME 1", "SEASON", …
+  sortOrder: number  // ascending display order (game order, season-long last)
+}
+
+export function lineGroup(line: LineView): LineGroup {
+  if (line.gameNumber != null) {
+    return { key: `game-${line.gameNumber}`, label: `GAME ${line.gameNumber}`, sortOrder: line.gameNumber }
+  }
+  // Season-long / futures markets (no game scope) collect at the end.
+  return { key: 'season', label: 'SEASON', sortOrder: Number.MAX_SAFE_INTEGER }
+}
+
+// The line *category* within a group — one collapsible LineRowContainer. A single
+// game can surface several categories (player over/unders, team totals, …), each
+// independently collapsible; the label summarizes what's inside on the collapsed
+// bar. Market-type aware so new line kinds name their own section.
+export interface LineCategory {
+  key: string
+  label: string
+  sortOrder: number
+}
+
+export function lineCategory(line: LineView): LineCategory {
+  switch (line.marketType) {
+    case 'over_under':
+      return { key: 'player_ou', label: 'Player Over/Unders', sortOrder: 0 }
+    case 'moneyline':
+      return { key: 'moneyline', label: 'Moneylines', sortOrder: 1 }
+    default:
+      return { key: line.marketType, label: line.title || line.marketType, sortOrder: 99 }
+  }
+}
+
+// Copy shown when a group's betting is closed (the market is in progress).
+// Market-type aware so non-game markets read sensibly.
+export function closedBettingNote(line: LineView): string {
+  if (line.gameNumber != null) return 'The Pinsino does not take action on games in progress'
+  return 'The Pinsino does not take action while this market is in progress'
+}
+
 // One resolved leg of a bet (a single backed over/under selection).
 export interface LegView {
+  marketId: string          // the leg's market — settled independently (admin settle)
   subjectName: string
   pick: string              // selection key: 'over' | 'under'
   line: number
@@ -56,6 +125,7 @@ export function normalizeBet(b: any): BetView {
     const sel = leg?.bet_selections
     const mkt = sel?.bet_markets
     return {
+      marketId: mkt?.id ?? '',
       subjectName: mkt?.subject?.name ?? '—',
       pick: sel?.key ?? '',
       line: Number(leg?.line_at_placement ?? sel?.line ?? 0),
@@ -91,16 +161,33 @@ export function normalizeBet(b: any): BetView {
 }
 
 function normalizeMarket(m: any): LineView {
-  const over = m.bet_selections?.find((s: any) => s.key === 'over')
-  const under = m.bet_selections?.find((s: any) => s.key === 'under')
+  const selections: SelectionView[] = (m.bet_selections ?? [])
+    .slice()
+    .sort((a: any, b: any) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
+    .map((s: any) => ({
+      selectionId: s.id,
+      key: s.key,
+      label: s.label ?? s.key ?? '—',
+      line: s.line != null ? Number(s.line) : null,
+      odds: Number(s.odds ?? 2),
+    }))
+
+  // A "shared line" exists when every selection carries the same line (the O/U
+  // case) — surfaced once on the row. Markets whose sides differ (or have no
+  // line) leave it null.
+  const lineVals = selections.map(s => s.line).filter((v): v is number => v != null)
+  const sharedLine =
+    lineVals.length > 0 && lineVals.every(v => v === lineVals[0]) ? lineVals[0] : null
+
   return {
     marketId: m.id,
-    subjectPlayerId: m.subject_player_id,
+    marketType: m.market_type,
+    title: m.title ?? '',
+    subjectPlayerId: m.subject_player_id ?? null,
     subjectName: m.subject?.name ?? '—',
-    gameNumber: m.game_number,
-    line: Number(over?.line ?? under?.line ?? 0),
-    overSelectionId: over?.id,
-    underSelectionId: under?.id,
+    gameNumber: m.game_number ?? null,
+    line: sharedLine,
+    selections,
     inProgress: m.status === 'closed',
   }
 }
