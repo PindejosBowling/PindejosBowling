@@ -30,6 +30,17 @@ const DEBT_TYPE_LABEL: Record<string, string> = {
   season_close_settlement: 'SEASON-CLOSE',
 }
 
+// Mechanical order of loan_ledger events within a single week. Garnishment is
+// applied before interest, but the two rows share a created_at (written in the
+// same transaction), so created_at can't disambiguate them — order by this.
+const DEBT_TYPE_SEQUENCE: Record<string, number> = {
+  loan_issued: 0,
+  manual_repayment: 1,
+  weekly_garnishment: 2,
+  weekly_interest: 3,
+  season_close_settlement: 4,
+}
+
 const RISK_COLOR: Record<string, string> = {
   low: colors.success,
   medium: colors.gold,
@@ -51,6 +62,17 @@ export default function LoanSharkScreen() {
   const [repaying, setRepaying] = useState(false)
 
   const availableProducts = useMemo(() => products.filter(p => p.available), [products])
+
+  // Newest-first, but tie-break same-instant rows by mechanical sequence so a
+  // week's GARNISHED row always sits below its INTEREST row (garnishment happens
+  // first, so in a newest-first list it renders last).
+  const paymentHistory = useMemo(() => {
+    if (!activeLoan) return []
+    return [...activeLoan.paymentHistory].sort((a, b) => {
+      if (a.created_at !== b.created_at) return a.created_at < b.created_at ? 1 : -1
+      return (DEBT_TYPE_SEQUENCE[b.type] ?? 0) - (DEBT_TYPE_SEQUENCE[a.type] ?? 0)
+    })
+  }, [activeLoan])
 
   async function repay() {
     if (!activeLoan) return
@@ -137,19 +159,19 @@ export default function LoanSharkScreen() {
               activeOpacity={0.7}
             >
               <Text style={styles.historyToggleText}>
-                PAYMENT HISTORY ({activeLoan.paymentHistory.length})
+                PAYMENT HISTORY ({paymentHistory.length})
               </Text>
               <Text style={styles.historyChevron}>{historyOpen ? '▾' : '▸'}</Text>
             </TouchableOpacity>
             {historyOpen && (
               <View style={styles.historyList}>
-                {activeLoan.paymentHistory.length === 0 ? (
+                {paymentHistory.length === 0 ? (
                   <Text style={styles.historyEmpty}>No activity yet</Text>
                 ) : (
-                  activeLoan.paymentHistory.map((e: DebtLedgerEntry, i) => (
+                  paymentHistory.map((e: DebtLedgerEntry, i) => (
                     <View
                       key={e.id}
-                      style={[styles.historyRow, i < activeLoan.paymentHistory.length - 1 && styles.historyRowBorder]}
+                      style={[styles.historyRow, i < paymentHistory.length - 1 && styles.historyRowBorder]}
                     >
                       <View style={styles.historyLeft}>
                         <Text style={styles.historyType}>{DEBT_TYPE_LABEL[e.type] ?? e.type}</Text>

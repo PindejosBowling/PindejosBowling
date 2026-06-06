@@ -191,7 +191,7 @@ const styles = StyleSheet.create({
   note: {
     fontFamily: fonts.barlow,
     fontSize: 12,
-    color: colors.muted2,
+    color: colors.muted,
     lineHeight: 17,
   },
   confirmBtn: {
