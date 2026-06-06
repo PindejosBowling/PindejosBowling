@@ -22,6 +22,7 @@ import LoadingView from '../components/LoadingView'
 import ToggleGroup from '../components/ToggleGroup'
 import Toast from '../components/Toast'
 import BetRow from '../components/BetRow'
+import BetDetailModal, { resultBadge, betReturnText } from '../components/BetDetailModal'
 import { useBettingData, type BetView, type LineView } from '../hooks/useBettingData'
 import { useRefresh } from '../hooks/useRefresh'
 import { useAuthStore } from '../stores/authStore'
@@ -71,23 +72,6 @@ interface SettleModalState {
   gameNumber: number | null
   line: number
   actual: string
-}
-
-// Badge from the bet's own status (the target model resolves outcome per bet).
-function resultBadge(status: string) {
-  if (status === 'push') return { label: 'PUSH', color: colors.muted }
-  if (status === 'won') return { label: 'WON', color: colors.success }
-  if (status === 'lost') return { label: 'LOST', color: colors.danger }
-  return null
-}
-
-// Total amount the player gets back, signed for display.
-// potential_payout = total returned on a win incl. the stake. A push refunds the
-// stake; a loss forfeits it; a pending bet shows its projected full return.
-function betReturnText(bet: BetView): string {
-  if (bet.status === 'push' || bet.status === 'void') return `+${bet.stake}`
-  if (bet.status === 'lost') return `-${bet.stake}`
-  return `+${bet.potentialPayout}` // won or still pending → full return
 }
 
 export default function BettingScreen() {
@@ -851,106 +835,7 @@ export default function BettingScreen() {
       )}
 
       {/* Bet details modal */}
-      {detailModal && (
-        <Modal visible transparent animationType="fade" onRequestClose={() => setDetailModal(null)}>
-          <TouchableOpacity
-            style={styles.detailModalBackdrop}
-            activeOpacity={1}
-            onPress={() => setDetailModal(null)}
-          />
-          <View style={styles.detailModalContainer}>
-            <View style={styles.detailModalContent}>
-              <View style={styles.detailModalHeader}>
-                <Text style={styles.detailModalTitle}>Bet Details</Text>
-                <TouchableOpacity onPress={() => setDetailModal(null)}>
-                  <Text style={styles.detailModalClose}>✕</Text>
-                </TouchableOpacity>
-              </View>
-
-              <View style={styles.detailRow}>
-                <Text style={styles.detailLabel}>BETTOR</Text>
-                <Text style={styles.detailValue}>{detailModal.bettorName}</Text>
-              </View>
-
-              {detailModal.seasonNumber != null && (
-                <View style={styles.detailRow}>
-                  <Text style={styles.detailLabel}>SEASON</Text>
-                  <Text style={styles.detailValue}>{detailModal.seasonNumber}</Text>
-                </View>
-              )}
-
-              {detailModal.weekNumber != null && (
-                <View style={styles.detailRow}>
-                  <Text style={styles.detailLabel}>WEEK</Text>
-                  <Text style={styles.detailValue}>{detailModal.weekNumber}</Text>
-                </View>
-              )}
-
-              {detailModal.legCount === 1 && detailModal.gameNumber != null && (
-                <View style={styles.detailRow}>
-                  <Text style={styles.detailLabel}>GAME</Text>
-                  <Text style={styles.detailValue}>{detailModal.gameNumber}</Text>
-                </View>
-              )}
-
-              {detailModal.legCount > 1 ? (
-                <View style={styles.detailRow}>
-                  <Text style={styles.detailLabel}>LEGS ({detailModal.legCount})</Text>
-                  {detailModal.legs.map((leg, i) => (
-                    <Text key={i} style={[styles.detailValue, { marginTop: i === 0 ? 0 : 4 }]}>
-                      {leg.subjectName} · {leg.pick?.toUpperCase()} {leg.line.toFixed(1)}
-                      {leg.gameNumber != null ? ` · G${leg.gameNumber}` : ''}
-                      {leg.actualScore != null ? ` (${leg.actualScore})` : ''}
-                      {leg.result ? ` — ${leg.result.toUpperCase()}` : ''}
-                    </Text>
-                  ))}
-                </View>
-              ) : (
-                <>
-                  <View style={styles.detailRow}>
-                    <Text style={styles.detailLabel}>SUBJECT</Text>
-                    <Text style={styles.detailValue}>{detailModal.subjectName}</Text>
-                  </View>
-
-                  <View style={styles.detailRow}>
-                    <Text style={styles.detailLabel}>PICK</Text>
-                    <Text style={styles.detailValue}>{detailModal.pick?.toUpperCase()}</Text>
-                  </View>
-
-                  <View style={styles.detailRow}>
-                    <Text style={styles.detailLabel}>LINE</Text>
-                    <Text style={styles.detailValue}>{detailModal.line.toFixed(1)}</Text>
-                  </View>
-                </>
-              )}
-
-              <View style={styles.detailRow}>
-                <Text style={styles.detailLabel}>WAGER</Text>
-                <Text style={styles.detailValue}>{detailModal.stake} pins</Text>
-              </View>
-
-              {detailModal.legCount === 1 && detailModal.actualScore != null && (
-                <View style={styles.detailRow}>
-                  <Text style={styles.detailLabel}>ACTUAL SCORE</Text>
-                  <Text style={styles.detailValue}>{detailModal.actualScore}</Text>
-                </View>
-              )}
-
-              <View style={styles.detailRow}>
-                <Text style={styles.detailLabel}>STATUS</Text>
-                <Text style={[styles.detailValue, { color: resultBadge(detailModal.status)?.color || colors.muted }]}>
-                  {resultBadge(detailModal.status)?.label || 'PENDING'}
-                </Text>
-              </View>
-
-              <View style={styles.detailRow}>
-                <Text style={styles.detailLabel}>RETURN</Text>
-                <Text style={styles.detailValue}>{betReturnText(detailModal)} pins</Text>
-              </View>
-            </View>
-          </View>
-        </Modal>
-      )}
+      <BetDetailModal bet={detailModal} onClose={() => setDetailModal(null)} />
     </SafeAreaView>
   )
 }
@@ -1363,54 +1248,4 @@ const styles = StyleSheet.create({
   },
 
   // Bet details modal
-  detailModalBackdrop: {
-    ...StyleSheet.absoluteFill,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-  },
-  detailModalContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-  },
-  detailModalContent: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.card,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 24,
-    width: '100%',
-  },
-  detailModalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 24,
-  },
-  detailModalTitle: {
-    fontFamily: fonts.barlowCondensed,
-    fontSize: 20,
-    fontWeight: '700',
-    color: colors.text,
-  },
-  detailModalClose: {
-    fontFamily: fonts.barlowCondensed,
-    fontSize: 20,
-    color: colors.muted,
-  },
-  detailRow: {
-    marginBottom: 16,
-  },
-  detailLabel: {
-    fontFamily: fonts.barlowCondensed,
-    fontSize: 11,
-    letterSpacing: 1.5,
-    color: colors.muted,
-    marginBottom: 6,
-  },
-  detailValue: {
-    fontFamily: fonts.barlowCondensed,
-    fontSize: 16,
-    color: colors.text,
-  },
 })

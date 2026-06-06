@@ -9,6 +9,7 @@ export interface LedgerEntry {
   description: string
   created_at: string
   weekNumber: number | null
+  bet: BetView | null   // populated for bet_stake / bet_payout / bet_refund rows
 }
 
 export function usePlayerBettingDetailData(playerId: string | null) {
@@ -79,6 +80,7 @@ export function usePlayerBettingDetailData(playerId: string | null) {
         description: e.description,
         created_at: e.created_at,
         weekNumber: (e.weeks as any)?.week_number ?? null,
+        bet: e.bets ? normalizeBet(e.bets) : null,
       }))
 
       // Calculate balance

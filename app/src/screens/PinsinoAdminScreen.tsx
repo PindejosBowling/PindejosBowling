@@ -8,6 +8,7 @@ import { MoreStackParamList } from '../navigation/types'
 import ScreenHeader from '../components/ScreenHeader'
 import LoadingView from '../components/LoadingView'
 import ToggleGroup from '../components/ToggleGroup'
+import LedgerRow from '../components/LedgerRow'
 import { useRefresh } from '../hooks/useRefresh'
 import { useHouseBettingData } from '../hooks/useHouseBettingData'
 import { useAuthStore } from '../stores/authStore'
@@ -22,10 +23,6 @@ const VIEW_OPTIONS: { key: HouseView; label: string }[] = [
   { key: 'pnl', label: 'Weekly P&L' },
 ]
 
-function formatDate(dateStr: string): string {
-  return new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-}
-
 function signed(n: number): string {
   return `${n > 0 ? '+' : ''}${n.toLocaleString()}`
 }
@@ -34,7 +31,7 @@ export default function PinsinoAdminScreen() {
   const navigation = useNavigation<Nav>()
   const isAdmin = useAuthStore(s => s.role) === 'admin'
 
-  const { loading, balance, ledger, summary, weekPnl, exposure, seasonNumber, reload } = useHouseBettingData()
+  const { loading, balance, ledger, summary, weekPnl, exposure, stats, seasonNumber, reload } = useHouseBettingData()
   const { refreshing, onRefresh } = useRefresh(reload)
 
   const [view, setView] = useState<HouseView>('statement')
@@ -120,14 +117,52 @@ export default function PinsinoAdminScreen() {
           <ToggleGroup options={VIEW_OPTIONS} value={view} onChange={setView} />
         </View>
 
-        {/* ── Statement note ───────────────────────────────── */}
+        {/* ── Statement (house performance) ─────────────────── */}
         {view === 'statement' && (
-          <Text style={styles.note}>
-            The House is the counterparty to every bet and the funder of every bonus.
-            A positive balance means the Pinsino is ahead; negative means it is paying
-            out more than it takes in. Exposure is what it would owe if every open bet
-            this week wins.
-          </Text>
+          stats.settledCount > 0 || stats.bettors > 0 ? (
+            <>
+              {/* Record + hold headline */}
+              <View style={styles.statGrid}>
+                <View style={styles.statBox}>
+                  <Text style={styles.statValue}>{stats.houseWins}–{stats.houseLosses}–{stats.pushes}</Text>
+                  <Text style={styles.statLabel}>W–L–P (HOUSE)</Text>
+                </View>
+                <View style={styles.statBox}>
+                  <Text style={[styles.statValue, stats.holdPct != null && { color: stats.holdPct >= 0 ? colors.success : colors.danger }]}>
+                    {stats.holdPct != null ? `${stats.holdPct.toFixed(1)}%` : '—'}
+                  </Text>
+                  <Text style={styles.statLabel}>HOLD</Text>
+                </View>
+              </View>
+
+              <View style={styles.card}>
+                <View style={[styles.ledgerRow, styles.ledgerRowBorder]}>
+                  <Text style={styles.ledgerDescription}>BETS SETTLED</Text>
+                  <Text style={styles.statRowValue}>{stats.settledCount.toLocaleString()}</Text>
+                </View>
+                <View style={[styles.ledgerRow, styles.ledgerRowBorder]}>
+                  <Text style={styles.ledgerDescription}>DISTINCT BETTORS</Text>
+                  <Text style={styles.statRowValue}>{stats.bettors.toLocaleString()}</Text>
+                </View>
+                <View style={styles.ledgerRow}>
+                  <Text style={styles.ledgerDescription}>BIGGEST PAYOUT</Text>
+                  <Text style={[styles.statRowValue, { color: colors.danger }]}>
+                    {stats.biggestPayout > 0 ? `−${stats.biggestPayout.toLocaleString()}` : '—'}
+                  </Text>
+                </View>
+              </View>
+
+              <Text style={styles.note}>
+                Hold is the House's net betting take as a share of stakes wagered —
+                positive means the Pinsino is winning. Exposure above is what it would
+                owe if every open bet this week hits.
+              </Text>
+            </>
+          ) : (
+            <View style={styles.emptyCard}>
+              <Text style={styles.emptyText}>No bets settled yet this season</Text>
+            </View>
+          )
         )}
 
         {/* ── Activity (house ledger by week) ───────────────── */}
@@ -139,7 +174,7 @@ export default function PinsinoAdminScreen() {
                   <Text style={styles.gameLabel}>BONUSES</Text>
                   <View style={styles.card}>
                     {bonusEntries.map((entry, idx) => (
-                      <LedgerRow key={entry.id} entry={entry} isLast={idx === bonusEntries.length - 1} />
+                      <LedgerRow key={entry.id} entry={entry} perspective="house" isLast={idx === bonusEntries.length - 1} />
                     ))}
                   </View>
                 </View>
@@ -151,7 +186,7 @@ export default function PinsinoAdminScreen() {
                     <Text style={styles.gameLabel}>WEEK {weekNum}</Text>
                     <View style={styles.card}>
                       {entries.map((entry, idx) => (
-                        <LedgerRow key={entry.id} entry={entry} isLast={idx === entries.length - 1} />
+                        <LedgerRow key={entry.id} entry={entry} perspective="house" isLast={idx === entries.length - 1} />
                       ))}
                     </View>
                   </View>
@@ -186,21 +221,6 @@ export default function PinsinoAdminScreen() {
         )}
       </ScrollView>
     </SafeAreaView>
-  )
-}
-
-function LedgerRow({ entry, isLast }: { entry: LedgerEntry; isLast: boolean }) {
-  const isPositive = entry.amount > 0
-  return (
-    <View style={[styles.ledgerRow, !isLast && styles.ledgerRowBorder]}>
-      <View style={styles.ledgerInfo}>
-        <Text style={styles.ledgerDescription}>{entry.description}</Text>
-        <Text style={styles.ledgerDate}>{formatDate(entry.created_at)}</Text>
-      </View>
-      <Text style={[styles.ledgerAmount, { color: isPositive ? colors.success : colors.danger }]}>
-        {isPositive ? '+' : ''}{entry.amount}
-      </Text>
-    </View>
   )
 }
 
@@ -254,6 +274,41 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: colors.muted,
     lineHeight: 19,
+    marginTop: 4,
+  },
+
+  statGrid: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 10,
+  },
+  statBox: {
+    flex: 1,
+    backgroundColor: colors.surface,
+    borderRadius: radius.cardMd,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingVertical: 16,
+    alignItems: 'center',
+  },
+  statValue: {
+    fontFamily: fonts.barlowCondensedHeavy,
+    fontSize: 26,
+    color: colors.accent,
+    lineHeight: 28,
+  },
+  statLabel: {
+    fontFamily: fonts.barlowCondensed,
+    fontSize: 10,
+    letterSpacing: 1,
+    color: colors.muted,
+    marginTop: 4,
+  },
+  statRowValue: {
+    fontFamily: fonts.barlowCondensed,
+    fontSize: 16,
+    color: colors.text,
+    marginLeft: 10,
   },
 
   card: {
@@ -273,18 +328,11 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   ledgerRowBorder: { borderBottomWidth: 1, borderBottomColor: colors.border },
-  ledgerInfo: { flex: 1 },
   ledgerDescription: {
     fontFamily: fonts.barlowCondensed,
     fontSize: 14,
     color: colors.text,
     letterSpacing: 0.3,
-  },
-  ledgerDate: {
-    fontFamily: fonts.barlow,
-    fontSize: 12,
-    color: colors.muted,
-    marginTop: 2,
   },
   ledgerAmount: {
     fontFamily: fonts.barlowCondensed,
