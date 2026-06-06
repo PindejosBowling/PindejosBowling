@@ -78,6 +78,7 @@ interface BetModalState {
 
 export default function BettingScreen() {
   const playerId = useAuthStore(s => s.playerId)
+  const playerName = useAuthStore(s => s.playerName)
   const { showToast } = useUiStore()
   const navigation = useNavigation<BettingNav>()
 
@@ -236,12 +237,19 @@ export default function BettingScreen() {
         ]}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.muted} />}
       >
-        {/* Balance card */}
-        <View style={styles.balanceCard}>
+        {/* Balance card — tap to view your own betting record */}
+        <TouchableOpacity
+          style={styles.balanceCard}
+          onPress={() => {
+            if (playerId) navigation.navigate('PlayerBettingDetail', { playerId, name: playerName ?? 'Me' })
+          }}
+          activeOpacity={0.7}
+          disabled={!playerId}
+        >
           <Text style={styles.balanceLabel}>YOUR BALANCE</Text>
           <Text style={styles.balanceValue}>{balance.toLocaleString()}</Text>
           <Text style={styles.balanceUnit}>PINS</Text>
-        </View>
+        </TouchableOpacity>
 
         {/* View toggle */}
         <View style={styles.viewToggle}>
