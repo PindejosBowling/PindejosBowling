@@ -241,7 +241,6 @@ export default function PlayerBettingDetailScreen() {
                           isLast={isLast}
                           badge={null}
                           betReturnText={betReturnText(bet)}
-                          isAdmin={false}
                         />
                       )
                     })}
@@ -289,7 +288,6 @@ export default function PlayerBettingDetailScreen() {
                               isLast={isLast}
                               badge={badge}
                               betReturnText={betReturnText(bet)}
-                              isAdmin={false}
                             />
                           )
                         })}

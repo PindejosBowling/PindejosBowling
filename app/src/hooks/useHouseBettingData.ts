@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect } from 'react'
 import { seasons, weeks, bets, pinLedger } from '../utils/supabase/db'
-import { normalizeBet } from './useBettingData'
+import { normalizeBet, type BetView } from './useBettingData'
 import { LedgerEntry } from './usePlayerBettingDetailData'
 
 // The house side of the pin economy — the literal other side of
@@ -42,6 +42,10 @@ export function useHouseBettingData() {
   const [exposure, setExposure] = useState(0)
   const [stats, setStats] = useState<HouseStats>(EMPTY_STATS)
   const [seasonNumber, setSeasonNumber] = useState<number | null>(null)
+  // All of this week's bets + this season's settled bets, so the admin screen can
+  // reuse the same Active/Settled surfaces the public Pinsino tab renders.
+  const [weekBets, setWeekBets] = useState<BetView[]>([])
+  const [settledBets, setSettledBets] = useState<BetView[]>([])
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -52,7 +56,7 @@ export function useHouseBettingData() {
 
       if (!seasonId) {
         setBalance(0); setLedger([]); setSummary(EMPTY_SUMMARY); setWeekPnl([])
-        setExposure(0); setStats(EMPTY_STATS)
+        setExposure(0); setStats(EMPTY_STATS); setWeekBets([]); setSettledBets([])
         return
       }
 
@@ -149,6 +153,8 @@ export function useHouseBettingData() {
       setWeekPnl(pnl)
       setExposure(houseExposure)
       setStats(nextStats)
+      setWeekBets(weekBetViews)
+      setSettledBets(settledViews)
     } catch (e) {
       console.error('useHouseBettingData error:', e)
     } finally {
@@ -158,5 +164,5 @@ export function useHouseBettingData() {
 
   useEffect(() => { load() }, [load])
 
-  return { loading, balance, ledger, summary, weekPnl, exposure, stats, seasonNumber, reload: load }
+  return { loading, balance, ledger, summary, weekPnl, exposure, stats, seasonNumber, weekBets, settledBets, reload: load }
 }

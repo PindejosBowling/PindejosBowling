@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { View, Text, ScrollView, StyleSheet, RefreshControl } from 'react-native'
+import { View, Text, ScrollView, StyleSheet, RefreshControl, Alert } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useNavigation } from '@react-navigation/native'
 import { NativeStackNavigationProp } from '@react-navigation/native-stack'
@@ -9,18 +9,27 @@ import ScreenHeader from '../components/ScreenHeader'
 import LoadingView from '../components/LoadingView'
 import ToggleGroup from '../components/ToggleGroup'
 import LedgerRow from '../components/LedgerRow'
+import ActiveBetsView from '../components/ActiveBetsView'
+import SettledBetsView from '../components/SettledBetsView'
+import BetDetailModal from '../components/BetDetailModal'
+import SettleBetModal from '../components/SettleBetModal'
 import { useRefresh } from '../hooks/useRefresh'
 import { useHouseBettingData } from '../hooks/useHouseBettingData'
 import { useAuthStore } from '../stores/authStore'
+import { useUiStore } from '../stores/uiStore'
 import { LedgerEntry } from '../hooks/usePlayerBettingDetailData'
+import { type BetView } from '../hooks/useBettingData'
+import { bets } from '../utils/supabase/db'
 
 type Nav = NativeStackNavigationProp<MoreStackParamList>
-type HouseView = 'statement' | 'activity' | 'pnl'
+type HouseView = 'statement' | 'activity' | 'pnl' | 'active' | 'settled'
 
 const VIEW_OPTIONS: { key: HouseView; label: string }[] = [
   { key: 'statement', label: 'Statement' },
   { key: 'activity', label: 'Activity' },
   { key: 'pnl', label: 'Weekly P&L' },
+  { key: 'active', label: 'Active Bets' },
+  { key: 'settled', label: 'Settled Bets' },
 ]
 
 function signed(n: number): string {
@@ -30,11 +39,37 @@ function signed(n: number): string {
 export default function PinsinoAdminScreen() {
   const navigation = useNavigation<Nav>()
   const isAdmin = useAuthStore(s => s.role) === 'admin'
+  const { showToast } = useUiStore()
 
-  const { loading, balance, ledger, summary, weekPnl, exposure, stats, seasonNumber, reload } = useHouseBettingData()
+  const { loading, balance, ledger, summary, weekPnl, exposure, stats, seasonNumber, weekBets, settledBets, reload } = useHouseBettingData()
   const { refreshing, onRefresh } = useRefresh(reload)
 
   const [view, setView] = useState<HouseView>('statement')
+  const [detailBet, setDetailBet] = useState<BetView | null>(null)
+  const [settleBet, setSettleBet] = useState<BetView | null>(null)
+
+  // Active = this week's still-pending bets (settled ones live in Settled Bets).
+  const activeBets = useMemo(() => weekBets.filter(b => b.status === 'pending'), [weekBets])
+
+  // Total undo, server-side (cancel_bet RPC): removes the bet's ledger pair(s) and
+  // the bet, and re-opens the market if it was the last bet on a settled one.
+  async function cancelBet(bet: BetView) {
+    const { error } = await bets.cancel(bet.id)
+    if (error) { showToast(error.message, 'error'); return }
+    showToast('Bet canceled', 'success')
+    await reload()
+  }
+
+  function confirmCancelBet(bet: BetView) {
+    Alert.alert(
+      'Cancel this bet?',
+      `Remove ${bet.bettorName}'s ${bet.legCount > 1 ? `${bet.legCount}-leg parlay` : `${bet.pick?.toUpperCase()} ${bet.line.toFixed(1)} bet on ${bet.subjectName} (Game ${bet.gameNumber})`}. This fully reverses the bet's pin effect — restoring the balance to before it was placed — and cannot be undone.`,
+      [
+        { text: 'Keep Bet', style: 'cancel' },
+        { text: 'Cancel Bet', style: 'destructive', onPress: () => cancelBet(bet) },
+      ],
+    )
+  }
 
   // Activity: house ledger grouped by week (newest first), week-less rows
   // (season-open bonuses) bucketed separately.
@@ -112,10 +147,14 @@ export default function PinsinoAdminScreen() {
           </View>
         </View>
 
-        {/* View toggle */}
-        <View style={styles.viewToggle}>
+        {/* View toggle — scrollable: five pills overflow a phone width */}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.viewToggle}
+        >
           <ToggleGroup options={VIEW_OPTIONS} value={view} onChange={setView} />
-        </View>
+        </ScrollView>
 
         {/* ── Statement (house performance) ─────────────────── */}
         {view === 'statement' && (
@@ -219,7 +258,39 @@ export default function PinsinoAdminScreen() {
             </View>
           )
         )}
+
+        {/* ── Active Bets (admin: tap to settle a line, ✕ to cancel) ── */}
+        {view === 'active' && (
+          <ActiveBetsView
+            bets={activeBets}
+            hint="Tap a bet to settle its line · ✕ to cancel a bet"
+            onBetPress={setSettleBet}
+            onParlayPress={setDetailBet}
+            onCancelBet={confirmCancelBet}
+          />
+        )}
+
+        {/* ── Settled Bets (admin: ✕ to cancel) ─────────────── */}
+        {view === 'settled' && (
+          <SettledBetsView
+            bets={settledBets}
+            onBetPress={setDetailBet}
+            onCancelBet={confirmCancelBet}
+          />
+        )}
       </ScrollView>
+
+      {/* Bet details overlay (parlays + settled-bet taps) */}
+      <BetDetailModal bet={detailBet} onClose={() => setDetailBet(null)} />
+
+      {/* Admin: settle a line from one of its active bets */}
+      {settleBet && (
+        <SettleBetModal
+          bet={settleBet}
+          onClose={() => setSettleBet(null)}
+          onSettled={reload}
+        />
+      )}
     </SafeAreaView>
   )
 }

@@ -7,22 +7,23 @@ interface BetRowProps {
   isLast: boolean
   badge: { label: string; color: string } | null
   betReturnText: string
-  isAdmin: boolean
   onPress?: () => void
   onCancelPress?: () => void
 }
 
+// Presentational: the row is tappable when given an `onPress`, and shows a cancel
+// (✕) affordance when given an `onCancelPress`. Callers gate those callbacks
+// (read-only surfaces omit them; admin surfaces pass them).
 export default function BetRow({
   bet,
   isLast,
   badge,
   betReturnText,
-  isAdmin,
   onPress,
   onCancelPress,
 }: BetRowProps) {
-  const isPressable = !!onPress && isAdmin
-  const showCancelBtn = !!onCancelPress && isAdmin
+  const isPressable = !!onPress
+  const showCancelBtn = !!onCancelPress
 
   const isParlay = bet.legCount > 1
 
