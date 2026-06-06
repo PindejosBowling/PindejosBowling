@@ -1,5 +1,4 @@
-import { useMemo, useState } from 'react'
-import { View, Text, ScrollView, StyleSheet, RefreshControl, Alert, TouchableOpacity, Dimensions } from 'react-native'
+import { View, Text, ScrollView, StyleSheet, RefreshControl, TouchableOpacity, Dimensions } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useNavigation } from '@react-navigation/native'
 import { NativeStackNavigationProp } from '@react-navigation/native-stack'
@@ -7,67 +6,26 @@ import { colors, fonts, radius } from '../theme'
 import { MoreStackParamList } from '../navigation/types'
 import ScreenHeader from '../components/ScreenHeader'
 import LoadingView from '../components/LoadingView'
-import ToggleGroup from '../components/ToggleGroup'
-import ActiveBetsView from '../components/ActiveBetsView'
-import SettledBetsView from '../components/SettledBetsView'
-import BetDetailModal from '../components/BetDetailModal'
-import SettleBetModal from '../components/SettleBetModal'
 import { useRefresh } from '../hooks/useRefresh'
 import { useHousePinsinoData } from '../hooks/useHousePinsinoData'
 import { useAuthStore } from '../stores/authStore'
-import { useUiStore } from '../stores/uiStore'
-import { type BetView } from '../hooks/usePinsinoData'
-import { bets } from '../utils/supabase/db'
 
 type Nav = NativeStackNavigationProp<MoreStackParamList>
-type HouseView = 'active' | 'settled'
 
 const TILE_WIDTH = (Dimensions.get('window').width - 48) / 3
 
 // Subpage menu tiles (groundwork for more admin subpages — add one line each)
-const MENU_TILES: { icon: string; label: string; route: 'PinsinoAccounting' }[] = [
+const MENU_TILES: { icon: string; label: string; route: 'PinsinoAccounting' | 'PinsinoSportsbook' }[] = [
   { icon: '📒', label: 'Accounting', route: 'PinsinoAccounting' },
-]
-
-const VIEW_OPTIONS: { key: HouseView; label: string }[] = [
-  { key: 'active', label: 'Active Bets' },
-  { key: 'settled', label: 'Settled Bets' },
+  { icon: '🎰', label: 'Sportsbook', route: 'PinsinoSportsbook' },
 ]
 
 export default function PinsinoAdminScreen() {
   const navigation = useNavigation<Nav>()
   const isAdmin = useAuthStore(s => s.role) === 'admin'
-  const { showToast } = useUiStore()
 
-  const { loading, weekBets, settledBets, reload } = useHousePinsinoData()
+  const { loading, reload } = useHousePinsinoData()
   const { refreshing, onRefresh } = useRefresh(reload)
-
-  const [view, setView] = useState<HouseView>('active')
-  const [detailBet, setDetailBet] = useState<BetView | null>(null)
-  const [settleBet, setSettleBet] = useState<BetView | null>(null)
-
-  // Active = this week's still-pending bets (settled ones live in Settled Bets).
-  const activeBets = useMemo(() => weekBets.filter(b => b.status === 'pending'), [weekBets])
-
-  // Total undo, server-side (cancel_bet RPC): removes the bet's ledger pair(s) and
-  // the bet, and re-opens the market if it was the last bet on a settled one.
-  async function cancelBet(bet: BetView) {
-    const { error } = await bets.cancel(bet.id)
-    if (error) { showToast(error.message, 'error'); return }
-    showToast('Bet canceled', 'success')
-    await reload()
-  }
-
-  function confirmCancelBet(bet: BetView) {
-    Alert.alert(
-      'Cancel this bet?',
-      `Remove ${bet.bettorName}'s ${bet.legCount > 1 ? `${bet.legCount}-leg parlay` : `${bet.pick?.toUpperCase()} ${bet.line.toFixed(1)} bet on ${bet.subjectName} (Game ${bet.gameNumber})`}. This fully reverses the bet's pin effect — restoring the balance to before it was placed — and cannot be undone.`,
-      [
-        { text: 'Keep Bet', style: 'cancel' },
-        { text: 'Cancel Bet', style: 'destructive', onPress: () => cancelBet(bet) },
-      ],
-    )
-  }
 
   if (loading) return <LoadingView label="Loading…" />
 
@@ -107,46 +65,7 @@ export default function PinsinoAdminScreen() {
             </TouchableOpacity>
           ))}
         </View>
-
-        {/* View toggle */}
-        <View style={styles.viewToggle}>
-          <ToggleGroup options={VIEW_OPTIONS} value={view} onChange={setView} />
-        </View>
-
-        {/* ── Active Bets (admin: tap to settle a line, ✕ to cancel) ── */}
-        {view === 'active' && (
-          <ActiveBetsView
-            bets={activeBets}
-            perspective="house"
-            hint="Tap a bet to settle its line(s) · ✕ to cancel a bet"
-            onBetPress={setSettleBet}
-            onParlayPress={setSettleBet}
-            onCancelBet={confirmCancelBet}
-          />
-        )}
-
-        {/* ── Settled Bets (admin: ✕ to cancel) ─────────────── */}
-        {view === 'settled' && (
-          <SettledBetsView
-            bets={settledBets}
-            perspective="house"
-            onBetPress={setDetailBet}
-            onCancelBet={confirmCancelBet}
-          />
-        )}
       </ScrollView>
-
-      {/* Bet details overlay (parlays + settled-bet taps) */}
-      <BetDetailModal bet={detailBet} onClose={() => setDetailBet(null)} />
-
-      {/* Admin: settle a line from one of its active bets */}
-      {settleBet && (
-        <SettleBetModal
-          bet={settleBet}
-          onClose={() => setSettleBet(null)}
-          onSettled={reload}
-        />
-      )}
     </SafeAreaView>
   )
 }
@@ -179,8 +98,6 @@ const styles = StyleSheet.create({
     letterSpacing: 0.3,
     textAlign: 'center',
   },
-
-  viewToggle: { marginBottom: 20 },
 
   emptyCard: {
     backgroundColor: colors.surface,

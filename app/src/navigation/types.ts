@@ -12,6 +12,7 @@ export type MoreStackParamList = {
   Registration: undefined
   PinsinoAdmin: undefined
   PinsinoAccounting: undefined
+  PinsinoSportsbook: undefined
 }
 
 export type StandingsStackParamList = {
