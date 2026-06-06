@@ -24,7 +24,7 @@ function actionLabel(type: string, perspective: 'player' | 'house'): string {
     case 'bet_refund':
       return 'PUSH · REFUND'
     case 'score_credit':
-      return 'GAME SCORE'
+      return 'PINCOME'
     case 'bonus':
       return 'BONUS'
     default:
