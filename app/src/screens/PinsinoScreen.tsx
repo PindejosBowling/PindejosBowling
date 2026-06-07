@@ -31,7 +31,7 @@ const MENU_TILES: { icon: string; label: string; route: 'PinsinoLeaderboard' | '
   { icon: '🏟️', label: 'Sportsbook', route: 'Sportsbook' },
   { icon: '🦈', label: 'Loan Shark', route: 'LoanShark' },
   { icon: '⚔️', label: 'PvP', route: 'PvP' },
-  { icon: '📊', label: 'Market Moves', route: 'MarketMoves' },
+  { icon: '👀', label: 'Market Moves', route: 'MarketMoves' },
 ]
 
 export default function PinsinoScreen() {

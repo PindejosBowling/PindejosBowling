@@ -2,7 +2,7 @@ import { useState, useCallback, useEffect } from 'react'
 import { seasons, activityFeed } from '../utils/supabase/db'
 import type { FeedEventView } from '../utils/activityFeedTemplates'
 
-export type FeedFilter = 'all' | 'sportsbook' | 'loan_shark' | 'highlights'
+export type FeedFilter = 'all' | 'sportsbook' | 'loan_shark' | 'pvp' | 'highlights'
 
 const PAGE_SIZE = 50
 
@@ -25,14 +25,15 @@ export function normalizeFeedRow(r: any): FeedEventView {
     publishedAt: r.published_at,
     occurredAt: r.occurred_at,
     actorPlayerId: r.actor_player_id ?? null,
-    actorName: r.actor?.name ?? null,
+    actorName: r.actor?.first_name ?? null,
     actorAvatarPath: r.actor?.avatar_path ?? null,
     subjectPlayerId: r.subject_player_id ?? null,
-    subjectName: r.subject?.name ?? null,
+    subjectName: r.subject?.first_name ?? null,
     secondaryPlayerId: r.secondary_player_id ?? null,
-    secondaryName: r.secondary?.name ?? null,
+    secondaryName: r.secondary?.first_name ?? null,
     sportsbookBetId: r.sportsbook_bet_id ?? null,
     loanId: r.loan_id ?? null,
+    pvpChallengeId: r.pvp_challenge_id ?? null,
     suppressionReason: r.suppression_reason ?? null,
   }
 }
@@ -48,6 +49,8 @@ function fetchPage(
       return activityFeed.listByFeature(seasonId, 'sportsbook', cursor)
     case 'loan_shark':
       return activityFeed.listByFeature(seasonId, 'loan_shark', cursor)
+    case 'pvp':
+      return activityFeed.listByFeature(seasonId, 'pvp', cursor)
     case 'highlights':
       return activityFeed.listHighlights(seasonId, cursor)
     default:

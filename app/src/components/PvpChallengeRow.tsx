@@ -25,7 +25,7 @@ function opponentLabel(c: PvpChallengeView, viewerId: string | null): string {
 function resultChip(c: PvpChallengeView, viewerId: string | null): { text: string; color: string } {
   if (c.status === 'settled') {
     if (viewerId && c.winnerId === viewerId) return { text: 'WON', color: colors.success }
-    if (c.winnerId) return { text: 'LOST', color: colors.danger }
+    if (viewerId && c.winnerId) return { text: 'LOST', color: colors.danger }
     return { text: 'SETTLED', color: colors.muted }
   }
   if (c.status === 'pushed') return { text: 'PUSH', color: colors.gold }

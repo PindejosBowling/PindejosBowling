@@ -20,7 +20,7 @@ const MENU_TILES: { icon: string; label: string; route: 'PinsinoAccounting' | 'P
   { icon: '🏟️', label: 'Sportsbook', route: 'PinsinoSportsbook' },
   { icon: '🦈', label: 'Loan Shark', route: 'LoanSharkAdmin' },
   { icon: '⚔️', label: 'PvP', route: 'PvPAdmin' },
-  { icon: '📊', label: 'Market Moves', route: 'MarketMovesAdmin' },
+  { icon: '👀', label: 'Market Moves', route: 'MarketMovesAdmin' },
 ]
 
 export default function PinsinoAdminScreen() {

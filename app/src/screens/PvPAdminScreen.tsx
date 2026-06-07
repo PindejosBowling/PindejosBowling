@@ -18,7 +18,7 @@ import { CONTRACT_TYPE_LABEL, STATUS_LABEL } from '../utils/pvp'
 
 type Nav = NativeStackNavigationProp<MoreStackParamList>
 
-const STATUS_FILTERS = ['All', 'pending', 'countered', 'locked']
+const STATUS_FILTERS = ['All', 'pending', 'countered', 'locked', 'settled']
 
 export default function PvPAdminScreen() {
   const navigation = useNavigation<Nav>()
@@ -79,7 +79,7 @@ export default function PvPAdminScreen() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.muted} />}
       >
         {rows.length === 0 ? (
-          <View style={styles.emptyCard}><Text style={styles.emptyText}>No open or active contracts.</Text></View>
+          <View style={styles.emptyCard}><Text style={styles.emptyText}>No open, active, or settled contracts.</Text></View>
         ) : (
           rows.map(c => (
             <PvpChallengeRow

@@ -26,13 +26,14 @@ import { normalizeFeedRow } from '../hooks/useMarketMovesData'
 import { renderFeedEvent, FeedEventView } from '../utils/activityFeedTemplates'
 
 // Client-side admin filters (design §18). Reuse the string-keyed pill component.
-const FEATURE_FILTERS = ['all', 'sportsbook', 'loan_shark', 'system', 'admin']
+const FEATURE_FILTERS = ['all', 'sportsbook', 'loan_shark', 'pvp', 'system', 'admin']
 const STATUS_FILTERS = ['all', 'published', 'suppressed']
 const IMPORTANCE_FILTERS = ['all', 'highlight', 'major']
 const FILTER_LABELS: Record<string, string> = {
   all: 'All',
   sportsbook: 'Sportsbook',
   loan_shark: 'Loan Shark',
+  pvp: 'PvP',
   system: 'System',
   admin: 'Admin',
   published: 'Published',
@@ -139,7 +140,9 @@ export default function MarketMovesAdminScreen() {
               ? `bet ${e.sportsbookBetId.slice(0, 8)}`
               : e.loanId
                 ? `loan ${e.loanId.slice(0, 8)}`
-                : null
+                : e.pvpChallengeId
+                  ? `pvp ${e.pvpChallengeId.slice(0, 8)}`
+                  : null
             return (
               <View key={e.id} style={styles.card}>
                 <View style={styles.cardHead}>

@@ -18,8 +18,17 @@ export default function MarketMoveCard({ event, onPress }: Props) {
   const parts = useMemo(() => renderFeedEvent(event), [event])
   const hasActor = event.actorPlayerId != null && event.actorName != null
 
+  const winner = parts.winner
+
   const body = (
     <View style={styles.card}>
+      {winner && (
+        <View style={styles.winnerBanner}>
+          <Text style={styles.winnerTrophy}>🏆</Text>
+          <Text style={styles.winnerLabel}>WINNER</Text>
+          <Text style={styles.winnerName} numberOfLines={1}>{winner.name}</Text>
+        </View>
+      )}
       <View style={styles.leadRow}>
         {hasActor ? (
           <PlayerAvatar name={event.actorName} playerId={event.actorPlayerId} size={36} />
@@ -39,6 +48,7 @@ export default function MarketMoveCard({ event, onPress }: Props) {
         </View>
         {parts.amount && (
           <View style={styles.amountBadge}>
+            {parts.amount.label && <Text style={styles.amountLabel}>{parts.amount.label}</Text>}
             <Text
               style={[
                 styles.amountText,
@@ -70,6 +80,30 @@ const styles = StyleSheet.create({
     padding: 14,
     marginBottom: 10,
   },
+  // Victory treatment — a gold trophy banner above an otherwise-standard card.
+  winnerBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 10,
+    paddingBottom: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(251,191,36,0.25)',
+  },
+  winnerTrophy: { fontSize: 14 },
+  winnerLabel: {
+    fontFamily: fonts.barlowCondensedHeavy,
+    fontSize: 12,
+    letterSpacing: 2,
+    color: colors.gold,
+  },
+  winnerName: {
+    flex: 1,
+    fontFamily: fonts.barlowCondensed,
+    fontSize: 14,
+    letterSpacing: 0.3,
+    color: colors.gold,
+  },
   leadRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   iconCircle: {
     width: 36,
@@ -99,6 +133,14 @@ const styles = StyleSheet.create({
     borderRadius: radius.cardSm,
     paddingHorizontal: 10,
     paddingVertical: 6,
+    alignItems: 'flex-end',
+  },
+  amountLabel: {
+    fontFamily: fonts.barlowCondensed,
+    fontSize: 9,
+    letterSpacing: 1,
+    color: colors.muted,
+    marginBottom: 1,
   },
   amountText: { fontFamily: fonts.barlowCondensedHeavy, fontSize: 15 },
   amountPositive: { color: colors.success },

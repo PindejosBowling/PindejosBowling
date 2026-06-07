@@ -15,6 +15,7 @@ interface AdminLoanRow {
   loanId: string
   playerName: string
   productName: string
+  status: 'active' | 'paid_off'
   outstanding: number
 }
 
@@ -34,8 +35,8 @@ export default function LoanSharkAdminScreen() {
       if (!seasonId) { setRows([]); return }
 
       const [loansRes, debtRes] = await Promise.all([
-        loans.listActiveDetailed(seasonId),
-        loanLedger.listActiveBySeason(seasonId),
+        loans.listCancelableDetailed(seasonId),
+        loanLedger.listCancelableBySeason(seasonId),
       ])
 
       // Outstanding debt per loan = SUM(loan_ledger.amount) over its rows.
@@ -49,6 +50,7 @@ export default function LoanSharkAdminScreen() {
           loanId: l.id,
           playerName: l.players?.name ?? '—',
           productName: l.loan_products?.display_name ?? '—',
+          status: l.status,
           outstanding: debtByLoan[l.id] ?? 0,
         }))
       )
@@ -72,9 +74,13 @@ export default function LoanSharkAdminScreen() {
   }
 
   function confirmCancel(row: AdminLoanRow) {
+    const detail =
+      row.status === 'paid_off'
+        ? 'This loan is paid off — undoing it reverts every pin movement it made (the original payout and all repayments).'
+        : 'This removes the loan and reverts their balance and debt.'
     Alert.alert(
       'Cancel Loan',
-      `Undo ${row.playerName}'s ${row.productName}? This removes the loan and reverts their balance and debt.`,
+      `Undo ${row.playerName}'s ${row.productName}? ${detail}`,
       [
         { text: 'Keep Loan', style: 'cancel' },
         { text: 'Cancel Loan', style: 'destructive', onPress: () => cancelLoan(row) },
@@ -97,14 +103,14 @@ export default function LoanSharkAdminScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
-      <ScreenHeader title="Loan Shark Admin" subtitle="Active loans" onBack={() => navigation.goBack()} />
+      <ScreenHeader title="Loan Shark Admin" subtitle="Active & paid-off loans" onBack={() => navigation.goBack()} />
       <ScrollView
         contentContainerStyle={styles.content}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.muted} />}
       >
         {rows.length === 0 ? (
           <View style={styles.emptyCard}>
-            <Text style={styles.emptyText}>No active loans</Text>
+            <Text style={styles.emptyText}>No active or paid-off loans</Text>
           </View>
         ) : (
           <View style={styles.card}>
@@ -117,7 +123,13 @@ export default function LoanSharkAdminScreen() {
                   <Text style={styles.playerName}>{r.playerName}</Text>
                   <Text style={styles.productName}>{r.productName}</Text>
                 </View>
-                <Text style={styles.outstanding}>−{r.outstanding.toLocaleString()}</Text>
+                {r.status === 'paid_off' ? (
+                  <View style={styles.paidBadge}>
+                    <Text style={styles.paidBadgeText}>Paid Off</Text>
+                  </View>
+                ) : (
+                  <Text style={styles.outstanding}>−{r.outstanding.toLocaleString()}</Text>
+                )}
                 <TouchableOpacity
                   style={styles.cancelBtn}
                   onPress={() => confirmCancel(r)}
@@ -155,6 +167,20 @@ const styles = StyleSheet.create({
     fontSize: 18,
     color: colors.danger,
     marginRight: 14,
+  },
+  paidBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    backgroundColor: colors.surface2,
+    marginRight: 14,
+  },
+  paidBadgeText: {
+    fontFamily: fonts.barlowCondensed,
+    fontSize: 12,
+    color: colors.muted,
+    letterSpacing: 0.3,
+    textTransform: 'uppercase',
   },
   cancelBtn: {
     width: 32,

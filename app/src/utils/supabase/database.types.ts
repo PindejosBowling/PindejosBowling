@@ -26,6 +26,7 @@ export type Database = {
           occurred_at: string
           public_payload: Json
           published_at: string
+          pvp_challenge_id: string | null
           season_id: string
           secondary_player_id: string | null
           source_feature: string
@@ -51,6 +52,7 @@ export type Database = {
           occurred_at: string
           public_payload?: Json
           published_at?: string
+          pvp_challenge_id?: string | null
           season_id: string
           secondary_player_id?: string | null
           source_feature: string
@@ -76,6 +78,7 @@ export type Database = {
           occurred_at?: string
           public_payload?: Json
           published_at?: string
+          pvp_challenge_id?: string | null
           season_id?: string
           secondary_player_id?: string | null
           source_feature?: string
@@ -103,6 +106,13 @@ export type Database = {
             columns: ["loan_id"]
             isOneToOne: false
             referencedRelation: "loans"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "activity_feed_events_pvp_challenge_id_fkey"
+            columns: ["pvp_challenge_id"]
+            isOneToOne: false
+            referencedRelation: "pvp_challenges"
             referencedColumns: ["id"]
           },
           {
@@ -1647,6 +1657,7 @@ export type Database = {
           p_loan_id: string
           p_occurred_at: string
           p_public_payload: Json
+          p_pvp_challenge_id?: string
           p_season_id: string
           p_secondary_player_id: string
           p_source_feature: string

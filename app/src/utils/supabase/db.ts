@@ -425,6 +425,14 @@ export const bets = {
       .eq('season_id', seasonId)
       .not('settled_at', 'is', null)
       .order('settled_at', { ascending: false }),
+  // One bet with its full leg → selection → market graph (Bet Details overlay,
+  // e.g. opened from a Market Moves placement card).
+  getById: (betId: string) =>
+    supabase
+      .from('bets')
+      .select('*, players(name), ' + LEG_GRAPH)
+      .eq('id', betId)
+      .single(),
   // Place a house bet atomically (SECURITY DEFINER); O/U passes one selection id.
   place: (selectionIds: string[], stake: number) =>
     supabase.rpc('place_house_bet', { p_selection_ids: selectionIds, p_stake: stake }),
@@ -469,6 +477,15 @@ export const loans = {
       .eq('season_id', seasonId)
       .eq('status', 'active')
       .order('issued_at', { ascending: false }),
+  // Active + paid-off loans in a season with player + product — the admin
+  // cancel list, which can roll back loans that have already been repaid.
+  listCancelableDetailed: (seasonId: string) =>
+    supabase
+      .from('loans')
+      .select('*, players(name), loan_products(display_name, borrow_amount)')
+      .eq('season_id', seasonId)
+      .in('status', ['active', 'paid_off'])
+      .order('issued_at', { ascending: false }),
   take: (productId: string) =>
     supabase.rpc('take_loan', { p_loan_product_id: productId }),
   repay: (loanId: string, amount: number) =>
@@ -496,6 +513,14 @@ export const loanLedger = {
       .select('player_id, amount, loan_id, loans!inner(status)')
       .eq('season_id', seasonId)
       .eq('loans.status', 'active'),
+  // Debt rows for active + paid-off loans in a season — summed per loan for the
+  // admin cancel list (paid-off loans net to 0).
+  listCancelableBySeason: (seasonId: string) =>
+    supabase
+      .from('loan_ledger')
+      .select('player_id, amount, loan_id, loans!inner(status)')
+      .eq('season_id', seasonId)
+      .in('loans.status', ['active', 'paid_off']),
 }
 
 export const pinLedger = {
@@ -585,12 +610,13 @@ export const pvpChallenges = {
       .eq('status', 'pending')
       .order('created_at', { ascending: false }),
 
-  // Admin: active/locked + still-negotiating contracts for the season.
+  // Admin: active/locked + still-negotiating + settled contracts for the season.
+  // Settled contracts are included so an admin can review and cancel them.
   listLockedBySeason: (seasonId: string) =>
     supabase.from('pvp_challenges')
       .select(CHALLENGE_PARTIES)
       .eq('season_id', seasonId)
-      .in('status', ['pending', 'countered', 'locked'])
+      .in('status', ['pending', 'countered', 'locked', 'settled'])
       .order('created_at', { ascending: false }),
 
   // Detail page: one contract with its full negotiation trail + ledger.
@@ -670,10 +696,12 @@ export const pvpLedger = {
 // names are pulled live from the joined players rows, NOT snapshotted. Three FKs
 // point at players, so the actor/subject/secondary embeds REQUIRE explicit
 // !constraint hints to disambiguate.
+// Feed copy uses first names only (e.g. "Garrett placed a ticket"), so the embeds
+// pull first_name (+ avatar_path for the actor's avatar) rather than full name.
 const FEED_GRAPH =
-  '*, actor:players!activity_feed_events_actor_player_id_fkey(name, avatar_path), ' +
-  'subject:players!activity_feed_events_subject_player_id_fkey(name), ' +
-  'secondary:players!activity_feed_events_secondary_player_id_fkey(name)'
+  '*, actor:players!activity_feed_events_actor_player_id_fkey(first_name, avatar_path), ' +
+  'subject:players!activity_feed_events_subject_player_id_fkey(first_name), ' +
+  'secondary:players!activity_feed_events_secondary_player_id_fkey(first_name)'
 
 // Keyset cursor = the last row's { publishedAt, id }. published_at DESC, id DESC
 // is the stable ordering key; the .or(...) keeps the boundary row from repeating.
