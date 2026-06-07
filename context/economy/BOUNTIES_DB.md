@@ -15,6 +15,13 @@
 > House seed is `0` for sponsor bounties and `n × R` only for a House bounty that loses.
 > Sections below that reference per-entry dilution / `floor(S/k)` / House seed are
 > historical; read them through that migration.
+>
+> **v1 is House-only.** `20260607221500_bounty_house_only_v1.sql` revokes EXECUTE on
+> `create_sponsor_bounty(uuid,text,text,int,int,int,timestamptz)` from `authenticated`,
+> so players cannot self-sponsor even via direct API calls — only admin-posted
+> `create_house_bounty` and `enter_bounty_as_hunter` are reachable by clients. The
+> function is kept (not dropped) for a future player-sponsor phase; re-`GRANT` to
+> restore. Rationale + the planned admin-approval gate: `ECONOMIC_DESIGN_BOUNTIES.md` §3.3.
 
 Handoff spec for the **database layer** of the Bounty Board feature. Self-contained and
 executable independently of the app-layer spec (`economy/BOUNTIES_APP.md`), which depends on

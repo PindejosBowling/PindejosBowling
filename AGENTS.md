@@ -38,15 +38,15 @@ Product/design references and per-feature implementation specs for the pin econo
 | [context/economy/ECONOMIC_DESIGN_MERCHANT.md](context/economy/ECONOMIC_DESIGN_MERCHANT.md) | Traveling Merchant / Item Shop feature design |
 | [context/economy/ECONOMIC_DESIGN_PvP.md](context/economy/ECONOMIC_DESIGN_PvP.md) | PvP Challenge Contracts feature design |
 | [context/economy/ECONOMIC_DESIGN_ACTIVITY_FEED.md](context/economy/ECONOMIC_DESIGN_ACTIVITY_FEED.md) | Activity Feed ("Market Moves") feature design — the public economic newswire |
-| [context/economy/ECONOMIC_DESIGN_BOUNTIES.md](context/economy/ECONOMIC_DESIGN_BOUNTIES.md) | Bounty Board feature design — public, pooled, manually-settled sponsor/house bounties with early-hunter anti-dilution + House seed |
+| [context/economy/ECONOMIC_DESIGN_BOUNTIES.md](context/economy/ECONOMIC_DESIGN_BOUNTIES.md) | Bounty Board feature design — public, pooled, manually-settled bounties on the **"All Comers"** model (flat reward-per-hunter, no dilution, collective win); **v1 House-only** (player-sponsor path gated off for integrity, §3.3) |
 | [context/economy/LOAN_SHARK_DB.md](context/economy/LOAN_SHARK_DB.md) | Loan Shark **database** implementation spec (schema + RPCs) — read before touching any `loan_*` DB code |
 | [context/economy/LOAN_SHARK_APP.md](context/economy/LOAN_SHARK_APP.md) | Loan Shark **app-layer** implementation spec (`app/src`) |
 | [context/economy/PvP_DB.md](context/economy/PvP_DB.md) | PvP Challenge Contracts **database** implementation spec (schema + RPCs) — read before touching any `pvp_*` DB code |
 | [context/economy/PvP_APP.md](context/economy/PvP_APP.md) | PvP Challenge Contracts **app-layer** implementation spec (`app/src`) |
 | [context/economy/ACTIVITY_FEED_DB.md](context/economy/ACTIVITY_FEED_DB.md) | Activity Feed **database** implementation spec (the `activity_feed_events` table + `publish_activity_event` helper + edits to existing economic RPCs) — read before touching any `activity_feed_*` DB code |
 | [context/economy/ACTIVITY_FEED_APP.md](context/economy/ACTIVITY_FEED_APP.md) | Activity Feed **app-layer** implementation spec (the "Market Moves" Pinsino tile) |
-| [context/economy/BOUNTIES_DB.md](context/economy/BOUNTIES_DB.md) | Bounty Board **database** implementation spec (the four `bounty_*` tables + `pin_ledger` extension + RPCs + Activity Feed wiring) — read before touching any `bounty_*` DB code |
-| [context/economy/BOUNTIES_APP.md](context/economy/BOUNTIES_APP.md) | Bounty Board **app-layer** implementation spec (the "Bounties" Pinsino tile) |
+| [context/economy/BOUNTIES_DB.md](context/economy/BOUNTIES_DB.md) | Bounty Board **database** implementation spec (the four `bounty_*` tables + `pin_ledger` extension + RPCs + Activity Feed wiring) — read before touching any `bounty_*` DB code. **As-built mechanic = All Comers** (migration `…220000_bounty_all_comers`); **v1 House-only** (`create_sponsor_bounty` revoked, migration `…221500_bounty_house_only_v1`) |
+| [context/economy/BOUNTIES_APP.md](context/economy/BOUNTIES_APP.md) | Bounty Board **app-layer** implementation spec (the "Bounties" Pinsino tile) — All Comers payouts; **player "Post a Bounty" CTA hidden in v1** (route/screen/`createSponsor` kept for later) |
 
 ## External source-of-truth docs
 

@@ -11,6 +11,13 @@
 > whole pack wins." Pure helpers live in `app/src/utils/bounty.ts`
 > (`sponsorMaxLiability`, `hunterPayout`, `bountyEconomics`). References below to
 > "protected profit", "anti-dilution preview", or "House seed estimate" are historical.
+>
+> **v1 is House-only.** The player "Post a Bounty" CTA on `BountyBoardScreen` is hidden
+> (see the comment there) — players join as hunters only; bounties are created by admins
+> via the Bounty Admin "Create House Bounty" flow. The `BountyCreate` route, screen, and
+> `bountyPosts.createSponsor` wrapper are **kept** for a future player-sponsor phase; only
+> the entry point is removed (the DB also revokes the RPC — see the DB spec banner). To
+> restore: re-add the CTA. Rationale: `ECONOMIC_DESIGN_BOUNTIES.md` §3.3.
 
 Handoff spec for the **app layer** (`app/src`) of the Bounty Board feature, surfaced as a
 new Pinsino tile **"Bounties"**.

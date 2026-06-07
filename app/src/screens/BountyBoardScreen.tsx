@@ -1,5 +1,5 @@
 import { useCallback } from 'react'
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, RefreshControl } from 'react-native'
+import { View, Text, ScrollView, StyleSheet, RefreshControl } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useNavigation, useFocusEffect } from '@react-navigation/native'
 import { NativeStackNavigationProp } from '@react-navigation/native-stack'
@@ -46,7 +46,7 @@ export default function BountyBoardScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
-      <ScreenHeader title="Bounties" subtitle="Post a bounty, or join the hunt" onBack={() => navigation.goBack()} />
+      <ScreenHeader title="Bounties" subtitle="Join the hunt & prosper together" onBack={() => navigation.goBack()} />
       <ScrollView
         contentContainerStyle={styles.content}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.muted} />}
@@ -56,17 +56,14 @@ export default function BountyBoardScreen() {
           <Text style={styles.balancePillValue}>{balance.toLocaleString()} pins</Text>
         </View>
 
-        <TouchableOpacity
-          style={styles.postBtn}
-          onPress={() => navigation.navigate('BountyCreate')}
-          activeOpacity={0.7}
-        >
-          <Text style={styles.postBtnText}>+ Post a Bounty</Text>
-        </TouchableOpacity>
+        {/* v1 is House-only: the player "Post a Bounty" entry point is intentionally
+            hidden (the create_sponsor_bounty RPC is also revoked at the DB layer).
+            The BountyCreate route/screen are kept for a future player-sponsor phase
+            — re-add this CTA + re-GRANT the RPC to restore it. */}
 
         {nothing ? (
           <View style={styles.emptyCard}>
-            <Text style={styles.emptyText}>No bounties yet. Post one to get the hunt started.</Text>
+            <Text style={styles.emptyText}>No bounties right now. Check back when the Pinsino posts one to hunt.</Text>
           </View>
         ) : (
           <>
@@ -100,15 +97,6 @@ const styles = StyleSheet.create({
   },
   balancePillLabel: { fontFamily: fonts.barlowCondensed, fontSize: 12, letterSpacing: 1.5, color: colors.muted },
   balancePillValue: { fontFamily: fonts.barlowCondensedHeavy, fontSize: 20, color: colors.accent },
-
-  postBtn: {
-    backgroundColor: colors.accent,
-    borderRadius: radius.cardSm,
-    paddingVertical: 13,
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  postBtnText: { fontFamily: fonts.barlowCondensed, fontSize: 15, fontWeight: '700', color: colors.bg, letterSpacing: 0.5 },
 
   sectionLabel: {
     fontFamily: fonts.barlowCondensed,

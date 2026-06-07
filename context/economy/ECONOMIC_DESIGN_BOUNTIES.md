@@ -24,6 +24,12 @@ This document is self-contained and written to support database and application-
 > subsidizes a *House-sponsored* bounty that loses to the hunters. The as-built
 > schema/RPCs are in `supabase/migrations/20260607220000_bounty_all_comers.sql`;
 > §15+ below predate the revision and should be read through this lens.
+>
+> **v1 is House-only (see §3.1).** Only the Pinsino sponsors bounties; players join as
+> hunters. Player-sponsored bounties are deferred for integrity reasons and the create
+> path is gated off (UI button hidden; `create_sponsor_bounty` revoked from
+> `authenticated` in `20260607221500_bounty_house_only_v1.sql`). The code path is kept
+> for a future player-sponsor phase.
 
 ---
 
@@ -135,6 +141,43 @@ Examples:
 > I am betting nobody in the league bowls a turkey this week. If nobody does, sponsor wins. If anyone does, hunters win.
 
 A “Back Yourself” bounty is not a separate schema type. It is simply a `sponsor_bounty` where the player-sponsor writes the bounty about their own performance.
+
+### 3.3 v1 sponsorship policy — House-only (integrity decision)
+
+**For v1, only `house_bounty` is enabled. Players join as hunters only.** The
+`sponsor_bounty` type, schema, and RPC are retained but the create path is gated off
+(the app hides the "Post a Bounty" entry point and `create_sponsor_bounty` is revoked
+from `authenticated` in `20260607221500_bounty_house_only_v1.sql`).
+
+The governing rule:
+
+> A bounty is integrity-safe only if **no participant can influence the real-world
+> outcome in the direction that pays them.**
+
+A player sponsor fails this rule three ways, because the counterparty is a competitor
+who bowls:
+
+1. **Tanking.** A condition the sponsor influences lets them steer the outcome toward
+   their winning side — most dangerously a *negative* or *team* condition they can
+   deliberately miss to keep the hunter stakes (the pin economy paying a player to bowl
+   badly — a violation of "bounties never affect gameplay", §28.1).
+2. **Collusion / wash transfers.** Manual freeform settlement lets two friends stage a
+   bounty whose only purpose is to move pins between them, polluting the leaderboard.
+3. **Targeting.** Freeform text can describe a third party who never opted in
+   ("hunters win if Bob chokes"), even though `subject_player_id` was removed (§19.1).
+
+The House is structurally immune: it does not bowl (cannot tank), it sets and curates
+the condition (can frame "hunter win" as a *positive achievement* so it aligns with
+good bowling), and it is not a competitor. The valuable, safe essence of a bounty is
+the **crowd-vs-House** dynamic; **player-vs-player action already lives on the PvP
+Challenge board**, so House-only loses little.
+
+**Re-enabling player bounties later** (a possible "back yourself, positive-framed"
+phase) should go behind an **admin-approval gate**: a player posts a *proposal*
+(`pending_approval`), escrow locks only on admin approval, and conditions that are
+self-negative, team-tankable, or subject-targeted are rejected. To restore: re-add the
+UI CTA and re-`GRANT EXECUTE` on `create_sponsor_bounty` (ideally with the approval
+status flow).
 
 ---
 

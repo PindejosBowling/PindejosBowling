@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   Modal, View, Text, TextInput, TouchableOpacity, StyleSheet,
   KeyboardAvoidingView, Platform, ActivityIndicator, ScrollView,
@@ -7,7 +7,7 @@ import DateTimePicker from '@react-native-community/datetimepicker'
 import { colors, fonts, radius } from '../theme'
 import Toast from './Toast'
 import { useUiStore } from '../stores/uiStore'
-import { bountyPosts } from '../utils/supabase/db'
+import { bountyPosts, players } from '../utils/supabase/db'
 import {
   MIN_REWARD_PER_HUNTER, MIN_HUNTER_STAKE, MIN_MAX_HUNTERS, MAX_MAX_HUNTERS,
   MAX_TITLE_LEN, MAX_DESCRIPTION_LEN, defaultBountyCloseAt, formatCloseTime,
@@ -31,6 +31,19 @@ export default function BountyHouseCreateModal({ weekId, onClose, onDone }: Prop
   const [closesAt, setClosesAt] = useState<Date>(() => defaultBountyCloseAt())
   const [pickerOpen, setPickerOpen] = useState(false)
   const [saving, setSaving] = useState(false)
+
+  // Default Max Hunters to the number of active players in the current season.
+  // Only seeds the field while it's still untouched/empty.
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      const { data } = await players.listActive()
+      if (cancelled || !data) return
+      const count = Math.min(data.length, MAX_MAX_HUNTERS)
+      if (count >= MIN_MAX_HUNTERS) setMaxHunters(prev => (prev ? prev : String(count)))
+    })()
+    return () => { cancelled = true }
+  }, [])
 
   const R = Number(reward) || 0
   const H = Number(hunterStake) || 0
