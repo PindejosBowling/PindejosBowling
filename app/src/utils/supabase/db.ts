@@ -1,5 +1,5 @@
 import { supabase } from './client'
-import type { TablesInsert, TablesUpdate } from './database.types'
+import type { TablesInsert, TablesUpdate, Json } from './database.types'
 
 export const boardPosts = {
   list: () =>
@@ -661,6 +661,74 @@ export const pvpLedger = {
     supabase.from('pvp_ledger').select('*, weeks(week_number)')
       .eq('player_id', playerId).eq('season_id', seasonId)
       .order('created_at', { ascending: false }),
+}
+
+// ── Activity Feed ("Market Moves") — activity_feed_events ────────────────────
+// The public economic newswire. One narrative row per feed-worthy economic
+// action; the feed never moves pins (read-derived only). Copy is rendered in the
+// app from template_key + public_payload (see utils/activityFeedTemplates.ts) —
+// names are pulled live from the joined players rows, NOT snapshotted. Three FKs
+// point at players, so the actor/subject/secondary embeds REQUIRE explicit
+// !constraint hints to disambiguate.
+const FEED_GRAPH =
+  '*, actor:players!activity_feed_events_actor_player_id_fkey(name, avatar_path), ' +
+  'subject:players!activity_feed_events_subject_player_id_fkey(name), ' +
+  'secondary:players!activity_feed_events_secondary_player_id_fkey(name)'
+
+// Keyset cursor = the last row's { publishedAt, id }. published_at DESC, id DESC
+// is the stable ordering key; the .or(...) keeps the boundary row from repeating.
+type FeedCursor = { publishedAt: string; id: string }
+const feedCursorFilter = (c: FeedCursor) =>
+  `published_at.lt.${c.publishedAt},and(published_at.eq.${c.publishedAt},id.lt.${c.id})`
+
+export const activityFeed = {
+  // Public feed (design §15.1) — published + public rows, newest first.
+  listPublic: (seasonId: string, cursor?: FeedCursor) => {
+    let q = supabase.from('activity_feed_events').select(FEED_GRAPH)
+      .eq('season_id', seasonId).eq('status', 'published').eq('visibility', 'public')
+    if (cursor) q = q.or(feedCursorFilter(cursor))
+    return q.order('published_at', { ascending: false }).order('id', { ascending: false }).limit(50)
+  },
+
+  // Feature filter (design §15.2): sourceFeature in ('sportsbook','loan_shark').
+  listByFeature: (seasonId: string, sourceFeature: string, cursor?: FeedCursor) => {
+    let q = supabase.from('activity_feed_events').select(FEED_GRAPH)
+      .eq('season_id', seasonId).eq('status', 'published').eq('visibility', 'public')
+      .eq('source_feature', sourceFeature)
+    if (cursor) q = q.or(feedCursorFilter(cursor))
+    return q.order('published_at', { ascending: false }).order('id', { ascending: false }).limit(50)
+  },
+
+  // Highlights filter (design §15.2): importance in ('highlight','major').
+  listHighlights: (seasonId: string, cursor?: FeedCursor) => {
+    let q = supabase.from('activity_feed_events').select(FEED_GRAPH)
+      .eq('season_id', seasonId).eq('status', 'published').eq('visibility', 'public')
+      .in('importance', ['highlight', 'major'])
+    if (cursor) q = q.or(feedCursorFilter(cursor))
+    return q.order('published_at', { ascending: false }).order('id', { ascending: false }).limit(50)
+  },
+
+  // Admin: every row (any status/visibility) for the season, filtered client-side.
+  listAllForAdmin: (seasonId: string) =>
+    supabase.from('activity_feed_events').select(FEED_GRAPH)
+      .eq('season_id', seasonId)
+      .order('published_at', { ascending: false }).order('id', { ascending: false }).limit(200),
+
+  suppress: (eventId: string, reason: string) =>
+    supabase.rpc('suppress_activity_event', { p_event_id: eventId, p_reason: reason }),
+  restore: (eventId: string) =>
+    supabase.rpc('restore_activity_event', { p_event_id: eventId }),
+  createSystemEvent: (args: {
+    sourceFeature: 'system' | 'admin'; eventType: string; templateKey: string
+    publicPayload: Json; importance: string
+  }) =>
+    supabase.rpc('create_system_activity_event', {
+      p_source_feature: args.sourceFeature,
+      p_event_type: args.eventType,
+      p_template_key: args.templateKey,
+      p_public_payload: args.publicPayload,
+      p_importance: args.importance,
+    }),
 }
 
 export const weeks = {

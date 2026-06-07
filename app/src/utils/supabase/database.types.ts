@@ -12,33 +12,143 @@ export type Database = {
   __InternalSupabase: {
     PostgrestVersion: "14.5"
   }
-  graphql_public: {
-    Tables: {
-      [_ in never]: never
-    }
-    Views: {
-      [_ in never]: never
-    }
-    Functions: {
-      graphql: {
-        Args: {
-          extensions?: Json
-          operationName?: string
-          query?: string
-          variables?: Json
-        }
-        Returns: Json
-      }
-    }
-    Enums: {
-      [_ in never]: never
-    }
-    CompositeTypes: {
-      [_ in never]: never
-    }
-  }
   public: {
     Tables: {
+      activity_feed_events: {
+        Row: {
+          actor_player_id: string | null
+          admin_payload: Json
+          created_at: string
+          event_type: string
+          id: string
+          importance: string
+          loan_id: string | null
+          occurred_at: string
+          public_payload: Json
+          published_at: string
+          season_id: string
+          secondary_player_id: string | null
+          source_feature: string
+          sportsbook_bet_id: string | null
+          status: string
+          subject_player_id: string | null
+          suppressed_at: string | null
+          suppressed_by_admin_id: string | null
+          suppression_reason: string | null
+          template_key: string
+          updated_at: string
+          visibility: string
+          week_id: string | null
+        }
+        Insert: {
+          actor_player_id?: string | null
+          admin_payload?: Json
+          created_at?: string
+          event_type: string
+          id?: string
+          importance?: string
+          loan_id?: string | null
+          occurred_at: string
+          public_payload?: Json
+          published_at?: string
+          season_id: string
+          secondary_player_id?: string | null
+          source_feature: string
+          sportsbook_bet_id?: string | null
+          status?: string
+          subject_player_id?: string | null
+          suppressed_at?: string | null
+          suppressed_by_admin_id?: string | null
+          suppression_reason?: string | null
+          template_key: string
+          updated_at?: string
+          visibility?: string
+          week_id?: string | null
+        }
+        Update: {
+          actor_player_id?: string | null
+          admin_payload?: Json
+          created_at?: string
+          event_type?: string
+          id?: string
+          importance?: string
+          loan_id?: string | null
+          occurred_at?: string
+          public_payload?: Json
+          published_at?: string
+          season_id?: string
+          secondary_player_id?: string | null
+          source_feature?: string
+          sportsbook_bet_id?: string | null
+          status?: string
+          subject_player_id?: string | null
+          suppressed_at?: string | null
+          suppressed_by_admin_id?: string | null
+          suppression_reason?: string | null
+          template_key?: string
+          updated_at?: string
+          visibility?: string
+          week_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "activity_feed_events_actor_player_id_fkey"
+            columns: ["actor_player_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "activity_feed_events_loan_id_fkey"
+            columns: ["loan_id"]
+            isOneToOne: false
+            referencedRelation: "loans"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "activity_feed_events_season_id_fkey"
+            columns: ["season_id"]
+            isOneToOne: false
+            referencedRelation: "seasons"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "activity_feed_events_secondary_player_id_fkey"
+            columns: ["secondary_player_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "activity_feed_events_sportsbook_bet_id_fkey"
+            columns: ["sportsbook_bet_id"]
+            isOneToOne: false
+            referencedRelation: "bets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "activity_feed_events_subject_player_id_fkey"
+            columns: ["subject_player_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "activity_feed_events_suppressed_by_admin_id_fkey"
+            columns: ["suppressed_by_admin_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "activity_feed_events_week_id_fkey"
+            columns: ["week_id"]
+            isOneToOne: false
+            referencedRelation: "weeks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       bet_legs: {
         Row: {
           bet_id: string
@@ -901,11 +1011,13 @@ export type Database = {
           accepted_at: string | null
           admin_note: string | null
           contract_type: string
+          counterparty_handicap: number
           counterparty_line: number | null
           counterparty_player_id: string | null
           counterparty_selection: string | null
           counterparty_stake: number
           created_at: string
+          creator_handicap: number
           creator_line: number | null
           creator_message: string | null
           creator_player_id: string
@@ -933,11 +1045,13 @@ export type Database = {
           accepted_at?: string | null
           admin_note?: string | null
           contract_type: string
+          counterparty_handicap?: number
           counterparty_line?: number | null
           counterparty_player_id?: string | null
           counterparty_selection?: string | null
           counterparty_stake: number
           created_at?: string
+          creator_handicap?: number
           creator_line?: number | null
           creator_message?: string | null
           creator_player_id: string
@@ -965,11 +1079,13 @@ export type Database = {
           accepted_at?: string | null
           admin_note?: string | null
           contract_type?: string
+          counterparty_handicap?: number
           counterparty_line?: number | null
           counterparty_player_id?: string | null
           counterparty_selection?: string | null
           counterparty_stake?: number
           created_at?: string
+          creator_handicap?: number
           creator_line?: number | null
           creator_message?: string | null
           creator_player_id?: string
@@ -1472,7 +1588,9 @@ export type Database = {
         Args: {
           p_challenge_id: string
           p_contract_type: string
+          p_counterparty_handicap: number
           p_counterparty_stake: number
+          p_creator_handicap: number
           p_creator_stake: number
           p_game_number: number
           p_message: string
@@ -1484,8 +1602,10 @@ export type Database = {
       create_pvp_challenge: {
         Args: {
           p_contract_type: string
+          p_counterparty_handicap: number
           p_counterparty_player_id: string
           p_counterparty_stake: number
+          p_creator_handicap: number
           p_creator_selection: string
           p_creator_stake: number
           p_custom_description: string
@@ -1494,6 +1614,16 @@ export type Database = {
           p_message: string
           p_prop_market_id: string
           p_week_id: string
+        }
+        Returns: string
+      }
+      create_system_activity_event: {
+        Args: {
+          p_event_type: string
+          p_importance: string
+          p_public_payload: Json
+          p_source_feature: string
+          p_template_key: string
         }
         Returns: string
       }
@@ -1508,6 +1638,26 @@ export type Database = {
         Returns: string
       }
       process_weekly_loans: { Args: { p_week_id: string }; Returns: undefined }
+      publish_activity_event: {
+        Args: {
+          p_actor_player_id: string
+          p_admin_payload: Json
+          p_event_type: string
+          p_importance: string
+          p_loan_id: string
+          p_occurred_at: string
+          p_public_payload: Json
+          p_season_id: string
+          p_secondary_player_id: string
+          p_source_feature: string
+          p_sportsbook_bet_id: string
+          p_subject_player_id: string
+          p_template_key: string
+          p_visibility: string
+          p_week_id: string
+        }
+        Returns: string
+      }
       pvp_player_line: {
         Args: { p_player_id: string; p_season_id: string }
         Returns: number
@@ -1518,6 +1668,10 @@ export type Database = {
       }
       repay_loan: {
         Args: { p_amount: number; p_loan_id: string }
+        Returns: undefined
+      }
+      restore_activity_event: {
+        Args: { p_event_id: string }
         Returns: undefined
       }
       settle_betting_for_week: {
@@ -1546,6 +1700,10 @@ export type Database = {
         Returns: undefined
       }
       settle_pvp_for_week: { Args: { p_week_id: string }; Returns: undefined }
+      suppress_activity_event: {
+        Args: { p_event_id: string; p_reason: string }
+        Returns: undefined
+      }
       sync_over_under_markets_for_week: {
         Args: { p_extra_games?: number[]; p_week_id: string }
         Returns: undefined
@@ -1683,9 +1841,6 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
-  graphql_public: {
-    Enums: {},
-  },
   public: {
     Enums: {},
   },
