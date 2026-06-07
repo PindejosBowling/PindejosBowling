@@ -18,6 +18,12 @@ This file is an **index**. The detailed reference is split across [context/](con
 | [context/file-map.md](context/file-map.md) | The full `app/` source tree with a one-line note per file |
 | [context/agent-rules.md](context/agent-rules.md) | Page-creation workflow + the numbered hard rules for agents (migrations-only DB changes, Supabase CLI usage, "current season", uuid ids, etc.) |
 
+## Cross-cutting systems ([references/](references/))
+
+| File | Read it when you need… |
+|---|---|
+| [references/notifications.md](references/notifications.md) | The Pinsino **notification framework** — per-tile pending-action badges + the aggregate Pinsino tab-bar badge. Read before adding a notification count to any Pinsino tile. |
+
 ## Economy design & feature specs ([context/economy/](context/economy/))
 
 Product/design references and per-feature implementation specs for the pin economy. Read the relevant one before working on that feature; the authoritative *schema* for live betting is `supabase/PIN_ECONOMY_SCHEMA.md` (below), while these are the design rationale + feature handoffs.

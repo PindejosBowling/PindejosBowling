@@ -8,7 +8,8 @@ import {
   Dimensions,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import { useNavigation } from '@react-navigation/native'
+import { useCallback } from 'react'
+import { useNavigation, useFocusEffect } from '@react-navigation/native'
 import { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { colors, fonts, radius } from '../theme'
 import AppHeader from '../components/AppHeader'
@@ -17,6 +18,8 @@ import PinsinoLeaderboardTable from '../components/PinsinoLeaderboardTable'
 import { usePinsinoData } from '../hooks/usePinsinoData'
 import { useRefresh } from '../hooks/useRefresh'
 import { useAuthStore } from '../stores/authStore'
+import { useNotificationStore } from '../stores/notificationStore'
+import { countForRoute } from '../utils/notifications'
 import { PinsinoStackParamList } from '../navigation/types'
 
 type PinsinoNav = NativeStackNavigationProp<PinsinoStackParamList>
@@ -35,8 +38,17 @@ export default function PinsinoScreen() {
   const playerName = useAuthStore(s => s.playerName)
   const navigation = useNavigation<PinsinoNav>()
 
-  const { loading, balance, debt, netWorth, leaderboard, pvpReceivedCount, reload } = usePinsinoData(playerId)
+  const { loading, balance, debt, netWorth, leaderboard, reload } = usePinsinoData(playerId)
   const { refreshing, onRefresh } = useRefresh(reload)
+
+  // Pending-action counts for the tile badges. Refresh on focus so they reflect
+  // actions taken inside the subpages (e.g. responding to a PvP contract).
+  const counts = useNotificationStore(s => s.counts)
+  useFocusEffect(
+    useCallback(() => {
+      useNotificationStore.getState().refresh()
+    }, []),
+  )
 
   if (loading) return <LoadingView label="Loading…" />
 
@@ -89,8 +101,8 @@ export default function PinsinoScreen() {
         {/* Subpage menu */}
         <View style={styles.grid}>
           {MENU_TILES.map(tile => {
-            // Outstanding "Received" PvP contracts → notification badge on the PvP tile.
-            const badge = tile.route === 'PvP' ? pvpReceivedCount : 0
+            // Pending-action badge for this tile (0 when nothing needs attention).
+            const badge = countForRoute(counts, tile.route)
             return (
               <TouchableOpacity
                 key={tile.route}

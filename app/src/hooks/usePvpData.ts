@@ -79,6 +79,16 @@ export function normalizeChallenge(c: any): PvpChallengeView {
   }
 }
 
+// A contract is "received" (awaiting *this* player's response) when it's
+// pending/countered and they didn't make the latest live offer. The single
+// source of truth for the inbox `received` bucket and the PvP notification count.
+export function isReceivedForPlayer(c: PvpChallengeView, playerId: string): boolean {
+  return (
+    (c.status === 'pending' || c.status === 'countered') &&
+    !(c.activeOfferBy && c.activeOfferBy === playerId)
+  )
+}
+
 export interface PvpInbox {
   received: PvpChallengeView[]   // pending/countered where it's my turn
   sent: PvpChallengeView[]       // pending/countered I'm waiting on
@@ -133,8 +143,8 @@ export function usePvpData(playerId: string | null) {
       for (const c of mine) {
         if (c.status === 'pending' || c.status === 'countered') {
           // It's my turn unless I'm the one who made the latest live offer.
-          if (c.activeOfferBy && c.activeOfferBy === playerId) next.sent.push(c)
-          else next.received.push(c)
+          if (isReceivedForPlayer(c, playerId)) next.received.push(c)
+          else next.sent.push(c)
         } else if (c.status === 'locked' || c.status === 'accepted') {
           next.active.push(c)
         } else {
