@@ -1,6 +1,6 @@
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native'
 import { colors, fonts, radius } from '../theme'
-import { CONTRACT_TYPE_LABEL, STATUS_LABEL } from '../utils/pvp'
+import { CONTRACT_TYPE_LABEL, STATUS_LABEL, formatStakes } from '../utils/pvp'
 import type { PvpChallengeView } from '../hooks/usePvpData'
 
 interface Props {
@@ -50,7 +50,7 @@ export default function PvpChallengeRow({ challenge: c, viewerId, onPress, cta }
       <View style={styles.metaRow}>
         <Text style={styles.meta}>{scope}</Text>
         <Text style={styles.metaDivider}>·</Text>
-        <Text style={styles.meta}>Stake {c.creatorStake.toLocaleString()}</Text>
+        <Text style={styles.meta}>Stake {formatStakes(c.creatorStake, c.counterpartyStake)}</Text>
         <Text style={styles.metaDivider}>·</Text>
         <Text style={styles.metaPot}>Pot {c.totalPot.toLocaleString()}</Text>
       </View>

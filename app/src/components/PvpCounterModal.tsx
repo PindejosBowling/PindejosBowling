@@ -12,33 +12,46 @@ import type { PvpChallengeView } from '../hooks/usePvpData'
 
 interface Props {
   // Mount conditionally so it resets between opens. Confirm → counter RPC → toast +
-  // onDone (reload) + onClose. Counters the stake/scope; type + prop side inherit
-  // from the current contract.
+  // onDone (reload) + onClose. Counters the stakes/scope; type + prop side inherit
+  // from the current contract. viewerId maps the viewer-relative "your / opponent"
+  // inputs onto the role-fixed creator/counterparty stakes the RPC expects.
   challenge: PvpChallengeView
+  viewerId: string | null
   balance: number
   onClose: () => void
   onDone: () => void
 }
 
-export default function PvpCounterModal({ challenge: c, balance, onClose, onDone }: Props) {
+export default function PvpCounterModal({ challenge: c, viewerId, balance, onClose, onDone }: Props) {
   const { showToast } = useUiStore()
   const [saving, setSaving] = useState(false)
-  const [stake, setStake] = useState(String(c.creatorStake))
+
+  const iAmCreator = viewerId != null && viewerId === c.creatorId
+  const myPrior = iAmCreator ? c.creatorStake : c.counterpartyStake
+  const oppPrior = iAmCreator ? c.counterpartyStake : c.creatorStake
+
+  const [stake, setStake] = useState(String(myPrior))
+  const [customStakes, setCustomStakes] = useState(myPrior !== oppPrior)
+  const [opponentStake, setOpponentStake] = useState(String(oppPrior))
   const [game, setGame] = useState(c.gameNumber != null ? String(c.gameNumber) : '')
   const [message, setMessage] = useState('')
 
   // Prop and custom contracts have no game scope — the counter renegotiates the
-  // stake only (custom keeps its title/win-condition; prop keeps its market side).
+  // stakes only (custom keeps its title/win-condition; prop keeps its market side).
   const noGame = c.contractType === 'prop_duel' || c.contractType === 'custom'
   const stakeNum = parseInt(stake, 10)
-  const validStake = !isNaN(stakeNum) && stakeNum >= PVP_MIN_STAKE && stakeNum <= balance
-  const pot = isNaN(stakeNum) ? 0 : stakeNum * 2
+  const oppStakeNum = customStakes ? parseInt(opponentStake, 10) : stakeNum
+  const validMyStake = !isNaN(stakeNum) && stakeNum >= PVP_MIN_STAKE && stakeNum <= balance
+  const validOppStake = !isNaN(oppStakeNum) && oppStakeNum >= PVP_MIN_STAKE
+  const validStake = validMyStake && validOppStake
+  const pot = validStake ? stakeNum + oppStakeNum : 0
 
   async function confirm() {
-    if (!validStake) {
+    if (!validMyStake) {
       showToast(stakeNum > balance ? 'Stake exceeds your balance' : `Minimum stake is ${PVP_MIN_STAKE} pins`, 'error')
       return
     }
+    if (!validOppStake) { showToast(`Opponent's stake must be at least ${PVP_MIN_STAKE} pins`, 'error'); return }
     const gameNum = noGame ? null : parseInt(game, 10)
     if (!noGame && (gameNum == null || isNaN(gameNum))) { showToast('Enter a game number', 'error'); return }
 
@@ -46,7 +59,9 @@ export default function PvpCounterModal({ challenge: c, balance, onClose, onDone
     try {
       const args: CounterPvpArgs = {
         challengeId: c.id,
-        stake: stakeNum,
+        // Map viewer-relative → role-fixed stakes.
+        creatorStake: iAmCreator ? stakeNum : oppStakeNum,
+        counterpartyStake: iAmCreator ? oppStakeNum : stakeNum,
         contractType: c.contractType,
         gameNumber: gameNum,
         propMarketId: c.propMarketId,
@@ -74,7 +89,16 @@ export default function PvpCounterModal({ challenge: c, balance, onClose, onDone
           <Text style={styles.subtitle}>vs {c.creatorName}</Text>
 
           <ScrollView style={styles.body} keyboardShouldPersistTaps="handled">
-            <Text style={styles.label}>STAKE (MIN {PVP_MIN_STAKE})</Text>
+            <View style={styles.stakeHeader}>
+              <Text style={[styles.label, styles.stakeLabel]}>{customStakes ? 'YOUR STAKE' : 'STAKE'} (MIN {PVP_MIN_STAKE})</Text>
+              <TouchableOpacity
+                style={[styles.customToggle, customStakes && styles.customToggleOn]}
+                onPress={() => setCustomStakes(o => !o)}
+                activeOpacity={0.7}
+              >
+                <Text style={[styles.customToggleText, customStakes && styles.customToggleTextOn]}>Custom stakes</Text>
+              </TouchableOpacity>
+            </View>
             <TextInput
               style={styles.input}
               value={stake}
@@ -85,6 +109,21 @@ export default function PvpCounterModal({ challenge: c, balance, onClose, onDone
               maxLength={7}
             />
             <Text style={styles.help}>Balance: {balance.toLocaleString()} pins</Text>
+
+            {customStakes && (
+              <>
+                <Text style={styles.label}>OPPONENT'S STAKE (MIN {PVP_MIN_STAKE})</Text>
+                <TextInput
+                  style={styles.input}
+                  value={opponentStake}
+                  onChangeText={v => setOpponentStake(v.replace(/[^0-9]/g, ''))}
+                  keyboardType="number-pad"
+                  placeholder={`${PVP_MIN_STAKE}`}
+                  placeholderTextColor={colors.muted2}
+                  maxLength={7}
+                />
+              </>
+            )}
 
             {!noGame && (
               <>
@@ -150,6 +189,12 @@ const styles = StyleSheet.create({
   subtitle: { fontFamily: fonts.barlowCondensed, fontSize: 13, color: colors.muted, letterSpacing: 0.5, marginTop: 2, marginBottom: 8 },
   body: { maxHeight: 380 },
   label: { fontFamily: fonts.barlowCondensed, fontSize: 12, letterSpacing: 1.5, color: colors.muted, marginTop: 14, marginBottom: 8 },
+  stakeHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  stakeLabel: { flex: 1 },
+  customToggle: { borderRadius: radius.cardSm, borderWidth: 1, borderColor: colors.border2, paddingHorizontal: 12, paddingVertical: 6 },
+  customToggleOn: { backgroundColor: colors.accentDim, borderColor: colors.accent },
+  customToggleText: { fontFamily: fonts.barlowCondensed, fontSize: 12, color: colors.muted, letterSpacing: 0.5 },
+  customToggleTextOn: { color: colors.accent },
   input: {
     backgroundColor: colors.surface2,
     borderRadius: radius.cardSm,

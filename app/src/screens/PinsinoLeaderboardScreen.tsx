@@ -33,17 +33,14 @@ export default function PinsinoLeaderboardScreen() {
         <View style={styles.rulesCard}>
           <Text style={styles.rulesTitle}>How It Works</Text>
           <Text style={styles.rulesBody}>
-            Titans of Pindustry is the "game within the game" of the bowling league — a season-long
-            race to amass the biggest pin fortune.
+            Titans of Pindustry is the "game within the game" of the PBL — a season-long
+            race to amass the biggest pin fortune by any means necessary.
           </Text>
           <Text style={styles.rulesBody}>
-            Bowling well is the only way new pins are minted, but from there it's open season: bet at the
-            Pinsino, take loans, challenge rivals, and work every angle. Pile up as many pins as you can,
-            by any means necessary.
+            Earn pins by bowling games in the PBL, winning bets at the Sportsbook, leveraging loans from the Loan Shark, and challenging rivals directly.
           </Text>
           <Text style={styles.rulesBody}>
-            Every season starts fresh. When it ends, balances reset and whoever sits atop this board
-            is crowned the season's Titan.
+            When a season ends, whoever sits atop this board is crowned the season's Titan and then the next season will start fresh.
           </Text>
         </View>
 

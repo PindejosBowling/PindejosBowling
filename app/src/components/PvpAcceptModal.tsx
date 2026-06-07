@@ -22,9 +22,11 @@ export default function PvpAcceptModal({ challenge: c, viewerId, onClose, onDone
   const { showToast } = useUiStore()
   const [saving, setSaving] = useState(false)
 
-  // The viewer accepts the *other* side's offer; their stake is the counterparty
-  // side (symmetric in v1, so this equals the creator stake).
-  const myStake = viewerId && c.creatorId === viewerId ? c.creatorStake : c.counterpartyStake
+  // The viewer accepts the *other* side's offer. Stakes may be asymmetric, so show
+  // both: the viewer's own side and the opponent's.
+  const iAmCreator = viewerId != null && viewerId === c.creatorId
+  const myStake = iAmCreator ? c.creatorStake : c.counterpartyStake
+  const oppStake = iAmCreator ? c.counterpartyStake : c.creatorStake
 
   async function confirm() {
     setSaving(true)
@@ -53,6 +55,10 @@ export default function PvpAcceptModal({ challenge: c, viewerId, onClose, onDone
             <View style={styles.row}>
               <Text style={styles.rowLabel}>Your stake</Text>
               <Text style={styles.rowValue}>{myStake.toLocaleString()} pins</Text>
+            </View>
+            <View style={styles.row}>
+              <Text style={styles.rowLabel}>Opponent's stake</Text>
+              <Text style={styles.rowValue}>{oppStake.toLocaleString()} pins</Text>
             </View>
             <View style={styles.row}>
               <Text style={styles.rowLabel}>Total pot</Text>

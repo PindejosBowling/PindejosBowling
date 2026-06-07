@@ -38,6 +38,19 @@ export const CONTRACT_TYPE_OPTIONS: { key: PvpContractType; label: string }[] = 
   { key: 'custom', label: 'Custom' },
 ]
 
+// True when the two sides put up different amounts (asymmetric stakes).
+export function isAsymmetricStakes(creatorStake: number, counterpartyStake: number): boolean {
+  return creatorStake !== counterpartyStake
+}
+
+// Compact stake label: a single number when equal, "creator / counterparty" when
+// the sides differ. Used in list rows + the negotiation trail where space is tight.
+export function formatStakes(creatorStake: number, counterpartyStake: number): string {
+  return isAsymmetricStakes(creatorStake, counterpartyStake)
+    ? `${creatorStake.toLocaleString()} / ${counterpartyStake.toLocaleString()}`
+    : creatorStake.toLocaleString()
+}
+
 // status → { label, color-key }. The screen maps the color key to a theme color.
 export const STATUS_LABEL: Record<string, string> = {
   pending: 'Pending',

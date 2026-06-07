@@ -911,6 +911,8 @@ export type Database = {
           creator_player_id: string
           creator_selection: string | null
           creator_stake: number
+          custom_description: string | null
+          custom_title: string | null
           game_number: number | null
           id: string
           locked_at: string | null
@@ -941,6 +943,8 @@ export type Database = {
           creator_player_id: string
           creator_selection?: string | null
           creator_stake: number
+          custom_description?: string | null
+          custom_title?: string | null
           game_number?: number | null
           id?: string
           locked_at?: string | null
@@ -971,6 +975,8 @@ export type Database = {
           creator_player_id?: string
           creator_selection?: string | null
           creator_stake?: number
+          custom_description?: string | null
+          custom_title?: string | null
           game_number?: number | null
           id?: string
           locked_at?: string | null
@@ -1466,11 +1472,12 @@ export type Database = {
         Args: {
           p_challenge_id: string
           p_contract_type: string
+          p_counterparty_stake: number
+          p_creator_stake: number
           p_game_number: number
           p_message: string
           p_prop_market_id: string
           p_selection: string
-          p_stake: number
         }
         Returns: string
       }
@@ -1478,11 +1485,14 @@ export type Database = {
         Args: {
           p_contract_type: string
           p_counterparty_player_id: string
+          p_counterparty_stake: number
           p_creator_selection: string
+          p_creator_stake: number
+          p_custom_description: string
+          p_custom_title: string
           p_game_number: number
           p_message: string
           p_prop_market_id: string
-          p_stake: number
           p_week_id: string
         }
         Returns: string

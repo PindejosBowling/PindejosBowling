@@ -54,6 +54,8 @@ export default function PvPCreateScreen() {
   const [propMarketId, setPropMarketId] = useState<string | null>(null)
   const [selection, setSelection] = useState<'over' | 'under'>('over')
   const [stake, setStake] = useState('')
+  const [customStakes, setCustomStakes] = useState(false)
+  const [opponentStake, setOpponentStake] = useState('')
   const [message, setMessage] = useState('')
   const [customTitle, setCustomTitle] = useState('')
   const [customDescription, setCustomDescription] = useState('')
@@ -96,14 +98,23 @@ export default function PvPCreateScreen() {
         line: m.bet_selections?.[0]?.line != null ? Number(m.bet_selections[0].line) : null,
       })))
 
-      // Rematch prefill: inherit type + opponent, double the stake (§7 v1 default).
+      // Rematch prefill: inherit type + opponent and carry the prior stakes from
+      // the viewer's perspective (their own side → STAKE, the other side →
+      // opponent's stake). Reveal the custom-stakes field if they differed.
       if (route.params?.rematchOfId) {
         const { data } = await pvpChallenges.getById(route.params.rematchOfId)
         if (data) {
           const c = normalizeChallenge(data)
           setContractType(c.contractType as PvpContractType)
           setGameNumber(c.gameNumber ?? nums[0] ?? null)
-          setStake(String(c.creatorStake * 2))
+          const iWasCreator = c.creatorId === playerId
+          const myPrior = iWasCreator ? c.creatorStake : c.counterpartyStake
+          const oppPrior = iWasCreator ? c.counterpartyStake : c.creatorStake
+          setStake(String(myPrior))
+          if (myPrior !== oppPrior) {
+            setCustomStakes(true)
+            setOpponentStake(String(oppPrior))
+          }
           const other = c.creatorId === playerId ? c.counterpartyId : c.creatorId
           if (other) setOpponentId(other)
           if (c.contractType === 'prop_duel' && c.propMarketId) setPropMarketId(c.propMarketId)
@@ -126,7 +137,11 @@ export default function PvPCreateScreen() {
   const { refreshing, onRefresh } = useRefresh(load)
 
   const stakeNum = parseInt(stake, 10)
-  const validStake = !isNaN(stakeNum) && stakeNum >= PVP_MIN_STAKE && stakeNum <= balance
+  // Opponent's stake mirrors yours unless custom stakes are toggled on.
+  const oppStakeNum = customStakes ? parseInt(opponentStake, 10) : stakeNum
+  const validMyStake = !isNaN(stakeNum) && stakeNum >= PVP_MIN_STAKE && stakeNum <= balance
+  const validOppStake = !isNaN(oppStakeNum) && oppStakeNum >= PVP_MIN_STAKE
+  const validStake = validMyStake && validOppStake
   const opponentName = useMemo(
     () => opponents.find(o => o.id === opponentId)?.name ?? null,
     [opponents, opponentId],
@@ -144,6 +159,9 @@ export default function PvPCreateScreen() {
     if (!openBoard && !opponentId) return 'Pick an opponent or post to the open board'
     if (isNaN(stakeNum) || stakeNum < PVP_MIN_STAKE) return `Minimum stake is ${PVP_MIN_STAKE} pins`
     if (stakeNum > balance) return 'Stake exceeds your balance'
+    if (customStakes && (isNaN(oppStakeNum) || oppStakeNum < PVP_MIN_STAKE)) {
+      return `Opponent's stake must be at least ${PVP_MIN_STAKE} pins`
+    }
     if (isCustom) {
       if (!customTitle.trim()) return 'Give your custom challenge a title'
       if (!customDescription.trim()) return 'Describe the win condition'
@@ -165,7 +183,8 @@ export default function PvPCreateScreen() {
         counterpartyId: openBoard ? null : opponentId,
         weekId: weekId!,
         gameNumber: isProp || isCustom ? null : gameNumber,
-        stake: stakeNum,
+        creatorStake: stakeNum,
+        counterpartyStake: oppStakeNum,
         propMarketId: isProp ? propMarketId : null,
         creatorSelection: isProp ? selection : null,
         message: message.trim() || null,
@@ -187,7 +206,7 @@ export default function PvPCreateScreen() {
 
   if (loading) return <LoadingView label="Loading…" />
 
-  const pot = isNaN(stakeNum) ? 0 : stakeNum * 2
+  const pot = validStake ? stakeNum + oppStakeNum : 0
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
@@ -248,6 +267,9 @@ export default function PvPCreateScreen() {
                 Write the win condition clearly and unambiguously — an admin settles this
                 contract by hand based on exactly what you describe here.
               </Text>
+              <Text style={[styles.warnText, { marginTop: 14 }]}>
+                Be sure to specify if the outcome is game-specific (Game 1 or Game 2), or if it covers the entire week.
+              </Text>
             </View>
           </View>
         ) : isProp ? (
@@ -301,7 +323,16 @@ export default function PvPCreateScreen() {
         )}
 
         {/* Stake */}
-        <Text style={styles.label}>STAKE (MIN {PVP_MIN_STAKE})</Text>
+        <View style={styles.stakeHeader}>
+          <Text style={[styles.label, styles.stakeLabel]}>{customStakes ? 'YOUR STAKE' : 'STAKE'} (MIN {PVP_MIN_STAKE})</Text>
+          <TouchableOpacity
+            style={[styles.customToggle, customStakes && styles.customToggleOn]}
+            onPress={() => setCustomStakes(o => !o)}
+            activeOpacity={0.7}
+          >
+            <Text style={[styles.customToggleText, customStakes && styles.customToggleTextOn]}>Custom stakes</Text>
+          </TouchableOpacity>
+        </View>
         <TextInput
           style={styles.input}
           value={stake}
@@ -312,6 +343,25 @@ export default function PvPCreateScreen() {
           maxLength={7}
         />
         <Text style={styles.helpText}>Balance: {balance.toLocaleString()} pins</Text>
+
+        {customStakes && (
+          <>
+            <Text style={styles.label}>OPPONENT'S STAKE (MIN {PVP_MIN_STAKE})</Text>
+            <TextInput
+              style={styles.input}
+              value={opponentStake}
+              onChangeText={v => setOpponentStake(v.replace(/[^0-9]/g, ''))}
+              keyboardType="number-pad"
+              placeholder={`${PVP_MIN_STAKE}`}
+              placeholderTextColor={colors.muted2}
+              maxLength={7}
+            />
+            <Text style={styles.helpText}>
+              Each side stakes a different amount — winner still takes the whole pot. The opponent's
+              balance is checked when they accept.
+            </Text>
+          </>
+        )}
 
         {/* Message */}
         <Text style={styles.label}>MESSAGE (OPTIONAL)</Text>
@@ -330,8 +380,14 @@ export default function PvPCreateScreen() {
           <Text style={styles.confirmTitle}>{CONTRACT_TYPE_LABEL[contractType]}</Text>
           <View style={styles.confirmRow}>
             <Text style={styles.confirmLabel}>Your stake</Text>
-            <Text style={styles.confirmValue}>{validStake ? stakeNum.toLocaleString() : '—'} pins</Text>
+            <Text style={styles.confirmValue}>{validMyStake ? stakeNum.toLocaleString() : '—'} pins</Text>
           </View>
+          {customStakes && (
+            <View style={styles.confirmRow}>
+              <Text style={styles.confirmLabel}>Opponent's stake</Text>
+              <Text style={styles.confirmValue}>{validOppStake ? oppStakeNum.toLocaleString() : '—'} pins</Text>
+            </View>
+          )}
           <View style={styles.confirmRow}>
             <Text style={styles.confirmLabel}>Total pot</Text>
             <Text style={styles.confirmValueAccent}>{pot.toLocaleString()} pins</Text>
@@ -342,7 +398,7 @@ export default function PvPCreateScreen() {
           </View>
           <Text style={styles.confirmRule}>{CONTRACT_TYPE_RULE[contractType]}</Text>
           <Text style={styles.confirmNote}>
-            Winner takes the whole pot — no house cut. This does not affect bowling gameplay — always bowl your best.
+            Winner takes the whole pot — no house cut.
           </Text>
         </View>
 
@@ -386,6 +442,19 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   toggle: { justifyContent: 'flex-start' },
+
+  stakeHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  stakeLabel: { flex: 1 },
+  customToggle: {
+    borderRadius: radius.cardSm,
+    borderWidth: 1,
+    borderColor: colors.border2,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  customToggleOn: { backgroundColor: colors.accentDim, borderColor: colors.accent },
+  customToggleText: { fontFamily: fonts.barlowCondensed, fontSize: 12, color: colors.muted, letterSpacing: 0.5 },
+  customToggleTextOn: { color: colors.accent },
 
   opponentRow: { flexDirection: 'row', gap: 8 },
   opponentBtn: {

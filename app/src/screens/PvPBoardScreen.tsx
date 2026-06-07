@@ -126,6 +126,7 @@ export default function PvPBoardScreen() {
       {counterTarget && (
         <PvpCounterModal
           challenge={counterTarget}
+          viewerId={playerId}
           balance={balance}
           onClose={() => setCounterTarget(null)}
           onDone={reload}

@@ -14,7 +14,7 @@ import { useRefresh } from '../hooks/useRefresh'
 import { useAuthStore } from '../stores/authStore'
 import { useUiStore } from '../stores/uiStore'
 import { seasons, pinLedger, pvpChallenges } from '../utils/supabase/db'
-import { CONTRACT_TYPE_LABEL, CONTRACT_TYPE_RULE, STATUS_LABEL, statusKind } from '../utils/pvp'
+import { CONTRACT_TYPE_LABEL, CONTRACT_TYPE_RULE, STATUS_LABEL, statusKind, formatStakes, isAsymmetricStakes } from '../utils/pvp'
 import { PinsinoStackParamList } from '../navigation/types'
 
 type Nav = NativeStackNavigationProp<PinsinoStackParamList>
@@ -107,6 +107,7 @@ export default function PvPChallengeDetailScreen() {
   const showResult = c.status === 'settled' || c.status === 'pushed'
   const isProp = c.contractType === 'prop_duel'
   const isCustom = c.contractType === 'custom'
+  const asymmetric = isAsymmetricStakes(c.creatorStake, c.counterpartyStake)
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
@@ -127,8 +128,10 @@ export default function PvPChallengeDetailScreen() {
 
           <View style={styles.termGrid}>
             <View style={styles.termCell}>
-              <Text style={styles.termLabel}>STAKE EACH</Text>
-              <Text style={styles.termValue}>{c.creatorStake.toLocaleString()}</Text>
+              <Text style={styles.termLabel}>{asymmetric ? 'STAKES' : 'STAKE EACH'}</Text>
+              <Text style={asymmetric ? styles.termValueSm : styles.termValue}>
+                {asymmetric ? formatStakes(c.creatorStake, c.counterpartyStake) : c.creatorStake.toLocaleString()}
+              </Text>
             </View>
             <View style={styles.termCell}>
               <Text style={styles.termLabel}>POT</Text>
@@ -139,6 +142,12 @@ export default function PvPChallengeDetailScreen() {
               <Text style={styles.termValueAccent}>{c.payoutAmount.toLocaleString()}</Text>
             </View>
           </View>
+
+          {asymmetric ? (
+            <Text style={styles.sides}>
+              Stakes — {c.creatorName}: {c.creatorStake.toLocaleString()} · {c.counterpartyName ?? 'Taker'}: {c.counterpartyStake.toLocaleString()}
+            </Text>
+          ) : null}
 
           {!isCustom ? (
             <View style={styles.metaLine}>
@@ -212,7 +221,7 @@ export default function PvPChallengeDetailScreen() {
                     </Text>
                   </View>
                   <Text style={styles.offerTerms}>
-                    Stake {o.creatorStake.toLocaleString()} · {o.gameNumber != null ? `Game ${o.gameNumber}` : 'Series'} · {CONTRACT_TYPE_LABEL[o.contractType] ?? o.contractType}
+                    Stake {formatStakes(o.creatorStake, o.counterpartyStake)} · {o.gameNumber != null ? `Game ${o.gameNumber}` : 'Series'} · {CONTRACT_TYPE_LABEL[o.contractType] ?? o.contractType}
                   </Text>
                   {o.message ? <Text style={styles.offerMsg}>“{o.message}”</Text> : null}
                 </View>
@@ -283,7 +292,7 @@ export default function PvPChallengeDetailScreen() {
         <PvpAcceptModal challenge={c} viewerId={playerId} onClose={() => setAcceptOpen(false)} onDone={reload} />
       )}
       {counterOpen && (
-        <PvpCounterModal challenge={c} balance={balance} onClose={() => setCounterOpen(false)} onDone={reload} />
+        <PvpCounterModal challenge={c} viewerId={playerId} balance={balance} onClose={() => setCounterOpen(false)} onDone={reload} />
       )}
       <Toast />
     </SafeAreaView>
@@ -310,6 +319,7 @@ const styles = StyleSheet.create({
   termCell: { flex: 1, backgroundColor: colors.surface2, borderRadius: radius.cardSm, padding: 12 },
   termLabel: { fontFamily: fonts.barlowCondensed, fontSize: 10, letterSpacing: 1, color: colors.muted },
   termValue: { fontFamily: fonts.barlowCondensedHeavy, fontSize: 22, color: colors.text, marginTop: 2 },
+  termValueSm: { fontFamily: fonts.barlowCondensedHeavy, fontSize: 16, color: colors.text, marginTop: 4 },
   termValueAccent: { fontFamily: fonts.barlowCondensedHeavy, fontSize: 22, color: colors.accent, marginTop: 2 },
 
   metaLine: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 12 },

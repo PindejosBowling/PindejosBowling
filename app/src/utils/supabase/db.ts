@@ -537,7 +537,8 @@ export interface CreatePvpArgs {
   counterpartyId: string | null        // null = open board
   weekId: string
   gameNumber: number | null            // required for line/raw; null for prop/custom
-  stake: number
+  creatorStake: number                 // the creator's own stake
+  counterpartyStake: number            // the opponent's stake (equal to creator's unless custom)
   propMarketId: string | null          // prop_duel only
   creatorSelection: string | null      // prop_duel only ('over' | 'under')
   message: string | null
@@ -547,7 +548,8 @@ export interface CreatePvpArgs {
 
 export interface CounterPvpArgs {
   challengeId: string
-  stake: number
+  creatorStake: number                 // role-fixed (creator side), not viewer-relative
+  counterpartyStake: number            // role-fixed (counterparty side)
   contractType: string
   gameNumber: number | null
   propMarketId: string | null
@@ -601,7 +603,8 @@ export const pvpChallenges = {
       p_counterparty_player_id: a.counterpartyId as string,
       p_week_id: a.weekId,
       p_game_number: a.gameNumber as number,
-      p_stake: a.stake,
+      p_creator_stake: a.creatorStake,
+      p_counterparty_stake: a.counterpartyStake,
       p_prop_market_id: a.propMarketId as string,
       p_creator_selection: a.creatorSelection as string,
       p_message: a.message as string,
@@ -611,7 +614,8 @@ export const pvpChallenges = {
   counter: (a: CounterPvpArgs) =>
     supabase.rpc('counter_pvp_challenge', {
       p_challenge_id: a.challengeId,
-      p_stake: a.stake,
+      p_creator_stake: a.creatorStake,
+      p_counterparty_stake: a.counterpartyStake,
       p_contract_type: a.contractType,
       p_game_number: a.gameNumber as number,
       p_prop_market_id: a.propMarketId as string,
