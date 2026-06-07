@@ -9,6 +9,7 @@ import LoadingView from '../components/LoadingView'
 import Toast from '../components/Toast'
 import PvpAcceptModal from '../components/PvpAcceptModal'
 import PvpCounterModal from '../components/PvpCounterModal'
+import LineDuelLines from '../components/LineDuelLines'
 import { usePvpChallengeDetail, PvpOfferView, PvpLedgerView } from '../hooks/usePvpChallengeDetail'
 import { useRefresh } from '../hooks/useRefresh'
 import { useAuthStore } from '../stores/authStore'
@@ -166,23 +167,17 @@ export default function PvPChallengeDetailScreen() {
           ) : null}
 
           {c.contractType === 'line_duel' ? (
-            <>
-              <Text style={styles.linesLabel}>LINES TO BEAT</Text>
-              <View style={styles.linesCard}>
-                <View style={styles.lineRow}>
-                  <Text style={styles.lineName}>{c.creatorName}</Text>
-                  <Text style={styles.lineValue}>{c.creatorLine != null ? c.creatorLine.toFixed(1) : '—'}</Text>
-                </View>
-                <View style={styles.lineRow}>
-                  <Text style={styles.lineName}>{c.counterpartyName ?? 'Taker'}</Text>
-                  <Text style={styles.lineValue}>
-                    {c.counterpartyLine != null
-                      ? c.counterpartyLine.toFixed(1)
-                      : c.counterpartyId == null ? 'Set when taken' : '—'}
-                  </Text>
-                </View>
-              </View>
-            </>
+            <LineDuelLines
+              sides={[
+                { name: c.creatorName, value: c.creatorLine != null ? c.creatorLine.toFixed(1) : '—' },
+                {
+                  name: c.counterpartyName ?? 'Taker',
+                  value: c.counterpartyLine != null
+                    ? c.counterpartyLine.toFixed(1)
+                    : c.counterpartyId == null ? 'Set when taken' : '—',
+                },
+              ]}
+            />
           ) : null}
 
           <Text style={styles.rule}>{CONTRACT_TYPE_RULE[c.contractType]}</Text>
@@ -340,21 +335,6 @@ const styles = StyleSheet.create({
   metaText: { fontFamily: fonts.barlowCondensed, fontSize: 13, color: colors.muted, letterSpacing: 0.3 },
   metaDivider: { color: colors.muted2 },
   sides: { fontFamily: fonts.barlow, fontSize: 13, color: colors.text, marginTop: 10 },
-
-  // Lines-to-beat card — mirrors the create screen's presentation.
-  linesLabel: { fontFamily: fonts.barlowCondensed, fontSize: 12, letterSpacing: 1.5, color: colors.muted, marginTop: 14, marginBottom: 8 },
-  linesCard: {
-    backgroundColor: colors.surface2,
-    borderRadius: radius.cardSm,
-    borderWidth: 1,
-    borderColor: colors.border2,
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-  },
-  lineRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 7 },
-  lineName: { fontFamily: fonts.barlowCondensed, fontSize: 15, color: colors.text },
-  lineValue: { fontFamily: fonts.barlowCondensedHeavy, fontSize: 16, color: colors.accent },
-
   rule: { fontFamily: fonts.barlow, fontSize: 13, color: colors.muted, lineHeight: 19, marginTop: 12 },
   message: { fontFamily: fonts.barlow, fontSize: 14, color: colors.text, fontStyle: 'italic', lineHeight: 20, marginTop: 10 },
 

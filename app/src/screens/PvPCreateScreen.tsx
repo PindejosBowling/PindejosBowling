@@ -10,6 +10,8 @@ import ScreenHeader from '../components/ScreenHeader'
 import LoadingView from '../components/LoadingView'
 import ToggleGroup from '../components/ToggleGroup'
 import PlayerPickerModal from '../components/PlayerPickerModal'
+import LineDuelLines from '../components/LineDuelLines'
+import GamePicker from '../components/GamePicker'
 import Toast from '../components/Toast'
 import { useRefresh } from '../hooks/useRefresh'
 import { useAuthStore } from '../stores/authStore'
@@ -264,21 +266,15 @@ export default function PvPCreateScreen() {
 
         {/* Lines to beat (Line Duel only) — frozen onto the contract at create */}
         {contractType === 'line_duel' && (
-          <>
-            <Text style={styles.label}>LINES TO BEAT</Text>
-            <View style={styles.linesCard}>
-              <View style={styles.lineRow}>
-                <Text style={styles.lineName}>Your line</Text>
-                <Text style={styles.lineValue}>{myLine != null ? myLine.toFixed(1) : '—'}</Text>
-              </View>
-              <View style={styles.lineRow}>
-                <Text style={styles.lineName}>{opponentName ?? 'Opponent'}</Text>
-                <Text style={styles.lineValue}>
-                  {openBoard ? 'Set when taken' : opponentLine != null ? opponentLine.toFixed(1) : '—'}
-                </Text>
-              </View>
-            </View>
-          </>
+          <LineDuelLines
+            sides={[
+              { name: 'Your line', value: myLine != null ? myLine.toFixed(1) : '—' },
+              {
+                name: opponentName ?? 'Opponent',
+                value: openBoard ? 'Set when taken' : opponentLine != null ? opponentLine.toFixed(1) : '—',
+              },
+            ]}
+          />
         )}
 
         {/* Scope */}
@@ -347,22 +343,7 @@ export default function PvPCreateScreen() {
             )}
           </View>
         ) : (
-          <View style={styles.gameRow}>
-            {gameNumbers.length === 0 ? (
-              <Text style={styles.helpText}>No games scheduled this week.</Text>
-            ) : (
-              gameNumbers.map(n => (
-                <TouchableOpacity
-                  key={n}
-                  style={[styles.gameBtn, gameNumber === n && styles.gameBtnOn]}
-                  onPress={() => setGameNumber(n)}
-                  activeOpacity={0.7}
-                >
-                  <Text style={[styles.gameBtnText, gameNumber === n && styles.gameBtnTextOn]}>Game {n}</Text>
-                </TouchableOpacity>
-              ))
-            )}
-          </View>
+          <GamePicker games={gameNumbers} value={gameNumber} onChange={setGameNumber} />
         )}
 
         {/* Stake */}
@@ -537,18 +518,6 @@ const styles = StyleSheet.create({
   boardToggleText: { fontFamily: fonts.barlowCondensed, fontSize: 13, color: colors.muted, letterSpacing: 0.5 },
   boardToggleTextOn: { color: colors.accent },
 
-  gameRow: { flexDirection: 'row', gap: 8 },
-  gameBtn: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: colors.border2,
-  },
-  gameBtnOn: { backgroundColor: colors.accentDim, borderColor: colors.accent },
-  gameBtnText: { fontFamily: fonts.barlowCondensed, fontSize: 14, color: colors.muted, letterSpacing: 0.5 },
-  gameBtnTextOn: { color: colors.accent },
-
   propRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -564,18 +533,6 @@ const styles = StyleSheet.create({
   propRowOn: { backgroundColor: colors.accentDim, borderColor: colors.accent },
   propName: { fontFamily: fonts.barlowCondensed, fontSize: 15, color: colors.text },
   propLine: { fontFamily: fonts.barlowCondensed, fontSize: 14, color: colors.muted },
-
-  linesCard: {
-    backgroundColor: colors.surface2,
-    borderRadius: radius.cardSm,
-    borderWidth: 1,
-    borderColor: colors.border2,
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-  },
-  lineRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 7 },
-  lineName: { fontFamily: fonts.barlowCondensed, fontSize: 15, color: colors.text },
-  lineValue: { fontFamily: fonts.barlowCondensedHeavy, fontSize: 16, color: colors.accent },
 
   input: {
     backgroundColor: colors.surface2,

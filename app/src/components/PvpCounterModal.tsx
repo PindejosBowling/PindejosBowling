@@ -6,7 +6,9 @@ import {
 import { colors, fonts, radius } from '../theme'
 import Toast from './Toast'
 import { useUiStore } from '../stores/uiStore'
-import { pvpChallenges, seasons, CounterPvpArgs } from '../utils/supabase/db'
+import { pvpChallenges, seasons, games, CounterPvpArgs } from '../utils/supabase/db'
+import LineDuelLines from './LineDuelLines'
+import GamePicker from './GamePicker'
 import { PVP_MIN_STAKE, CONTRACT_TYPE_LABEL } from '../utils/pvp'
 import type { PvpChallengeView } from '../hooks/usePvpData'
 
@@ -33,7 +35,8 @@ export default function PvpCounterModal({ challenge: c, viewerId, balance, onClo
   const [stake, setStake] = useState(String(myPrior))
   const [customStakes, setCustomStakes] = useState(myPrior !== oppPrior)
   const [opponentStake, setOpponentStake] = useState(String(oppPrior))
-  const [game, setGame] = useState(c.gameNumber != null ? String(c.gameNumber) : '')
+  const [game, setGame] = useState<number | null>(c.gameNumber)
+  const [gameNumbers, setGameNumbers] = useState<number[]>([])
   const [message, setMessage] = useState('')
 
   // Line Duel lines-to-beat, from the viewer's perspective. Both come off the
@@ -58,6 +61,21 @@ export default function PvpCounterModal({ challenge: c, viewerId, balance, onClo
   }, [isLineDuel, myLine, viewerId])
   const myLineShown = myLine ?? takerLine
 
+  // Game-scoped contracts only — load the week's scheduled games so the counter
+  // can only re-pick from what's actually available (no free-form entry).
+  const gameScoped = c.contractType !== 'prop_duel' && c.contractType !== 'custom'
+  useEffect(() => {
+    if (!gameScoped) return
+    let active = true
+    games.listByWeek(c.weekId).then(({ data }) => {
+      if (!active) return
+      const nums = Array.from(new Set((data ?? []).map((g: any) => g.game_number))).sort((a, b) => a - b)
+      setGameNumbers(nums)
+      setGame(prev => prev ?? nums[0] ?? null)
+    })
+    return () => { active = false }
+  }, [gameScoped, c.weekId])
+
   // Prop and custom contracts have no game scope — the counter renegotiates the
   // stakes only (custom keeps its title/win-condition; prop keeps its market side).
   const noGame = c.contractType === 'prop_duel' || c.contractType === 'custom'
@@ -74,8 +92,8 @@ export default function PvpCounterModal({ challenge: c, viewerId, balance, onClo
       return
     }
     if (!validOppStake) { showToast(`Opponent's stake must be at least ${PVP_MIN_STAKE} pins`, 'error'); return }
-    const gameNum = noGame ? null : parseInt(game, 10)
-    if (!noGame && (gameNum == null || isNaN(gameNum))) { showToast('Enter a game number', 'error'); return }
+    const gameNum = noGame ? null : game
+    if (!noGame && gameNum == null) { showToast('Pick a game', 'error'); return }
 
     setSaving(true)
     try {
@@ -150,15 +168,7 @@ export default function PvpCounterModal({ challenge: c, viewerId, balance, onClo
             {!noGame && (
               <>
                 <Text style={styles.label}>GAME</Text>
-                <TextInput
-                  style={styles.input}
-                  value={game}
-                  onChangeText={v => setGame(v.replace(/[^0-9]/g, ''))}
-                  keyboardType="number-pad"
-                  placeholder="1"
-                  placeholderTextColor={colors.muted2}
-                  maxLength={2}
-                />
+                <GamePicker games={gameNumbers} value={game} onChange={setGame} />
               </>
             )}
 
@@ -174,19 +184,12 @@ export default function PvpCounterModal({ challenge: c, viewerId, balance, onClo
             />
 
             {isLineDuel && (
-              <>
-                <Text style={styles.label}>LINES TO BEAT</Text>
-                <View style={styles.linesCard}>
-                  <View style={styles.lineRow}>
-                    <Text style={styles.lineName}>Your line</Text>
-                    <Text style={styles.lineValue}>{myLineShown != null ? myLineShown.toFixed(1) : '—'}</Text>
-                  </View>
-                  <View style={styles.lineRow}>
-                    <Text style={styles.lineName}>{oppName}</Text>
-                    <Text style={styles.lineValue}>{oppLine != null ? oppLine.toFixed(1) : '—'}</Text>
-                  </View>
-                </View>
-              </>
+              <LineDuelLines
+                sides={[
+                  { name: 'Your line', value: myLineShown != null ? myLineShown.toFixed(1) : '—' },
+                  { name: oppName, value: oppLine != null ? oppLine.toFixed(1) : '—' },
+                ]}
+              />
             )}
 
             <View style={styles.potRow}>
@@ -246,17 +249,6 @@ const styles = StyleSheet.create({
   },
   messageInput: { fontFamily: fonts.barlow, fontSize: 15, minHeight: 56, textAlignVertical: 'top' },
   help: { fontFamily: fonts.barlow, fontSize: 12, color: colors.muted, marginTop: 6 },
-  linesCard: {
-    backgroundColor: colors.surface2,
-    borderRadius: radius.cardSm,
-    borderWidth: 1,
-    borderColor: colors.border2,
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-  },
-  lineRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 7 },
-  lineName: { fontFamily: fonts.barlowCondensed, fontSize: 15, color: colors.text },
-  lineValue: { fontFamily: fonts.barlowCondensedHeavy, fontSize: 16, color: colors.accent },
   potRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', marginTop: 18 },
   potLabel: { fontFamily: fonts.barlow, fontSize: 13, color: colors.muted },
   potValue: { fontFamily: fonts.barlowCondensedHeavy, fontSize: 18, color: colors.accent },
