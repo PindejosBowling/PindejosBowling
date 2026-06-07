@@ -16,13 +16,30 @@ same RPC patterns — read it for worked examples.
 > DB directly. CLI invocation (token from `app/.env.local` + `--linked --workdir $(pwd)`)
 > is in AGENTS.md §3. Project ref `lyihsvxraurjghjqxaau`.
 
+> **⚠️ Implemented + corrected — this doc reflects the as-built design.** The
+> migrations below were applied, then two corrective migrations changed the design.
+> The text here has been updated to match what's live; the deltas from the original
+> v1 plan are:
+> 1. **No rake / no house cut.** PvP duels are **winner-takes-the-whole-pot**. There
+>    is no `pvp_rake` type, no `rake` pvp_ledger type, no `pvp_rake()` helper, and no
+>    `pvp_challenges.rake_amount` column. `payout_amount` always equals `total_pot`.
+> 2. **Week lock = `weeks.bowled_at`.** There is no `weeks.lock_at` column; the
+>    de-facto lock / default contract expiry is the week's scheduled `bowled_at`.
+> 3. Settlement pays the **full pot** to the winner as a single balanced player+house
+>    `pvp_payout` pair. Voiding a *settled* contract reverses the payout before
+>    refunding stakes. `decline` is restricted to actual parties (no open-board grief).
+>
+> Migrations: `…002012`–`…002537` (initial), `…004500_pvp_fixes` (lock_at/prop/void/
+> decline + conservation fix), `…010000_pvp_remove_rake` (rake removal).
+
 ## Scope of this spec (v1 — design §10 MVP)
 
-The reusable **Challenge Engine** (contract model + escrow + rake + settlement
-routing + counteroffers + admin tools) and three contract types: **Line Duel**
+The reusable **Challenge Engine** (contract model + escrow + settlement
+routing + counteroffers + admin tools — winner-takes-the-whole-pot, no rake) and
+three contract types: **Line Duel**
 (§11.1), **Player Prop Duel** (§11.7), **Raw Score Duel** (§11.2). Plus the **Open
 Challenge Board** (open contracts, `counterparty_player_id IS NULL`), **counteroffers**
-(§6), **escrow**, **5% rake** (§4.3–4.4), **auto-settlement from archived scores**
+(§6), **escrow**, **auto-settlement from archived scores**
 (§7.3), **admin cancel/void/manual-settle** (§14), and **double-or-nothing rematch**
 (§11.10). The schema is generalized so deferred types (Series, Spread, Accuracy, Side
 Pot, Rivalry, King of the Hill) slot in later via new `contract_type` values + new
@@ -38,7 +55,8 @@ Activity feed and push notifications are **out of scope** (deferred phase — se
 **Every new table is prefixed `pvp_*`** so they group together alphabetically:
 `pvp_challenges`, `pvp_challenge_offers`, `pvp_ledger`. The `pin_ledger` linking
 column is `pvp_ledger_id`. The new `pin_ledger.type` values are `pvp_stake`,
-`pvp_payout`, `pvp_refund`, `pvp_rake`. Do not deviate from this prefix.
+`pvp_payout`, `pvp_refund` (no `pvp_rake` — winner takes the whole pot). Do not
+deviate from this prefix.
 
 ---
 
@@ -91,8 +109,9 @@ One logical change per migration file (timestamps assigned by the CLI):
 1. `pvp_challenge_tables` — `pvp_challenges`, `pvp_challenge_offers`, `pvp_ledger`
    + indexes + RLS.
 2. `pin_ledger_pvp_support` — `pvp_ledger_id` column + index; extend `pin_ledger.type`
-   CHECK with the four `pvp_*` types; set `pvp_ledger.pin_ledger_id`'s FK (mutual ref).
-3. `pvp_engine_helpers` — `pvp_rake(int)` and `pvp_player_line(uuid, uuid)` helper functions.
+   CHECK with the three `pvp_*` types (`pvp_stake`/`pvp_payout`/`pvp_refund`); set
+   `pvp_ledger.pin_ledger_id`'s FK (mutual ref).
+3. `pvp_engine_helpers` — `pvp_player_line(uuid, uuid)` helper function.
 4. `pvp_challenge_rpcs` — `create_pvp_challenge`, `counter_pvp_challenge`,
    `accept_pvp_challenge`, `decline_pvp_challenge`, `cancel_pvp_challenge`,
    `void_pvp_challenge`, `settle_pvp_challenge`, `settle_pvp_for_week`,
@@ -124,15 +143,14 @@ trail lives in `pvp_challenge_offers`.
 | `creator_stake` | `int NOT NULL CHECK (creator_stake > 0)` |
 | `counterparty_stake` | `int NOT NULL CHECK (counterparty_stake > 0)` — v1 = symmetric (equals `creator_stake`); column allows future asymmetric |
 | `total_pot` | `int NOT NULL CHECK (total_pot > 0)` — `creator_stake + counterparty_stake` (stored for display/audit; recomputed in RPCs) |
-| `rake_amount` | `int NOT NULL CHECK (rake_amount >= 0)` — `floor(total_pot * 0.05)`, set at accept |
-| `payout_amount` | `int NOT NULL CHECK (payout_amount >= 0)` — `total_pot - rake_amount`, set at accept |
+| `payout_amount` | `int NOT NULL CHECK (payout_amount >= 0)` — winner takes the whole pot, so always `= total_pot`, set at accept. (There is **no** `rake_amount` column — rake was removed.) |
 | `creator_line` | `numeric(6,1) NULL` — snapshot of creator's projected line (Line Duel only), frozen at accept |
 | `counterparty_line` | `numeric(6,1) NULL` — snapshot of counterparty's projected line (Line Duel only) |
 | `prop_market_id` | `uuid NULL REFERENCES public.bet_markets(id) ON DELETE SET NULL` — Prop Duel: the existing market both players take sides of |
 | `creator_selection` | `text NULL` — Prop Duel: the creator's chosen `bet_selections.key` (e.g. `'over'`) |
 | `counterparty_selection` | `text NULL` — Prop Duel: the opposite selection key |
 | `subject_player_id` | `uuid NULL REFERENCES public.players(id) ON DELETE SET NULL` — Prop Duel subject (the player the prop is about); NULL for duels where the two parties are the subjects |
-| `expires_at` | `timestamptz NOT NULL` — pending/countered auto-expire at/after this (default = week lock) |
+| `expires_at` | `timestamptz NOT NULL` — pending/countered auto-expire at/after this (default = the week's `bowled_at`; there is no `weeks.lock_at`) |
 | `accepted_at` | `timestamptz NULL` |
 | `locked_at` | `timestamptz NULL` |
 | `settled_at` | `timestamptz NULL` |
@@ -155,9 +173,9 @@ and a composite `(status, expires_at)` for the expiry sweep.
 > is introduced.
 
 > **Derivation note:** escrow currently held for a contract =
-> `SUM(pvp_ledger.amount) WHERE challenge_id = X AND type = 'pvp_stake'` (will be
+> `SUM(pvp_ledger.amount) WHERE challenge_id = X AND type = 'stake'` (will be
 > negative player-side / positive house-side; the held amount is the absolute player
-> total). `rake = floor(total_pot * 0.05)` — see the `pvp_rake` helper (§3).
+> total). The winner is paid `total_pot`; there is no rake.
 
 ### `pvp_challenge_offers` (design §6.4)
 Append-only offer/counteroffer history. The contract's *current* terms live on
@@ -191,7 +209,7 @@ to fetch the live offer fast.
 
 ### `pvp_ledger` (mirrors `loan_ledger`)
 Append-only PvP economic event log. Every pin movement for a contract has a row here,
-linked to the player-side `pin_ledger` row. **Held escrow / payouts / rake are all
+linked to the player-side `pin_ledger` row. **Held escrow / payouts are all
 derivable from this table.**
 
 | Column | Type / notes |
@@ -202,7 +220,7 @@ derivable from this table.**
 | `season_id` | `uuid NOT NULL REFERENCES public.seasons(id) ON DELETE CASCADE` (denormalized) |
 | `week_id` | `uuid NULL REFERENCES public.weeks(id) ON DELETE SET NULL` |
 | `amount` | `int NOT NULL` — signed (see sign table) |
-| `type` | `text NOT NULL CHECK (type IN ('stake','payout','refund','rake'))` |
+| `type` | `text NOT NULL CHECK (type IN ('stake','payout','refund'))` |
 | `description` | `text NOT NULL` |
 | `pin_ledger_id` | `uuid NULL REFERENCES public.pin_ledger(id) ON DELETE SET NULL` — the matching `pin_ledger` row |
 | `created_at` / `updated_at` | audit (auto) |
@@ -213,19 +231,17 @@ Indexes: `challenge_id`, `player_id`, `season_id`, `week_id`, `pin_ledger_id`.
 event writes **two** `pvp_ledger` rows (player + house), mirroring the two `pin_ledger`
 rows, so the pair nets to 0:
 
-| event | player row sign | house row sign | rake collected? |
-|---|---|---|---|
-| `stake` (escrow on accept) | − stake | + stake | no |
-| `payout` (winner paid) | + payout | − payout | — |
-| `rake` (house keeps cut) | n/a (house only) | + rake | yes |
-| `refund` (push/void/cancel) | + stake | − stake | no |
+| event | player row sign | house row sign |
+|---|---|---|
+| `stake` (escrow on accept) | − stake | + stake |
+| `payout` (winner paid) | + total_pot | − total_pot |
+| `refund` (push/void/cancel) | + stake | − stake |
 
 > At settlement the pot (both stakes, already in House from `stake` events) is paid
-> out as: winner `+ payout` / house `− payout`, **and** a `rake` row records the House
-> keeping `rake_amount` (house-side `+rake`, no player row). The conservation invariant
-> still holds because the original `stake` events already moved both stakes into the
-> House; settlement only moves `payout` back out, and `rake = total_pot − payout`
-> remains House-side. (See §6 verification.)
+> back out **in full** to the winner: winner `+ total_pot` / house `− total_pot`. There
+> is no rake — the House nets exactly 0 per contract over its lifecycle (both stakes in,
+> the full pot out), so every PvP event is a balanced player+house pair and the
+> conservation invariant holds. (See §6 verification.)
 
 > **Mutual-reference note** (same as Loan Shark): `pvp_ledger.pin_ledger_id` and
 > `pin_ledger.pvp_ledger_id` reference each other. Insert order inside RPCs: insert the
@@ -254,17 +270,16 @@ ALTER TABLE public.pin_ledger
 CREATE INDEX pin_ledger_pvp_ledger_id_idx ON public.pin_ledger (pvp_ledger_id);
 ```
 
-**Extend the existing `pin_ledger.type` CHECK** (drop + re-add) to add the four PvP
+**Extend the existing `pin_ledger.type` CHECK** (drop + re-add) to add the three PvP
 types alongside the current set. **Confirm the live set first** with a read:
 `SELECT pg_get_constraintdef(oid) FROM pg_constraint WHERE conname LIKE 'pin_ledger_type%';`
-(at time of writing the live set includes `champion_bonus`, `score_credit`,
-`bet_stake`, `bet_payout`, `bet_refund`, and the four `loan_*` types). Add:
+(the live set is `bonus`, `score_credit`, `bet_stake`, `bet_payout`, `bet_refund`,
+and the four `loan_*` types). Add:
 
 ```
 pvp_stake
 pvp_payout
 pvp_refund
-pvp_rake
 ```
 
 **Cancel-friendliness convention:** in every PvP transfer, stamp `pvp_ledger_id` on
@@ -276,11 +291,7 @@ both sides.
 
 ## 3. Engine helpers
 
-In `pvp_engine_helpers`. Both `SET search_path = ''`, fully qualified.
-
-### `pvp_rake(p_total_pot int) RETURNS int`
-Deterministic rake (design §4.4): `RETURN floor(p_total_pot * 0.05)::int;`. `IMMUTABLE`.
-This is the single source of truth — every RPC computes rake via this function.
+In `pvp_engine_helpers`. `SET search_path = ''`, fully qualified.
 
 ### `pvp_player_line(p_player_id uuid, p_season_id uuid) RETURNS numeric`
 The Line Duel snapshot value. Reuse the sportsbook formula from
@@ -314,7 +325,8 @@ p_creator_selection text, p_message text, p_expires_at timestamptz`.
 
 1. Resolve `v_creator_id` from `auth.uid()` (RAISE if no player).
 2. Resolve current season; RAISE if none. Validate `p_week_id` is in that season and
-   not archived; default `p_expires_at` to the week lock if NULL; reject if past lock.
+   not archived; default `p_expires_at` to the week's `bowled_at` if NULL (there is no
+   `weeks.lock_at`); RAISE if no expiry can be determined; reject if already past.
 3. Validate `p_stake >= 10` (min stake, v1 default §15-Q1) and creator balance
    `>= p_stake`. (Balance only checked here for UX; re-checked at accept.)
 4. Validate `p_counterparty_player_id <> v_creator_id` (no self-challenge); if not
@@ -328,7 +340,7 @@ p_creator_selection text, p_message text, p_expires_at timestamptz`.
    neutral-framed; document that any future "under your own line" type is disallowed.)
 6. INSERT `pvp_challenges` (`status='pending'`, symmetric stakes
    `creator_stake = counterparty_stake = p_stake`, `total_pot = 2*p_stake`,
-   `rake_amount = public.pvp_rake(total_pot)`, `payout_amount = total_pot - rake_amount`).
+   `payout_amount = total_pot` — winner takes the whole pot, no rake).
    **No escrow.** Capture `v_challenge_id`.
 7. INSERT the original `pvp_challenge_offers` row (`offer_no = 1`, snapshot of terms).
 8. `RETURN v_challenge_id`.
@@ -348,7 +360,7 @@ p_prop_market_id uuid, p_selection text, p_message text, p_expires_at timestampt
 4. `UPDATE` the prior active offer `SET superseded_at = now()`.
 5. INSERT a new `pvp_challenge_offers` row (`offer_no = prev + 1`, new snapshot).
 6. `UPDATE pvp_challenges` to the new current terms, recompute
-   `total_pot`/`rake_amount`/`payout_amount` via `pvp_rake`, set `status='countered'`,
+   `total_pot` and `payout_amount` (`= total_pot`), set `status='countered'`,
    and set `counterparty_player_id` if it was an open-board contract now being
    negotiated by a specific player.
 7. `RETURN v_challenge_id`.
@@ -377,11 +389,14 @@ The escrow moment. Mirror `place_house_bet`'s double-entry for each side.
 7. Mark the accepted offer `accepted_at = now()`; `UPDATE pvp_challenges`
    `SET status='locked', accepted_at=now(), locked_at=now()` (v1 locks immediately on
    accept since contracts can't be created after the week lock anyway). Re-affirm
-   `total_pot`/`rake_amount`/`payout_amount`.
+   `total_pot` and `payout_amount` (`= total_pot`).
 
 ### `decline_pvp_challenge(p_challenge_id uuid) RETURNS void` — `authenticated`
-1. Resolve caller; load challenge. RAISE unless status in (`pending`,`countered`) and
-   caller is the party whose turn it is (the offer recipient).
+1. Resolve caller; load challenge. RAISE unless status in (`pending`,`countered`).
+   Caller must be an actual party — the creator or the (set) counterparty — **and** the
+   offer recipient (not the offerer). An open-board contract has no counterparty yet, so
+   only the creator is a party and the creator can't decline their own live offer; this
+   means a stranger can never decline (cancel) someone's open-board challenge.
 2. Mark the active offer `declined_at = now()`; `UPDATE pvp_challenges
    SET status='cancelled'`. **No escrow exists**, so no refund. (Declines are never
    surfaced publicly — §15-Q8 / no feed in v1.)
@@ -403,10 +418,11 @@ Admin cancellation of a pending/locked contract (design §4.5, §14). Refund any
 > implementer chose in the migration comment.
 
 ### `void_pvp_challenge(p_challenge_id uuid, p_admin_note text) RETURNS void` — admin-gated
-Design §4.5 void: contract can't be settled fairly → refund both stakes, **no rake**.
-1. Admin gate. Load challenge; RAISE unless `locked` (or `settled` if reversing).
-2. Refund both stakes (`pvp_refund` pairs as in cancel). If already `settled`, also
-   reverse the `payout` and `rake` rows first (write reversing pairs), then refund.
+Design §4.5 void: contract can't be settled fairly → refund both stakes.
+1. Admin gate. Load challenge `FOR UPDATE`; RAISE unless `locked` or `settled`.
+2. If already `settled`, **reverse the `payout` movement first** (write a reversing
+   `pvp_refund` pair for each `payout` pvp_ledger row) so the winner isn't paid twice.
+   Then refund both stakes (`pvp_refund` pairs). (There is no rake to reverse.)
 3. `UPDATE pvp_challenges SET status='voided', admin_note = p_admin_note, settled_at=now()`.
 
 ### `settle_pvp_challenge(p_challenge_id uuid, p_source text, p_winner_player_id uuid, p_admin_note text) RETURNS void`
@@ -429,13 +445,12 @@ Admin-gated for `admin`; for `automatic` it is invoked internally by
      **push**.
    - For `p_source='admin'` with `p_winner_player_id` supplied, the admin's pick
      overrides computed outcome (manual adjudication, design §7.3 "fully admin").
-4. **If a winner:** pay the pot back out — winner `+payout_amount` / house
-   `−payout_amount` (`type='pvp_payout'`) pin pair + matching `pvp_ledger` `payout`
-   rows; **plus** a house-only `pvp_rake` row (`pin_ledger` house `+rake_amount`,
-   `is_house=true`, and a `pvp_ledger` `rake` row). Stamp `pvp_ledger_id` on both pin
-   rows. `UPDATE` challenge `status='settled', winner_player_id, settled_at=now(),
-   result_detail`.
-5. **If push/void:** refund both stakes (`pvp_refund` pairs), **no rake**;
+4. **If a winner:** pay the **whole pot** back out — winner `+total_pot` / house
+   `−total_pot` (`type='pvp_payout'`) pin pair + a matching `pvp_ledger` `payout` row.
+   Stamp `pvp_ledger_id` on both pin rows. There is **no rake** — the House nets 0 over
+   the contract (both stakes in, full pot out). `UPDATE` challenge
+   `status='settled', winner_player_id, settled_at=now(), result_detail`.
+5. **If push/void:** refund both stakes (`pvp_refund` pairs);
    `status='pushed'` (or `voided` if data missing/unfair), `settled_at=now()`.
 6. If `p_source='admin'`, store `p_admin_note`.
 
@@ -497,29 +512,28 @@ Use a throwaway / non-prod season. SQL reads via `supabase db query --linked`.
    unchanged and writes **zero** `pvp_ledger` rows; a `pvp_challenge_offers` row
    (`offer_no=1`) exists; `status='pending'`.
 3. **counter** — `counter_pvp_challenge` supersedes the prior offer (`superseded_at`
-   set), inserts `offer_no=2`, recomputes `rake_amount = floor(total_pot*0.05)`,
+   set), inserts `offer_no=2`, recomputes `total_pot`/`payout_amount`,
    `status='countered'`; only the latest non-superseded/non-resolved offer is acceptable.
 4. **accept → escrow nets 0** — both balances drop by their stake; four `pvp_stake`
    pin rows sum to 0; each pair carries the same `pvp_ledger_id`; Line Duel snapshots
    `creator_line`/`counterparty_line`; `status='locked'`. Accepting your own latest
    offer raises; accepting after `expires_at` raises; accepting with insufficient
    balance raises.
-5. **rake** — `rake_amount = floor(total_pot * 0.05)` for the §4.4 table values
-   (20→1, 25→1, 50→2, 100→5, 200→10, 500→25); `payout_amount = total_pot − rake_amount`.
+5. **payout = pot** — `payout_amount = total_pot` for every contract (no rake; winner
+   takes the whole pot).
 6. **auto-settle (archive)** — archive a week with a locked Line Duel: winner gets
-   `+payout_amount`, house nets `+rake_amount` overall, loser gets nothing back; a
-   `pvp_rake` row exists; `result_detail` holds both scores/nets; **re-running
-   `settle_betting_for_week` is a no-op** (idempotency guard). Equal nets → `pushed`
-   with both stakes refunded and **no** `pvp_rake` row.
+   `+total_pot`, house nets 0 overall (both stakes in, full pot out), loser gets nothing
+   back; `result_detail` holds both scores/nets; **re-running `settle_betting_for_week`
+   is a no-op** (idempotency guard). Equal nets → `pushed` with both stakes refunded.
 7. **prop_duel settle** — agrees with the existing market settlement: the side holding
    the winning `bet_selections.key` wins; a market push → contract `pushed`.
 8. **missing score → void** — a locked contract whose game has no archived score after
-   settle becomes `voided` with both stakes refunded, no rake.
+   settle becomes `voided` with both stakes refunded.
 9. **admin tools** — `cancel_pvp_challenge` (pre-settlement) rolls escrow back to
-   pre-accept state; `void_pvp_challenge` refunds with no rake; admin
-   `settle_pvp_challenge(..., 'admin', winner)` overrides computed outcome.
+   pre-accept state; `void_pvp_challenge` refunds (reversing the payout first if the
+   contract was already settled); admin `settle_pvp_challenge(..., 'admin', winner)`
+   overrides computed outcome.
 10. **Conservation invariant (§10.2)** — `SUM(pin_ledger.amount)` per season still
     equals `SUM(score_credit)`: every PvP `stake`/`payout`/`refund` is a player+house
-    pair netting 0, and `pvp_rake` is offset by the difference between the pot
-    (escrowed into House) and the payout (paid back out) — i.e. all PvP rows net 0
-    House-side overall. Confirm with the §10 conservation query.
+    pair netting 0, so all PvP rows net 0 House-side overall (no rake row to leak).
+    Confirm with the §10 conservation query.

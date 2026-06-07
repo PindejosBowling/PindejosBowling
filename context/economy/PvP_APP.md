@@ -2,13 +2,21 @@
 
 Handoff spec for the **app layer** (`app/src`) of the PvP Challenge Contracts feature.
 
+> **⚠️ No rake — winner takes the whole pot.** The DB layer was built without any
+> house cut: there is no `pvp_rake` `pin_ledger` type, no `rake` column, and the
+> winner is paid the **full `total_pot`** (`payout_amount` always equals `total_pot`).
+> Wherever this spec originally said "rake" / "net payout", read it as **"pot" /
+> "winner's payout = pot"**. The "week lock" used for default expiry is the week's
+> `weeks.bowled_at` (there is no `weeks.lock_at`). See `PvP_DB.md` for the as-built
+> design.
+
 **Prerequisite:** the database spec (`economy/PvP_DB.md`) is fully applied
 (`supabase db push`) **and** `app/src/utils/supabase/database.types.ts` has been
 regenerated — follow the type-regeneration step in `PAGE_CREATION.md`. These must exist
 in the generated types before starting:
 - Tables `pvp_challenges`, `pvp_challenge_offers`, `pvp_ledger`.
-- Column `pin_ledger.pvp_ledger_id` and the four new `pin_ledger.type` values
-  (`pvp_stake`/`pvp_payout`/`pvp_refund`/`pvp_rake`).
+- Column `pin_ledger.pvp_ledger_id` and the three new `pin_ledger.type` values
+  (`pvp_stake`/`pvp_payout`/`pvp_refund` — there is no `pvp_rake`).
 - RPCs `create_pvp_challenge`, `counter_pvp_challenge`, `accept_pvp_challenge`,
   `decline_pvp_challenge`, `cancel_pvp_challenge`, `void_pvp_challenge`,
   `settle_pvp_challenge`.
@@ -22,7 +30,8 @@ admin gate via `useAuthStore(s => s.role) === 'admin'`.
 
 ## Scope (v1 — design §10 MVP)
 Three contract types (**Line Duel**, **Player Prop Duel**, **Raw Score Duel**), the
-**Open Challenge Board**, **counteroffers**, escrow + 5% rake display, auto-settlement
+**Open Challenge Board**, **counteroffers**, escrow (winner takes the whole pot — no
+rake), auto-settlement
 (server-side on archive — the app just reflects results), **admin manual-settle / cancel
 / void**, and **double-or-nothing rematch**. **No activity feed, no push notifications**
 in v1 (§6 below) — the inbox, board, contract detail, and pull-to-refresh are the social
@@ -171,8 +180,8 @@ Layout (design §8.2):
   `PvPBoard`.
 
 ### `app/src/screens/PvPBoardScreen.tsx` (new) — open marketplace (design §8.3)
-- List open contracts (`usePvpData().openBoard`): contract type, creator, stake, **pot**,
-  **rake (5%)**, **net payout**, game/week scope, expiration.
+- List open contracts (`usePvpData().openBoard`): contract type, creator, stake, **pot
+  (= winner's payout)**, game/week scope, expiration.
 - Filters (type / stake / week / creator) — reuse `PillFilter` / `ToggleGroup`.
 - Per row: **Accept** (→ accept-confirm modal) and **Counter** (→ counteroffer modal).
 - **"Post Open Challenge"** button → `PvPCreate` with opponent unset (open board).
@@ -186,20 +195,20 @@ Form fields:
 - **Prop Duel only**: pick the subject's open `bet_market` + the creator's side
   (`over`/`under`); reuse the sportsbook market reads + `OddsBlock` for display.
 - **Stake** (numeric; min 10, ≤ balance — client mirror of the RPC).
-- **Optional message**, **expiration** (default = week lock).
+- **Optional message**, **expiration** (default = week lock = `bowled_at`).
 - **Confirmation panel** (always shown before submit — design §8.1, §4.3): **stake
-  required, total pot, House rake (5% = floor(pot×0.05)), net payout, the settlement
+  required, total pot (= the winner's payout — winner takes all, no rake), the settlement
   rule in plain words, lock time, and "This does not affect bowling gameplay — always
   no."** Submit → `pvpChallenges.create` → toast + navigate to the new detail page.
 
 ### `app/src/screens/PvPChallengeDetailScreen.tsx` (new) — contract detail (design §8.4)
 From `usePvpChallengeDetail`:
-- Status badge, participants, terms, **pot / rake / net payout**, settlement condition,
+- Status badge, participants, terms, **pot (= winner's payout)**, settlement condition,
   and (Line Duel) the **snapshot lines** for each side.
 - **Offer / counteroffer history** (from `pvp_challenge_offers`, oldest→newest): who
   offered, which terms changed, message, timestamp, accepted/declined/superseded marker
   (design §6.4).
-- **Ledger events** (from `pvp_ledger`): stake / payout / refund / rake rows with signs.
+- **Ledger events** (from `pvp_ledger`): stake / payout / refund rows with signs.
 - **Result** when settled: each side's score + net-vs-line from `result_detail`; winner.
 - **Admin note** when present.
 - Action buttons by status + viewer role: **Accept / Decline / Counter** (when it's the
@@ -210,10 +219,10 @@ From `usePvpChallengeDetail`:
 Both modeled on `SettleBetModal` (bottom sheet, `<Toast/>` inside, mounted conditionally
 so they reset between opens, disabled-while-saving).
 - **`PvpAcceptModal`**: re-displays the full revised terms and **recomputed
-  stake/pot/rake/net payout** before acceptance (design §6.3 — accepting = accepting the
+  stake/pot (= payout)** before acceptance (design §6.3 — accepting = accepting the
   full revised contract). Confirm → `pvpChallenges.accept` → toast + `reload` + close.
 - **`PvpCounterModal`**: form for the counter-able terms (stake, type, scope/game,
-  selection, optional shorter expiration, message) with the recomputed pot/rake/payout
+  selection, optional shorter expiration, message) with the recomputed pot/payout
   shown live. Confirm → `pvpChallenges.counter` → toast + `reload` + close.
 
 ---
@@ -241,12 +250,11 @@ so they reset between opens, disabled-while-saving).
   (title "PvP Admin").
 
 ### Ledger rendering — PvP-aware rows
-`app/src/components/LedgerRow.tsx`: add action labels for the four new `pin_ledger` PvP
+`app/src/components/LedgerRow.tsx`: add action labels for the three new `pin_ledger` PvP
 types, for both perspectives (player vs house):
 - `pvp_stake` → player "CHALLENGE STAKE", house "CHALLENGE ESCROW"
 - `pvp_payout` → player "CHALLENGE WIN", house "CHALLENGE PAYOUT"
 - `pvp_refund` → player "CHALLENGE REFUND", house "REFUND ISSUED"
-- `pvp_rake` → house "CHALLENGE RAKE" (house-only; no player row)
 
 These are transfers with no `bet` graph, so render them as **static rows** (like
 `score_credit`/loan rows), not tappable bet rows. In `usePlayerPinsinoData.ts` /
@@ -264,7 +272,7 @@ labels them. Optionally make a PvP pin row tappable → navigate to its
   matching the other admin screens).
 - List active/locked contracts for the current season
   (`pvpChallenges.listLockedBySeason`), filterable by status / week / type (`PillFilter`).
-  Each row: type, both players, pot, rake, status; tap → detail.
+  Each row: type, both players, pot, status; tap → detail.
 - Per-contract admin actions (in a modal, `<Toast/>` inside):
   - **Manual Settle** — pick winner (creator / counterparty / **push** / **void**) →
     `pvpChallenges.settle(id, winnerId|null, note)` (push/void map to the appropriate
@@ -272,8 +280,7 @@ labels them. Optionally make a PvP pin row tappable → navigate to its
   - **Cancel** (pre-settlement) → confirm → `pvpChallenges.cancel(id)` → toast + reload.
     Mirror the cancel UX in `PinsinoSportsbookScreen`.
   - **Void** → confirm + note → `pvpChallenges.void(id, note)` → toast + reload.
-- Show escrow held, rake collected, and the offer history per contract (reuse the detail
-  components).
+- Show escrow held and the offer history per contract (reuse the detail components).
 
 ### `app/src/screens/PinsinoAdminScreen.tsx`
 - Already covered in §4 (tile added).
@@ -329,27 +336,27 @@ SQL checks (`PvP_DB.md` §6).
 1. **Tiles** — PvP tile appears on the Pinsino hub; PvP tile appears on Pinsino Admin
    (admin only).
 2. **Create** — creating a direct Line Duel shows the confirmation panel with correct
-   stake / pot / **rake (5%)** / net payout / settlement rule / lock time / "does not
+   stake / pot (= winner's payout) / settlement rule / lock time / "does not
    affect bowling"; submitting leaves balances unchanged (no escrow yet) and the contract
    appears in the creator's Sent and the opponent's Received.
-3. **Counter** — countering recomputes and displays pot/rake/payout; the prior offer is
+3. **Counter** — countering recomputes and displays pot/payout; the prior offer is
    marked superseded in the detail history; only the latest offer is acceptable.
 4. **Accept** — accepting escrows both stakes (both balances drop by the stake; net
    unchanged conceptually until settle); status flips to Active/locked; Line Duel snapshot
    lines show on the detail page.
-5. **Open board** — posting an open challenge lists it on the Board with pot/rake/payout;
+5. **Open board** — posting an open challenge lists it on the Board with pot/payout;
    a different player accepts it FCFS; it leaves the board.
 6. **Settle (archive)** — archiving the contract's week auto-settles it: winner's balance
-   rises by net payout, loser's stake is gone, the detail page shows both scores/nets and
-   the winner; the ledger shows stake/payout/rake rows. A tied Line Duel pushes and
+   rises by the full pot, loser's stake is gone, the detail page shows both scores/nets and
+   the winner; the ledger shows stake/payout rows. A tied Line Duel pushes and
    refunds both.
 7. **Ledger labels** — borrower/player PlayerPinsino Activity and the house Accounting
-   Activity show PvP rows with correct labels/signs; rake appears house-side only.
+   Activity show PvP rows with correct labels/signs; the house nets 0 per settled contract.
 8. **Rematch** — the loser of a settled contract can open a Rematch (prefilled, same type,
    double stake); the other player accepts/declines/counters.
 9. **Admin** — admin can manual-settle (pick winner / push / void), cancel a pre-
-   settlement contract (escrow reverts), and void a locked contract (both refunded, no
-   rake); each action toasts and reloads.
+   settlement contract (escrow reverts), and void a locked contract (both refunded);
+   each action toasts and reloads.
 10. **Integrity** — confirm nothing in this flow touches league standings, team results,
     or scores (read-only against `scores`/`weeks`); a player with no accepted contract has
     zero PvP exposure (design §2).
