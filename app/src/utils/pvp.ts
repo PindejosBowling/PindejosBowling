@@ -4,12 +4,12 @@
 
 export const PVP_MIN_STAKE = 10
 
-export type PvpContractType = 'line_duel' | 'prop_duel' | 'raw_score_duel' | 'custom'
+export type PvpContractType = 'line_duel' | 'prop_duel' | 'head_to_head' | 'custom'
 
 export const CONTRACT_TYPE_LABEL: Record<string, string> = {
   line_duel: 'Line Duel',
   prop_duel: 'Prop Duel',
-  raw_score_duel: 'Raw Score Duel',
+  head_to_head: 'Head-to-Head',
   custom: 'Custom',
 }
 
@@ -21,9 +21,10 @@ export const CONTRACT_TYPE_RULE: Record<string, string> = {
   prop_duel:
     'Both players take opposite sides of the same prop. The side the result lands ' +
     'on wins the pot. A market push refunds both stakes.',
-  raw_score_duel:
-    'Highest raw game score wins the pot — no lines, no handicap. A tie pushes and ' +
-    'both stakes are refunded.',
+  head_to_head:
+    "Each bowler's raw game score plus their assigned handicap is compared — the " +
+    'higher adjusted total wins the pot. A handicap is optional (0 = none) and a tie ' +
+    'pushes, refunding both stakes.',
   custom:
     'A custom challenge — the creator defines the win condition. Settled manually ' +
     'by an admin based on the stated terms. There is no automatic scoring.',
@@ -34,9 +35,23 @@ export const CONTRACT_TYPE_RULE: Record<string, string> = {
 // any legacy prop_duel rows still render).
 export const CONTRACT_TYPE_OPTIONS: { key: PvpContractType; label: string }[] = [
   { key: 'line_duel', label: 'Line Duel' },
-  { key: 'raw_score_duel', label: 'Raw Score' },
+  { key: 'head_to_head', label: 'Head-to-Head' },
   { key: 'custom', label: 'Custom' },
 ]
+
+// Display a signed Head-to-Head handicap (pins added to a player's raw score).
+// 0 = no handicap; positives add, negatives subtract.
+export function formatHandicap(n: number): string {
+  if (!n) return 'Scratch'
+  return n > 0 ? `+${n}` : `${n}`
+}
+
+// Sanitize a handicap text input to a signed integer string: digits with an
+// optional single leading minus ("" and "-" are valid in-progress values → 0).
+export function sanitizeHandicap(v: string): string {
+  const digits = v.replace(/[^0-9]/g, '')
+  return (v.trimStart().startsWith('-') ? '-' : '') + digits
+}
 
 // True when the two sides put up different amounts (asymmetric stakes).
 export function isAsymmetricStakes(creatorStake: number, counterpartyStake: number): boolean {

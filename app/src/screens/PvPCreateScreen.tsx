@@ -22,6 +22,7 @@ import {
 import { normalizeChallenge } from '../hooks/usePvpData'
 import {
   PVP_MIN_STAKE, PvpContractType, CONTRACT_TYPE_OPTIONS, CONTRACT_TYPE_RULE, CONTRACT_TYPE_LABEL,
+  formatHandicap, sanitizeHandicap,
 } from '../utils/pvp'
 import { PinsinoStackParamList } from '../navigation/types'
 
@@ -49,6 +50,10 @@ export default function PvPCreateScreen() {
   // always known; the opponent's is known only once a specific opponent is set.
   const [myLine, setMyLine] = useState<number | null>(null)
   const [opponentLine, setOpponentLine] = useState<number | null>(null)
+  // Head-to-Head handicaps (signed pins added to each player's score; blank = 0).
+  // Creator-defined for both sides up front, even on an open board.
+  const [myHandicap, setMyHandicap] = useState('')
+  const [opponentHandicap, setOpponentHandicap] = useState('')
   const [opponents, setOpponents] = useState<OpponentOpt[]>([])
   const [gameNumbers, setGameNumbers] = useState<number[]>([])
   const [propMarkets, setPropMarkets] = useState<PropMarket[]>([])
@@ -131,6 +136,13 @@ export default function PvPCreateScreen() {
             setCustomTitle(c.customTitle ?? '')
             setCustomDescription(c.customDescription ?? '')
           }
+          if (c.contractType === 'head_to_head') {
+            // Carry the prior handicaps from the viewer's perspective.
+            const myHc = iWasCreator ? c.creatorHandicap : c.counterpartyHandicap
+            const oppHc = iWasCreator ? c.counterpartyHandicap : c.creatorHandicap
+            if (myHc) setMyHandicap(String(myHc))
+            if (oppHc) setOpponentHandicap(String(oppHc))
+          }
         }
       } else if (route.params?.opponentId) {
         setOpponentId(route.params.opponentId)
@@ -176,6 +188,10 @@ export default function PvPCreateScreen() {
 
   const isProp = contractType === 'prop_duel'
   const isCustom = contractType === 'custom'
+  const isHeadToHead = contractType === 'head_to_head'
+  // Parse the signed handicap inputs (blank or "-" alone → 0).
+  const myHandicapNum = parseInt(myHandicap, 10) || 0
+  const oppHandicapNum = parseInt(opponentHandicap, 10) || 0
 
   function validate(): string | null {
     if (!weekId) return 'No active week to challenge in'
@@ -213,6 +229,9 @@ export default function PvPCreateScreen() {
         message: message.trim() || null,
         customTitle: isCustom ? customTitle.trim() : null,
         customDescription: isCustom ? customDescription.trim() : null,
+        // The viewer is always the creator here: "your" → creator, opponent → counterparty.
+        creatorHandicap: isHeadToHead ? myHandicapNum : 0,
+        counterpartyHandicap: isHeadToHead ? oppHandicapNum : 0,
       }
       const { data, error } = await pvpChallenges.create(args)
       if (error) { showToast(error.message, 'error'); return }
@@ -275,6 +294,46 @@ export default function PvPCreateScreen() {
               },
             ]}
           />
+        )}
+
+        {/* Handicaps (Head-to-Head only) — signed pins added to each score at settle */}
+        {isHeadToHead && (
+          <>
+            <View style={styles.handicapRow}>
+              <View style={styles.handicapCell}>
+                <Text style={styles.label}>YOUR HANDICAP</Text>
+                <TextInput
+                  style={styles.input}
+                  value={myHandicap}
+                  onChangeText={v => setMyHandicap(sanitizeHandicap(v))}
+                  keyboardType="numbers-and-punctuation"
+                  placeholder="0"
+                  placeholderTextColor={colors.muted2}
+                  maxLength={4}
+                />
+              </View>
+              <View style={styles.handicapCell}>
+                <Text style={styles.label}>{(opponentName ?? 'OPPONENT').toUpperCase()}'S HANDICAP</Text>
+                <TextInput
+                  style={styles.input}
+                  value={opponentHandicap}
+                  onChangeText={v => setOpponentHandicap(sanitizeHandicap(v))}
+                  keyboardType="numbers-and-punctuation"
+                  placeholder="0"
+                  placeholderTextColor={colors.muted2}
+                  maxLength={4}
+                />
+              </View>
+            </View>
+            <Text style={styles.helpText}>Pins added to a player's score (negative subtracts). 0 = no handicap.</Text>
+            <LineDuelLines
+              label="HANDICAPS"
+              sides={[
+                { name: 'You', value: formatHandicap(myHandicapNum) },
+                { name: opponentName ?? 'Opponent', value: formatHandicap(oppHandicapNum) },
+              ]}
+            />
+          </>
         )}
 
         {/* Scope */}
@@ -416,6 +475,18 @@ export default function PvPCreateScreen() {
               </View>
             </>
           )}
+          {isHeadToHead && (
+            <>
+              <View style={styles.confirmRow}>
+                <Text style={styles.confirmLabel}>Your handicap</Text>
+                <Text style={styles.confirmValue}>{formatHandicap(myHandicapNum)}</Text>
+              </View>
+              <View style={styles.confirmRow}>
+                <Text style={styles.confirmLabel}>{opponentName ?? "Opponent's"} handicap</Text>
+                <Text style={styles.confirmValue}>{formatHandicap(oppHandicapNum)}</Text>
+              </View>
+            </>
+          )}
           <View style={styles.confirmRow}>
             <Text style={styles.confirmLabel}>Your stake</Text>
             <Text style={styles.confirmValue}>{validMyStake ? stakeNum.toLocaleString() : '—'} pins</Text>
@@ -481,6 +552,9 @@ const styles = StyleSheet.create({
   },
   toggle: { justifyContent: 'flex-start' },
   contractRule: { fontFamily: fonts.barlow, fontSize: 13, color: colors.muted, lineHeight: 19, marginTop: 10 },
+
+  handicapRow: { flexDirection: 'row', gap: 8 },
+  handicapCell: { flex: 1 },
 
   stakeHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   stakeLabel: { flex: 1 },

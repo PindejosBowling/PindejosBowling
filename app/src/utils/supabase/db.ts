@@ -533,10 +533,10 @@ export const pinLedger = {
 // go through SECURITY DEFINER RPCs. Reads embed the creator/counterparty names —
 // the two FKs to players are disambiguated via their constraint names.
 export interface CreatePvpArgs {
-  contractType: string                 // 'line_duel' | 'prop_duel' | 'raw_score_duel' | 'custom'
+  contractType: string                 // 'line_duel' | 'prop_duel' | 'head_to_head' | 'custom'
   counterpartyId: string | null        // null = open board
   weekId: string
-  gameNumber: number | null            // required for line/raw; null for prop/custom
+  gameNumber: number | null            // required for line/head_to_head; null for prop/custom
   creatorStake: number                 // the creator's own stake
   counterpartyStake: number            // the opponent's stake (equal to creator's unless custom)
   propMarketId: string | null          // prop_duel only
@@ -544,6 +544,8 @@ export interface CreatePvpArgs {
   message: string | null
   customTitle: string | null           // custom only
   customDescription: string | null     // custom only — the admin-judged win condition
+  creatorHandicap: number              // head_to_head only (signed pins; 0 = none)
+  counterpartyHandicap: number         // head_to_head only (signed pins; 0 = none)
 }
 
 export interface CounterPvpArgs {
@@ -555,6 +557,8 @@ export interface CounterPvpArgs {
   propMarketId: string | null
   selection: string | null
   message: string | null
+  creatorHandicap: number              // role-fixed; head_to_head only (signed pins)
+  counterpartyHandicap: number         // role-fixed; head_to_head only (signed pins)
 }
 
 const CHALLENGE_PARTIES =
@@ -610,6 +614,8 @@ export const pvpChallenges = {
       p_message: a.message as string,
       p_custom_title: a.customTitle as string,
       p_custom_description: a.customDescription as string,
+      p_creator_handicap: a.creatorHandicap,
+      p_counterparty_handicap: a.counterpartyHandicap,
     }),
   counter: (a: CounterPvpArgs) =>
     supabase.rpc('counter_pvp_challenge', {
@@ -621,6 +627,8 @@ export const pvpChallenges = {
       p_prop_market_id: a.propMarketId as string,
       p_selection: a.selection as string,
       p_message: a.message as string,
+      p_creator_handicap: a.creatorHandicap,
+      p_counterparty_handicap: a.counterpartyHandicap,
     }),
   // The Line Duel snapshot value for a player (floor(season avg)+0.5; league-avg
   // fallback). Used to preview each side's line-to-beat during create/counter

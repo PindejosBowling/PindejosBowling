@@ -9,8 +9,12 @@ import { useUiStore } from '../stores/uiStore'
 import { pvpChallenges, seasons, games, CounterPvpArgs } from '../utils/supabase/db'
 import LineDuelLines from './LineDuelLines'
 import GamePicker from './GamePicker'
-import { PVP_MIN_STAKE, CONTRACT_TYPE_LABEL } from '../utils/pvp'
+import { PVP_MIN_STAKE, CONTRACT_TYPE_LABEL, formatHandicap, sanitizeHandicap } from '../utils/pvp'
 import type { PvpChallengeView } from '../hooks/usePvpData'
+
+// Names in this sheet sit in tight spots (a column header above an input, inline
+// labels) where a full name wraps and displaces the fields — use the first name only.
+const firstName = (name: string) => name.split(' ')[0]
 
 interface Props {
   // Mount conditionally so it resets between opens. Confirm → counter RPC → toast +
@@ -45,7 +49,7 @@ export default function PvpCounterModal({ challenge: c, viewerId, balance, onClo
   const isLineDuel = c.contractType === 'line_duel'
   const myLine = iAmCreator ? c.creatorLine : c.counterpartyLine
   const oppLine = iAmCreator ? c.counterpartyLine : c.creatorLine
-  const oppName = iAmCreator ? (c.counterpartyName ?? 'Taker') : c.creatorName
+  const oppName = iAmCreator ? (c.counterpartyName ? firstName(c.counterpartyName) : 'Taker') : firstName(c.creatorName)
   const [takerLine, setTakerLine] = useState<number | null>(null)
   useEffect(() => {
     if (!isLineDuel || myLine != null || !viewerId) return
@@ -60,6 +64,17 @@ export default function PvpCounterModal({ challenge: c, viewerId, balance, onClo
     return () => { active = false }
   }, [isLineDuel, myLine, viewerId])
   const myLineShown = myLine ?? takerLine
+
+  // Head-to-Head handicaps, viewer-relative and renegotiable like the stakes.
+  const isHeadToHead = c.contractType === 'head_to_head'
+  const [myHandicap, setMyHandicap] = useState(
+    String((iAmCreator ? c.creatorHandicap : c.counterpartyHandicap) || ''),
+  )
+  const [oppHandicap, setOppHandicap] = useState(
+    String((iAmCreator ? c.counterpartyHandicap : c.creatorHandicap) || ''),
+  )
+  const myHandicapNum = parseInt(myHandicap, 10) || 0
+  const oppHandicapNum = parseInt(oppHandicap, 10) || 0
 
   // Game-scoped contracts only — load the week's scheduled games so the counter
   // can only re-pick from what's actually available (no free-form entry).
@@ -107,6 +122,9 @@ export default function PvpCounterModal({ challenge: c, viewerId, balance, onClo
         propMarketId: c.propMarketId,
         selection: c.creatorSelection,
         message: message.trim() || null,
+        // Map viewer-relative → role-fixed handicaps (0 for non-head_to_head).
+        creatorHandicap: isHeadToHead ? (iAmCreator ? myHandicapNum : oppHandicapNum) : 0,
+        counterpartyHandicap: isHeadToHead ? (iAmCreator ? oppHandicapNum : myHandicapNum) : 0,
       }
       const { error } = await pvpChallenges.counter(args)
       if (error) { showToast(error.message, 'error'); return }
@@ -126,7 +144,7 @@ export default function PvpCounterModal({ challenge: c, viewerId, balance, onClo
         <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={() => !saving && onClose()} />
         <View style={styles.sheet}>
           <Text style={styles.title}>Counter {CONTRACT_TYPE_LABEL[c.contractType]}</Text>
-          <Text style={styles.subtitle}>vs {c.creatorName}</Text>
+          <Text style={styles.subtitle}>vs {firstName(c.creatorName)}</Text>
 
           <ScrollView style={styles.body} keyboardShouldPersistTaps="handled">
             <View style={styles.stakeHeader}>
@@ -192,6 +210,44 @@ export default function PvpCounterModal({ challenge: c, viewerId, balance, onClo
               />
             )}
 
+            {isHeadToHead && (
+              <>
+                <View style={styles.handicapRow}>
+                  <View style={styles.handicapCell}>
+                    <Text style={styles.label} numberOfLines={1}>YOUR HANDICAP</Text>
+                    <TextInput
+                      style={styles.input}
+                      value={myHandicap}
+                      onChangeText={v => setMyHandicap(sanitizeHandicap(v))}
+                      keyboardType="numbers-and-punctuation"
+                      placeholder="0"
+                      placeholderTextColor={colors.muted2}
+                      maxLength={4}
+                    />
+                  </View>
+                  <View style={styles.handicapCell}>
+                    <Text style={styles.label} numberOfLines={1}>{oppName.toUpperCase()}'S HANDICAP</Text>
+                    <TextInput
+                      style={styles.input}
+                      value={oppHandicap}
+                      onChangeText={v => setOppHandicap(sanitizeHandicap(v))}
+                      keyboardType="numbers-and-punctuation"
+                      placeholder="0"
+                      placeholderTextColor={colors.muted2}
+                      maxLength={4}
+                    />
+                  </View>
+                </View>
+                <LineDuelLines
+                  label="HANDICAPS"
+                  sides={[
+                    { name: 'You', value: formatHandicap(myHandicapNum) },
+                    { name: oppName, value: formatHandicap(oppHandicapNum) },
+                  ]}
+                />
+              </>
+            )}
+
             <View style={styles.potRow}>
               <Text style={styles.potLabel}>New pot (winner takes all)</Text>
               <Text style={styles.potValue}>{pot.toLocaleString()} pins</Text>
@@ -232,6 +288,8 @@ const styles = StyleSheet.create({
   label: { fontFamily: fonts.barlowCondensed, fontSize: 12, letterSpacing: 1.5, color: colors.muted, marginTop: 14, marginBottom: 8 },
   stakeHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   stakeLabel: { flex: 1 },
+  handicapRow: { flexDirection: 'row', gap: 8 },
+  handicapCell: { flex: 1 },
   customToggle: { borderRadius: radius.cardSm, borderWidth: 1, borderColor: colors.border2, paddingHorizontal: 12, paddingVertical: 6 },
   customToggleOn: { backgroundColor: colors.accentDim, borderColor: colors.accent },
   customToggleText: { fontFamily: fonts.barlowCondensed, fontSize: 12, color: colors.muted, letterSpacing: 0.5 },

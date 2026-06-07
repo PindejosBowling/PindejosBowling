@@ -15,7 +15,7 @@ import { useRefresh } from '../hooks/useRefresh'
 import { useAuthStore } from '../stores/authStore'
 import { useUiStore } from '../stores/uiStore'
 import { seasons, pinLedger, pvpChallenges } from '../utils/supabase/db'
-import { CONTRACT_TYPE_LABEL, CONTRACT_TYPE_RULE, STATUS_LABEL, statusKind, formatStakes, isAsymmetricStakes } from '../utils/pvp'
+import { CONTRACT_TYPE_LABEL, CONTRACT_TYPE_RULE, STATUS_LABEL, statusKind, formatStakes, isAsymmetricStakes, formatHandicap } from '../utils/pvp'
 import { PinsinoStackParamList } from '../navigation/types'
 
 type Nav = NativeStackNavigationProp<PinsinoStackParamList>
@@ -180,6 +180,16 @@ export default function PvPChallengeDetailScreen() {
             />
           ) : null}
 
+          {c.contractType === 'head_to_head' ? (
+            <LineDuelLines
+              label="HANDICAPS"
+              sides={[
+                { name: c.creatorName, value: formatHandicap(c.creatorHandicap) },
+                { name: c.counterpartyName ?? 'Taker', value: formatHandicap(c.counterpartyHandicap) },
+              ]}
+            />
+          ) : null}
+
           <Text style={styles.rule}>{CONTRACT_TYPE_RULE[c.contractType]}</Text>
           {c.creatorMessage ? <Text style={styles.message}>“{c.creatorMessage}”</Text> : null}
         </View>
@@ -198,7 +208,9 @@ export default function PvPChallengeDetailScreen() {
                 <View style={styles.resultRow}>
                   <Text style={styles.resultName}>{c.creatorName}</Text>
                   <Text style={styles.resultScore}>
-                    {rd.creator_score}{rd.creator_net != null ? `  (${Number(rd.creator_net) >= 0 ? '+' : ''}${rd.creator_net} vs line)` : ''}
+                    {rd.creator_score}
+                    {rd.creator_net != null ? `  (${Number(rd.creator_net) >= 0 ? '+' : ''}${rd.creator_net} vs line)` : ''}
+                    {rd.creator_adjusted != null ? `  (${formatHandicap(Number(rd.creator_handicap))} → ${rd.creator_adjusted})` : ''}
                   </Text>
                 </View>
               )}
@@ -206,7 +218,9 @@ export default function PvPChallengeDetailScreen() {
                 <View style={styles.resultRow}>
                   <Text style={styles.resultName}>{c.counterpartyName}</Text>
                   <Text style={styles.resultScore}>
-                    {rd.counterparty_score}{rd.counterparty_net != null ? `  (${Number(rd.counterparty_net) >= 0 ? '+' : ''}${rd.counterparty_net} vs line)` : ''}
+                    {rd.counterparty_score}
+                    {rd.counterparty_net != null ? `  (${Number(rd.counterparty_net) >= 0 ? '+' : ''}${rd.counterparty_net} vs line)` : ''}
+                    {rd.counterparty_adjusted != null ? `  (${formatHandicap(Number(rd.counterparty_handicap))} → ${rd.counterparty_adjusted})` : ''}
                   </Text>
                 </View>
               )}

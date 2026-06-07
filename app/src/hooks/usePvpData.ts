@@ -19,6 +19,8 @@ export interface PvpChallengeView {
   payoutAmount: number
   creatorLine: number | null
   counterpartyLine: number | null
+  creatorHandicap: number
+  counterpartyHandicap: number
   propMarketId: string | null
   creatorSelection: string | null
   counterpartySelection: string | null
@@ -59,6 +61,8 @@ export function normalizeChallenge(c: any): PvpChallengeView {
     payoutAmount: c.payout_amount,
     creatorLine: c.creator_line != null ? Number(c.creator_line) : null,
     counterpartyLine: c.counterparty_line != null ? Number(c.counterparty_line) : null,
+    creatorHandicap: Number(c.creator_handicap ?? 0),
+    counterpartyHandicap: Number(c.counterparty_handicap ?? 0),
     propMarketId: c.prop_market_id ?? null,
     creatorSelection: c.creator_selection ?? null,
     counterpartySelection: c.counterparty_selection ?? null,

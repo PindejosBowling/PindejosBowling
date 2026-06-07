@@ -18,7 +18,7 @@ import { PinsinoStackParamList } from '../navigation/types'
 
 type Nav = NativeStackNavigationProp<PinsinoStackParamList>
 
-const FILTERS = ['All', 'line_duel', 'raw_score_duel']
+const FILTERS = ['All', 'line_duel', 'head_to_head']
 
 export default function PvPBoardScreen() {
   const navigation = useNavigation<Nav>()
