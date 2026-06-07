@@ -24,8 +24,8 @@ interface BorrowConfirmModalProps {
 
 const GENERAL_WARNING =
   'Borrowed pins increase your available balance, but not your net worth. Debt accrues weekly ' +
-  'interest until repaid. If you miss a week, there may be no pincome to garnish, but interest ' +
-  'still applies. Outstanding debt counts against final season standings.'
+  'interest until repaid. If you miss a week in the PBL, there will be no pincome to garnish, but weekly interest ' +
+  'is still applied.'
 
 export default function BorrowConfirmModal({ product, onClose, onBorrowed }: BorrowConfirmModalProps) {
   const { showToast } = useUiStore()
@@ -85,8 +85,8 @@ export default function BorrowConfirmModal({ product, onClose, onBorrowed }: Bor
             ) : null}
 
             <Text style={styles.warnText}>{GENERAL_WARNING}</Text>
-            <Text style={styles.note}>
-              Repayment is manual — garnishment chips away at your debt, but clearing it is on you.
+            <Text style={styles.warnText}>
+              You have the option to pay off this loan, in part or in full, at any time. The loan is closed when the outstanding balance reaches zero.
             </Text>
           </View>
 

@@ -24,6 +24,7 @@ This file is an **index**. The detailed reference is split across [context/](con
 |---|---|
 | [context/notifications.md](context/notifications.md) | The Pinsino **notification framework** — per-tile pending-action badges + the aggregate Pinsino tab-bar badge. Read before adding a notification count to any Pinsino tile. |
 | [context/toast.md](context/toast.md) | The global **toast** system — why `<Toast />` is mounted per-screen/per-modal (RN Modal overlay) rather than at the root, and the mount-baseline guard against duplicate toasts during navigation transitions. Read before adding a root Toast or debugging duplicate toasts. |
+| [context/activity-feed.md](context/activity-feed.md) | The **Activity Feed ("Market Moves")** framework — how feed rows are published (the `publish_activity_event` transactional helper + catalog), rendered (`activityFeedTemplates.ts`, no stored text), and moderated, plus the **step-by-step recipe for adding a new event type or a new publisher feature**. Read before adding any event to the feed. |
 
 ## Economy design & feature specs ([context/economy/](context/economy/))
 

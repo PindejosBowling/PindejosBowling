@@ -126,7 +126,7 @@ export default function PvpAdminActionModal({ challenge: c, onClose, onDone }: P
                 <Text style={styles.dangerText}>Void (refund both stakes)</Text>
               </TouchableOpacity>
             )}
-            {(isLive || isLocked) && (
+            {(isLive || isLocked || c.status === 'settled') && (
               <TouchableOpacity
                 style={[styles.actBtn, styles.dangerBtn]}
                 disabled={saving}

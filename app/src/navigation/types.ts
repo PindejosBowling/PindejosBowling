@@ -15,6 +15,7 @@ export type MoreStackParamList = {
   PinsinoSportsbook: undefined
   LoanSharkAdmin: undefined
   PvPAdmin: undefined
+  MarketMovesAdmin: undefined
 }
 
 export type StandingsStackParamList = {
@@ -31,4 +32,5 @@ export type PinsinoStackParamList = {
   PvP: undefined
   PvPBoard: undefined
   PvPCreate: { opponentId?: string; rematchOfId?: string; openBoard?: boolean } | undefined
+  MarketMoves: undefined
 }
