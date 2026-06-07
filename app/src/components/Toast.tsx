@@ -5,8 +5,14 @@ import { colors, fonts, radius } from '../theme'
 
 export default function Toast() {
   const { toasts } = useUiStore()
-  const toast = toasts[toasts.length - 1]
   const opacity = useRef(new Animated.Value(0)).current
+  // Only show toasts created after this instance mounted. Toast ids are
+  // monotonic (Date.now()-based), so a screen sliding in over another won't
+  // re-render a toast its predecessor triggered mid-transition — each toast
+  // belongs to the screen that was mounted when it fired.
+  const baseline = useRef(toasts.length ? toasts[toasts.length - 1].id : 0)
+  const ours = toasts.filter(t => t.id > baseline.current)
+  const toast = ours[ours.length - 1]
 
   useEffect(() => {
     if (!toast) return

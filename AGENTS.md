@@ -18,11 +18,12 @@ This file is an **index**. The detailed reference is split across [context/](con
 | [context/file-map.md](context/file-map.md) | The full `app/` source tree with a one-line note per file |
 | [context/agent-rules.md](context/agent-rules.md) | Page-creation workflow + the numbered hard rules for agents (migrations-only DB changes, Supabase CLI usage, "current season", uuid ids, etc.) |
 
-## Cross-cutting systems ([references/](references/))
+## Cross-cutting systems ([context/](context/))
 
 | File | Read it when you need… |
 |---|---|
-| [references/notifications.md](references/notifications.md) | The Pinsino **notification framework** — per-tile pending-action badges + the aggregate Pinsino tab-bar badge. Read before adding a notification count to any Pinsino tile. |
+| [context/notifications.md](context/notifications.md) | The Pinsino **notification framework** — per-tile pending-action badges + the aggregate Pinsino tab-bar badge. Read before adding a notification count to any Pinsino tile. |
+| [context/toast.md](context/toast.md) | The global **toast** system — why `<Toast />` is mounted per-screen/per-modal (RN Modal overlay) rather than at the root, and the mount-baseline guard against duplicate toasts during navigation transitions. Read before adding a root Toast or debugging duplicate toasts. |
 
 ## Economy design & feature specs ([context/economy/](context/economy/))
 
@@ -54,3 +55,4 @@ Product/design references and per-feature implementation specs for the pin econo
 4. "Current season" = `is_active = true` AND `registration_open = false` (`seasons.getCurrent()`), **not** highest number.
 5. Compute functions are pure and uncached — always wrap them in `useMemo` at the screen level.
 6. All ids are `uuid` / TypeScript `string`. No test suite — verify via `expo start`.
+7. **This `AGENTS.md` is an INDEX, never a content file.** Reference material lives in self-contained markdown files under [context/](context/), one file per domain — `AGENTS.md` holds only a one-line table row per file plus these rules. When you document a finding, pattern, or system: **prefer updating the existing `context/*.md` file** if the topic reasonably fits one; **otherwise create a new `context/<domain>.md`** and add a row linking to it in the matching table above ("Context map" or "Cross-cutting systems"). Never paste reference content directly into `AGENTS.md`, and never reintroduce a `references/` directory.
