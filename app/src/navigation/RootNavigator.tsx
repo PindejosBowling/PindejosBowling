@@ -1,7 +1,9 @@
 import React from 'react'
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs'
 import { Text } from 'react-native'
-import { colors } from '../theme'
+import { colors, fonts } from '../theme'
+import { useNotificationStore } from '../stores/notificationStore'
+import { totalCount } from '../utils/notifications'
 
 import MatchupsScreen from '../screens/MatchupsScreen'
 import RsvpScreen from '../screens/RsvpScreen'
@@ -18,6 +20,9 @@ function tabIcon(emoji: string) {
 }
 
 export default function RootNavigator() {
+  // Aggregate pending-action count across all Pinsino notification sources.
+  const pinsinoBadge = useNotificationStore(s => totalCount(s.counts))
+
   return (
     <Tab.Navigator
       screenOptions={{
@@ -49,7 +54,21 @@ export default function RootNavigator() {
       <Tab.Screen
         name="Pinsino"
         component={PinsinoStackNavigator}
-        options={{ tabBarLabel: 'Pinsino', tabBarIcon: tabIcon('🏦') }}
+        options={{
+          tabBarLabel: 'Pinsino',
+          tabBarIcon: tabIcon('🏦'),
+          tabBarBadge: pinsinoBadge > 0 ? (pinsinoBadge > 99 ? '99+' : pinsinoBadge) : undefined,
+          tabBarBadgeStyle: {
+            backgroundColor: colors.danger,
+            color: colors.bg,
+            fontFamily: fonts.barlowCondensedHeavy,
+            fontSize: 10,
+            lineHeight: 14,
+            minWidth: 16,
+            height: 16,
+            borderRadius: 8,
+          },
+        }}
       />
       <Tab.Screen
         name="More"

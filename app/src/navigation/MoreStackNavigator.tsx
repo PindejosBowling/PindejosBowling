@@ -18,6 +18,7 @@ import PinsinoAdminScreen from '../screens/PinsinoAdminScreen'
 import PinsinoAccountingScreen from '../screens/PinsinoAccountingScreen'
 import PinsinoSportsbookScreen from '../screens/PinsinoSportsbookScreen'
 import LoanSharkAdminScreen from '../screens/LoanSharkAdminScreen'
+import PvPAdminScreen from '../screens/PvPAdminScreen'
 
 const Stack = createNativeStackNavigator<MoreStackParamList>()
 
@@ -44,6 +45,7 @@ export default function MoreStackNavigator() {
       <Stack.Screen name="PinsinoAccounting" component={PinsinoAccountingScreen} options={{ title: 'Accounting' }} />
       <Stack.Screen name="PinsinoSportsbook" component={PinsinoSportsbookScreen} options={{ title: 'Sportsbook' }} />
       <Stack.Screen name="LoanSharkAdmin" component={LoanSharkAdminScreen} options={{ title: 'Loan Shark Admin' }} />
+      <Stack.Screen name="PvPAdmin" component={PvPAdminScreen} options={{ title: 'PvP Admin' }} />
     </Stack.Navigator>
   )
 }

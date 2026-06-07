@@ -1,8 +1,8 @@
-import { ScrollView, StyleSheet, RefreshControl } from 'react-native'
+import { ScrollView, StyleSheet, RefreshControl, View, Text } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useNavigation } from '@react-navigation/native'
 import { NativeStackNavigationProp } from '@react-navigation/native-stack'
-import { colors } from '../theme'
+import { colors, fonts, radius } from '../theme'
 import { PinsinoStackParamList } from '../navigation/types'
 import ScreenHeader from '../components/ScreenHeader'
 import LoadingView from '../components/LoadingView'
@@ -30,6 +30,20 @@ export default function PinsinoLeaderboardScreen() {
       >
         <ScreenHeader title="Titans of Pindustry" onBack={() => navigation.goBack()} />
 
+        <View style={styles.rulesCard}>
+          <Text style={styles.rulesTitle}>How It Works</Text>
+          <Text style={styles.rulesBody}>
+            Titans of Pindustry is the "game within the game" of the PBL — a season-long
+            race to amass the biggest pin fortune by any means necessary.
+          </Text>
+          <Text style={styles.rulesBody}>
+            Earn pins by bowling games in the PBL, winning bets at the Sportsbook, leveraging loans from the Loan Shark, and challenging rivals directly.
+          </Text>
+          <Text style={styles.rulesBody}>
+            When a season ends, whoever sits atop this board is crowned the season's Titan and then the next season will start fresh.
+          </Text>
+        </View>
+
         <PinsinoLeaderboardTable
           leaderboard={leaderboard}
           playerId={playerId}
@@ -43,4 +57,27 @@ export default function PinsinoLeaderboardScreen() {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.bg },
   content: { paddingHorizontal: 16, paddingBottom: 40 },
+  rulesCard: {
+    backgroundColor: colors.surface,
+    borderRadius: radius.card,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: 18,
+    marginBottom: 16,
+  },
+  rulesTitle: {
+    fontFamily: fonts.barlowCondensed,
+    fontSize: 16,
+    color: colors.accent,
+    letterSpacing: 1.5,
+    textTransform: 'uppercase',
+    marginBottom: 10,
+  },
+  rulesBody: {
+    fontFamily: fonts.barlow,
+    fontSize: 14,
+    color: colors.muted,
+    lineHeight: 20,
+    marginBottom: 10,
+  },
 })

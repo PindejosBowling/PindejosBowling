@@ -20,6 +20,7 @@ import LoginScreen from './src/screens/LoginScreen'
 import Toast from './src/components/Toast'
 import { useAuthStore } from './src/stores/authStore'
 import { useAvatarStore } from './src/stores/avatarStore'
+import { useNotificationStore } from './src/stores/notificationStore'
 
 const BASE = 'PindejosBowling'
 
@@ -69,8 +70,15 @@ export default function App() {
   }, [])
 
   // Signed-URL avatar reads require an authenticated session, so load once signed in.
+  // Prime the Pinsino notification badge here too so the tab count is live before
+  // the user ever opens the (lazy-mounted) Pinsino tab; clear it on sign-out.
   useEffect(() => {
-    if (role) useAvatarStore.getState().load()
+    if (role) {
+      useAvatarStore.getState().load()
+      useNotificationStore.getState().refresh()
+    } else {
+      useNotificationStore.getState().clear()
+    }
   }, [role])
 
   if (!fontsLoaded || !isHydrated) return null

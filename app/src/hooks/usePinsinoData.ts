@@ -395,6 +395,7 @@ export function usePinsinoData(playerId: string | null) {
       // already summed for the leaderboard; the active loan row carries its product.
       const myDebt = playerId ? (debtByPlayer[playerId] ?? 0) : 0
       const myActiveLoan = myLoansData.find((l: any) => l.status === 'active')
+
       setDebt(myDebt)
       setActiveLoan(
         myActiveLoan

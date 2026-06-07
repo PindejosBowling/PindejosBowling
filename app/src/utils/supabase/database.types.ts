@@ -691,6 +691,7 @@ export type Database = {
           is_house: boolean
           loan_ledger_id: string | null
           player_id: string | null
+          pvp_ledger_id: string | null
           season_id: string
           type: string
           updated_at: string
@@ -705,6 +706,7 @@ export type Database = {
           is_house?: boolean
           loan_ledger_id?: string | null
           player_id?: string | null
+          pvp_ledger_id?: string | null
           season_id: string
           type: string
           updated_at?: string
@@ -719,6 +721,7 @@ export type Database = {
           is_house?: boolean
           loan_ledger_id?: string | null
           player_id?: string | null
+          pvp_ledger_id?: string | null
           season_id?: string
           type?: string
           updated_at?: string
@@ -744,6 +747,13 @@ export type Database = {
             columns: ["player_id"]
             isOneToOne: false
             referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pin_ledger_pvp_ledger_id_fkey"
+            columns: ["pvp_ledger_id"]
+            isOneToOne: false
+            referencedRelation: "pvp_ledger"
             referencedColumns: ["id"]
           },
           {
@@ -803,6 +813,322 @@ export type Database = {
           user_id?: string | null
         }
         Relationships: []
+      }
+      pvp_challenge_offers: {
+        Row: {
+          accepted_at: string | null
+          challenge_id: string
+          contract_type: string
+          counterparty_selection: string | null
+          counterparty_stake: number
+          created_at: string
+          creator_selection: string | null
+          creator_stake: number
+          declined_at: string | null
+          game_number: number | null
+          id: string
+          message: string | null
+          offer_no: number
+          offered_by_player_id: string
+          prop_market_id: string | null
+          superseded_at: string | null
+          updated_at: string
+        }
+        Insert: {
+          accepted_at?: string | null
+          challenge_id: string
+          contract_type: string
+          counterparty_selection?: string | null
+          counterparty_stake: number
+          created_at?: string
+          creator_selection?: string | null
+          creator_stake: number
+          declined_at?: string | null
+          game_number?: number | null
+          id?: string
+          message?: string | null
+          offer_no: number
+          offered_by_player_id: string
+          prop_market_id?: string | null
+          superseded_at?: string | null
+          updated_at?: string
+        }
+        Update: {
+          accepted_at?: string | null
+          challenge_id?: string
+          contract_type?: string
+          counterparty_selection?: string | null
+          counterparty_stake?: number
+          created_at?: string
+          creator_selection?: string | null
+          creator_stake?: number
+          declined_at?: string | null
+          game_number?: number | null
+          id?: string
+          message?: string | null
+          offer_no?: number
+          offered_by_player_id?: string
+          prop_market_id?: string | null
+          superseded_at?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pvp_challenge_offers_challenge_id_fkey"
+            columns: ["challenge_id"]
+            isOneToOne: false
+            referencedRelation: "pvp_challenges"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pvp_challenge_offers_offered_by_player_id_fkey"
+            columns: ["offered_by_player_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pvp_challenge_offers_prop_market_id_fkey"
+            columns: ["prop_market_id"]
+            isOneToOne: false
+            referencedRelation: "bet_markets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pvp_challenges: {
+        Row: {
+          accepted_at: string | null
+          admin_note: string | null
+          contract_type: string
+          counterparty_line: number | null
+          counterparty_player_id: string | null
+          counterparty_selection: string | null
+          counterparty_stake: number
+          created_at: string
+          creator_line: number | null
+          creator_message: string | null
+          creator_player_id: string
+          creator_selection: string | null
+          creator_stake: number
+          custom_description: string | null
+          custom_title: string | null
+          game_number: number | null
+          id: string
+          locked_at: string | null
+          payout_amount: number
+          prop_market_id: string | null
+          rematch_of_challenge_id: string | null
+          result_detail: Json
+          season_id: string
+          settled_at: string | null
+          status: string
+          subject_player_id: string | null
+          total_pot: number
+          updated_at: string
+          week_id: string
+          winner_player_id: string | null
+        }
+        Insert: {
+          accepted_at?: string | null
+          admin_note?: string | null
+          contract_type: string
+          counterparty_line?: number | null
+          counterparty_player_id?: string | null
+          counterparty_selection?: string | null
+          counterparty_stake: number
+          created_at?: string
+          creator_line?: number | null
+          creator_message?: string | null
+          creator_player_id: string
+          creator_selection?: string | null
+          creator_stake: number
+          custom_description?: string | null
+          custom_title?: string | null
+          game_number?: number | null
+          id?: string
+          locked_at?: string | null
+          payout_amount: number
+          prop_market_id?: string | null
+          rematch_of_challenge_id?: string | null
+          result_detail?: Json
+          season_id: string
+          settled_at?: string | null
+          status?: string
+          subject_player_id?: string | null
+          total_pot: number
+          updated_at?: string
+          week_id: string
+          winner_player_id?: string | null
+        }
+        Update: {
+          accepted_at?: string | null
+          admin_note?: string | null
+          contract_type?: string
+          counterparty_line?: number | null
+          counterparty_player_id?: string | null
+          counterparty_selection?: string | null
+          counterparty_stake?: number
+          created_at?: string
+          creator_line?: number | null
+          creator_message?: string | null
+          creator_player_id?: string
+          creator_selection?: string | null
+          creator_stake?: number
+          custom_description?: string | null
+          custom_title?: string | null
+          game_number?: number | null
+          id?: string
+          locked_at?: string | null
+          payout_amount?: number
+          prop_market_id?: string | null
+          rematch_of_challenge_id?: string | null
+          result_detail?: Json
+          season_id?: string
+          settled_at?: string | null
+          status?: string
+          subject_player_id?: string | null
+          total_pot?: number
+          updated_at?: string
+          week_id?: string
+          winner_player_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pvp_challenges_counterparty_player_id_fkey"
+            columns: ["counterparty_player_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pvp_challenges_creator_player_id_fkey"
+            columns: ["creator_player_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pvp_challenges_prop_market_id_fkey"
+            columns: ["prop_market_id"]
+            isOneToOne: false
+            referencedRelation: "bet_markets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pvp_challenges_rematch_of_challenge_id_fkey"
+            columns: ["rematch_of_challenge_id"]
+            isOneToOne: false
+            referencedRelation: "pvp_challenges"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pvp_challenges_season_id_fkey"
+            columns: ["season_id"]
+            isOneToOne: false
+            referencedRelation: "seasons"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pvp_challenges_subject_player_id_fkey"
+            columns: ["subject_player_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pvp_challenges_week_id_fkey"
+            columns: ["week_id"]
+            isOneToOne: false
+            referencedRelation: "weeks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pvp_challenges_winner_player_id_fkey"
+            columns: ["winner_player_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pvp_ledger: {
+        Row: {
+          amount: number
+          challenge_id: string
+          created_at: string
+          description: string
+          id: string
+          pin_ledger_id: string | null
+          player_id: string | null
+          season_id: string
+          type: string
+          updated_at: string
+          week_id: string | null
+        }
+        Insert: {
+          amount: number
+          challenge_id: string
+          created_at?: string
+          description: string
+          id?: string
+          pin_ledger_id?: string | null
+          player_id?: string | null
+          season_id: string
+          type: string
+          updated_at?: string
+          week_id?: string | null
+        }
+        Update: {
+          amount?: number
+          challenge_id?: string
+          created_at?: string
+          description?: string
+          id?: string
+          pin_ledger_id?: string | null
+          player_id?: string | null
+          season_id?: string
+          type?: string
+          updated_at?: string
+          week_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pvp_ledger_challenge_id_fkey"
+            columns: ["challenge_id"]
+            isOneToOne: false
+            referencedRelation: "pvp_challenges"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pvp_ledger_pin_ledger_id_fkey"
+            columns: ["pin_ledger_id"]
+            isOneToOne: false
+            referencedRelation: "pin_ledger"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pvp_ledger_player_id_fkey"
+            columns: ["player_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pvp_ledger_season_id_fkey"
+            columns: ["season_id"]
+            isOneToOne: false
+            referencedRelation: "seasons"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pvp_ledger_week_id_fkey"
+            columns: ["week_id"]
+            isOneToOne: false
+            referencedRelation: "weeks"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       registrations: {
         Row: {
@@ -1128,15 +1454,64 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      accept_pvp_challenge: {
+        Args: { p_challenge_id: string }
+        Returns: undefined
+      }
       cancel_bet: { Args: { p_bet_id: string }; Returns: undefined }
       cancel_loan: { Args: { p_loan_id: string }; Returns: undefined }
+      cancel_pvp_challenge: {
+        Args: { p_challenge_id: string }
+        Returns: undefined
+      }
+      close_open_pvp_challenges: {
+        Args: { p_game_number: number; p_week_id: string }
+        Returns: undefined
+      }
+      counter_pvp_challenge: {
+        Args: {
+          p_challenge_id: string
+          p_contract_type: string
+          p_counterparty_stake: number
+          p_creator_stake: number
+          p_game_number: number
+          p_message: string
+          p_prop_market_id: string
+          p_selection: string
+        }
+        Returns: string
+      }
+      create_pvp_challenge: {
+        Args: {
+          p_contract_type: string
+          p_counterparty_player_id: string
+          p_counterparty_stake: number
+          p_creator_selection: string
+          p_creator_stake: number
+          p_custom_description: string
+          p_custom_title: string
+          p_game_number: number
+          p_message: string
+          p_prop_market_id: string
+          p_week_id: string
+        }
+        Returns: string
+      }
       custom_access_token: { Args: { event: Json }; Returns: Json }
+      decline_pvp_challenge: {
+        Args: { p_challenge_id: string }
+        Returns: undefined
+      }
       is_registered_player: { Args: { phone: string }; Returns: boolean }
       place_house_bet: {
         Args: { p_selection_ids: string[]; p_stake: number }
         Returns: string
       }
       process_weekly_loans: { Args: { p_week_id: string }; Returns: undefined }
+      pvp_player_line: {
+        Args: { p_player_id: string; p_season_id: string }
+        Returns: number
+      }
       remove_over_under_markets_for_game: {
         Args: { p_game_number: number; p_week_id: string }
         Returns: undefined
@@ -1161,11 +1536,25 @@ export type Database = {
         Args: { p_market_id: string; p_result_value: number }
         Returns: undefined
       }
+      settle_pvp_challenge: {
+        Args: {
+          p_admin_note: string
+          p_challenge_id: string
+          p_source: string
+          p_winner_player_id: string
+        }
+        Returns: undefined
+      }
+      settle_pvp_for_week: { Args: { p_week_id: string }; Returns: undefined }
       sync_over_under_markets_for_week: {
         Args: { p_extra_games?: number[]; p_week_id: string }
         Returns: undefined
       }
       take_loan: { Args: { p_loan_product_id: string }; Returns: string }
+      void_pvp_challenge: {
+        Args: { p_admin_note: string; p_challenge_id: string }
+        Returns: undefined
+      }
     }
     Enums: {
       [_ in never]: never

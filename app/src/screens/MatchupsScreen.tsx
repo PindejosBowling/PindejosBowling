@@ -24,7 +24,7 @@ import { useMatchupsData } from '../hooks/useMatchupsData'
 import { useUiStore } from '../stores/uiStore'
 import { usePendingStore } from '../stores/pendingStore'
 import { useAuthStore } from '../stores/authStore'
-import { scores, teams as teamsDb, games, weeks, betMarkets } from '../utils/supabase/db'
+import { scores, teams as teamsDb, games, weeks, betMarkets, pvpChallenges } from '../utils/supabase/db'
 import { colors, fonts, radius } from '../theme'
 
 // ---------------------------------------------------------------------------
@@ -158,13 +158,18 @@ export default function MatchupsScreen() {
 
   // Start a game: close its betting markets (no more bets — the Pinsino takes no
   // action on games in progress) and reveal the scores by expanding the game.
-  // Unstart reverses it, reopening the markets for betting.
+  // Starting also closes any still-open PvP challenges for this game (accepted
+  // ones are untouched). Unstart reverses the markets for betting, but does NOT
+  // reopen closed challenges — once closed they stay cancelled.
   async function setGameStarted(gameNum: number, started: boolean) {
     if (!weekId) return
     setStartingGame(gameNum)
     try {
       await betMarkets.setOUStatusByWeekGame(weekId, gameNum, started ? 'closed' : 'open')
-      if (started) setOpenGames(prev => ({ ...prev, [gameNum]: true }))
+      if (started) {
+        await pvpChallenges.closeOpenForGame(weekId, gameNum)
+        setOpenGames(prev => ({ ...prev, [gameNum]: true }))
+      }
       await reload()
     } finally {
       setStartingGame(null)

@@ -14,6 +14,7 @@ export default function PillFilter({ items, value, onChange, renderLabel, style 
     <ScrollView
       horizontal
       showsHorizontalScrollIndicator={false}
+      style={styles.pillScroll}
       contentContainerStyle={[styles.pillRow, style]}
     >
       {items.map((item) => {
@@ -35,6 +36,7 @@ export default function PillFilter({ items, value, onChange, renderLabel, style 
 }
 
 const styles = StyleSheet.create({
+  pillScroll: { flexGrow: 0 },
   pillRow: {
     flexDirection: 'row',
     paddingHorizontal: 16,

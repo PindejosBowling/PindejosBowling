@@ -8,7 +8,8 @@ import {
   Dimensions,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import { useNavigation } from '@react-navigation/native'
+import { useCallback } from 'react'
+import { useNavigation, useFocusEffect } from '@react-navigation/native'
 import { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { colors, fonts, radius } from '../theme'
 import AppHeader from '../components/AppHeader'
@@ -17,6 +18,8 @@ import PinsinoLeaderboardTable from '../components/PinsinoLeaderboardTable'
 import { usePinsinoData } from '../hooks/usePinsinoData'
 import { useRefresh } from '../hooks/useRefresh'
 import { useAuthStore } from '../stores/authStore'
+import { useNotificationStore } from '../stores/notificationStore'
+import { countForRoute } from '../utils/notifications'
 import { PinsinoStackParamList } from '../navigation/types'
 
 type PinsinoNav = NativeStackNavigationProp<PinsinoStackParamList>
@@ -24,9 +27,10 @@ type PinsinoNav = NativeStackNavigationProp<PinsinoStackParamList>
 const TILE_WIDTH = (Dimensions.get('window').width - 48) / 3
 
 // Subpage menu tiles (groundwork for more Pinsino subpages — add one line each)
-const MENU_TILES: { icon: string; label: string; route: 'PinsinoLeaderboard' | 'Sportsbook' | 'LoanShark' }[] = [
+const MENU_TILES: { icon: string; label: string; route: 'PinsinoLeaderboard' | 'Sportsbook' | 'LoanShark' | 'PvP' }[] = [
   { icon: '🏟️', label: 'Sportsbook', route: 'Sportsbook' },
   { icon: '🦈', label: 'Loan Shark', route: 'LoanShark' },
+  { icon: '⚔️', label: 'PvP', route: 'PvP' },
 ]
 
 export default function PinsinoScreen() {
@@ -36,6 +40,15 @@ export default function PinsinoScreen() {
 
   const { loading, balance, debt, netWorth, leaderboard, reload } = usePinsinoData(playerId)
   const { refreshing, onRefresh } = useRefresh(reload)
+
+  // Pending-action counts for the tile badges. Refresh on focus so they reflect
+  // actions taken inside the subpages (e.g. responding to a PvP contract).
+  const counts = useNotificationStore(s => s.counts)
+  useFocusEffect(
+    useCallback(() => {
+      useNotificationStore.getState().refresh()
+    }, []),
+  )
 
   if (loading) return <LoadingView label="Loading…" />
 
@@ -87,17 +100,26 @@ export default function PinsinoScreen() {
 
         {/* Subpage menu */}
         <View style={styles.grid}>
-          {MENU_TILES.map(tile => (
-            <TouchableOpacity
-              key={tile.route}
-              style={styles.tile}
-              onPress={() => navigation.navigate(tile.route)}
-              activeOpacity={0.7}
-            >
-              <Text style={styles.tileIcon}>{tile.icon}</Text>
-              <Text style={styles.tileLabel}>{tile.label}</Text>
-            </TouchableOpacity>
-          ))}
+          {MENU_TILES.map(tile => {
+            // Pending-action badge for this tile (0 when nothing needs attention).
+            const badge = countForRoute(counts, tile.route)
+            return (
+              <TouchableOpacity
+                key={tile.route}
+                style={styles.tile}
+                onPress={() => navigation.navigate(tile.route)}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.tileIcon}>{tile.icon}</Text>
+                <Text style={styles.tileLabel}>{tile.label}</Text>
+                {badge > 0 && (
+                  <View style={styles.badge}>
+                    <Text style={styles.badgeText}>{badge > 99 ? '99+' : badge}</Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+            )
+          })}
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -193,6 +215,25 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     minHeight: 84,
+    position: 'relative',
+  },
+  badge: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    minWidth: 20,
+    height: 20,
+    paddingHorizontal: 5,
+    borderRadius: 10,
+    backgroundColor: colors.danger,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  badgeText: {
+    fontFamily: fonts.barlowCondensedHeavy,
+    fontSize: 12,
+    color: colors.bg,
+    lineHeight: 14,
   },
   tileIcon: { fontSize: 26, marginBottom: 6 },
   tileLabel: {
