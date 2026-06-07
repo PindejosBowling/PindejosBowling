@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import { seasons, activityFeed } from '../utils/supabase/db'
 import type { FeedEventView } from '../utils/activityFeedTemplates'
 
@@ -69,9 +69,13 @@ export function useMarketMovesData() {
   const [hasMore, setHasMore] = useState(false)
   const [loadingMore, setLoadingMore] = useState(false)
 
+  // Only the first load shows the full-screen LoadingView; later reloads (focus,
+  // pull-to-refresh, filter switch) refresh in place so the list never flashes.
+  const loadedOnce = useRef(false)
+
   // Load page 1 for a given filter. Resolves the current season on first call.
   const loadFirst = useCallback(async (f: FeedFilter) => {
-    setLoading(true)
+    if (!loadedOnce.current) setLoading(true)
     try {
       const seasonRes = await seasons.getCurrent()
       const sid = seasonRes.data?.id ?? null
@@ -86,6 +90,7 @@ export function useMarketMovesData() {
       console.error('useMarketMovesData error:', e)
       setEvents([]); setHasMore(false)
     } finally {
+      loadedOnce.current = true
       setLoading(false)
     }
   }, [])

@@ -1,7 +1,7 @@
-import { useState } from 'react'
+import { useState, useCallback } from 'react'
 import { View, Text, FlatList, StyleSheet, RefreshControl, ActivityIndicator } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import { useNavigation } from '@react-navigation/native'
+import { useNavigation, useFocusEffect } from '@react-navigation/native'
 import { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { colors, fonts } from '../theme'
 import ScreenHeader from '../components/ScreenHeader'
@@ -36,6 +36,11 @@ export default function MarketMovesScreen() {
   const playerId = useAuthStore(s => s.playerId)
   const { loading, events, filter, setFilter, hasMore, loadMore, reload } = useMarketMovesData()
   const { refreshing, onRefresh } = useRefresh(reload)
+
+  // Refresh whenever the screen regains focus (opened or revisited) so events for
+  // cancelled outcomes — which cascade-delete from the feed — drop off without a
+  // manual pull. The hook's mount load covers first paint; focus reloads are silent.
+  useFocusEffect(useCallback(() => { reload() }, [reload]))
 
   // The bet behind a tapped Sportsbook card → the shared Bet Details overlay.
   const [detailBet, setDetailBet] = useState<BetView | null>(null)
