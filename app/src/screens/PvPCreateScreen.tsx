@@ -239,6 +239,7 @@ export default function PvPCreateScreen() {
         {/* Contract type */}
         <Text style={styles.label}>CONTRACT TYPE</Text>
         <ToggleGroup options={CONTRACT_TYPE_OPTIONS} value={contractType} onChange={k => setContractType(k as PvpContractType)} style={styles.toggle} />
+        <Text style={styles.contractRule}>{CONTRACT_TYPE_RULE[contractType]}</Text>
 
         {/* Scope */}
         <Text style={styles.label}>WEEK {weekNumber ?? '—'} · SCOPE</Text>
@@ -264,11 +265,13 @@ export default function PvPCreateScreen() {
             />
             <View style={styles.warnCard}>
               <Text style={styles.warnText}>
-                Write the win condition clearly and unambiguously — an admin settles this
-                contract by hand based on exactly what you describe here.
+                Write the win condition clearly — an Admin settles this contract by hand based on exactly what you describe here.
               </Text>
               <Text style={[styles.warnText, { marginTop: 14 }]}>
                 Be sure to specify if the outcome is game-specific (Game 1 or Game 2), or if it covers the entire week.
+              </Text>
+              <Text style={[styles.warnText, { marginTop: 14 }]}>
+                Admins will cancel all contracts that incentivise tanking behavior with EXTREME prejudice, and reserve the right to cancel any contracts with unclear or unenforceable conditions.
               </Text>
             </View>
           </View>
@@ -442,6 +445,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   toggle: { justifyContent: 'flex-start' },
+  contractRule: { fontFamily: fonts.barlow, fontSize: 13, color: colors.muted, lineHeight: 19, marginTop: 10 },
 
   stakeHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   stakeLabel: { flex: 1 },

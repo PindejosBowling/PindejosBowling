@@ -16,7 +16,7 @@ export const CONTRACT_TYPE_LABEL: Record<string, string> = {
 // One-line settlement rule, in plain words, shown on create + detail.
 export const CONTRACT_TYPE_RULE: Record<string, string> = {
   line_duel:
-    'Each bowler is measured against their own projected line. Whoever beats their ' +
+    'Each bowler is measured against their own projected line for the game. Whoever beats their ' +
     'line by more wins the pot. A tie pushes and both stakes are refunded.',
   prop_duel:
     'Both players take opposite sides of the same prop. The side the result lands ' +
