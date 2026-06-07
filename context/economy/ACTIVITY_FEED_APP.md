@@ -52,10 +52,12 @@ existing shape (each method returns the supabase query/`rpc` builder; RPC params
 are **not** snapshotted (§8.4).
 
 ```ts
+// Feed copy uses first names only ("Garrett placed a ticket"), so the embeds pull
+// first_name (+ avatar_path for the actor) rather than full name.
 const FEED_GRAPH =
-  '*, actor:players!activity_feed_events_actor_player_id_fkey(name, avatar_path), ' +
-  'subject:players!activity_feed_events_subject_player_id_fkey(name), ' +
-  'secondary:players!activity_feed_events_secondary_player_id_fkey(name)'
+  '*, actor:players!activity_feed_events_actor_player_id_fkey(first_name, avatar_path), ' +
+  'subject:players!activity_feed_events_subject_player_id_fkey(first_name), ' +
+  'secondary:players!activity_feed_events_secondary_player_id_fkey(first_name)'
 
 export const activityFeed = {
   // Public feed (design §15.1). `cursor` = the last row's { published_at, id }.
