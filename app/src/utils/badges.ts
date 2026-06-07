@@ -26,13 +26,7 @@ const BADGE_RULES: {
     emoji: '👑',
     label: 'Reigning champion',
     applies: (id, ctx) => ctx.lastSeasonChampionIds.has(id),
-  },
-  {
-    key: 'pin_leader',
-    emoji: '🎩',
-    label: 'Highest pin balance',
-    applies: (id, ctx) => ctx.topPinBalancePlayerId === id,
-  },
+  }
 ]
 
 export function badgesForPlayer(playerId: string, ctx: BadgeContext): Badge[] {
