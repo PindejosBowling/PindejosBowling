@@ -7,7 +7,6 @@ import {
   StyleSheet,
   Platform,
   ActivityIndicator,
-  ScrollView,
 } from 'react-native'
 import { colors, fonts, radius } from '../theme'
 import Toast from './Toast'
@@ -62,7 +61,7 @@ export default function BorrowConfirmModal({ product, onClose, onBorrowed }: Bor
           <Text style={styles.modalTitle}>{product.display_name}</Text>
           <Text style={styles.modalSubtitle}>CONFIRM YOUR DEAL WITH THE SHARK</Text>
 
-          <ScrollView style={styles.body} keyboardShouldPersistTaps="handled">
+          <View>
             <View style={styles.statRow}>
               <Text style={styles.statLabel}>BORROW</Text>
               <Text style={styles.statValueBig}>{product.borrow_amount.toLocaleString()} pins</Text>
@@ -89,7 +88,7 @@ export default function BorrowConfirmModal({ product, onClose, onBorrowed }: Bor
             <Text style={styles.note}>
               Repayment is manual — garnishment chips away at your debt, but clearing it is on you.
             </Text>
-          </ScrollView>
+          </View>
 
           <TouchableOpacity
             style={[styles.confirmBtn, borrowing && styles.confirmBtnDisabled]}
@@ -136,7 +135,6 @@ const styles = StyleSheet.create({
     letterSpacing: 1.5,
     marginBottom: 16,
   },
-  body: { maxHeight: 360 },
   statRow: {
     flexDirection: 'row',
     alignItems: 'baseline',
