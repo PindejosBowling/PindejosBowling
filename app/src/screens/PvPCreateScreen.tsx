@@ -59,7 +59,7 @@ export default function PvPCreateScreen() {
   const [propMarkets, setPropMarkets] = useState<PropMarket[]>([])
 
   // Form state
-  const [openBoard, setOpenBoard] = useState(false)
+  const [openBoard, setOpenBoard] = useState(route.params?.openBoard ?? false)
   const [opponentId, setOpponentId] = useState<string | null>(null)
   const [contractType, setContractType] = useState<PvpContractType>('line_duel')
   const [gameNumber, setGameNumber] = useState<number | null>(null)

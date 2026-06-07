@@ -63,7 +63,7 @@ export default function PvPBoardScreen() {
       >
         <TouchableOpacity
           style={styles.postBtn}
-          onPress={() => navigation.navigate('PvPCreate')}
+          onPress={() => navigation.navigate('PvPCreate', { openBoard: true })}
           activeOpacity={0.7}
         >
           <Text style={styles.postBtnText}>+ Post Open Challenge</Text>

@@ -30,6 +30,6 @@ export type PinsinoStackParamList = {
   PlayerPinsino: { playerId: string; name: string }
   PvP: undefined
   PvPBoard: undefined
-  PvPCreate: { opponentId?: string; rematchOfId?: string } | undefined
+  PvPCreate: { opponentId?: string; rematchOfId?: string; openBoard?: boolean } | undefined
   PvPChallengeDetail: { challengeId: string }
 }
