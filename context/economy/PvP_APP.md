@@ -6,8 +6,14 @@ Handoff spec for the **app layer** (`app/src`) of the PvP Challenge Contracts fe
 > house cut: there is no `pvp_rake` `pin_ledger` type, no `rake` column, and the
 > winner is paid the **full `total_pot`** (`payout_amount` always equals `total_pot`).
 > Wherever this spec originally said "rake" / "net payout", read it as **"pot" /
-> "winner's payout = pot"**. The "week lock" used for default expiry is the week's
-> `weeks.bowled_at` (there is no `weeks.lock_at`). See `PvP_DB.md` for the as-built
+> "winner's payout = pot"**.
+>
+> **⚠️ No expiry; Prop Duel hidden in the UI.** Challenges no longer expire on a
+> clock — there is no `expires_at` / `p_expires_at` anywhere. A challenge stays open
+> until the admin presses **Start Game** on Matchups (closes that game's open
+> challenges) or the week is settled. Ignore every "expiration" mention below. Also,
+> **Prop Duel is dropped from the UI for now** (not in `CONTRACT_TYPE_OPTIONS` or the
+> board filter); the DB still supports `prop_duel`. See `PvP_DB.md` for the as-built
 > design.
 
 **Prerequisite:** the database spec (`economy/PvP_DB.md`) is fully applied
@@ -119,7 +125,7 @@ export const pvpLedger = {
 > fetch player names separately and join client-side (as some hooks already do). The
 > `mapCreate`/`mapCounter` helpers translate the screen's form shape to the RPC's `p_*`
 > params (`p_contract_type`, `p_counterparty_player_id`, `p_week_id`, `p_game_number`,
-> `p_stake`, `p_prop_market_id`, `p_creator_selection`, `p_message`, `p_expires_at`).
+> `p_stake`, `p_prop_market_id`, `p_creator_selection`, `p_message`).
 
 Reuse existing wrappers where they exist: `seasons.getCurrent()`, `weeks.getCurrent()`,
 `players.list()` (opponent picker), `pinLedger.listByPlayerSeason` (balance), and the

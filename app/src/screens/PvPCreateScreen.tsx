@@ -19,7 +19,7 @@ import {
 } from '../utils/supabase/db'
 import { normalizeChallenge } from '../hooks/usePvpData'
 import {
-  PVP_MIN_STAKE, PvpContractType, CONTRACT_TYPE_OPTIONS, CONTRACT_TYPE_RULE, CONTRACT_TYPE_LABEL, formatExpiry,
+  PVP_MIN_STAKE, PvpContractType, CONTRACT_TYPE_OPTIONS, CONTRACT_TYPE_RULE, CONTRACT_TYPE_LABEL,
 } from '../utils/pvp'
 import { PinsinoStackParamList } from '../navigation/types'
 
@@ -41,7 +41,6 @@ export default function PvPCreateScreen() {
   // Loaded context
   const [weekId, setWeekId] = useState<string | null>(null)
   const [weekNumber, setWeekNumber] = useState<number | null>(null)
-  const [bowledAt, setBowledAt] = useState<string | null>(null)
   const [balance, setBalance] = useState(0)
   const [opponents, setOpponents] = useState<OpponentOpt[]>([])
   const [gameNumbers, setGameNumbers] = useState<number[]>([])
@@ -66,7 +65,6 @@ export default function PvPCreateScreen() {
       const wId = weekRes.data?.id ?? null
       setWeekId(wId)
       setWeekNumber(weekRes.data?.week_number ?? null)
-      setBowledAt((weekRes.data as any)?.bowled_at ?? null)
 
       const fetches: PromiseLike<any>[] = []
       let playerRows: any[] = []
@@ -161,7 +159,6 @@ export default function PvPCreateScreen() {
         propMarketId: isProp ? propMarketId : null,
         creatorSelection: isProp ? selection : null,
         message: message.trim() || null,
-        expiresAt: null, // server defaults to the week's bowled_at lock
       }
       const { data, error } = await pvpChallenges.create(args)
       if (error) { showToast(error.message, 'error'); return }
@@ -305,10 +302,6 @@ export default function PvPCreateScreen() {
             <Text style={styles.confirmValueAccent}>{pot.toLocaleString()} pins</Text>
           </View>
           <Text style={styles.confirmRule}>{CONTRACT_TYPE_RULE[contractType]}</Text>
-          <View style={styles.confirmRow}>
-            <Text style={styles.confirmLabel}>Locks at</Text>
-            <Text style={styles.confirmValue}>{bowledAt ? formatExpiry(bowledAt) : 'week lock'}</Text>
-          </View>
           <Text style={styles.confirmNote}>
             Winner takes the whole pot — no house cut. This does not affect bowling gameplay — always bowl your best.
           </Text>

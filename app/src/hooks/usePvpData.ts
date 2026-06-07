@@ -23,7 +23,6 @@ export interface PvpChallengeView {
   creatorSelection: string | null
   counterpartySelection: string | null
   subjectPlayerId: string | null
-  expiresAt: string
   winnerId: string | null
   resultDetail: any
   creatorMessage: string | null
@@ -62,7 +61,6 @@ export function normalizeChallenge(c: any): PvpChallengeView {
     creatorSelection: c.creator_selection ?? null,
     counterpartySelection: c.counterparty_selection ?? null,
     subjectPlayerId: c.subject_player_id ?? null,
-    expiresAt: c.expires_at,
     winnerId: c.winner_player_id ?? null,
     resultDetail: c.result_detail ?? {},
     creatorMessage: c.creator_message ?? null,

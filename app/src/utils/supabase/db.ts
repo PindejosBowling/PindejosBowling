@@ -541,7 +541,6 @@ export interface CreatePvpArgs {
   propMarketId: string | null          // prop_duel only
   creatorSelection: string | null      // prop_duel only ('over' | 'under')
   message: string | null
-  expiresAt: string | null             // null → server defaults to the week's bowled_at
 }
 
 export interface CounterPvpArgs {
@@ -552,7 +551,6 @@ export interface CounterPvpArgs {
   propMarketId: string | null
   selection: string | null
   message: string | null
-  expiresAt: string | null
 }
 
 const CHALLENGE_PARTIES =
@@ -605,7 +603,6 @@ export const pvpChallenges = {
       p_prop_market_id: a.propMarketId as string,
       p_creator_selection: a.creatorSelection as string,
       p_message: a.message as string,
-      p_expires_at: a.expiresAt as string,
     }),
   counter: (a: CounterPvpArgs) =>
     supabase.rpc('counter_pvp_challenge', {
@@ -616,12 +613,15 @@ export const pvpChallenges = {
       p_prop_market_id: a.propMarketId as string,
       p_selection: a.selection as string,
       p_message: a.message as string,
-      p_expires_at: a.expiresAt as string,
     }),
   accept: (challengeId: string) =>
     supabase.rpc('accept_pvp_challenge', { p_challenge_id: challengeId }),
   decline: (challengeId: string) =>
     supabase.rpc('decline_pvp_challenge', { p_challenge_id: challengeId }),
+  // Admin: close every still-open challenge for a week (optionally one game).
+  // Used by "Start Game" (game-scoped) and week settlement (gameNumber = null).
+  closeOpenForGame: (weekId: string, gameNumber: number | null) =>
+    supabase.rpc('close_open_pvp_challenges', { p_week_id: weekId, p_game_number: gameNumber as number }),
   cancel: (challengeId: string) =>
     supabase.rpc('cancel_pvp_challenge', { p_challenge_id: challengeId }),
   void: (challengeId: string, note: string) =>

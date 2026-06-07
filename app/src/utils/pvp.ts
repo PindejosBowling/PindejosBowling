@@ -25,9 +25,11 @@ export const CONTRACT_TYPE_RULE: Record<string, string> = {
     'both stakes are refunded.',
 }
 
+// Selectable contract types in the UI. Prop Duel is intentionally hidden for now
+// (the DB still supports prop_duel; CONTRACT_TYPE_LABEL/RULE keep its strings so
+// any legacy prop_duel rows still render).
 export const CONTRACT_TYPE_OPTIONS: { key: PvpContractType; label: string }[] = [
   { key: 'line_duel', label: 'Line' },
-  { key: 'prop_duel', label: 'Prop' },
   { key: 'raw_score_duel', label: 'Raw Score' },
 ]
 
@@ -49,10 +51,4 @@ export function statusKind(status: string): 'live' | 'active' | 'done' {
   if (status === 'pending' || status === 'countered') return 'live'
   if (status === 'locked' || status === 'accepted') return 'active'
   return 'done'
-}
-
-export function formatExpiry(iso: string): string {
-  const d = new Date(iso)
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) +
-    ' ' + d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
 }

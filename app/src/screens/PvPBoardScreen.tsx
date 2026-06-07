@@ -13,18 +13,18 @@ import PvpCounterModal from '../components/PvpCounterModal'
 import { usePvpData, PvpChallengeView } from '../hooks/usePvpData'
 import { useRefresh } from '../hooks/useRefresh'
 import { useAuthStore } from '../stores/authStore'
-import { CONTRACT_TYPE_LABEL, formatExpiry } from '../utils/pvp'
+import { CONTRACT_TYPE_LABEL } from '../utils/pvp'
 import { PinsinoStackParamList } from '../navigation/types'
 
 type Nav = NativeStackNavigationProp<PinsinoStackParamList>
 
-const FILTERS = ['All', 'line_duel', 'prop_duel', 'raw_score_duel']
+const FILTERS = ['All', 'line_duel', 'raw_score_duel']
 
 export default function PvPBoardScreen() {
   const navigation = useNavigation<Nav>()
   const playerId = useAuthStore(s => s.playerId)
 
-  const { loading, balance, openBoard, reload } = usePvpData(playerId)
+  const { loading, balance, openBoard, inbox, reload } = usePvpData(playerId)
   const { refreshing, onRefresh } = useRefresh(reload)
 
   const [filter, setFilter] = useState('All')
@@ -35,6 +35,14 @@ export default function PvPBoardScreen() {
     () => (filter === 'All' ? openBoard : openBoard.filter(c => c.contractType === filter)),
     [openBoard, filter],
   )
+
+  // The viewer's own open-board posts (counterparty still null, still pending).
+  // They're filtered out of `openBoard` because you can't accept your own, but the
+  // board should still show them so you can confirm the post went live.
+  const myOpen = useMemo(() => {
+    const mine = inbox.sent.filter(c => c.counterpartyId == null && c.status === 'pending')
+    return filter === 'All' ? mine : mine.filter(c => c.contractType === filter)
+  }, [inbox.sent, filter])
 
   if (loading) return <LoadingView label="Loading…" />
 
@@ -61,6 +69,22 @@ export default function PvPBoardScreen() {
           <Text style={styles.postBtnText}>+ Post Open Challenge</Text>
         </TouchableOpacity>
 
+        {myOpen.length > 0 && (
+          <>
+            <Text style={styles.sectionLabel}>YOUR OPEN POSTS ({myOpen.length})</Text>
+            {myOpen.map(c => (
+              <PvpChallengeRow
+                key={c.id}
+                challenge={c}
+                viewerId={playerId}
+                onPress={() => navigation.navigate('PvPChallengeDetail', { challengeId: c.id })}
+                cta="Waiting for a taker · tap to manage"
+              />
+            ))}
+            <Text style={styles.sectionLabel}>OPEN CHALLENGES</Text>
+          </>
+        )}
+
         {rows.length === 0 ? (
           <View style={styles.emptyCard}>
             <Text style={styles.emptyText}>No open challenges right now.</Text>
@@ -72,7 +96,6 @@ export default function PvPBoardScreen() {
                 challenge={c}
                 viewerId={playerId}
                 onPress={() => navigation.navigate('PvPChallengeDetail', { challengeId: c.id })}
-                cta={`Expires ${formatExpiry(c.expiresAt)}`}
               />
               <View style={styles.actionRow}>
                 <TouchableOpacity
@@ -125,6 +148,15 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   postBtnText: { fontFamily: fonts.barlowCondensed, fontSize: 15, fontWeight: '700', color: colors.bg, letterSpacing: 0.5 },
+
+  sectionLabel: {
+    fontFamily: fonts.barlowCondensed,
+    fontSize: 13,
+    letterSpacing: 2,
+    color: colors.muted,
+    marginBottom: 10,
+    marginTop: 6,
+  },
 
   actionRow: { flexDirection: 'row', gap: 8, marginTop: -2, marginBottom: 16 },
   actBtn: { flex: 1, borderRadius: radius.cardSm, paddingVertical: 11, alignItems: 'center' },

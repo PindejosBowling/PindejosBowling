@@ -14,7 +14,6 @@ export interface PvpOfferView {
   gameNumber: number | null
   selection: string | null
   message: string | null
-  expiresAt: string
   createdAt: string
   superseded: boolean
   accepted: boolean
@@ -63,7 +62,6 @@ export function usePvpChallengeDetail(challengeId: string | null) {
             gameNumber: o.game_number ?? null,
             selection: o.creator_selection ?? null,
             message: o.message ?? null,
-            expiresAt: o.expires_at,
             createdAt: o.created_at,
             superseded: o.superseded_at != null,
             accepted: o.accepted_at != null,

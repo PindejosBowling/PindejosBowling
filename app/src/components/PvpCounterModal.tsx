@@ -50,7 +50,6 @@ export default function PvpCounterModal({ challenge: c, balance, onClose, onDone
         propMarketId: c.propMarketId,
         selection: c.creatorSelection,
         message: message.trim() || null,
-        expiresAt: null, // inherit prior offer's expiry (may only be shortened, server-enforced)
       }
       const { error } = await pvpChallenges.counter(args)
       if (error) { showToast(error.message, 'error'); return }

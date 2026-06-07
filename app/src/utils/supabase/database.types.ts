@@ -825,7 +825,6 @@ export type Database = {
           creator_selection: string | null
           creator_stake: number
           declined_at: string | null
-          expires_at: string
           game_number: number | null
           id: string
           message: string | null
@@ -845,7 +844,6 @@ export type Database = {
           creator_selection?: string | null
           creator_stake: number
           declined_at?: string | null
-          expires_at: string
           game_number?: number | null
           id?: string
           message?: string | null
@@ -865,7 +863,6 @@ export type Database = {
           creator_selection?: string | null
           creator_stake?: number
           declined_at?: string | null
-          expires_at?: string
           game_number?: number | null
           id?: string
           message?: string | null
@@ -914,7 +911,6 @@ export type Database = {
           creator_player_id: string
           creator_selection: string | null
           creator_stake: number
-          expires_at: string
           game_number: number | null
           id: string
           locked_at: string | null
@@ -945,7 +941,6 @@ export type Database = {
           creator_player_id: string
           creator_selection?: string | null
           creator_stake: number
-          expires_at: string
           game_number?: number | null
           id?: string
           locked_at?: string | null
@@ -976,7 +971,6 @@ export type Database = {
           creator_player_id?: string
           creator_selection?: string | null
           creator_stake?: number
-          expires_at?: string
           game_number?: number | null
           id?: string
           locked_at?: string | null
@@ -1464,11 +1458,14 @@ export type Database = {
         Args: { p_challenge_id: string }
         Returns: undefined
       }
+      close_open_pvp_challenges: {
+        Args: { p_game_number: number; p_week_id: string }
+        Returns: undefined
+      }
       counter_pvp_challenge: {
         Args: {
           p_challenge_id: string
           p_contract_type: string
-          p_expires_at: string
           p_game_number: number
           p_message: string
           p_prop_market_id: string
@@ -1482,7 +1479,6 @@ export type Database = {
           p_contract_type: string
           p_counterparty_player_id: string
           p_creator_selection: string
-          p_expires_at: string
           p_game_number: number
           p_message: string
           p_prop_market_id: string
@@ -1496,7 +1492,6 @@ export type Database = {
         Args: { p_challenge_id: string }
         Returns: undefined
       }
-      expire_pvp_challenges: { Args: never; Returns: undefined }
       is_registered_player: { Args: { phone: string }; Returns: boolean }
       place_house_bet: {
         Args: { p_selection_ids: string[]; p_stake: number }

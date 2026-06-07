@@ -23,8 +23,14 @@ same RPC patterns — read it for worked examples.
 > 1. **No rake / no house cut.** PvP duels are **winner-takes-the-whole-pot**. There
 >    is no `pvp_rake` type, no `rake` pvp_ledger type, no `pvp_rake()` helper, and no
 >    `pvp_challenges.rake_amount` column. `payout_amount` always equals `total_pot`.
-> 2. **Week lock = `weeks.bowled_at`.** There is no `weeks.lock_at` column; the
->    de-facto lock / default contract expiry is the week's scheduled `bowled_at`.
+> 2. **No time-based expiry.** Challenges do not expire on a clock. There is no
+>    `expires_at` column on `pvp_challenges` or `pvp_challenge_offers`, no
+>    `p_expires_at` RPC param, and no `expire_pvp_challenges()` sweep. A challenge
+>    stays open until the admin **starts the game** it is tied to (Matchups →
+>    "Start Game" → `close_open_pvp_challenges(week, game)`), which closes every
+>    still-open challenge for that game; anything left open is closed when the week
+>    is settled (`close_open_pvp_challenges(week, NULL)`). Closing reuses the decline
+>    semantics: `status='cancelled'` + the live offer's `declined_at`.
 > 3. Settlement pays the **full pot** to the winner as a single balanced player+house
 >    `pvp_payout` pair. Voiding a *settled* contract reverses the payout before
 >    refunding stakes. `decline` is restricted to actual parties (no open-board grief).
@@ -115,7 +121,9 @@ One logical change per migration file (timestamps assigned by the CLI):
 4. `pvp_challenge_rpcs` — `create_pvp_challenge`, `counter_pvp_challenge`,
    `accept_pvp_challenge`, `decline_pvp_challenge`, `cancel_pvp_challenge`,
    `void_pvp_challenge`, `settle_pvp_challenge`, `settle_pvp_for_week`,
-   `expire_pvp_challenges`.
+   `close_open_pvp_challenges`. *(A later migration, `pvp_remove_expiry`, dropped the
+   `expires_at` columns/params and replaced `expire_pvp_challenges` with
+   `close_open_pvp_challenges`.)*
 5. `settle_betting_for_week_pvp` — `CREATE OR REPLACE settle_betting_for_week` to
    `PERFORM public.settle_pvp_for_week(p_week_id)` after the pincome mint (same txn).
 
@@ -150,7 +158,6 @@ trail lives in `pvp_challenge_offers`.
 | `creator_selection` | `text NULL` — Prop Duel: the creator's chosen `bet_selections.key` (e.g. `'over'`) |
 | `counterparty_selection` | `text NULL` — Prop Duel: the opposite selection key |
 | `subject_player_id` | `uuid NULL REFERENCES public.players(id) ON DELETE SET NULL` — Prop Duel subject (the player the prop is about); NULL for duels where the two parties are the subjects |
-| `expires_at` | `timestamptz NOT NULL` — pending/countered auto-expire at/after this (default = the week's `bowled_at`; there is no `weeks.lock_at`) |
 | `accepted_at` | `timestamptz NULL` |
 | `locked_at` | `timestamptz NULL` |
 | `settled_at` | `timestamptz NULL` |
@@ -162,8 +169,7 @@ trail lives in `pvp_challenge_offers`.
 | `created_at` / `updated_at` | audit (auto) |
 
 Indexes: `creator_player_id`, `counterparty_player_id`, `season_id`, `week_id`,
-`prop_market_id`, `subject_player_id`, `winner_player_id`, `rematch_of_challenge_id`,
-and a composite `(status, expires_at)` for the expiry sweep.
+`prop_market_id`, `subject_player_id`, `winner_player_id`, `rematch_of_challenge_id`.
 
 > **Status note:** design §5.2 lists `draft`, `escrowed`, `settlement_pending`. v1
 > drops `draft` (creation is immediate), folds `escrowed` into `accepted`→`locked`
@@ -196,7 +202,6 @@ acceptable offer** (design §6.3).
 | `prop_market_id` | `uuid NULL REFERENCES public.bet_markets(id) ON DELETE SET NULL` |
 | `creator_selection` | `text NULL` |
 | `counterparty_selection` | `text NULL` |
-| `expires_at` | `timestamptz NOT NULL` — this offer's expiry (inherits prior unless shortened, §6 / v1 default) |
 | `message` | `text NULL` |
 | `superseded_at` | `timestamptz NULL` — set when a newer counter replaces this offer |
 | `accepted_at` | `timestamptz NULL` |
@@ -321,12 +326,11 @@ open-Q #11, v1 default).
 Params (all explicit; caller is `auth.uid()`):
 `p_contract_type text, p_counterparty_player_id uuid /* NULL = open board */,
 p_week_id uuid, p_game_number int, p_stake int, p_prop_market_id uuid,
-p_creator_selection text, p_message text, p_expires_at timestamptz`.
+p_creator_selection text, p_message text`.
 
 1. Resolve `v_creator_id` from `auth.uid()` (RAISE if no player).
 2. Resolve current season; RAISE if none. Validate `p_week_id` is in that season and
-   not archived; default `p_expires_at` to the week's `bowled_at` if NULL (there is no
-   `weeks.lock_at`); RAISE if no expiry can be determined; reject if already past.
+   not archived. (No expiry — challenges stay open until the game starts; see §4.)
 3. Validate `p_stake >= 10` (min stake, v1 default §15-Q1) and creator balance
    `>= p_stake`. (Balance only checked here for UX; re-checked at accept.)
 4. Validate `p_counterparty_player_id <> v_creator_id` (no self-challenge); if not
@@ -347,7 +351,7 @@ p_creator_selection text, p_message text, p_expires_at timestamptz`.
 
 ### `counter_pvp_challenge(...) RETURNS uuid` — `authenticated`
 Params: `p_challenge_id uuid, p_stake int, p_contract_type text, p_game_number int,
-p_prop_market_id uuid, p_selection text, p_message text, p_expires_at timestamptz`.
+p_prop_market_id uuid, p_selection text, p_message text`.
 
 1. Resolve caller; load the challenge `FOR UPDATE`. RAISE unless status in
    (`pending`,`countered`) and caller is a current party (creator or counterparty; for
@@ -355,8 +359,7 @@ p_prop_market_id uuid, p_selection text, p_message text, p_expires_at timestampt
 2. Identify the latest active offer; RAISE if the caller made it (can't counter your own
    live offer — it's the other party's turn).
 3. Validate new terms (stake ≥ 10, scope valid, balance check on the *countering*
-   player for their side). `p_expires_at` defaults to the prior offer's `expires_at`;
-   may only be **shortened**, never extended (§6 / v1 default).
+   player for their side).
 4. `UPDATE` the prior active offer `SET superseded_at = now()`.
 5. INSERT a new `pvp_challenge_offers` row (`offer_no = prev + 1`, new snapshot).
 6. `UPDATE pvp_challenges` to the new current terms, recompute
@@ -373,7 +376,7 @@ The escrow moment. Mirror `place_house_bet`'s double-entry for each side.
 2. Identify the latest active offer; RAISE if caller made it (you accept the *other*
    party's offer). For an **open-board** contract (`counterparty_player_id IS NULL`),
    the caller becomes the counterparty now (FCFS, exact posted terms — §13/v1) — set it.
-3. Validate not expired (`now() < offer.expires_at`); week not archived.
+3. Week not archived (no expiry check — challenges stay open until the game starts).
 4. Re-derive **both** players' balances; RAISE if either `< their stake`.
 5. **Escrow both stakes** — for each player, write the double-entry pin pair
    (`type='pvp_stake'`, player `−stake` / house `+stake`, `is_house` set correctly,
@@ -402,20 +405,20 @@ The escrow moment. Mirror `place_house_bet`'s double-entry for each side.
    surfaced publicly — §15-Q8 / no feed in v1.)
 
 ### `cancel_pvp_challenge(p_challenge_id uuid) RETURNS void` — admin-gated
-Admin cancellation of a pending/locked contract (design §4.5, §14). Refund any escrow.
+Admin cancellation of a pending/locked contract (design §4.5, §14). **Hard delete** —
+makes it as if the contract never existed, mirroring `cancel_loan`/`cancel_bet`.
 1. Admin gate. Load challenge.
-2. If status = `locked` (escrow held): for the two `stake` events, write `refund` pin
-   pairs (player `+stake` / house `−stake`, `type='pvp_refund'`) + matching `pvp_ledger`
-   `refund` rows, link both. (Equivalent to reversing the stakes.)
-3. `UPDATE pvp_challenges SET status='cancelled'`.
+2. Delete the escrow pin rows by `pvp_ledger_id` (both player + house sides):
+   `DELETE FROM public.pin_ledger WHERE pvp_ledger_id IN (SELECT id FROM public.pvp_ledger WHERE challenge_id = p_challenge_id);`
+   (`pin_ledger.pvp_ledger_id` is `ON DELETE SET NULL`, so these must go first or
+   they orphan.)
+3. `DELETE FROM public.pvp_challenges WHERE id = p_challenge_id` — `pvp_ledger` and
+   `pvp_challenge_offers` both cascade `ON DELETE CASCADE`, so the contract row and
+   all its children disappear.
 
-> Alternative destructive form (mirrors `cancel_loan`/`cancel_bet`): instead of writing
-> reversing rows, **delete** the contract's escrow rows by `pvp_ledger_id`:
-> `DELETE FROM public.pin_ledger WHERE pvp_ledger_id IN (SELECT id FROM public.pvp_ledger WHERE challenge_id = p_challenge_id); DELETE FROM public.pvp_ledger WHERE challenge_id = p_challenge_id;`
-> then set status. Prefer the **delete** form for *pre-settlement* cancel (clean
-> rollback, matches Loan Shark), and the **reversal** form for *post-settlement*
-> correction (see `void`/§4.5 "cancellation after settlement"). Document which the
-> implementer chose in the migration comment.
+> Implemented as the **delete** form (migration `20260607012000_pvp_cancel_hard_delete`).
+> Use `void_pvp_challenge` (reversal, keeps the row + history) for *post-settlement*
+> correction; `cancel` is the clean pre-settlement rollback.
 
 ### `void_pvp_challenge(p_challenge_id uuid, p_admin_note text) RETURNS void` — admin-gated
 Design §4.5 void: contract can't be settled fairly → refund both stakes.
@@ -469,12 +472,16 @@ Idempotent batch driver, called by `settle_betting_for_week` after pincome is mi
 3. Contract types requiring admin adjudication (none in v1) are skipped for manual
    settle.
 
-### `expire_pvp_challenges() RETURNS void` — admin-gated (or invoked from archive)
-Flip stale negotiations to `expired`:
-`UPDATE public.pvp_challenges SET status='expired'
- WHERE status IN ('pending','countered') AND expires_at <= now();`
-No escrow exists on these, so nothing to refund. Call it from `settle_pvp_for_week`
-(start) and/or expose for admin/cron.
+### `close_open_pvp_challenges(p_week_id uuid, p_game_number int) RETURNS void` — admin-gated
+Close every still-open negotiation for a week, optionally narrowed to one game. Stamp
+the live offer's `declined_at` and set `status='cancelled'`:
+`UPDATE public.pvp_challenges SET status='cancelled'
+ WHERE week_id = p_week_id AND status IN ('pending','countered')
+   AND (p_game_number IS NULL OR game_number = p_game_number);`
+The status filter inherently skips accepted/locked contracts, so an already-accepted
+challenge is never closed. No escrow exists on pending/countered, so nothing to refund.
+Called game-scoped by Matchups "Start Game" (`game_number = N`) and week-wide by
+`settle_pvp_for_week` (`game_number = NULL`).
 
 ---
 
@@ -486,9 +493,9 @@ public.settle_betting_for_week(p_week_id uuid)` reusing the **current body verba
 statements before `END;`:
 
 ```sql
-  -- PvP: expire stale offers, then auto-settle locked contracts for this week,
-  -- in the same transaction as the score_credit mint (no intermediate player window).
-  PERFORM public.expire_pvp_challenges();
+  -- PvP: settle locked contracts for this week in the same transaction as the
+  -- score_credit mint (no intermediate player window). settle_pvp_for_week first
+  -- closes any still-open challenges for the week (close_open_pvp_challenges).
   PERFORM public.settle_pvp_for_week(p_week_id);
 ```
 
@@ -517,8 +524,10 @@ Use a throwaway / non-prod season. SQL reads via `supabase db query --linked`.
 4. **accept → escrow nets 0** — both balances drop by their stake; four `pvp_stake`
    pin rows sum to 0; each pair carries the same `pvp_ledger_id`; Line Duel snapshots
    `creator_line`/`counterparty_line`; `status='locked'`. Accepting your own latest
-   offer raises; accepting after `expires_at` raises; accepting with insufficient
-   balance raises.
+   offer raises; accepting with insufficient balance raises.
+4a. **close on game start** — `close_open_pvp_challenges(week, N)` flips every open
+   (`pending`/`countered`) Game-N challenge to `cancelled` and stamps its live offer's
+   `declined_at`; a `locked` (accepted) Game-N challenge is untouched.
 5. **payout = pot** — `payout_amount = total_pot` for every contract (no rake; winner
    takes the whole pot).
 6. **auto-settle (archive)** — archive a week with a locked Line Duel: winner gets

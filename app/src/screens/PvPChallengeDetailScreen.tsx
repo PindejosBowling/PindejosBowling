@@ -14,7 +14,7 @@ import { useRefresh } from '../hooks/useRefresh'
 import { useAuthStore } from '../stores/authStore'
 import { useUiStore } from '../stores/uiStore'
 import { seasons, pinLedger, pvpChallenges } from '../utils/supabase/db'
-import { CONTRACT_TYPE_LABEL, CONTRACT_TYPE_RULE, STATUS_LABEL, statusKind, formatExpiry } from '../utils/pvp'
+import { CONTRACT_TYPE_LABEL, CONTRACT_TYPE_RULE, STATUS_LABEL, statusKind } from '../utils/pvp'
 import { PinsinoStackParamList } from '../navigation/types'
 
 type Nav = NativeStackNavigationProp<PinsinoStackParamList>
@@ -138,8 +138,6 @@ export default function PvPChallengeDetailScreen() {
 
           <View style={styles.metaLine}>
             <Text style={styles.metaText}>{c.gameNumber != null ? `Game ${c.gameNumber}` : 'Series'}</Text>
-            <Text style={styles.metaDivider}>·</Text>
-            <Text style={styles.metaText}>Locks {formatExpiry(c.expiresAt)}</Text>
           </View>
 
           {isProp && (c.creatorSelection || c.counterpartySelection) ? (
