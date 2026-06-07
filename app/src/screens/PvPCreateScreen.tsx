@@ -233,12 +233,13 @@ export default function PvPCreateScreen() {
         creatorHandicap: isHeadToHead ? myHandicapNum : 0,
         counterpartyHandicap: isHeadToHead ? oppHandicapNum : 0,
       }
-      const { data, error } = await pvpChallenges.create(args)
+      const { error } = await pvpChallenges.create(args)
       if (error) { showToast(error.message, 'error'); return }
       showToast('Challenge sent', 'success')
-      const newId = data as unknown as string
-      if (newId) navigation.replace('PvPChallengeDetail', { challengeId: newId })
-      else navigation.goBack()
+      // Return to the list that owns this contract — the Challenge Board for an open
+      // post, otherwise the PvP inbox. Both are already in the stack, so this pops
+      // back; the list's focus reload surfaces the new challenge.
+      navigation.navigate(openBoard ? 'PvPBoard' : 'PvP')
     } catch {
       showToast('Failed to create challenge', 'error')
     } finally {
@@ -366,7 +367,7 @@ export default function PvPCreateScreen() {
                 Be sure to specify if the outcome is game-specific (Game 1 or Game 2), or if it covers the entire week.
               </Text>
               <Text style={[styles.warnText, { marginTop: 14 }]}>
-                Admins will cancel all contracts that incentivise tanking behavior with EXTREME prejudice, and reserve the right to cancel any contracts with unclear or unenforceable conditions.
+                Admins will VOID all contracts that incentivise tanking behavior with EXTREME prejudice, and reserve the right to VOID any contracts with unclear or unenforceable conditions.
               </Text>
             </View>
           </View>

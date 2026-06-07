@@ -31,5 +31,4 @@ export type PinsinoStackParamList = {
   PvP: undefined
   PvPBoard: undefined
   PvPCreate: { opponentId?: string; rematchOfId?: string; openBoard?: boolean } | undefined
-  PvPChallengeDetail: { challengeId: string }
 }

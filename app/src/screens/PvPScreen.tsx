@@ -1,11 +1,13 @@
+import { useCallback, useState } from 'react'
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet, RefreshControl } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import { useNavigation } from '@react-navigation/native'
+import { useNavigation, useFocusEffect } from '@react-navigation/native'
 import { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { colors, fonts, radius } from '../theme'
 import ScreenHeader from '../components/ScreenHeader'
 import LoadingView from '../components/LoadingView'
 import PvpChallengeRow from '../components/PvpChallengeRow'
+import PvPChallengeDetailModal from '../components/PvPChallengeDetailModal'
 import { usePvpData, PvpChallengeView } from '../hooks/usePvpData'
 import { useRefresh } from '../hooks/useRefresh'
 import { useAuthStore } from '../stores/authStore'
@@ -19,11 +21,16 @@ export default function PvPScreen() {
 
   const { loading, balance, inbox, openBoard, record, reload } = usePvpData(playerId)
   const { refreshing, onRefresh } = useRefresh(reload)
+  const [detailId, setDetailId] = useState<string | null>(null)
+
+  // Refresh on return (e.g. after creating a challenge). The hook's own mount load
+  // covers the first paint; subsequent focus reloads are silent (no full-screen loader).
+  useFocusEffect(useCallback(() => { reload() }, [reload]))
 
   if (loading) return <LoadingView label="Loading…" />
 
   function openDetail(c: PvpChallengeView) {
-    navigation.navigate('PvPChallengeDetail', { challengeId: c.id })
+    setDetailId(c.id)
   }
 
   const section = (
@@ -114,6 +121,14 @@ export default function PvPScreen() {
           </>
         )}
       </ScrollView>
+
+      {detailId && (
+        <PvPChallengeDetailModal
+          challengeId={detailId}
+          onClose={() => setDetailId(null)}
+          onChanged={reload}
+        />
+      )}
     </SafeAreaView>
   )
 }

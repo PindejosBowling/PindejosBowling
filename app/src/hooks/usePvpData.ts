@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import { seasons, pinLedger, pvpChallenges } from '../utils/supabase/db'
 
 // A flattened pvp_challenges row with resolved participant names. The screen
@@ -109,9 +109,12 @@ export function usePvpData(playerId: string | null) {
   const [inbox, setInbox] = useState<PvpInbox>(EMPTY_INBOX)
   const [openBoard, setOpenBoard] = useState<PvpChallengeView[]>([])
   const [record, setRecord] = useState<PvpRecord>(EMPTY_RECORD)
+  // Only the first load shows the full-screen LoadingView; later reloads (focus,
+  // pull-to-refresh) update silently — pull-to-refresh has its own RefreshControl spinner.
+  const loadedOnce = useRef(false)
 
   const load = useCallback(async () => {
-    setLoading(true)
+    if (!loadedOnce.current) setLoading(true)
     try {
       if (!playerId) {
         setBalance(0); setInbox(EMPTY_INBOX); setOpenBoard([]); setRecord(EMPTY_RECORD)
@@ -167,6 +170,7 @@ export function usePvpData(playerId: string | null) {
     } catch (e) {
       console.error('usePvpData error:', e)
     } finally {
+      loadedOnce.current = true
       setLoading(false)
     }
   }, [playerId])

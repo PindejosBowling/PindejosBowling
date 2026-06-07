@@ -11,7 +11,6 @@ import PlayerPinsinoScreen from '../screens/PlayerPinsinoScreen'
 import PvPScreen from '../screens/PvPScreen'
 import PvPBoardScreen from '../screens/PvPBoardScreen'
 import PvPCreateScreen from '../screens/PvPCreateScreen'
-import PvPChallengeDetailScreen from '../screens/PvPChallengeDetailScreen'
 
 const Stack = createNativeStackNavigator<PinsinoStackParamList>()
 
@@ -31,7 +30,6 @@ export default function PinsinoStackNavigator() {
       <Stack.Screen name="PvP" component={PvPScreen} options={{ title: 'PvP' }} />
       <Stack.Screen name="PvPBoard" component={PvPBoardScreen} options={{ title: 'Challenge Board' }} />
       <Stack.Screen name="PvPCreate" component={PvPCreateScreen} options={{ title: 'New Challenge' }} />
-      <Stack.Screen name="PvPChallengeDetail" component={PvPChallengeDetailScreen} options={{ title: 'Challenge' }} />
     </Stack.Navigator>
   )
 }

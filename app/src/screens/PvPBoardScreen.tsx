@@ -1,7 +1,7 @@
-import { useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet, RefreshControl } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import { useNavigation } from '@react-navigation/native'
+import { useNavigation, useFocusEffect } from '@react-navigation/native'
 import { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { colors, fonts, radius } from '../theme'
 import ScreenHeader from '../components/ScreenHeader'
@@ -10,6 +10,7 @@ import PillFilter from '../components/PillFilter'
 import PvpChallengeRow from '../components/PvpChallengeRow'
 import PvpAcceptModal from '../components/PvpAcceptModal'
 import PvpCounterModal from '../components/PvpCounterModal'
+import PvPChallengeDetailModal from '../components/PvPChallengeDetailModal'
 import { usePvpData, PvpChallengeView } from '../hooks/usePvpData'
 import { useRefresh } from '../hooks/useRefresh'
 import { useAuthStore } from '../stores/authStore'
@@ -30,6 +31,10 @@ export default function PvPBoardScreen() {
   const [filter, setFilter] = useState('All')
   const [acceptTarget, setAcceptTarget] = useState<PvpChallengeView | null>(null)
   const [counterTarget, setCounterTarget] = useState<PvpChallengeView | null>(null)
+  const [detailId, setDetailId] = useState<string | null>(null)
+
+  // Refresh on return (e.g. after posting an open challenge). Silent after first load.
+  useFocusEffect(useCallback(() => { reload() }, [reload]))
 
   const rows = useMemo(
     () => (filter === 'All' ? openBoard : openBoard.filter(c => c.contractType === filter)),
@@ -77,7 +82,7 @@ export default function PvPBoardScreen() {
                 key={c.id}
                 challenge={c}
                 viewerId={playerId}
-                onPress={() => navigation.navigate('PvPChallengeDetail', { challengeId: c.id })}
+                onPress={() => setDetailId(c.id)}
                 cta="Waiting for a taker · tap to manage"
               />
             ))}
@@ -95,7 +100,7 @@ export default function PvPBoardScreen() {
               <PvpChallengeRow
                 challenge={c}
                 viewerId={playerId}
-                onPress={() => navigation.navigate('PvPChallengeDetail', { challengeId: c.id })}
+                onPress={() => setDetailId(c.id)}
               />
               <View style={styles.actionRow}>
                 <TouchableOpacity
@@ -130,6 +135,13 @@ export default function PvPBoardScreen() {
           balance={balance}
           onClose={() => setCounterTarget(null)}
           onDone={reload}
+        />
+      )}
+      {detailId && (
+        <PvPChallengeDetailModal
+          challengeId={detailId}
+          onClose={() => setDetailId(null)}
+          onChanged={reload}
         />
       )}
     </SafeAreaView>
