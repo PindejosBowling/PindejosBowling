@@ -36,10 +36,13 @@ Product/design references and per-feature implementation specs for the pin econo
 | [context/economy/ECONOMIC_DESIGN_DEBT.md](context/economy/ECONOMIC_DESIGN_DEBT.md) | Debt & Leverage / Loan Shark feature design |
 | [context/economy/ECONOMIC_DESIGN_MERCHANT.md](context/economy/ECONOMIC_DESIGN_MERCHANT.md) | Traveling Merchant / Item Shop feature design |
 | [context/economy/ECONOMIC_DESIGN_PvP.md](context/economy/ECONOMIC_DESIGN_PvP.md) | PvP Challenge Contracts feature design |
+| [context/economy/ECONOMIC_DESIGN_ACTIVITY_FEED.md](context/economy/ECONOMIC_DESIGN_ACTIVITY_FEED.md) | Activity Feed ("Market Moves") feature design — the public economic newswire |
 | [context/economy/LOAN_SHARK_DB.md](context/economy/LOAN_SHARK_DB.md) | Loan Shark **database** implementation spec (schema + RPCs) — read before touching any `loan_*` DB code |
 | [context/economy/LOAN_SHARK_APP.md](context/economy/LOAN_SHARK_APP.md) | Loan Shark **app-layer** implementation spec (`app/src`) |
 | [context/economy/PvP_DB.md](context/economy/PvP_DB.md) | PvP Challenge Contracts **database** implementation spec (schema + RPCs) — read before touching any `pvp_*` DB code |
 | [context/economy/PvP_APP.md](context/economy/PvP_APP.md) | PvP Challenge Contracts **app-layer** implementation spec (`app/src`) |
+| [context/economy/ACTIVITY_FEED_DB.md](context/economy/ACTIVITY_FEED_DB.md) | Activity Feed **database** implementation spec (the `activity_feed_events` table + `publish_activity_event` helper + edits to existing economic RPCs) — read before touching any `activity_feed_*` DB code |
+| [context/economy/ACTIVITY_FEED_APP.md](context/economy/ACTIVITY_FEED_APP.md) | Activity Feed **app-layer** implementation spec (the "Market Moves" Pinsino tile) |
 
 ## External source-of-truth docs
 

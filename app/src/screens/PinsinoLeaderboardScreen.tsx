@@ -37,7 +37,7 @@ export default function PinsinoLeaderboardScreen() {
             race to amass the biggest pin fortune by any means necessary.
           </Text>
           <Text style={styles.rulesBody}>
-            Earn pins by bowling games in the PBL, winning bets at the Sportsbook, leveraging loans from the Loan Shark, and challenging rivals directly.
+            Earn pins by bowling games in the PBL, winning bets at the Sportsbook, leveraging loans from the Loan Shark, and challenging rivals directly in PvP.
           </Text>
           <Text style={styles.rulesBody}>
             When a season ends, whoever sits atop this board is crowned the season's Titan and then the next season will start fresh.
@@ -47,6 +47,7 @@ export default function PinsinoLeaderboardScreen() {
         <PinsinoLeaderboardTable
           leaderboard={leaderboard}
           playerId={playerId}
+          mode="detail"
           onRowPress={(id, name) => navigation.navigate('PlayerPinsino', { playerId: id, name })}
         />
       </ScrollView>

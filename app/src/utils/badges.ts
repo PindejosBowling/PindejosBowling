@@ -29,7 +29,7 @@ const BADGE_RULES: {
   },
   {
     key: 'pin_leader',
-    emoji: '💰',
+    emoji: '🎩',
     label: 'Highest pin balance',
     applies: (id, ctx) => ctx.topPinBalancePlayerId === id,
   },

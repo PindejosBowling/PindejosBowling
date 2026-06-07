@@ -8,9 +8,20 @@ type Props = {
   onRowPress: (playerId: string, name: string) => void
   /** Optional cap on the number of rows rendered (e.g. Top 3). Omit for the full list. */
   limit?: number
+  /**
+   * `summary` shows only name + net (compact landing-page preview).
+   * `detail` shows the full pins/wagers/debt/net breakdown. Defaults to `detail`.
+   */
+  mode?: 'summary' | 'detail'
 }
 
-export default function PinsinoLeaderboardTable({ leaderboard, playerId, onRowPress, limit }: Props) {
+export default function PinsinoLeaderboardTable({
+  leaderboard,
+  playerId,
+  onRowPress,
+  limit,
+  mode = 'detail',
+}: Props) {
   if (leaderboard.length === 0) {
     return (
       <View style={styles.emptyCard}>
@@ -20,16 +31,23 @@ export default function PinsinoLeaderboardTable({ leaderboard, playerId, onRowPr
   }
 
   const rows = limit ? leaderboard.slice(0, limit) : leaderboard
+  const isSummary = mode === 'summary'
 
   return (
     <View style={styles.sbCard}>
       <View style={styles.sbHeaderRow}>
         <Text style={[styles.sbHeaderCell, styles.sbRankCell]}>#</Text>
         <Text style={[styles.sbHeaderCell, styles.sbNameCell]}>Titan</Text>
-        <Text style={[styles.sbHeaderCell, styles.sbBalCell]}>Pins</Text>
-        <Text style={[styles.sbHeaderCell, styles.sbWagerCell]}>Wagers</Text>
-        <Text style={[styles.sbHeaderCell, styles.sbDebtCell]}>Debt</Text>
-        <Text style={[styles.sbHeaderCell, styles.sbNetCell]}>Net</Text>
+        {!isSummary && (
+          <>
+            <Text style={[styles.sbHeaderCell, styles.sbBalCell]}>Pins</Text>
+            <Text style={[styles.sbHeaderCell, styles.sbWagerCell]}>Wagers</Text>
+            <Text style={[styles.sbHeaderCell, styles.sbDebtCell]}>Debt</Text>
+          </>
+        )}
+        <Text style={[styles.sbHeaderCell, isSummary ? styles.sbNetSummaryCell : styles.sbNetCell]}>
+          {isSummary ? 'Current Net Worth' : 'Net'}
+        </Text>
       </View>
       {rows.map((p, index) => {
         const isMe = p.playerId === playerId
@@ -48,10 +66,20 @@ export default function PinsinoLeaderboardTable({ leaderboard, playerId, onRowPr
               {p.movement === 'up' && <Text style={styles.moveUp}> ▲</Text>}
               {p.movement === 'down' && <Text style={styles.moveDown}> ▼</Text>}
             </Text>
-            <Text style={styles.sbBalance}>{p.balance.toLocaleString()}</Text>
-            <Text style={styles.sbWager}>{p.wagers > 0 ? p.wagers.toLocaleString() : ''}</Text>
-            <Text style={styles.sbDebt}>{p.debt > 0 ? `−${p.debt.toLocaleString()}` : ''}</Text>
-            <Text style={[styles.sbNet, p.netWorth < 0 && styles.sbNetNegative]}>
+            {!isSummary && (
+              <>
+                <Text style={styles.sbBalance}>{p.balance.toLocaleString()}</Text>
+                <Text style={styles.sbWager}>{p.wagers > 0 ? p.wagers.toLocaleString() : ''}</Text>
+                <Text style={styles.sbDebt}>{p.debt > 0 ? `−${p.debt.toLocaleString()}` : ''}</Text>
+              </>
+            )}
+            <Text
+              style={[
+                styles.sbNet,
+                isSummary && styles.sbNetSummaryCell,
+                p.netWorth < 0 && styles.sbNetNegative,
+              ]}
+            >
               {p.netWorth.toLocaleString()}
             </Text>
           </TouchableOpacity>
@@ -92,6 +120,8 @@ const styles = StyleSheet.create({
   sbWagerCell: { width: 56, textAlign: 'right' },
   sbDebtCell: { width: 56, textAlign: 'right' },
   sbNetCell: { width: 56, textAlign: 'right' },
+  // Wider net column for the summary view so "Current Networth" fits unclipped.
+  sbNetSummaryCell: { width: 130, textAlign: 'right' },
   sbRow: {
     flexDirection: 'row',
     alignItems: 'center',

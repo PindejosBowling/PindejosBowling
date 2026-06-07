@@ -94,6 +94,7 @@ export default function PinsinoScreen() {
         <PinsinoLeaderboardTable
           leaderboard={leaderboard}
           playerId={playerId}
+          mode="summary"
           limit={3}
           onRowPress={(id, name) => navigation.navigate('PlayerPinsino', { playerId: id, name })}
         />
