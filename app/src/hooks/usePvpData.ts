@@ -26,6 +26,8 @@ export interface PvpChallengeView {
   winnerId: string | null
   resultDetail: any
   creatorMessage: string | null
+  customTitle: string | null
+  customDescription: string | null
   adminNote: string | null
   rematchOfId: string | null
   createdAt: string
@@ -64,6 +66,8 @@ export function normalizeChallenge(c: any): PvpChallengeView {
     winnerId: c.winner_player_id ?? null,
     resultDetail: c.result_detail ?? {},
     creatorMessage: c.creator_message ?? null,
+    customTitle: c.custom_title ?? null,
+    customDescription: c.custom_description ?? null,
     adminNote: c.admin_note ?? null,
     rematchOfId: c.rematch_of_challenge_id ?? null,
     createdAt: c.created_at,

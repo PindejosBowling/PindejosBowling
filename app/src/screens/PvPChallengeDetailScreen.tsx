@@ -106,10 +106,14 @@ export default function PvPChallengeDetailScreen() {
   const rd = c.resultDetail ?? {}
   const showResult = c.status === 'settled' || c.status === 'pushed'
   const isProp = c.contractType === 'prop_duel'
+  const isCustom = c.contractType === 'custom'
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
-      <ScreenHeader title={CONTRACT_TYPE_LABEL[c.contractType] ?? 'Challenge'} onBack={() => navigation.goBack()} />
+      <ScreenHeader
+        title={(isCustom && c.customTitle) || CONTRACT_TYPE_LABEL[c.contractType] || 'Challenge'}
+        onBack={() => navigation.goBack()}
+      />
       <ScrollView
         contentContainerStyle={styles.content}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.muted} />}
@@ -136,9 +140,15 @@ export default function PvPChallengeDetailScreen() {
             </View>
           </View>
 
-          <View style={styles.metaLine}>
-            <Text style={styles.metaText}>{c.gameNumber != null ? `Game ${c.gameNumber}` : 'Series'}</Text>
-          </View>
+          {!isCustom ? (
+            <View style={styles.metaLine}>
+              <Text style={styles.metaText}>{c.gameNumber != null ? `Game ${c.gameNumber}` : 'Series'}</Text>
+            </View>
+          ) : null}
+
+          {isCustom && c.customDescription ? (
+            <Text style={styles.sides}>{c.customDescription}</Text>
+          ) : null}
 
           {isProp && (c.creatorSelection || c.counterpartySelection) ? (
             <Text style={styles.sides}>

@@ -33,7 +33,7 @@ export default function PinsinoLeaderboardScreen() {
         <View style={styles.rulesCard}>
           <Text style={styles.rulesTitle}>How It Works</Text>
           <Text style={styles.rulesBody}>
-            Titans of Pindustry is the economy game layered on top of the bowling league — a season-long
+            Titans of Pindustry is the "game within the game" of the bowling league — a season-long
             race to amass the biggest pin fortune.
           </Text>
           <Text style={styles.rulesBody}>

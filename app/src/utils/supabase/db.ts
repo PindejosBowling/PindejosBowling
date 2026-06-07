@@ -533,14 +533,16 @@ export const pinLedger = {
 // go through SECURITY DEFINER RPCs. Reads embed the creator/counterparty names —
 // the two FKs to players are disambiguated via their constraint names.
 export interface CreatePvpArgs {
-  contractType: string                 // 'line_duel' | 'prop_duel' | 'raw_score_duel'
+  contractType: string                 // 'line_duel' | 'prop_duel' | 'raw_score_duel' | 'custom'
   counterpartyId: string | null        // null = open board
   weekId: string
-  gameNumber: number | null            // required for line/raw; null for prop
+  gameNumber: number | null            // required for line/raw; null for prop/custom
   stake: number
   propMarketId: string | null          // prop_duel only
   creatorSelection: string | null      // prop_duel only ('over' | 'under')
   message: string | null
+  customTitle: string | null           // custom only
+  customDescription: string | null     // custom only — the admin-judged win condition
 }
 
 export interface CounterPvpArgs {
@@ -603,6 +605,8 @@ export const pvpChallenges = {
       p_prop_market_id: a.propMarketId as string,
       p_creator_selection: a.creatorSelection as string,
       p_message: a.message as string,
+      p_custom_title: a.customTitle as string,
+      p_custom_description: a.customDescription as string,
     }),
   counter: (a: CounterPvpArgs) =>
     supabase.rpc('counter_pvp_challenge', {

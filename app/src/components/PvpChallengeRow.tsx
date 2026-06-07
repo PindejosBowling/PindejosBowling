@@ -36,12 +36,14 @@ function resultChip(c: PvpChallengeView, viewerId: string | null): { text: strin
 
 export default function PvpChallengeRow({ challenge: c, viewerId, onPress, cta }: Props) {
   const chip = resultChip(c, viewerId)
-  const scope = c.gameNumber != null ? `Game ${c.gameNumber}` : 'Series'
+  const isCustom = c.contractType === 'custom'
+  const scope = isCustom ? 'Custom' : c.gameNumber != null ? `Game ${c.gameNumber}` : 'Series'
+  const typeLabel = (isCustom && c.customTitle) || CONTRACT_TYPE_LABEL[c.contractType] || c.contractType
 
   return (
     <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.7}>
       <View style={styles.topRow}>
-        <Text style={styles.type}>{CONTRACT_TYPE_LABEL[c.contractType] ?? c.contractType}</Text>
+        <Text style={styles.type} numberOfLines={1}>{typeLabel}</Text>
         <Text style={[styles.chip, { color: chip.color }]}>{chip.text}</Text>
       </View>
       <Text style={styles.opponent}>{opponentLabel(c, viewerId)}</Text>
@@ -66,8 +68,9 @@ const styles = StyleSheet.create({
     padding: 14,
     marginBottom: 10,
   },
-  topRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  topRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
   type: {
+    flex: 1,
     fontFamily: fonts.barlowCondensed,
     fontSize: 16,
     color: colors.text,

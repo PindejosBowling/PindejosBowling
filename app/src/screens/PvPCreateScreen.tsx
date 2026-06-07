@@ -55,6 +55,8 @@ export default function PvPCreateScreen() {
   const [selection, setSelection] = useState<'over' | 'under'>('over')
   const [stake, setStake] = useState('')
   const [message, setMessage] = useState('')
+  const [customTitle, setCustomTitle] = useState('')
+  const [customDescription, setCustomDescription] = useState('')
   const [pickerOpen, setPickerOpen] = useState(false)
 
   const load = async () => {
@@ -105,6 +107,10 @@ export default function PvPCreateScreen() {
           const other = c.creatorId === playerId ? c.counterpartyId : c.creatorId
           if (other) setOpponentId(other)
           if (c.contractType === 'prop_duel' && c.propMarketId) setPropMarketId(c.propMarketId)
+          if (c.contractType === 'custom') {
+            setCustomTitle(c.customTitle ?? '')
+            setCustomDescription(c.customDescription ?? '')
+          }
         }
       } else if (route.params?.opponentId) {
         setOpponentId(route.params.opponentId)
@@ -131,13 +137,17 @@ export default function PvPCreateScreen() {
   )
 
   const isProp = contractType === 'prop_duel'
+  const isCustom = contractType === 'custom'
 
   function validate(): string | null {
     if (!weekId) return 'No active week to challenge in'
     if (!openBoard && !opponentId) return 'Pick an opponent or post to the open board'
     if (isNaN(stakeNum) || stakeNum < PVP_MIN_STAKE) return `Minimum stake is ${PVP_MIN_STAKE} pins`
     if (stakeNum > balance) return 'Stake exceeds your balance'
-    if (isProp) {
+    if (isCustom) {
+      if (!customTitle.trim()) return 'Give your custom challenge a title'
+      if (!customDescription.trim()) return 'Describe the win condition'
+    } else if (isProp) {
       if (!propMarketId) return 'Pick a prop market'
     } else if (gameNumber == null) {
       return 'Pick a game'
@@ -154,11 +164,13 @@ export default function PvPCreateScreen() {
         contractType,
         counterpartyId: openBoard ? null : opponentId,
         weekId: weekId!,
-        gameNumber: isProp ? null : gameNumber,
+        gameNumber: isProp || isCustom ? null : gameNumber,
         stake: stakeNum,
         propMarketId: isProp ? propMarketId : null,
         creatorSelection: isProp ? selection : null,
         message: message.trim() || null,
+        customTitle: isCustom ? customTitle.trim() : null,
+        customDescription: isCustom ? customDescription.trim() : null,
       }
       const { data, error } = await pvpChallenges.create(args)
       if (error) { showToast(error.message, 'error'); return }
@@ -211,7 +223,34 @@ export default function PvPCreateScreen() {
 
         {/* Scope */}
         <Text style={styles.label}>WEEK {weekNumber ?? '—'} · SCOPE</Text>
-        {isProp ? (
+        {isCustom ? (
+          <View>
+            <TextInput
+              style={styles.input}
+              value={customTitle}
+              onChangeText={setCustomTitle}
+              placeholder="Challenge title…"
+              placeholderTextColor={colors.muted2}
+              maxLength={80}
+            />
+            <Text style={[styles.label, { marginTop: 14 }]}>WIN CONDITION</Text>
+            <TextInput
+              style={[styles.input, styles.descriptionInput]}
+              value={customDescription}
+              onChangeText={setCustomDescription}
+              placeholder="Describe exactly how this challenge is won…"
+              placeholderTextColor={colors.muted2}
+              multiline
+              maxLength={500}
+            />
+            <View style={styles.warnCard}>
+              <Text style={styles.warnText}>
+                Write the win condition clearly and unambiguously — an admin settles this
+                contract by hand based on exactly what you describe here.
+              </Text>
+            </View>
+          </View>
+        ) : isProp ? (
           <View>
             {propMarkets.length === 0 ? (
               <Text style={styles.helpText}>No open prop markets this week.</Text>
@@ -411,7 +450,19 @@ const styles = StyleSheet.create({
     color: colors.text,
   },
   messageInput: { fontFamily: fonts.barlow, fontSize: 15, minHeight: 60, textAlignVertical: 'top' },
+  descriptionInput: { fontFamily: fonts.barlow, fontSize: 15, minHeight: 90, textAlignVertical: 'top', marginTop: 8 },
   helpText: { fontFamily: fonts.barlow, fontSize: 12, color: colors.muted, marginTop: 6 },
+
+  warnCard: {
+    backgroundColor: 'rgba(251,191,36,0.10)',
+    borderRadius: radius.cardSm,
+    borderWidth: 1,
+    borderColor: 'rgba(251,191,36,0.4)',
+    paddingHorizontal: 14,
+    paddingVertical: 11,
+    marginTop: 12,
+  },
+  warnText: { fontFamily: fonts.barlow, fontSize: 13, color: colors.gold, lineHeight: 18 },
 
   confirmCard: {
     backgroundColor: colors.surface,

@@ -27,7 +27,9 @@ export default function PvpCounterModal({ challenge: c, balance, onClose, onDone
   const [game, setGame] = useState(c.gameNumber != null ? String(c.gameNumber) : '')
   const [message, setMessage] = useState('')
 
-  const isProp = c.contractType === 'prop_duel'
+  // Prop and custom contracts have no game scope — the counter renegotiates the
+  // stake only (custom keeps its title/win-condition; prop keeps its market side).
+  const noGame = c.contractType === 'prop_duel' || c.contractType === 'custom'
   const stakeNum = parseInt(stake, 10)
   const validStake = !isNaN(stakeNum) && stakeNum >= PVP_MIN_STAKE && stakeNum <= balance
   const pot = isNaN(stakeNum) ? 0 : stakeNum * 2
@@ -37,8 +39,8 @@ export default function PvpCounterModal({ challenge: c, balance, onClose, onDone
       showToast(stakeNum > balance ? 'Stake exceeds your balance' : `Minimum stake is ${PVP_MIN_STAKE} pins`, 'error')
       return
     }
-    const gameNum = isProp ? null : parseInt(game, 10)
-    if (!isProp && (gameNum == null || isNaN(gameNum))) { showToast('Enter a game number', 'error'); return }
+    const gameNum = noGame ? null : parseInt(game, 10)
+    if (!noGame && (gameNum == null || isNaN(gameNum))) { showToast('Enter a game number', 'error'); return }
 
     setSaving(true)
     try {
@@ -46,7 +48,7 @@ export default function PvpCounterModal({ challenge: c, balance, onClose, onDone
         challengeId: c.id,
         stake: stakeNum,
         contractType: c.contractType,
-        gameNumber: isProp ? null : gameNum,
+        gameNumber: gameNum,
         propMarketId: c.propMarketId,
         selection: c.creatorSelection,
         message: message.trim() || null,
@@ -84,7 +86,7 @@ export default function PvpCounterModal({ challenge: c, balance, onClose, onDone
             />
             <Text style={styles.help}>Balance: {balance.toLocaleString()} pins</Text>
 
-            {!isProp && (
+            {!noGame && (
               <>
                 <Text style={styles.label}>GAME</Text>
                 <TextInput

@@ -53,12 +53,23 @@ export default function PvpAdminActionModal({ challenge: c, onClose, onDone }: P
       <KeyboardAvoidingView style={styles.backdrop} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={() => !saving && onClose()} />
         <View style={styles.sheet}>
-          <Text style={styles.title}>{CONTRACT_TYPE_LABEL[c.contractType] ?? 'Challenge'}</Text>
+          <Text style={styles.title}>
+            {(c.contractType === 'custom' && c.customTitle) || CONTRACT_TYPE_LABEL[c.contractType] || 'Challenge'}
+          </Text>
           <Text style={styles.subtitle}>
             {c.creatorName} vs {c.counterpartyName ?? 'Open'} · {(STATUS_LABEL[c.status] ?? c.status).toUpperCase()} · Pot {c.totalPot.toLocaleString()}
           </Text>
 
           <ScrollView style={styles.body} keyboardShouldPersistTaps="handled">
+            {c.contractType === 'custom' && c.customDescription ? (
+              <>
+                <Text style={styles.label}>WIN CONDITION</Text>
+                <View style={styles.conditionCard}>
+                  <Text style={styles.conditionText}>{c.customDescription}</Text>
+                </View>
+              </>
+            ) : null}
+
             <Text style={styles.label}>ADMIN NOTE (OPTIONAL)</Text>
             <TextInput
               style={styles.input}
@@ -91,14 +102,16 @@ export default function PvpAdminActionModal({ challenge: c, onClose, onDone }: P
                     <Text style={styles.actText}>{c.counterpartyName} wins</Text>
                   </TouchableOpacity>
                 )}
-                <TouchableOpacity
-                  style={styles.actBtn}
-                  disabled={saving}
-                  onPress={() => confirm('Auto-settle from scores?', () => run('Settled from scores', () => pvpChallenges.settle(c.id, null, note)))}
-                  activeOpacity={0.7}
-                >
-                  <Text style={styles.actText}>Auto-settle from scores (push if tied)</Text>
-                </TouchableOpacity>
+                {c.contractType !== 'custom' && (
+                  <TouchableOpacity
+                    style={styles.actBtn}
+                    disabled={saving}
+                    onPress={() => confirm('Auto-settle from scores?', () => run('Settled from scores', () => pvpChallenges.settle(c.id, null, note)))}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.actText}>Auto-settle from scores (push if tied)</Text>
+                  </TouchableOpacity>
+                )}
               </>
             )}
 
@@ -152,6 +165,15 @@ const styles = StyleSheet.create({
   body: { maxHeight: 420 },
   label: { fontFamily: fonts.barlowCondensed, fontSize: 12, letterSpacing: 1.5, color: colors.muted, marginTop: 12, marginBottom: 8 },
   section: { fontFamily: fonts.barlowCondensed, fontSize: 12, letterSpacing: 2, color: colors.muted, marginTop: 18, marginBottom: 8 },
+  conditionCard: {
+    backgroundColor: colors.surface2,
+    borderRadius: radius.cardSm,
+    borderWidth: 1,
+    borderColor: colors.border2,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  conditionText: { fontFamily: fonts.barlow, fontSize: 15, color: colors.text, lineHeight: 21 },
   input: {
     backgroundColor: colors.surface2,
     borderRadius: radius.cardSm,
