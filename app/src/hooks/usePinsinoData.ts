@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect } from 'react'
-import { weeks, seasons, betMarkets, bets, pinLedger, loanLedger, loans } from '../utils/supabase/db'
+import { weeks, seasons, betMarkets, bets, pinLedger, loanLedger, loans, pvpChallenges } from '../utils/supabase/db'
+import { normalizeChallenge } from './usePvpData'
 
 // One bettable side of a market (a single `bet_selections` row, flattened).
 // Generic over market_type — over/under is the first consumer, but the shape
@@ -229,6 +230,9 @@ export function usePinsinoData(playerId: string | null) {
   // Caller's own loan figures (net-worth context near the balance card)
   const [debt, setDebt] = useState(0)
   const [activeLoan, setActiveLoan] = useState<ActiveLoanSummary | null>(null)
+  // Count of PvP contracts awaiting the caller's response (the "Received" inbox).
+  // Surfaced as a notification badge on the PvP hub tile.
+  const [pvpReceivedCount, setPvpReceivedCount] = useState(0)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -291,6 +295,8 @@ export function usePinsinoData(playerId: string | null) {
       // Player's bets and ledger balance
       let myBetsData: any[] = []
       let ledgerData: any[] = []
+      // Caller's own PvP contracts (for the "Received" badge on the hub)
+      let myPvpData: any[] = []
       if (playerId && seasonId) {
         fetches.push(
           bets.listByPlayer(playerId).then(({ data }) => {
@@ -298,6 +304,9 @@ export function usePinsinoData(playerId: string | null) {
           }),
           pinLedger.listByPlayerSeason(playerId, seasonId).then(({ data }) => {
             ledgerData = data ?? []
+          }),
+          pvpChallenges.listByPlayerSeason(playerId, seasonId).then(({ data }) => {
+            myPvpData = data ?? []
           })
         )
       }
@@ -395,7 +404,16 @@ export function usePinsinoData(playerId: string | null) {
       // already summed for the leaderboard; the active loan row carries its product.
       const myDebt = playerId ? (debtByPlayer[playerId] ?? 0) : 0
       const myActiveLoan = myLoansData.find((l: any) => l.status === 'active')
+      // "Received" PvP contracts: pending/countered where it's the caller's turn
+      // (i.e. they didn't make the latest live offer). Mirrors usePvpData's bucketing.
+      const pvpReceived = myPvpData.map(normalizeChallenge).filter(
+        c =>
+          (c.status === 'pending' || c.status === 'countered') &&
+          !(c.activeOfferBy && c.activeOfferBy === playerId),
+      ).length
+
       setDebt(myDebt)
+      setPvpReceivedCount(pvpReceived)
       setActiveLoan(
         myActiveLoan
           ? {
@@ -422,5 +440,5 @@ export function usePinsinoData(playerId: string | null) {
 
   useEffect(() => { load() }, [load])
 
-  return { loading, balance, debt, netWorth: balance - debt, activeLoan, openLines, myBets, weekBets, settledBets, leaderboard, myBetMarketIds, currentWeekId, currentSeasonId, reload: load }
+  return { loading, balance, debt, netWorth: balance - debt, activeLoan, pvpReceivedCount, openLines, myBets, weekBets, settledBets, leaderboard, myBetMarketIds, currentWeekId, currentSeasonId, reload: load }
 }

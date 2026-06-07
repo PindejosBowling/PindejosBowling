@@ -35,7 +35,7 @@ export default function PinsinoScreen() {
   const playerName = useAuthStore(s => s.playerName)
   const navigation = useNavigation<PinsinoNav>()
 
-  const { loading, balance, debt, netWorth, leaderboard, reload } = usePinsinoData(playerId)
+  const { loading, balance, debt, netWorth, leaderboard, pvpReceivedCount, reload } = usePinsinoData(playerId)
   const { refreshing, onRefresh } = useRefresh(reload)
 
   if (loading) return <LoadingView label="Loading…" />
@@ -88,17 +88,26 @@ export default function PinsinoScreen() {
 
         {/* Subpage menu */}
         <View style={styles.grid}>
-          {MENU_TILES.map(tile => (
-            <TouchableOpacity
-              key={tile.route}
-              style={styles.tile}
-              onPress={() => navigation.navigate(tile.route)}
-              activeOpacity={0.7}
-            >
-              <Text style={styles.tileIcon}>{tile.icon}</Text>
-              <Text style={styles.tileLabel}>{tile.label}</Text>
-            </TouchableOpacity>
-          ))}
+          {MENU_TILES.map(tile => {
+            // Outstanding "Received" PvP contracts → notification badge on the PvP tile.
+            const badge = tile.route === 'PvP' ? pvpReceivedCount : 0
+            return (
+              <TouchableOpacity
+                key={tile.route}
+                style={styles.tile}
+                onPress={() => navigation.navigate(tile.route)}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.tileIcon}>{tile.icon}</Text>
+                <Text style={styles.tileLabel}>{tile.label}</Text>
+                {badge > 0 && (
+                  <View style={styles.badge}>
+                    <Text style={styles.badgeText}>{badge > 99 ? '99+' : badge}</Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+            )
+          })}
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -194,6 +203,25 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     minHeight: 84,
+    position: 'relative',
+  },
+  badge: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    minWidth: 20,
+    height: 20,
+    paddingHorizontal: 5,
+    borderRadius: 10,
+    backgroundColor: colors.danger,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  badgeText: {
+    fontFamily: fonts.barlowCondensedHeavy,
+    fontSize: 12,
+    color: colors.bg,
+    lineHeight: 14,
   },
   tileIcon: { fontSize: 26, marginBottom: 6 },
   tileLabel: {
