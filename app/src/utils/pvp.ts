@@ -33,7 +33,7 @@ export const CONTRACT_TYPE_RULE: Record<string, string> = {
 // (the DB still supports prop_duel; CONTRACT_TYPE_LABEL/RULE keep its strings so
 // any legacy prop_duel rows still render).
 export const CONTRACT_TYPE_OPTIONS: { key: PvpContractType; label: string }[] = [
-  { key: 'line_duel', label: 'Line' },
+  { key: 'line_duel', label: 'Line Duel' },
   { key: 'raw_score_duel', label: 'Raw Score' },
   { key: 'custom', label: 'Custom' },
 ]

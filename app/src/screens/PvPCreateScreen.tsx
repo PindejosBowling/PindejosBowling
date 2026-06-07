@@ -41,7 +41,12 @@ export default function PvPCreateScreen() {
   // Loaded context
   const [weekId, setWeekId] = useState<string | null>(null)
   const [weekNumber, setWeekNumber] = useState<number | null>(null)
+  const [seasonId, setSeasonId] = useState<string | null>(null)
   const [balance, setBalance] = useState(0)
+  // Line Duel lines-to-beat (snapshotted on the contract at create). My line is
+  // always known; the opponent's is known only once a specific opponent is set.
+  const [myLine, setMyLine] = useState<number | null>(null)
+  const [opponentLine, setOpponentLine] = useState<number | null>(null)
   const [opponents, setOpponents] = useState<OpponentOpt[]>([])
   const [gameNumbers, setGameNumbers] = useState<number[]>([])
   const [propMarkets, setPropMarkets] = useState<PropMarket[]>([])
@@ -69,6 +74,7 @@ export default function PvPCreateScreen() {
       const wId = weekRes.data?.id ?? null
       setWeekId(wId)
       setWeekNumber(weekRes.data?.week_number ?? null)
+      setSeasonId(seasonId)
 
       const fetches: PromiseLike<any>[] = []
       let playerRows: any[] = []
@@ -79,6 +85,7 @@ export default function PvPCreateScreen() {
       fetches.push(playersDb.listActive().then(({ data }) => { playerRows = data ?? [] }))
       if (playerId && seasonId) {
         fetches.push(pinLedger.listByPlayerSeason(playerId, seasonId).then(({ data }) => { ledgerRows = data ?? [] }))
+        fetches.push(pvpChallenges.projectedLine(playerId, seasonId).then(({ data }) => { setMyLine(data != null ? Number(data) : null) }))
       }
       if (wId) {
         fetches.push(games.listByWeek(wId).then(({ data }) => { gameRows = data ?? [] }))
@@ -135,6 +142,20 @@ export default function PvPCreateScreen() {
 
   useEffect(() => { load() /* eslint-disable-next-line */ }, [playerId])
   const { refreshing, onRefresh } = useRefresh(load)
+
+  // Preview the named opponent's line-to-beat for a Line Duel. Cleared for the
+  // open board (the taker's line is set when they engage) or non-line contracts.
+  useEffect(() => {
+    if (contractType !== 'line_duel' || openBoard || !opponentId || !seasonId) {
+      setOpponentLine(null)
+      return
+    }
+    let active = true
+    pvpChallenges.projectedLine(opponentId, seasonId).then(({ data }) => {
+      if (active) setOpponentLine(data != null ? Number(data) : null)
+    })
+    return () => { active = false }
+  }, [contractType, openBoard, opponentId, seasonId])
 
   const stakeNum = parseInt(stake, 10)
   // Opponent's stake mirrors yours unless custom stakes are toggled on.
@@ -240,6 +261,25 @@ export default function PvPCreateScreen() {
         <Text style={styles.label}>CONTRACT TYPE</Text>
         <ToggleGroup options={CONTRACT_TYPE_OPTIONS} value={contractType} onChange={k => setContractType(k as PvpContractType)} style={styles.toggle} />
         <Text style={styles.contractRule}>{CONTRACT_TYPE_RULE[contractType]}</Text>
+
+        {/* Lines to beat (Line Duel only) — frozen onto the contract at create */}
+        {contractType === 'line_duel' && (
+          <>
+            <Text style={styles.label}>LINES TO BEAT</Text>
+            <View style={styles.linesCard}>
+              <View style={styles.lineRow}>
+                <Text style={styles.lineName}>Your line</Text>
+                <Text style={styles.lineValue}>{myLine != null ? myLine.toFixed(1) : '—'}</Text>
+              </View>
+              <View style={styles.lineRow}>
+                <Text style={styles.lineName}>{opponentName ?? 'Opponent'}</Text>
+                <Text style={styles.lineValue}>
+                  {openBoard ? 'Set when taken' : opponentLine != null ? opponentLine.toFixed(1) : '—'}
+                </Text>
+              </View>
+            </View>
+          </>
+        )}
 
         {/* Scope */}
         <Text style={styles.label}>WEEK {weekNumber ?? '—'} · SCOPE</Text>
@@ -381,6 +421,20 @@ export default function PvPCreateScreen() {
         {/* Confirmation panel */}
         <View style={styles.confirmCard}>
           <Text style={styles.confirmTitle}>{CONTRACT_TYPE_LABEL[contractType]}</Text>
+          {contractType === 'line_duel' && (
+            <>
+              <View style={styles.confirmRow}>
+                <Text style={styles.confirmLabel}>Your line</Text>
+                <Text style={styles.confirmValue}>{myLine != null ? myLine.toFixed(1) : '—'}</Text>
+              </View>
+              <View style={styles.confirmRow}>
+                <Text style={styles.confirmLabel}>{opponentName ?? "Opponent's"} line</Text>
+                <Text style={styles.confirmValue}>
+                  {openBoard ? 'Set when taken' : opponentLine != null ? opponentLine.toFixed(1) : '—'}
+                </Text>
+              </View>
+            </>
+          )}
           <View style={styles.confirmRow}>
             <Text style={styles.confirmLabel}>Your stake</Text>
             <Text style={styles.confirmValue}>{validMyStake ? stakeNum.toLocaleString() : '—'} pins</Text>
@@ -510,6 +564,18 @@ const styles = StyleSheet.create({
   propRowOn: { backgroundColor: colors.accentDim, borderColor: colors.accent },
   propName: { fontFamily: fonts.barlowCondensed, fontSize: 15, color: colors.text },
   propLine: { fontFamily: fonts.barlowCondensed, fontSize: 14, color: colors.muted },
+
+  linesCard: {
+    backgroundColor: colors.surface2,
+    borderRadius: radius.cardSm,
+    borderWidth: 1,
+    borderColor: colors.border2,
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+  },
+  lineRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 7 },
+  lineName: { fontFamily: fonts.barlowCondensed, fontSize: 15, color: colors.text },
+  lineValue: { fontFamily: fonts.barlowCondensedHeavy, fontSize: 16, color: colors.accent },
 
   input: {
     backgroundColor: colors.surface2,

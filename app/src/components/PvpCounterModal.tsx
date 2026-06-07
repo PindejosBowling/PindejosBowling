@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
   Modal, View, Text, TextInput, TouchableOpacity, StyleSheet,
   KeyboardAvoidingView, Platform, ActivityIndicator, ScrollView,
@@ -6,7 +6,7 @@ import {
 import { colors, fonts, radius } from '../theme'
 import Toast from './Toast'
 import { useUiStore } from '../stores/uiStore'
-import { pvpChallenges, CounterPvpArgs } from '../utils/supabase/db'
+import { pvpChallenges, seasons, CounterPvpArgs } from '../utils/supabase/db'
 import { PVP_MIN_STAKE, CONTRACT_TYPE_LABEL } from '../utils/pvp'
 import type { PvpChallengeView } from '../hooks/usePvpData'
 
@@ -35,6 +35,28 @@ export default function PvpCounterModal({ challenge: c, viewerId, balance, onClo
   const [opponentStake, setOpponentStake] = useState(String(oppPrior))
   const [game, setGame] = useState(c.gameNumber != null ? String(c.gameNumber) : '')
   const [message, setMessage] = useState('')
+
+  // Line Duel lines-to-beat, from the viewer's perspective. Both come off the
+  // contract once snapshotted; the open-board taker (whose side is still null)
+  // gets their own line previewed so the win condition is clear before they act.
+  const isLineDuel = c.contractType === 'line_duel'
+  const myLine = iAmCreator ? c.creatorLine : c.counterpartyLine
+  const oppLine = iAmCreator ? c.counterpartyLine : c.creatorLine
+  const oppName = iAmCreator ? (c.counterpartyName ?? 'Taker') : c.creatorName
+  const [takerLine, setTakerLine] = useState<number | null>(null)
+  useEffect(() => {
+    if (!isLineDuel || myLine != null || !viewerId) return
+    let active = true
+    seasons.getCurrent().then(({ data }) => {
+      const seasonId = data?.id
+      if (!seasonId) return
+      pvpChallenges.projectedLine(viewerId, seasonId).then(({ data: line }) => {
+        if (active) setTakerLine(line != null ? Number(line) : null)
+      })
+    })
+    return () => { active = false }
+  }, [isLineDuel, myLine, viewerId])
+  const myLineShown = myLine ?? takerLine
 
   // Prop and custom contracts have no game scope — the counter renegotiates the
   // stakes only (custom keeps its title/win-condition; prop keeps its market side).
@@ -151,6 +173,22 @@ export default function PvpCounterModal({ challenge: c, viewerId, balance, onClo
               maxLength={240}
             />
 
+            {isLineDuel && (
+              <>
+                <Text style={styles.label}>LINES TO BEAT</Text>
+                <View style={styles.linesCard}>
+                  <View style={styles.lineRow}>
+                    <Text style={styles.lineName}>Your line</Text>
+                    <Text style={styles.lineValue}>{myLineShown != null ? myLineShown.toFixed(1) : '—'}</Text>
+                  </View>
+                  <View style={styles.lineRow}>
+                    <Text style={styles.lineName}>{oppName}</Text>
+                    <Text style={styles.lineValue}>{oppLine != null ? oppLine.toFixed(1) : '—'}</Text>
+                  </View>
+                </View>
+              </>
+            )}
+
             <View style={styles.potRow}>
               <Text style={styles.potLabel}>New pot (winner takes all)</Text>
               <Text style={styles.potValue}>{pot.toLocaleString()} pins</Text>
@@ -208,6 +246,17 @@ const styles = StyleSheet.create({
   },
   messageInput: { fontFamily: fonts.barlow, fontSize: 15, minHeight: 56, textAlignVertical: 'top' },
   help: { fontFamily: fonts.barlow, fontSize: 12, color: colors.muted, marginTop: 6 },
+  linesCard: {
+    backgroundColor: colors.surface2,
+    borderRadius: radius.cardSm,
+    borderWidth: 1,
+    borderColor: colors.border2,
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+  },
+  lineRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 7 },
+  lineName: { fontFamily: fonts.barlowCondensed, fontSize: 15, color: colors.text },
+  lineValue: { fontFamily: fonts.barlowCondensedHeavy, fontSize: 16, color: colors.accent },
   potRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', marginTop: 18 },
   potLabel: { fontFamily: fonts.barlow, fontSize: 13, color: colors.muted },
   potValue: { fontFamily: fonts.barlowCondensedHeavy, fontSize: 18, color: colors.accent },

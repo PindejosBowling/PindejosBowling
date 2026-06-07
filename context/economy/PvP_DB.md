@@ -342,12 +342,19 @@ p_creator_selection text, p_message text`.
 5. **No-tank guard (design §2 / anti-tank trigger):** reject contract shapes that let a
    player profit from underperforming. (Line/Prop/Raw duels are overperformance- or
    neutral-framed; document that any future "under your own line" type is disallowed.)
-6. INSERT `pvp_challenges` (`status='pending'`, symmetric stakes
+6. **Snapshot Line Duel lines (design §11.1, encoded up front):** for `line_duel`,
+   compute `creator_line = pvp_player_line(creator, season)` always, and
+   `counterparty_line = pvp_player_line(counterparty, season)` when a named opponent is
+   given (NULL for an open board — filled when a taker engages). Other types leave both
+   NULL. Lines are a player+season projection, stable within an unarchived week, so they
+   are fully determined here and stay fixed through negotiation; the win condition is
+   therefore visible during create/counter, not just after accept.
+7. INSERT `pvp_challenges` (`status='pending'`, symmetric stakes
    `creator_stake = counterparty_stake = p_stake`, `total_pot = 2*p_stake`,
-   `payout_amount = total_pot` — winner takes the whole pot, no rake).
-   **No escrow.** Capture `v_challenge_id`.
-7. INSERT the original `pvp_challenge_offers` row (`offer_no = 1`, snapshot of terms).
-8. `RETURN v_challenge_id`.
+   `payout_amount = total_pot` — winner takes the whole pot, no rake), including the
+   snapshotted `creator_line`/`counterparty_line`. **No escrow.** Capture `v_challenge_id`.
+8. INSERT the original `pvp_challenge_offers` row (`offer_no = 1`, snapshot of terms).
+9. `RETURN v_challenge_id`.
 
 ### `counter_pvp_challenge(...) RETURNS uuid` — `authenticated`
 Params: `p_challenge_id uuid, p_stake int, p_contract_type text, p_game_number int,
@@ -365,7 +372,9 @@ p_prop_market_id uuid, p_selection text, p_message text`.
 6. `UPDATE pvp_challenges` to the new current terms, recompute
    `total_pot` and `payout_amount` (`= total_pot`), set `status='countered'`,
    and set `counterparty_player_id` if it was an open-board contract now being
-   negotiated by a specific player.
+   negotiated by a specific player. For `line_duel`, (re)snapshot
+   `creator_line`/`counterparty_line` for the now-resolved parties (this is where an
+   open-board taker's line first gets captured, since countering names them).
 7. `RETURN v_challenge_id`.
 
 ### `accept_pvp_challenge(p_challenge_id uuid) RETURNS void` — `authenticated`
@@ -383,9 +392,11 @@ The escrow moment. Mirror `place_house_bet`'s double-entry for each side.
    `week_id` = challenge week, both rows `bet_id`/`loan_ledger_id` NULL), then a matching
    `pvp_ledger` pair (`type='stake'`, signs mirroring), and `UPDATE` both pin rows'
    `pvp_ledger_id`. (4 pin rows + 4 pvp_ledger rows total.)
-6. **Snapshot settlement basis:**
-   - `line_duel`: `creator_line = pvp_player_line(creator, season)`,
-     `counterparty_line = pvp_player_line(counterparty, season)`.
+6. **Fill settlement basis if still missing:**
+   - `line_duel`: `creator_line = COALESCE(creator_line, pvp_player_line(creator, season))`,
+     `counterparty_line = COALESCE(counterparty_line, pvp_player_line(counterparty, season))`.
+     Lines are normally snapshotted at create/counter; this only fills an open-board taker's
+     line (NULL until now) and never overwrites a value the parties already saw.
    - `prop_duel`: nothing to snapshot beyond the already-stored `prop_market_id` +
      selections (the market's `line` is read at settlement).
    - `raw_score_duel`: nothing to snapshot.

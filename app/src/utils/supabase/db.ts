@@ -622,6 +622,11 @@ export const pvpChallenges = {
       p_selection: a.selection as string,
       p_message: a.message as string,
     }),
+  // The Line Duel snapshot value for a player (floor(season avg)+0.5; league-avg
+  // fallback). Used to preview each side's line-to-beat during create/counter
+  // before it's frozen onto the contract.
+  projectedLine: (playerId: string, seasonId: string) =>
+    supabase.rpc('pvp_player_line', { p_player_id: playerId, p_season_id: seasonId }),
   accept: (challengeId: string) =>
     supabase.rpc('accept_pvp_challenge', { p_challenge_id: challengeId }),
   decline: (challengeId: string) =>

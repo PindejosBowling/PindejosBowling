@@ -200,12 +200,18 @@ Form fields:
   (required for Line/Raw; Prop Duel picks an existing market instead).
 - **Prop Duel only**: pick the subject's open `bet_market` + the creator's side
   (`over`/`under`); reuse the sportsbook market reads + `OddsBlock` for display.
+- **Lines to beat (Line Duel only)**: shows your line (`pvpChallenges.projectedLine`) and,
+  for a named opponent, theirs — these are the values snapshotted onto the contract at
+  create. For an open board the opponent line reads "Set when taken" (the taker's line is
+  captured when they engage).
 - **Stake** (numeric; min 10, ≤ balance — client mirror of the RPC).
 - **Optional message**, **expiration** (default = week lock = `bowled_at`).
 - **Confirmation panel** (always shown before submit — design §8.1, §4.3): **stake
   required, total pot (= the winner's payout — winner takes all, no rake), the settlement
   rule in plain words, lock time, and "This does not affect bowling gameplay — always
-  no."** Submit → `pvpChallenges.create` → toast + navigate to the new detail page.
+  no."** For a Line Duel it also restates each side's line-to-beat. Submit →
+  `pvpChallenges.create` → toast + navigate to the new detail page. The counter modal
+  likewise shows both lines (computing the viewer's own when taking an open board).
 
 ### `app/src/screens/PvPChallengeDetailScreen.tsx` (new) — contract detail (design §8.4)
 From `usePvpChallengeDetail`:
