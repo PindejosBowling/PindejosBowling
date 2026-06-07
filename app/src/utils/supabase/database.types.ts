@@ -12,12 +12,38 @@ export type Database = {
   __InternalSupabase: {
     PostgrestVersion: "14.5"
   }
+  graphql_public: {
+    Tables: {
+      [_ in never]: never
+    }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      graphql: {
+        Args: {
+          extensions?: Json
+          operationName?: string
+          query?: string
+          variables?: Json
+        }
+        Returns: Json
+      }
+    }
+    Enums: {
+      [_ in never]: never
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
+  }
   public: {
     Tables: {
       activity_feed_events: {
         Row: {
           actor_player_id: string | null
           admin_payload: Json
+          bounty_post_id: string | null
           created_at: string
           event_type: string
           id: string
@@ -44,6 +70,7 @@ export type Database = {
         Insert: {
           actor_player_id?: string | null
           admin_payload?: Json
+          bounty_post_id?: string | null
           created_at?: string
           event_type: string
           id?: string
@@ -70,6 +97,7 @@ export type Database = {
         Update: {
           actor_player_id?: string | null
           admin_payload?: Json
+          bounty_post_id?: string | null
           created_at?: string
           event_type?: string
           id?: string
@@ -99,6 +127,13 @@ export type Database = {
             columns: ["actor_player_id"]
             isOneToOne: false
             referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "activity_feed_events_bounty_post_id_fkey"
+            columns: ["bounty_post_id"]
+            isOneToOne: false
+            referencedRelation: "bounty_post"
             referencedColumns: ["id"]
           },
           {
@@ -555,6 +590,260 @@ export type Database = {
           },
         ]
       }
+      bounty_hunter_stakes: {
+        Row: {
+          bounty_post_id: string
+          created_at: string
+          entered_at: string
+          entry_number: number
+          id: string
+          player_id: string
+          protected_hunter_profit: number
+          resolved_at: string | null
+          stake_amount: number
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          bounty_post_id: string
+          created_at?: string
+          entered_at?: string
+          entry_number: number
+          id?: string
+          player_id: string
+          protected_hunter_profit: number
+          resolved_at?: string | null
+          stake_amount: number
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          bounty_post_id?: string
+          created_at?: string
+          entered_at?: string
+          entry_number?: number
+          id?: string
+          player_id?: string
+          protected_hunter_profit?: number
+          resolved_at?: string | null
+          stake_amount?: number
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bounty_hunter_stakes_bounty_post_id_fkey"
+            columns: ["bounty_post_id"]
+            isOneToOne: false
+            referencedRelation: "bounty_post"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bounty_hunter_stakes_player_id_fkey"
+            columns: ["player_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      bounty_payouts: {
+        Row: {
+          bounty_post_id: string
+          bounty_settlement_id: string
+          created_at: string
+          id: string
+          is_house: boolean
+          payout_amount: number
+          player_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          bounty_post_id: string
+          bounty_settlement_id: string
+          created_at?: string
+          id?: string
+          is_house?: boolean
+          payout_amount: number
+          player_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          bounty_post_id?: string
+          bounty_settlement_id?: string
+          created_at?: string
+          id?: string
+          is_house?: boolean
+          payout_amount?: number
+          player_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bounty_payouts_bounty_post_id_fkey"
+            columns: ["bounty_post_id"]
+            isOneToOne: false
+            referencedRelation: "bounty_post"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bounty_payouts_bounty_settlement_id_fkey"
+            columns: ["bounty_settlement_id"]
+            isOneToOne: false
+            referencedRelation: "bounty_settlements"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bounty_payouts_player_id_fkey"
+            columns: ["player_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      bounty_post: {
+        Row: {
+          bounty_type: string
+          closes_at: string
+          created_at: string
+          description: string
+          house_seed_mode: string
+          hunter_stake_amount: number
+          id: string
+          season_id: string
+          sponsor_bounty_amount: number
+          sponsor_player_id: string | null
+          status: string
+          title: string
+          updated_at: string
+          week_id: string | null
+        }
+        Insert: {
+          bounty_type: string
+          closes_at: string
+          created_at?: string
+          description: string
+          house_seed_mode?: string
+          hunter_stake_amount: number
+          id?: string
+          season_id: string
+          sponsor_bounty_amount: number
+          sponsor_player_id?: string | null
+          status?: string
+          title: string
+          updated_at?: string
+          week_id?: string | null
+        }
+        Update: {
+          bounty_type?: string
+          closes_at?: string
+          created_at?: string
+          description?: string
+          house_seed_mode?: string
+          hunter_stake_amount?: number
+          id?: string
+          season_id?: string
+          sponsor_bounty_amount?: number
+          sponsor_player_id?: string | null
+          status?: string
+          title?: string
+          updated_at?: string
+          week_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bounty_post_season_id_fkey"
+            columns: ["season_id"]
+            isOneToOne: false
+            referencedRelation: "seasons"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bounty_post_sponsor_player_id_fkey"
+            columns: ["sponsor_player_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bounty_post_week_id_fkey"
+            columns: ["week_id"]
+            isOneToOne: false
+            referencedRelation: "weeks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      bounty_settlements: {
+        Row: {
+          admin_settlement_reasoning: string
+          bounty_post_id: string
+          created_at: string
+          id: string
+          settled_at: string
+          settled_by_admin_id: string
+          settlement_outcome: string
+          settlement_source: string
+          total_house_seed: number
+          total_hunter_stakes: number
+          total_pot: number
+          total_protected_hunter_profit: number
+          total_sponsor_bounty: number
+          updated_at: string
+          winner_count: number
+        }
+        Insert: {
+          admin_settlement_reasoning: string
+          bounty_post_id: string
+          created_at?: string
+          id?: string
+          settled_at?: string
+          settled_by_admin_id: string
+          settlement_outcome: string
+          settlement_source?: string
+          total_house_seed: number
+          total_hunter_stakes: number
+          total_pot: number
+          total_protected_hunter_profit: number
+          total_sponsor_bounty: number
+          updated_at?: string
+          winner_count: number
+        }
+        Update: {
+          admin_settlement_reasoning?: string
+          bounty_post_id?: string
+          created_at?: string
+          id?: string
+          settled_at?: string
+          settled_by_admin_id?: string
+          settlement_outcome?: string
+          settlement_source?: string
+          total_house_seed?: number
+          total_hunter_stakes?: number
+          total_pot?: number
+          total_protected_hunter_profit?: number
+          total_sponsor_bounty?: number
+          updated_at?: string
+          winner_count?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bounty_settlements_bounty_post_id_fkey"
+            columns: ["bounty_post_id"]
+            isOneToOne: false
+            referencedRelation: "bounty_post"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bounty_settlements_settled_by_admin_id_fkey"
+            columns: ["settled_by_admin_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       games: {
         Row: {
           created_at: string
@@ -805,6 +1094,10 @@ export type Database = {
         Row: {
           amount: number
           bet_id: string | null
+          bounty_hunter_stake_id: string | null
+          bounty_payout_id: string | null
+          bounty_post_id: string | null
+          bounty_settlement_id: string | null
           created_at: string
           description: string
           id: string
@@ -820,6 +1113,10 @@ export type Database = {
         Insert: {
           amount: number
           bet_id?: string | null
+          bounty_hunter_stake_id?: string | null
+          bounty_payout_id?: string | null
+          bounty_post_id?: string | null
+          bounty_settlement_id?: string | null
           created_at?: string
           description: string
           id?: string
@@ -835,6 +1132,10 @@ export type Database = {
         Update: {
           amount?: number
           bet_id?: string | null
+          bounty_hunter_stake_id?: string | null
+          bounty_payout_id?: string | null
+          bounty_post_id?: string | null
+          bounty_settlement_id?: string | null
           created_at?: string
           description?: string
           id?: string
@@ -853,6 +1154,34 @@ export type Database = {
             columns: ["bet_id"]
             isOneToOne: false
             referencedRelation: "bets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pin_ledger_bounty_hunter_stake_id_fkey"
+            columns: ["bounty_hunter_stake_id"]
+            isOneToOne: false
+            referencedRelation: "bounty_hunter_stakes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pin_ledger_bounty_payout_id_fkey"
+            columns: ["bounty_payout_id"]
+            isOneToOne: false
+            referencedRelation: "bounty_payouts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pin_ledger_bounty_post_id_fkey"
+            columns: ["bounty_post_id"]
+            isOneToOne: false
+            referencedRelation: "bounty_post"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pin_ledger_bounty_settlement_id_fkey"
+            columns: ["bounty_settlement_id"]
+            isOneToOne: false
+            referencedRelation: "bounty_settlements"
             referencedColumns: ["id"]
           },
           {
@@ -1585,11 +1914,13 @@ export type Database = {
         Returns: undefined
       }
       cancel_bet: { Args: { p_bet_id: string }; Returns: undefined }
+      cancel_bounty: { Args: { p_bounty_post_id: string }; Returns: undefined }
       cancel_loan: { Args: { p_loan_id: string }; Returns: undefined }
       cancel_pvp_challenge: {
         Args: { p_challenge_id: string }
         Returns: undefined
       }
+      close_bounty: { Args: { p_bounty_post_id: string }; Returns: undefined }
       close_open_pvp_challenges: {
         Args: { p_game_number: number; p_week_id: string }
         Returns: undefined
@@ -1606,6 +1937,17 @@ export type Database = {
           p_message: string
           p_prop_market_id: string
           p_selection: string
+        }
+        Returns: string
+      }
+      create_house_bounty: {
+        Args: {
+          p_closes_at: string
+          p_description: string
+          p_hunter_stake_amount: number
+          p_sponsor_bounty_amount: number
+          p_title: string
+          p_week_id: string
         }
         Returns: string
       }
@@ -1627,6 +1969,17 @@ export type Database = {
         }
         Returns: string
       }
+      create_sponsor_bounty: {
+        Args: {
+          p_closes_at: string
+          p_description: string
+          p_hunter_stake_amount: number
+          p_sponsor_bounty_amount: number
+          p_title: string
+          p_week_id: string
+        }
+        Returns: string
+      }
       create_system_activity_event: {
         Args: {
           p_event_type: string
@@ -1642,6 +1995,10 @@ export type Database = {
         Args: { p_challenge_id: string }
         Returns: undefined
       }
+      enter_bounty_as_hunter: {
+        Args: { p_bounty_post_id: string }
+        Returns: string
+      }
       is_registered_player: { Args: { phone: string }; Returns: boolean }
       place_house_bet: {
         Args: { p_selection_ids: string[]; p_stake: number }
@@ -1652,6 +2009,7 @@ export type Database = {
         Args: {
           p_actor_player_id: string
           p_admin_payload: Json
+          p_bounty_post_id?: string
           p_event_type: string
           p_importance: string
           p_loan_id: string
@@ -1687,6 +2045,14 @@ export type Database = {
       }
       settle_betting_for_week: {
         Args: { p_week_id: string }
+        Returns: undefined
+      }
+      settle_bounty: {
+        Args: {
+          p_admin_settlement_reasoning: string
+          p_bounty_post_id: string
+          p_outcome: string
+        }
         Returns: undefined
       }
       settle_loans_for_season_close: {
@@ -1852,6 +2218,9 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
+  graphql_public: {
+    Enums: {},
+  },
   public: {
     Enums: {},
   },
