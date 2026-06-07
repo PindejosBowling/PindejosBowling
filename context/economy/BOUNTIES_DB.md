@@ -1,5 +1,21 @@
 # Bounty Board — Database Implementation Spec
 
+> **⚠️ Superseded by the "All Comers" redesign.** This spec describes the original
+> early-hunter anti-dilution model (`floor(S / entry_number)` + House seed). The
+> mechanic was redesigned — see `ECONOMIC_DESIGN_BOUNTIES.md` §13–§14. The **as-built**
+> current schema/RPCs are the original four migrations (`20260607215737`–`…215740`)
+> **plus** `supabase/migrations/20260607220000_bounty_all_comers.sql`, which:
+> adds `bounty_post.reward_per_hunter` + `max_hunters`; repurposes `sponsor_bounty_amount`
+> to hold the total sponsor escrow `reward × max_hunters`; rebuilds `create_sponsor_bounty`
+> / `create_house_bounty` with the arg list
+> `(week, title, description, reward_per_hunter, hunter_stake_amount, max_hunters, closes_at)`;
+> caps `enter_bounty_as_hunter` at `max_hunters` and snapshots the flat reward into
+> `protected_hunter_profit`; and pays `H + R` per hunter on a hunter win (returning the
+> sponsor's unused `(m − n) × R` escrow), `n × H` to the sponsor on a sponsor win. The
+> House seed is `0` for sponsor bounties and `n × R` only for a House bounty that loses.
+> Sections below that reference per-entry dilution / `floor(S/k)` / House seed are
+> historical; read them through that migration.
+
 Handoff spec for the **database layer** of the Bounty Board feature. Self-contained and
 executable independently of the app-layer spec (`economy/BOUNTIES_APP.md`), which depends on
 this being applied (`supabase db push`) + `app/src/utils/supabase/database.types.ts`

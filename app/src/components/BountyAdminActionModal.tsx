@@ -24,7 +24,7 @@ export default function BountyAdminActionModal({ bounty: b, onClose, onDone }: P
   const [reasoning, setReasoning] = useState('')
   const [saving, setSaving] = useState(false)
 
-  const econ = useMemo(() => bountyEconomics(b.sponsorBountyAmount, b.hunters), [b])
+  const econ = useMemo(() => bountyEconomics(b.rewardPerHunter, b.hunters), [b])
 
   async function run(label: string, fn: () => PromiseLike<{ error: any }>) {
     setSaving(true)
@@ -102,14 +102,16 @@ export default function BountyAdminActionModal({ bounty: b, onClose, onDone }: P
                 />
 
                 <View style={styles.previewCard}>
-                  <View style={styles.kv}><Text style={styles.muted}>Sponsor wins → sponsor receives</Text><Text style={styles.kvValue}>{econ.totalPot.toLocaleString()}</Text></View>
+                  <View style={styles.kv}><Text style={styles.muted}>Sponsor wins → sponsor keeps</Text><Text style={styles.kvValue}>{econ.sponsorTakeOnWin.toLocaleString()}</Text></View>
                   {b.hunters.map(h => (
                     <View key={h.id} style={styles.kv}>
                       <Text style={styles.muted}>Hunters win → {h.playerName ?? `Hunter #${h.entryNumber}`}</Text>
-                      <Text style={styles.kvValue}>{hunterPayout(h.stakeAmount, h.protectedProfit).toLocaleString()}</Text>
+                      <Text style={styles.kvValue}>{hunterPayout(h.stakeAmount, b.rewardPerHunter).toLocaleString()}</Text>
                     </View>
                   ))}
-                  <View style={styles.kv}><Text style={styles.muted}>House seed (hunter win)</Text><Text style={styles.kvValue}>{econ.totalHouseSeed.toLocaleString()}</Text></View>
+                  {b.bountyType === 'house_bounty' && (
+                    <View style={styles.kv}><Text style={styles.muted}>House subsidy (hunter win)</Text><Text style={styles.kvValue}>{econ.totalReward.toLocaleString()}</Text></View>
+                  )}
                 </View>
 
                 <TouchableOpacity style={styles.actBtn} disabled={saving} onPress={() => settle('sponsor_win', 'Sponsor wins')} activeOpacity={0.7}>

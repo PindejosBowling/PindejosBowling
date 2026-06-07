@@ -36,14 +36,15 @@ export default function BountyDetailScreen() {
 
   // Live economics over the current hunters (pre-settlement estimate, design §34.4).
   const econ = useMemo(
-    () => (bounty ? bountyEconomics(bounty.sponsorBountyAmount, hunters) : null),
+    () => (bounty ? bountyEconomics(bounty.rewardPerHunter, hunters) : null),
     [bounty, hunters],
   )
 
-  // The viewer can join when the bounty is open, they aren't the sponsor, and they
-  // haven't already entered (design §29.2).
+  // The viewer can join when the bounty is open, has a free slot, they aren't the
+  // sponsor, and they haven't already entered (design §29.2).
   const canJoin = useMemo(() => {
     if (!bounty || bounty.status !== 'open' || !playerId) return false
+    if (bounty.slotsRemaining <= 0) return false
     if (bounty.sponsorPlayerId === playerId) return false
     return !hunters.some(h => h.playerId === playerId)
   }, [bounty, hunters, playerId])
@@ -76,17 +77,21 @@ export default function BountyDetailScreen() {
 
         <View style={styles.amountRow}>
           <View style={styles.amountCell}>
-            <Text style={styles.amountValue}>{bounty.sponsorBountyAmount.toLocaleString()}</Text>
-            <Text style={styles.amountLabel}>SPONSOR BOUNTY</Text>
-          </View>
-          <View style={styles.amountCell}>
             <Text style={styles.amountValue}>{bounty.hunterStakeAmount.toLocaleString()}</Text>
             <Text style={styles.amountLabel}>HUNTER STAKE</Text>
+          </View>
+          <View style={styles.amountCell}>
+            <Text style={styles.amountValue}>+{bounty.rewardPerHunter.toLocaleString()}</Text>
+            <Text style={styles.amountLabel}>REWARD EACH</Text>
+          </View>
+          <View style={styles.amountCell}>
+            <Text style={styles.amountValue}>{bounty.hunterCount}/{bounty.maxHunters}</Text>
+            <Text style={styles.amountLabel}>HUNTERS</Text>
           </View>
         </View>
 
         {/* Hunters */}
-        <Text style={styles.sectionLabel}>HUNTERS ({hunters.length})</Text>
+        <Text style={styles.sectionLabel}>HUNTERS ({hunters.length}/{bounty.maxHunters})</Text>
         {hunters.length === 0 ? (
           <View style={styles.card}><Text style={styles.muted}>No hunters yet.</Text></View>
         ) : (
@@ -94,7 +99,7 @@ export default function BountyDetailScreen() {
             {hunters.map((h, i) => (
               <View key={h.id} style={[styles.listRow, i < hunters.length - 1 && styles.listRowBorder]}>
                 <Text style={styles.listPrimary}>#{h.entryNumber} · {h.playerName ?? 'Hunter'}</Text>
-                <Text style={styles.listValue}>+{h.protectedProfit.toLocaleString()} protected</Text>
+                <Text style={styles.listValue}>+{bounty.rewardPerHunter.toLocaleString()} reward</Text>
               </View>
             ))}
           </View>
@@ -103,12 +108,9 @@ export default function BountyDetailScreen() {
         {/* Pot economics */}
         {econ && (
           <View style={styles.card}>
-            <View style={styles.kv}><Text style={styles.muted}>Total protected profit</Text><Text style={styles.kvValue}>{econ.totalProtectedProfit.toLocaleString()}</Text></View>
-            <View style={styles.kv}>
-              <Text style={styles.muted}>{settlement ? 'Final House seed' : 'Estimated House seed'}</Text>
-              <Text style={styles.kvValue}>{(settlement?.totalHouseSeed ?? econ.totalHouseSeed).toLocaleString()}</Text>
-            </View>
-            <View style={styles.kv}><Text style={styles.muted}>Total pot</Text><Text style={styles.kvAccent}>{(settlement?.totalPot ?? econ.totalPot).toLocaleString()}</Text></View>
+            <View style={styles.kv}><Text style={styles.muted}>Reward per hunter</Text><Text style={styles.kvValue}>+{bounty.rewardPerHunter.toLocaleString()}</Text></View>
+            <View style={styles.kv}><Text style={styles.muted}>Total reward if hunters win</Text><Text style={styles.kvValue}>{econ.totalReward.toLocaleString()}</Text></View>
+            <View style={styles.kv}><Text style={styles.muted}>Total paid to hunters</Text><Text style={styles.kvAccent}>{(settlement?.totalPot ?? econ.totalHunterPayout).toLocaleString()}</Text></View>
           </View>
         )}
 
@@ -117,11 +119,11 @@ export default function BountyDetailScreen() {
           <>
             <Text style={styles.sectionLabel}>IF IT SETTLES NOW</Text>
             <View style={styles.card}>
-              <View style={styles.kv}><Text style={styles.muted}>Sponsor wins → sponsor receives</Text><Text style={styles.kvValue}>{econ.totalPot.toLocaleString()}</Text></View>
+              <View style={styles.kv}><Text style={styles.muted}>Sponsor wins → sponsor keeps</Text><Text style={styles.kvValue}>{econ.sponsorTakeOnWin.toLocaleString()}</Text></View>
               {hunters.map(h => (
                 <View key={h.id} style={styles.kv}>
                   <Text style={styles.muted}>Hunters win → {h.playerName ?? `Hunter #${h.entryNumber}`}</Text>
-                  <Text style={styles.kvValue}>{hunterPayout(h.stakeAmount, h.protectedProfit).toLocaleString()}</Text>
+                  <Text style={styles.kvValue}>{hunterPayout(h.stakeAmount, bounty.rewardPerHunter).toLocaleString()}</Text>
                 </View>
               ))}
             </View>
@@ -135,11 +137,12 @@ export default function BountyDetailScreen() {
             <View style={styles.card}>
               <Text style={styles.reasoningLabel}>ADMIN REASONING</Text>
               <Text style={styles.reasoning}>{settlement.reasoning}</Text>
-              <View style={[styles.kv, { marginTop: 10 }]}><Text style={styles.muted}>Total sponsor bounty</Text><Text style={styles.kvValue}>{settlement.totalSponsorBounty.toLocaleString()}</Text></View>
-              <View style={styles.kv}><Text style={styles.muted}>Total hunter stakes</Text><Text style={styles.kvValue}>{settlement.totalHunterStakes.toLocaleString()}</Text></View>
-              <View style={styles.kv}><Text style={styles.muted}>Total protected profit</Text><Text style={styles.kvValue}>{settlement.totalProtectedProfit.toLocaleString()}</Text></View>
-              <View style={styles.kv}><Text style={styles.muted}>Final House seed</Text><Text style={styles.kvValue}>{settlement.totalHouseSeed.toLocaleString()}</Text></View>
-              <View style={styles.kv}><Text style={styles.muted}>Total pot</Text><Text style={styles.kvAccent}>{settlement.totalPot.toLocaleString()}</Text></View>
+              <View style={[styles.kv, { marginTop: 10 }]}><Text style={styles.muted}>Total hunter stakes</Text><Text style={styles.kvValue}>{settlement.totalHunterStakes.toLocaleString()}</Text></View>
+              <View style={styles.kv}><Text style={styles.muted}>Total reward paid</Text><Text style={styles.kvValue}>{settlement.totalReward.toLocaleString()}</Text></View>
+              {settlement.houseSeed > 0 && (
+                <View style={styles.kv}><Text style={styles.muted}>House subsidy</Text><Text style={styles.kvValue}>{settlement.houseSeed.toLocaleString()}</Text></View>
+              )}
+              <View style={styles.kv}><Text style={styles.muted}>{settlement.outcome === 'sponsor_win' ? 'Sponsor winnings' : 'Total paid to hunters'}</Text><Text style={styles.kvAccent}>{settlement.totalPot.toLocaleString()}</Text></View>
             </View>
             {payouts.filter(p => !p.isHouse).length > 0 && (
               <View style={styles.card}>

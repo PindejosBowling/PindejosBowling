@@ -9,8 +9,8 @@ import Toast from './Toast'
 import { useUiStore } from '../stores/uiStore'
 import { bountyPosts } from '../utils/supabase/db'
 import {
-  MIN_SPONSOR_BOUNTY, MIN_HUNTER_STAKE, MAX_TITLE_LEN, MAX_DESCRIPTION_LEN,
-  defaultBountyCloseAt, formatCloseTime,
+  MIN_REWARD_PER_HUNTER, MIN_HUNTER_STAKE, MIN_MAX_HUNTERS, MAX_MAX_HUNTERS,
+  MAX_TITLE_LEN, MAX_DESCRIPTION_LEN, defaultBountyCloseAt, formatCloseTime,
 } from '../utils/bounty'
 
 interface Props {
@@ -25,25 +25,28 @@ export default function BountyHouseCreateModal({ weekId, onClose, onDone }: Prop
   const { showToast } = useUiStore()
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
-  const [sponsorAmount, setSponsorAmount] = useState('')
+  const [reward, setReward] = useState('')
   const [hunterStake, setHunterStake] = useState('')
+  const [maxHunters, setMaxHunters] = useState('')
   const [closesAt, setClosesAt] = useState<Date>(() => defaultBountyCloseAt())
   const [pickerOpen, setPickerOpen] = useState(false)
   const [saving, setSaving] = useState(false)
 
-  const S = Number(sponsorAmount) || 0
+  const R = Number(reward) || 0
   const H = Number(hunterStake) || 0
+  const m = Number(maxHunters) || 0
 
   const error = useMemo<string | null>(() => {
     if (!title.trim()) return 'Add a title'
     if (title.length > MAX_TITLE_LEN) return `Title must be ≤ ${MAX_TITLE_LEN} characters`
     if (!description.trim()) return 'Add a description'
     if (description.length > MAX_DESCRIPTION_LEN) return `Description must be ≤ ${MAX_DESCRIPTION_LEN} characters`
-    if (S < MIN_SPONSOR_BOUNTY) return `Sponsor bounty must be at least ${MIN_SPONSOR_BOUNTY}`
+    if (R < MIN_REWARD_PER_HUNTER) return `Reward per hunter must be at least ${MIN_REWARD_PER_HUNTER}`
     if (H < MIN_HUNTER_STAKE) return `Hunter stake must be at least ${MIN_HUNTER_STAKE}`
+    if (m < MIN_MAX_HUNTERS || m > MAX_MAX_HUNTERS) return `Max hunters must be between ${MIN_MAX_HUNTERS} and ${MAX_MAX_HUNTERS}`
     if (closesAt.getTime() <= Date.now()) return 'Close time must be in the future'
     return null
-  }, [title, description, S, H, closesAt])
+  }, [title, description, R, H, m, closesAt])
 
   async function submit() {
     if (saving || error) return
@@ -54,8 +57,9 @@ export default function BountyHouseCreateModal({ weekId, onClose, onDone }: Prop
         weekId,
         title: title.trim(),
         description: description.trim(),
-        sponsorBountyAmount: S,
+        rewardPerHunter: R,
         hunterStakeAmount: H,
+        maxHunters: m,
         closesAt: closesAt.toISOString(),
       })
       if (rpcErr) { showToast(rpcErr.message, 'error'); return }
@@ -99,12 +103,16 @@ export default function BountyHouseCreateModal({ weekId, onClose, onDone }: Prop
 
             <View style={styles.row}>
               <View style={styles.rowCol}>
-                <Text style={styles.label}>SPONSOR BOUNTY</Text>
-                <TextInput style={styles.input} value={sponsorAmount} onChangeText={t => setSponsorAmount(t.replace(/[^0-9]/g, ''))} placeholder={`min ${MIN_SPONSOR_BOUNTY}`} placeholderTextColor={colors.muted2} keyboardType="number-pad" />
+                <Text style={styles.label}>REWARD / HUNTER</Text>
+                <TextInput style={styles.input} value={reward} onChangeText={t => setReward(t.replace(/[^0-9]/g, ''))} placeholder={`min ${MIN_REWARD_PER_HUNTER}`} placeholderTextColor={colors.muted2} keyboardType="number-pad" />
               </View>
               <View style={styles.rowCol}>
                 <Text style={styles.label}>HUNTER STAKE</Text>
                 <TextInput style={styles.input} value={hunterStake} onChangeText={t => setHunterStake(t.replace(/[^0-9]/g, ''))} placeholder={`min ${MIN_HUNTER_STAKE}`} placeholderTextColor={colors.muted2} keyboardType="number-pad" />
+              </View>
+              <View style={styles.rowCol}>
+                <Text style={styles.label}>MAX HUNTERS</Text>
+                <TextInput style={styles.input} value={maxHunters} onChangeText={t => setMaxHunters(t.replace(/[^0-9]/g, ''))} placeholder={`1–${MAX_MAX_HUNTERS}`} placeholderTextColor={colors.muted2} keyboardType="number-pad" />
               </View>
             </View>
 

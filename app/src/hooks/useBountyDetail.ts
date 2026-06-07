@@ -6,11 +6,11 @@ import { normalizeBounty, BountyView, BountyHunterView } from './useBountyBoardD
 export interface BountySettlementView {
   id: string
   outcome: 'sponsor_win' | 'hunter_win'
-  totalSponsorBounty: number
-  totalHunterStakes: number
-  totalProtectedProfit: number
-  totalHouseSeed: number
-  totalPot: number
+  sponsorEscrow: number       // total_sponsor_bounty = R × max_hunters
+  totalHunterStakes: number   // n × H
+  totalReward: number         // total_protected_hunter_profit = n × R
+  houseSeed: number           // House subsidy (House bounty hunter win); else 0
+  totalPot: number            // headline winnings to the winning side
   winnerCount: number
   reasoning: string
   settledAt: string
@@ -77,10 +77,10 @@ export function useBountyDetail(bountyId: string | null): BountyDetailData {
       setSettlement(settleRow ? {
         id: settleRow.id,
         outcome: settleRow.settlement_outcome,
-        totalSponsorBounty: settleRow.total_sponsor_bounty,
+        sponsorEscrow: settleRow.total_sponsor_bounty,
         totalHunterStakes: settleRow.total_hunter_stakes,
-        totalProtectedProfit: settleRow.total_protected_hunter_profit,
-        totalHouseSeed: settleRow.total_house_seed,
+        totalReward: settleRow.total_protected_hunter_profit,
+        houseSeed: settleRow.total_house_seed,
         totalPot: settleRow.total_pot,
         winnerCount: settleRow.winner_count,
         reasoning: settleRow.admin_settlement_reasoning,

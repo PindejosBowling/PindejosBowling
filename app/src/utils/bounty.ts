@@ -1,43 +1,53 @@
 // Bounty Board — pure economic helpers + the close-time business rule.
-// These mirror the DB's settlement math (BOUNTIES_DB §26, design §13/§14/§26) so
-// the UI can preview anti-dilution and payouts without a server round trip. All
-// pure + uncached — screens wrap them in useMemo (AGENTS.md §5).
+// These mirror the DB's "All Comers" settlement math so the UI can preview payouts
+// without a server round trip. All pure + uncached — screens wrap them in useMemo
+// (AGENTS.md §5).
+//
+// Model: the sponsor takes the SAME bet against each of up to `maxHunters` hunters.
+// The sponsor escrows reward*maxHunters up front. Every hunter who wins receives
+// stake + reward — identical regardless of join order or count (no dilution). More
+// hunters never reduce anyone's payout; with the collective win rule, more hunters
+// raise everyone's odds. The House only subsidizes a House-sponsored bounty that
+// loses to the hunters.
 
-// Client-side mirrors of the RPC validation thresholds (design §34.5, §34.1).
-export const MIN_SPONSOR_BOUNTY = 50
+// Client-side mirrors of the RPC validation thresholds.
+export const MIN_REWARD_PER_HUNTER = 25
 export const MIN_HUNTER_STAKE = 25
+export const MIN_MAX_HUNTERS = 1
+export const MAX_MAX_HUNTERS = 100
 export const MAX_TITLE_LEN = 80
 export const MAX_DESCRIPTION_LEN = 1000
 
-// A hunter's snapshotted protected profit = floor(sponsor bounty / entry order).
-export function protectedProfit(sponsorAmount: number, entryNumber: number): number {
-  if (entryNumber < 1) return 0
-  return Math.floor(sponsorAmount / entryNumber)
+// The sponsor's total escrow / max liability = reward per hunter × max hunters.
+export function sponsorMaxLiability(rewardPerHunter: number, maxHunters: number): number {
+  return rewardPerHunter * maxHunters
+}
+
+// What a single hunter receives if the hunters win: their stake back + the reward.
+export function hunterPayout(stake: number, rewardPerHunter: number): number {
+  return stake + rewardPerHunter
 }
 
 export interface BountyEconomics {
-  totalHunterStakes: number
-  totalProtectedProfit: number
-  totalHouseSeed: number
-  totalPot: number
+  totalHunterStakes: number   // n × H
+  totalReward: number         // n × R (paid by sponsor escrow / House)
+  totalHunterPayout: number   // n × (H + R) — paid to hunters on a hunter win
+  sponsorTakeOnWin: number    // n × H — the sponsor's winnings if the sponsor wins
 }
 
-// Pot economics over the current hunters. The House seed only kicks in when the
-// summed protected profit outruns the sponsor bounty (early-hunter anti-dilution).
+// Pot economics over the current hunters.
 export function bountyEconomics(
-  sponsorAmount: number,
-  hunters: { stakeAmount: number; protectedProfit: number }[],
+  rewardPerHunter: number,
+  hunters: { stakeAmount: number }[],
 ): BountyEconomics {
   const totalHunterStakes = hunters.reduce((s, h) => s + h.stakeAmount, 0)
-  const totalProtectedProfit = hunters.reduce((s, h) => s + h.protectedProfit, 0)
-  const totalHouseSeed = Math.max(0, totalProtectedProfit - sponsorAmount)
-  const totalPot = sponsorAmount + totalHunterStakes + totalHouseSeed
-  return { totalHunterStakes, totalProtectedProfit, totalHouseSeed, totalPot }
-}
-
-// A hunter's payout if the hunters win = their stake back + their protected profit.
-export function hunterPayout(stake: number, protectedProfit: number): number {
-  return stake + protectedProfit
+  const totalReward = rewardPerHunter * hunters.length
+  return {
+    totalHunterStakes,
+    totalReward,
+    totalHunterPayout: totalHunterStakes + totalReward,
+    sponsorTakeOnWin: totalHunterStakes,
+  }
 }
 
 // ── Close-time business rule (design §11) ───────────────────────────────────────
@@ -58,7 +68,6 @@ function etOffsetMinutes(date: Date): number {
   })
   const map: Record<string, string> = {}
   for (const p of dtf.formatToParts(date)) map[p.type] = p.value
-  // Hour can come back as "24" at midnight in some engines — normalize to 0.
   const hour = map.hour === '24' ? 0 : Number(map.hour)
   const asUTC = Date.UTC(
     Number(map.year), Number(map.month) - 1, Number(map.day),
@@ -75,12 +84,10 @@ function etWallToUtc(y: number, mo: number, d: number, h: number, mi: number): D
 }
 
 export function defaultBountyCloseAt(now: Date = new Date()): Date {
-  // ET wall-clock fields of `now` (read via getUTC* on the shifted instant).
   const et = new Date(now.getTime() + etOffsetMinutes(now) * 60000)
   const dow = et.getUTCDay() // 0 = Sun … 1 = Mon … 6 = Sat
   const daysToMon = (1 - dow + 7) % 7
   let target = etWallToUtc(et.getUTCFullYear(), et.getUTCMonth(), et.getUTCDate() + daysToMon, 19, 0)
-  // If that Monday 7 PM has already passed (today is Monday, past 7 PM), roll a week.
   if (target.getTime() <= now.getTime()) {
     target = etWallToUtc(et.getUTCFullYear(), et.getUTCMonth(), et.getUTCDate() + daysToMon + 7, 19, 0)
   }

@@ -12,31 +12,6 @@ export type Database = {
   __InternalSupabase: {
     PostgrestVersion: "14.5"
   }
-  graphql_public: {
-    Tables: {
-      [_ in never]: never
-    }
-    Views: {
-      [_ in never]: never
-    }
-    Functions: {
-      graphql: {
-        Args: {
-          extensions?: Json
-          operationName?: string
-          query?: string
-          variables?: Json
-        }
-        Returns: Json
-      }
-    }
-    Enums: {
-      [_ in never]: never
-    }
-    CompositeTypes: {
-      [_ in never]: never
-    }
-  }
   public: {
     Tables: {
       activity_feed_events: {
@@ -711,6 +686,8 @@ export type Database = {
           house_seed_mode: string
           hunter_stake_amount: number
           id: string
+          max_hunters: number
+          reward_per_hunter: number
           season_id: string
           sponsor_bounty_amount: number
           sponsor_player_id: string | null
@@ -727,6 +704,8 @@ export type Database = {
           house_seed_mode?: string
           hunter_stake_amount: number
           id?: string
+          max_hunters: number
+          reward_per_hunter: number
           season_id: string
           sponsor_bounty_amount: number
           sponsor_player_id?: string | null
@@ -743,6 +722,8 @@ export type Database = {
           house_seed_mode?: string
           hunter_stake_amount?: number
           id?: string
+          max_hunters?: number
+          reward_per_hunter?: number
           season_id?: string
           sponsor_bounty_amount?: number
           sponsor_player_id?: string | null
@@ -1945,7 +1926,8 @@ export type Database = {
           p_closes_at: string
           p_description: string
           p_hunter_stake_amount: number
-          p_sponsor_bounty_amount: number
+          p_max_hunters: number
+          p_reward_per_hunter: number
           p_title: string
           p_week_id: string
         }
@@ -1974,7 +1956,8 @@ export type Database = {
           p_closes_at: string
           p_description: string
           p_hunter_stake_amount: number
-          p_sponsor_bounty_amount: number
+          p_max_hunters: number
+          p_reward_per_hunter: number
           p_title: string
           p_week_id: string
         }
@@ -2218,9 +2201,6 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
-  graphql_public: {
-    Enums: {},
-  },
   public: {
     Enums: {},
   },

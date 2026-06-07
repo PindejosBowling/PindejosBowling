@@ -703,8 +703,9 @@ export interface CreateBountyArgs {
   weekId: string
   title: string
   description: string
-  sponsorBountyAmount: number
-  hunterStakeAmount: number
+  rewardPerHunter: number              // R — what each hunter wins
+  hunterStakeAmount: number            // H — what each hunter risks
+  maxHunters: number                   // m — caps the sponsor's escrow at R*m
   closesAt: string                     // ISO timestamp (computed app-side, design §11)
 }
 
@@ -747,8 +748,9 @@ export const bountyPosts = {
       p_week_id: a.weekId,
       p_title: a.title,
       p_description: a.description,
-      p_sponsor_bounty_amount: a.sponsorBountyAmount,
+      p_reward_per_hunter: a.rewardPerHunter,
       p_hunter_stake_amount: a.hunterStakeAmount,
+      p_max_hunters: a.maxHunters,
       p_closes_at: a.closesAt,
     }),
   createHouse: (a: CreateBountyArgs) =>
@@ -756,8 +758,9 @@ export const bountyPosts = {
       p_week_id: a.weekId,
       p_title: a.title,
       p_description: a.description,
-      p_sponsor_bounty_amount: a.sponsorBountyAmount,
+      p_reward_per_hunter: a.rewardPerHunter,
       p_hunter_stake_amount: a.hunterStakeAmount,
+      p_max_hunters: a.maxHunters,
       p_closes_at: a.closesAt,
     }),
   enter: (bountyId: string) => supabase.rpc('enter_bounty_as_hunter', { p_bounty_post_id: bountyId }),

@@ -1,6 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from 'react'
 import { seasons, pinLedger, bountyPosts } from '../utils/supabase/db'
-import { protectedProfit, bountyEconomics } from '../utils/bounty'
 
 // One hunter's entry, flattened. Name is present only when the query embeds it
 // (getById / detail); board/inbox queries leave it null.
@@ -10,7 +9,6 @@ export interface BountyHunterView {
   playerName: string | null
   stakeAmount: number
   entryNumber: number
-  protectedProfit: number
   status: string
 }
 
@@ -25,18 +23,16 @@ export interface BountyView {
   sponsorName: string | null
   title: string
   description: string
-  sponsorBountyAmount: number
-  hunterStakeAmount: number
+  rewardPerHunter: number         // R — what each hunter wins (flat, no dilution)
+  hunterStakeAmount: number       // H — what each hunter risks
+  maxHunters: number              // m — capacity
   closesAt: string
   status: 'open' | 'closed' | 'settled'
   createdAt: string
   hunters: BountyHunterView[]
   hunterCount: number
-  // Preview terms for the *next* hunter (open bounties) — entry order, protected
-  // profit, and the running estimated House seed (design §16, §34.4).
+  slotsRemaining: number          // m − n (0 = full)
   nextEntryNumber: number
-  nextProtectedProfit: number
-  currentEstimatedSeed: number
 }
 
 export function normalizeBounty(row: any): BountyView {
@@ -48,13 +44,11 @@ export function normalizeBounty(row: any): BountyView {
       playerName: s.players?.name ?? null,
       stakeAmount: s.stake_amount ?? row.hunter_stake_amount,
       entryNumber: s.entry_number,
-      protectedProfit: s.protected_hunter_profit,
       status: s.status ?? 'active',
     }))
     .sort((a, b) => a.entryNumber - b.entryNumber)
 
-  const sponsorAmount = row.sponsor_bounty_amount
-  const nextEntryNumber = hunters.length + 1
+  const maxHunters = row.max_hunters
 
   return {
     id: row.id,
@@ -65,16 +59,16 @@ export function normalizeBounty(row: any): BountyView {
     sponsorName: row.sponsor?.name ?? null,
     title: row.title,
     description: row.description,
-    sponsorBountyAmount: sponsorAmount,
+    rewardPerHunter: row.reward_per_hunter,
     hunterStakeAmount: row.hunter_stake_amount,
+    maxHunters,
     closesAt: row.closes_at,
     status: row.status,
     createdAt: row.created_at,
     hunters,
     hunterCount: hunters.length,
-    nextEntryNumber,
-    nextProtectedProfit: protectedProfit(sponsorAmount, nextEntryNumber),
-    currentEstimatedSeed: bountyEconomics(sponsorAmount, hunters).totalHouseSeed,
+    slotsRemaining: Math.max(0, maxHunters - hunters.length),
+    nextEntryNumber: hunters.length + 1,
   }
 }
 

@@ -1,5 +1,17 @@
 # Bounty Board — App Implementation Spec
 
+> **⚠️ Updated for the "All Comers" redesign.** The hunter mechanic changed from
+> early-hunter anti-dilution to a flat per-hunter reward (see
+> `ECONOMIC_DESIGN_BOUNTIES.md` §13–§14 and migration
+> `20260607220000_bounty_all_comers.sql`). The as-built app reflects the new model:
+> sponsors set **reward per hunter `R`**, **hunter stake `H`**, and **max hunters `m`**
+> (escrowing `R × m`); every hunter wins `H + R` regardless of order/count; the board
+> shows `n/m` hunters + "slots left" instead of a declining "next hunter profit"; the
+> entry modal stresses "every hunter gets the same reward, and if any hunter wins the
+> whole pack wins." Pure helpers live in `app/src/utils/bounty.ts`
+> (`sponsorMaxLiability`, `hunterPayout`, `bountyEconomics`). References below to
+> "protected profit", "anti-dilution preview", or "House seed estimate" are historical.
+
 Handoff spec for the **app layer** (`app/src`) of the Bounty Board feature, surfaced as a
 new Pinsino tile **"Bounties"**.
 

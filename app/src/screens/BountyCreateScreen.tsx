@@ -15,8 +15,9 @@ import { useAuthStore } from '../stores/authStore'
 import { useUiStore } from '../stores/uiStore'
 import { seasons, weeks, pinLedger, bountyPosts } from '../utils/supabase/db'
 import {
-  MIN_SPONSOR_BOUNTY, MIN_HUNTER_STAKE, MAX_TITLE_LEN, MAX_DESCRIPTION_LEN,
-  protectedProfit, defaultBountyCloseAt, formatCloseTime,
+  MIN_REWARD_PER_HUNTER, MIN_HUNTER_STAKE, MIN_MAX_HUNTERS, MAX_MAX_HUNTERS,
+  MAX_TITLE_LEN, MAX_DESCRIPTION_LEN,
+  sponsorMaxLiability, defaultBountyCloseAt, formatCloseTime,
 } from '../utils/bounty'
 import { PinsinoStackParamList } from '../navigation/types'
 
@@ -34,8 +35,9 @@ export default function BountyCreateScreen() {
 
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
-  const [sponsorAmount, setSponsorAmount] = useState('')
+  const [reward, setReward] = useState('')
   const [hunterStake, setHunterStake] = useState('')
+  const [maxHunters, setMaxHunters] = useState('')
   const [closesAt, setClosesAt] = useState<Date>(() => defaultBountyCloseAt())
   const [pickerOpen, setPickerOpen] = useState(false)
 
@@ -59,20 +61,23 @@ export default function BountyCreateScreen() {
   useEffect(() => { load() }, [playerId])
   const { refreshing, onRefresh } = useRefresh(load)
 
-  const S = Number(sponsorAmount) || 0
+  const R = Number(reward) || 0
   const H = Number(hunterStake) || 0
+  const m = Number(maxHunters) || 0
+  const escrow = sponsorMaxLiability(R, m)
 
   const error = useMemo<string | null>(() => {
     if (!title.trim()) return 'Add a title'
     if (title.length > MAX_TITLE_LEN) return `Title must be ≤ ${MAX_TITLE_LEN} characters`
     if (!description.trim()) return 'Add a description'
     if (description.length > MAX_DESCRIPTION_LEN) return `Description must be ≤ ${MAX_DESCRIPTION_LEN} characters`
-    if (S < MIN_SPONSOR_BOUNTY) return `Sponsor bounty must be at least ${MIN_SPONSOR_BOUNTY}`
+    if (R < MIN_REWARD_PER_HUNTER) return `Reward per hunter must be at least ${MIN_REWARD_PER_HUNTER}`
     if (H < MIN_HUNTER_STAKE) return `Hunter stake must be at least ${MIN_HUNTER_STAKE}`
-    if (S > balance) return 'Sponsor bounty exceeds your balance'
+    if (m < MIN_MAX_HUNTERS || m > MAX_MAX_HUNTERS) return `Max hunters must be between ${MIN_MAX_HUNTERS} and ${MAX_MAX_HUNTERS}`
+    if (escrow > balance) return `You'd escrow ${escrow.toLocaleString()} pins — more than your balance`
     if (closesAt.getTime() <= Date.now()) return 'Close time must be in the future'
     return null
-  }, [title, description, S, H, balance, closesAt])
+  }, [title, description, R, H, m, escrow, balance, closesAt])
 
   async function submit() {
     if (submitting || error) return
@@ -83,8 +88,9 @@ export default function BountyCreateScreen() {
         weekId,
         title: title.trim(),
         description: description.trim(),
-        sponsorBountyAmount: S,
+        rewardPerHunter: R,
         hunterStakeAmount: H,
+        maxHunters: m,
         closesAt: closesAt.toISOString(),
       })
       if (rpcErr) { showToast(rpcErr.message, 'error'); return }
@@ -138,12 +144,12 @@ export default function BountyCreateScreen() {
 
         <View style={styles.row}>
           <View style={styles.rowCol}>
-            <Text style={styles.label}>SPONSOR BOUNTY</Text>
+            <Text style={styles.label}>REWARD / HUNTER</Text>
             <TextInput
               style={styles.input}
-              value={sponsorAmount}
-              onChangeText={t => setSponsorAmount(t.replace(/[^0-9]/g, ''))}
-              placeholder={`min ${MIN_SPONSOR_BOUNTY}`}
+              value={reward}
+              onChangeText={t => setReward(t.replace(/[^0-9]/g, ''))}
+              placeholder={`min ${MIN_REWARD_PER_HUNTER}`}
               placeholderTextColor={colors.muted2}
               keyboardType="number-pad"
             />
@@ -155,6 +161,17 @@ export default function BountyCreateScreen() {
               value={hunterStake}
               onChangeText={t => setHunterStake(t.replace(/[^0-9]/g, ''))}
               placeholder={`min ${MIN_HUNTER_STAKE}`}
+              placeholderTextColor={colors.muted2}
+              keyboardType="number-pad"
+            />
+          </View>
+          <View style={styles.rowCol}>
+            <Text style={styles.label}>MAX HUNTERS</Text>
+            <TextInput
+              style={styles.input}
+              value={maxHunters}
+              onChangeText={t => setMaxHunters(t.replace(/[^0-9]/g, ''))}
+              placeholder={`1–${MAX_MAX_HUNTERS}`}
               placeholderTextColor={colors.muted2}
               keyboardType="number-pad"
             />
@@ -177,15 +194,14 @@ export default function BountyCreateScreen() {
           />
         )}
 
-        {/* Live anti-dilution preview (design §29.4) */}
-        {S >= MIN_SPONSOR_BOUNTY && (
+        {/* Live "all comers" preview (design §29.4) */}
+        {R >= MIN_REWARD_PER_HUNTER && m >= MIN_MAX_HUNTERS && (
           <View style={styles.previewCard}>
             <Text style={styles.previewTitle}>HOW IT PAYS OUT</Text>
-            <Text style={styles.previewLine}>You are risking {S.toLocaleString()} pins. Hunters stake {H.toLocaleString()} pins each.</Text>
-            <Text style={styles.previewLine}>Hunter #1 profit if hunters win: +{protectedProfit(S, 1).toLocaleString()}</Text>
-            <Text style={styles.previewLine}>Hunter #2: +{protectedProfit(S, 2).toLocaleString()}</Text>
-            <Text style={styles.previewLine}>Hunter #3: +{protectedProfit(S, 3).toLocaleString()}</Text>
-            <Text style={styles.previewLine}>More hunters get progressively lower protected profit. The Pinsino seeds the pot if needed to protect early hunters.</Text>
+            <Text style={styles.previewLine}>You take on up to {m.toLocaleString()} hunters. Each stakes {H.toLocaleString()} pins to join.</Text>
+            <Text style={styles.previewLine}>Every hunter wins the same: their stake back + {R.toLocaleString()} reward. Join order doesn't matter and more hunters never shrink anyone's payout.</Text>
+            <Text style={styles.previewLine}>If the hunters win, you pay {R.toLocaleString()} per hunter who joined. If you win, you collect every stake.</Text>
+            <Text style={styles.previewLine}>You escrow {escrow.toLocaleString()} pins now ({R.toLocaleString()} × {m.toLocaleString()}); any unused amount is returned at settlement.</Text>
             <Text style={styles.disclaimer}>This does not affect bowling gameplay.</Text>
           </View>
         )}

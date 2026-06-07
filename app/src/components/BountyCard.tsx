@@ -36,15 +36,15 @@ export default function BountyCard({ bounty: b, viewerId, onPress, manageHint }:
 
       <View style={styles.amountRow}>
         <View style={styles.amountCell}>
-          <Text style={styles.amountValue}>{b.sponsorBountyAmount.toLocaleString()}</Text>
-          <Text style={styles.amountLabel}>BOUNTY</Text>
-        </View>
-        <View style={styles.amountCell}>
           <Text style={styles.amountValue}>{b.hunterStakeAmount.toLocaleString()}</Text>
-          <Text style={styles.amountLabel}>HUNTER STAKE</Text>
+          <Text style={styles.amountLabel}>STAKE</Text>
         </View>
         <View style={styles.amountCell}>
-          <Text style={styles.amountValue}>{b.hunterCount}</Text>
+          <Text style={styles.amountValue}>+{b.rewardPerHunter.toLocaleString()}</Text>
+          <Text style={styles.amountLabel}>REWARD EACH</Text>
+        </View>
+        <View style={styles.amountCell}>
+          <Text style={styles.amountValue}>{b.hunterCount}/{b.maxHunters}</Text>
           <Text style={styles.amountLabel}>HUNTERS</Text>
         </View>
       </View>
@@ -53,8 +53,10 @@ export default function BountyCard({ bounty: b, viewerId, onPress, manageHint }:
       {manageHint ? (
         <Text style={styles.hint}>Tap to manage</Text>
       ) : b.status === 'open' ? (
-        <Text style={styles.nextTerms}>
-          Next hunter (#{b.nextEntryNumber}): protected profit +{b.nextProtectedProfit.toLocaleString()}
+        <Text style={[styles.nextTerms, b.slotsRemaining === 0 && styles.full]}>
+          {b.slotsRemaining === 0
+            ? 'Full — no slots left'
+            : `Every hunter wins +${b.rewardPerHunter.toLocaleString()} · ${b.slotsRemaining} slot${b.slotsRemaining === 1 ? '' : 's'} left`}
         </Text>
       ) : null}
     </TouchableOpacity>
@@ -82,5 +84,6 @@ const styles = StyleSheet.create({
 
   meta: { fontFamily: fonts.barlow, fontSize: 12, color: colors.muted, marginTop: 8 },
   nextTerms: { fontFamily: fonts.barlowCondensed, fontSize: 13, color: colors.success, letterSpacing: 0.3, marginTop: 4 },
+  full: { color: colors.muted },
   hint: { fontFamily: fonts.barlowCondensed, fontSize: 13, color: colors.accent, letterSpacing: 0.3, marginTop: 4 },
 })
