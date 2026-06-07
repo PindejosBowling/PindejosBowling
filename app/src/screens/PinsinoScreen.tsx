@@ -27,10 +27,11 @@ type PinsinoNav = NativeStackNavigationProp<PinsinoStackParamList>
 const TILE_WIDTH = (Dimensions.get('window').width - 48) / 3
 
 // Subpage menu tiles (groundwork for more Pinsino subpages — add one line each)
-const MENU_TILES: { icon: string; label: string; route: 'PinsinoLeaderboard' | 'Sportsbook' | 'LoanShark' | 'PvP' | 'MarketMoves' }[] = [
+const MENU_TILES: { icon: string; label: string; route: 'PinsinoLeaderboard' | 'Sportsbook' | 'LoanShark' | 'PvP' | 'MarketMoves' | 'BountyBoard' }[] = [
   { icon: '👀', label: 'Market Moves', route: 'MarketMoves' },
   { icon: '🏟️', label: 'Sportsbook', route: 'Sportsbook' },
   { icon: '⚔️', label: 'PvP', route: 'PvP' },
+  { icon: '🎯', label: 'Bounties', route: 'BountyBoard' },
   { icon: '🦈', label: 'Loan Shark', route: 'LoanShark' },
 ]
 

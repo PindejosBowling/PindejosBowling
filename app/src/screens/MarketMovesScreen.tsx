@@ -27,6 +27,7 @@ const FILTERS: { key: FeedFilter; label: string }[] = [
   { key: 'sportsbook', label: 'Sportsbook' },
   { key: 'loan_shark', label: 'Loan Shark' },
   { key: 'pvp', label: 'PvP' },
+  { key: 'bounty_board', label: 'Bounties' },
   { key: 'highlights', label: 'Highlights' },
 ]
 const LABEL_BY_KEY = Object.fromEntries(FILTERS.map(f => [f.key, f.label]))
@@ -126,6 +127,11 @@ export default function MarketMovesScreen() {
     if (event.pvpChallengeId) {
       const challengeId = event.pvpChallengeId
       return () => setDetailChallengeId(challengeId)
+    }
+    // Bounty moves → the public Bounty detail page.
+    if (event.bountySourceId) {
+      const bountyId = event.bountySourceId
+      return () => navigation.navigate('BountyDetail', { bountyId })
     }
     // Weekly House result + system events: no detail in v1.
     return undefined

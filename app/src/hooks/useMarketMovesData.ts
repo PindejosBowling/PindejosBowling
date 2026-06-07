@@ -2,7 +2,7 @@ import { useState, useCallback, useEffect, useRef } from 'react'
 import { seasons, activityFeed, weeks } from '../utils/supabase/db'
 import type { FeedEventView } from '../utils/activityFeedTemplates'
 
-export type FeedFilter = 'all' | 'sportsbook' | 'loan_shark' | 'pvp' | 'highlights'
+export type FeedFilter = 'all' | 'sportsbook' | 'loan_shark' | 'pvp' | 'bounty_board' | 'highlights'
 
 // Week label/lookup metadata for the screen's collapsible week grouping.
 export type WeekInfoById = Record<string, { weekNumber: number }>
@@ -37,6 +37,7 @@ export function normalizeFeedRow(r: any): FeedEventView {
     sportsbookBetId: r.sportsbook_bet_id ?? null,
     loanId: r.loan_id ?? null,
     pvpChallengeId: r.pvp_challenge_id ?? null,
+    bountySourceId: r.bounty_post_id ?? null,
     suppressionReason: r.suppression_reason ?? null,
   }
 }
@@ -54,6 +55,8 @@ function fetchPage(
       return activityFeed.listByFeature(seasonId, 'loan_shark', cursor)
     case 'pvp':
       return activityFeed.listByFeature(seasonId, 'pvp', cursor)
+    case 'bounty_board':
+      return activityFeed.listByFeature(seasonId, 'bounty_board', cursor)
     case 'highlights':
       return activityFeed.listHighlights(seasonId, cursor)
     default:

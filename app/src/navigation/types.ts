@@ -16,6 +16,7 @@ export type MoreStackParamList = {
   LoanSharkAdmin: undefined
   PvPAdmin: undefined
   MarketMovesAdmin: undefined
+  BountyAdmin: undefined
 }
 
 export type StandingsStackParamList = {
@@ -33,4 +34,7 @@ export type PinsinoStackParamList = {
   PvPBoard: undefined
   PvPCreate: { opponentId?: string; rematchOfId?: string; openBoard?: boolean } | undefined
   MarketMoves: undefined
+  BountyBoard: undefined
+  BountyCreate: undefined
+  BountyDetail: { bountyId: string }
 }

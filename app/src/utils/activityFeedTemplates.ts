@@ -38,6 +38,7 @@ export interface FeedEventView {
   sportsbookBetId: string | null
   loanId: string | null
   pvpChallengeId: string | null
+  bountySourceId: string | null
   // Admin moderation metadata.
   suppressionReason: string | null
 }
@@ -60,6 +61,7 @@ const FEATURE_META: Record<string, { icon: string; sourceLabel: string }> = {
   sportsbook: { icon: '🏟️', sourceLabel: 'Sportsbook' },
   loan_shark: { icon: '🦈', sourceLabel: 'Loan Shark' },
   pvp: { icon: '⚔️', sourceLabel: 'PvP' },
+  bounty_board: { icon: '🎯', sourceLabel: 'Bounty Board' },
   system: { icon: '🏛️', sourceLabel: 'The House' },
   admin: { icon: '📊', sourceLabel: 'The House' },
 }
@@ -188,6 +190,49 @@ export function renderFeedEvent(row: FeedEventView): FeedRenderParts {
             amount: { value: num(p.pot), tone: 'positive', label: 'WON' },
             winner: { name: actorOf(row) },
           }
+
+    case 'bounty_board.bounty_posted': {
+      // House bounties have no actor → the Pinsino is the poster.
+      const poster = row.actorName ?? 'The Pinsino'
+      const title = p.bounty_title ? `: "${p.bounty_title}."` : '.'
+      return { ...meta, line: `${poster} posted a bounty${title}` }
+    }
+
+    case 'bounty_board.hunter_joined':
+      return {
+        ...meta,
+        line: p.bounty_title
+          ? `${actorOf(row)} joined the hunt on "${p.bounty_title}."`
+          : `${actorOf(row)} joined the hunt.`,
+      }
+
+    case 'bounty_board.bounty_closed':
+      return {
+        ...meta,
+        line: p.bounty_title
+          ? `The bounty "${p.bounty_title}" stopped taking hunters.`
+          : 'A bounty stopped taking hunters.',
+      }
+
+    case 'bounty_board.sponsor_won': {
+      const poster = row.actorName ?? 'The Pinsino'
+      return {
+        ...meta,
+        line: p.bounty_title
+          ? `${poster} survived the hunt on "${p.bounty_title}."`
+          : `${poster} survived the hunt.`,
+        amount: num(p.total_pot) ? { value: num(p.total_pot), tone: 'positive', label: 'POT' } : undefined,
+      }
+    }
+
+    case 'bounty_board.hunters_won':
+      return {
+        ...meta,
+        line: p.bounty_title
+          ? `The hunters got paid on "${p.bounty_title}."`
+          : 'The hunters got paid.',
+        amount: num(p.total_pot) ? { value: num(p.total_pot), tone: 'positive', label: 'POT' } : undefined,
+      }
 
     case 'loan_shark.special_offer':
       // Posted as a system/admin event, but it reads as a Loan Shark move — force
