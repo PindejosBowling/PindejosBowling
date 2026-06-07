@@ -14,6 +14,7 @@ export type MoreStackParamList = {
   PinsinoAccounting: undefined
   PinsinoSportsbook: undefined
   LoanSharkAdmin: undefined
+  PvPAdmin: undefined
 }
 
 export type StandingsStackParamList = {
@@ -27,4 +28,8 @@ export type PinsinoStackParamList = {
   Sportsbook: undefined
   LoanShark: undefined
   PlayerPinsino: { playerId: string; name: string }
+  PvP: undefined
+  PvPBoard: undefined
+  PvPCreate: { opponentId?: string; rematchOfId?: string } | undefined
+  PvPChallengeDetail: { challengeId: string }
 }

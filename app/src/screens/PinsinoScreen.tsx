@@ -24,9 +24,10 @@ type PinsinoNav = NativeStackNavigationProp<PinsinoStackParamList>
 const TILE_WIDTH = (Dimensions.get('window').width - 48) / 3
 
 // Subpage menu tiles (groundwork for more Pinsino subpages — add one line each)
-const MENU_TILES: { icon: string; label: string; route: 'PinsinoLeaderboard' | 'Sportsbook' | 'LoanShark' }[] = [
+const MENU_TILES: { icon: string; label: string; route: 'PinsinoLeaderboard' | 'Sportsbook' | 'LoanShark' | 'PvP' }[] = [
   { icon: '🏟️', label: 'Sportsbook', route: 'Sportsbook' },
   { icon: '🦈', label: 'Loan Shark', route: 'LoanShark' },
+  { icon: '⚔️', label: 'PvP', route: 'PvP' },
 ]
 
 export default function PinsinoScreen() {

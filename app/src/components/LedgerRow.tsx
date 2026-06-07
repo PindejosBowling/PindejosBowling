@@ -35,6 +35,12 @@ function actionLabel(type: string, perspective: 'player' | 'house'): string {
       return perspective === 'house' ? 'GARNISHMENT' : 'GARNISHED'
     case 'loan_season_close_settlement':
       return perspective === 'house' ? 'SEASON-CLOSE COLLECTION' : 'SEASON-CLOSE PAYMENT'
+    case 'pvp_stake':
+      return perspective === 'house' ? 'CHALLENGE ESCROW' : 'CHALLENGE STAKE'
+    case 'pvp_payout':
+      return perspective === 'house' ? 'CHALLENGE PAYOUT' : 'CHALLENGE WIN'
+    case 'pvp_refund':
+      return perspective === 'house' ? 'REFUND ISSUED' : 'CHALLENGE REFUND'
     default:
       return type.replace(/_/g, ' ').toUpperCase()
   }

@@ -526,6 +526,122 @@ export const pinLedger = {
     supabase.from('pin_ledger').insert(data),
 }
 
+// ── PvP Challenge Contracts (pvp_challenges → pvp_challenge_offers / pvp_ledger) ─
+// Player-vs-player duels escrowed at acceptance; winner takes the whole pot (no
+// rake). Lifecycle-only contract rows (escrow derived from pvp_ledger); all player
+// write paths (create/counter/accept/decline) and admin tools (cancel/void/settle)
+// go through SECURITY DEFINER RPCs. Reads embed the creator/counterparty names —
+// the two FKs to players are disambiguated via their constraint names.
+export interface CreatePvpArgs {
+  contractType: string                 // 'line_duel' | 'prop_duel' | 'raw_score_duel'
+  counterpartyId: string | null        // null = open board
+  weekId: string
+  gameNumber: number | null            // required for line/raw; null for prop
+  stake: number
+  propMarketId: string | null          // prop_duel only
+  creatorSelection: string | null      // prop_duel only ('over' | 'under')
+  message: string | null
+  expiresAt: string | null             // null → server defaults to the week's bowled_at
+}
+
+export interface CounterPvpArgs {
+  challengeId: string
+  stake: number
+  contractType: string
+  gameNumber: number | null
+  propMarketId: string | null
+  selection: string | null
+  message: string | null
+  expiresAt: string | null
+}
+
+const CHALLENGE_PARTIES =
+  '*, creator:players!pvp_challenges_creator_player_id_fkey(name), ' +
+  'counterparty:players!pvp_challenges_counterparty_player_id_fkey(name)'
+
+export const pvpChallenges = {
+  // Inbox: everything involving this player for the current season, with a light
+  // offer embed so the hook can tell whose turn it is (latest live offer's offerer).
+  listByPlayerSeason: (playerId: string, seasonId: string) =>
+    supabase.from('pvp_challenges')
+      .select(CHALLENGE_PARTIES +
+        ', pvp_challenge_offers(offered_by_player_id, offer_no, superseded_at, accepted_at, declined_at)')
+      .eq('season_id', seasonId)
+      .or(`creator_player_id.eq.${playerId},counterparty_player_id.eq.${playerId}`)
+      .order('created_at', { ascending: false }),
+
+  // Open Challenge Board: open contracts awaiting any taker.
+  listOpenBySeason: (seasonId: string) =>
+    supabase.from('pvp_challenges')
+      .select('*, creator:players!pvp_challenges_creator_player_id_fkey(name)')
+      .eq('season_id', seasonId)
+      .is('counterparty_player_id', null)
+      .eq('status', 'pending')
+      .order('created_at', { ascending: false }),
+
+  // Admin: active/locked + still-negotiating contracts for the season.
+  listLockedBySeason: (seasonId: string) =>
+    supabase.from('pvp_challenges')
+      .select(CHALLENGE_PARTIES)
+      .eq('season_id', seasonId)
+      .in('status', ['pending', 'countered', 'locked'])
+      .order('created_at', { ascending: false }),
+
+  // Detail page: one contract with its full negotiation trail + ledger.
+  getById: (challengeId: string) =>
+    supabase.from('pvp_challenges')
+      .select(CHALLENGE_PARTIES +
+        ', pvp_challenge_offers(*, offerer:players!pvp_challenge_offers_offered_by_player_id_fkey(name)), ' +
+        'pvp_ledger(*, weeks(week_number))')
+      .eq('id', challengeId).single(),
+
+  create: (a: CreatePvpArgs) =>
+    supabase.rpc('create_pvp_challenge', {
+      p_contract_type: a.contractType,
+      p_counterparty_player_id: a.counterpartyId as string,
+      p_week_id: a.weekId,
+      p_game_number: a.gameNumber as number,
+      p_stake: a.stake,
+      p_prop_market_id: a.propMarketId as string,
+      p_creator_selection: a.creatorSelection as string,
+      p_message: a.message as string,
+      p_expires_at: a.expiresAt as string,
+    }),
+  counter: (a: CounterPvpArgs) =>
+    supabase.rpc('counter_pvp_challenge', {
+      p_challenge_id: a.challengeId,
+      p_stake: a.stake,
+      p_contract_type: a.contractType,
+      p_game_number: a.gameNumber as number,
+      p_prop_market_id: a.propMarketId as string,
+      p_selection: a.selection as string,
+      p_message: a.message as string,
+      p_expires_at: a.expiresAt as string,
+    }),
+  accept: (challengeId: string) =>
+    supabase.rpc('accept_pvp_challenge', { p_challenge_id: challengeId }),
+  decline: (challengeId: string) =>
+    supabase.rpc('decline_pvp_challenge', { p_challenge_id: challengeId }),
+  cancel: (challengeId: string) =>
+    supabase.rpc('cancel_pvp_challenge', { p_challenge_id: challengeId }),
+  void: (challengeId: string, note: string) =>
+    supabase.rpc('void_pvp_challenge', { p_challenge_id: challengeId, p_admin_note: note }),
+  settle: (challengeId: string, winnerId: string | null, note: string) =>
+    supabase.rpc('settle_pvp_challenge', {
+      p_challenge_id: challengeId,
+      p_source: 'admin',
+      p_winner_player_id: winnerId as string,
+      p_admin_note: note,
+    }),
+}
+
+export const pvpLedger = {
+  listByPlayerSeason: (playerId: string, seasonId: string) =>
+    supabase.from('pvp_ledger').select('*, weeks(week_number)')
+      .eq('player_id', playerId).eq('season_id', seasonId)
+      .order('created_at', { ascending: false }),
+}
+
 export const weeks = {
   list: () =>
     supabase.from('weeks').select('*').order('week_number'),

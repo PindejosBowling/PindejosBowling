@@ -127,7 +127,7 @@ export default function AdminGenerateTeamsModal({ visible, onClose }: Props) {
         setWeekRsvps(rsvps)
         // Default to two teams, sized to absorb the existing "In" RSVPs.
         const inCount = rsvps.filter((r: any) => r.status === 'in').length
-        const teamSize = Math.max(2, Math.min(5, Math.floor(inCount / 2)))
+        const teamSize = Math.max(2, Math.min(6, Math.floor(inCount / 2)))
         set({ genNumTeams: 2, genTeamSize: teamSize, genAvgSource: 'current-season', genTeams: null })
       } else {
         setWeekId(null)
@@ -340,7 +340,7 @@ export default function AdminGenerateTeamsModal({ visible, onClose }: Props) {
               <View style={styles.controlRow}>
                 <Text style={styles.controlLabel}>Players per Team</Text>
                 <ToggleGroup
-                  options={[2, 3, 4, 5].map(n => ({ key: String(n) as any, label: String(n) }))}
+                  options={[2, 3, 4, 5, 6].map(n => ({ key: String(n) as any, label: String(n) }))}
                   value={String(genTeamSize)}
                   onChange={v => set({ genTeamSize: parseInt(v), genTeams: null })}
                 />
