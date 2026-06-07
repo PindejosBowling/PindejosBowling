@@ -1,8 +1,11 @@
 import { useState, useCallback, useEffect, useRef } from 'react'
-import { seasons, activityFeed } from '../utils/supabase/db'
+import { seasons, activityFeed, weeks } from '../utils/supabase/db'
 import type { FeedEventView } from '../utils/activityFeedTemplates'
 
 export type FeedFilter = 'all' | 'sportsbook' | 'loan_shark' | 'pvp' | 'highlights'
+
+// Week label/lookup metadata for the screen's collapsible week grouping.
+export type WeekInfoById = Record<string, { weekNumber: number }>
 
 const PAGE_SIZE = 50
 
@@ -69,6 +72,12 @@ export function useMarketMovesData() {
   const [hasMore, setHasMore] = useState(false)
   const [loadingMore, setLoadingMore] = useState(false)
 
+  // Week metadata for the screen's collapsible week grouping. Loaded once per
+  // season alongside the season lookup (it doesn't change across filter switches
+  // or pagination).
+  const [weekInfoById, setWeekInfoById] = useState<WeekInfoById>({})
+  const [currentWeekId, setCurrentWeekId] = useState<string | null>(null)
+
   // Only the first load shows the full-screen LoadingView; later reloads (focus,
   // pull-to-refresh, filter switch) refresh in place so the list never flashes.
   const loadedOnce = useRef(false)
@@ -81,6 +90,19 @@ export function useMarketMovesData() {
       const sid = seasonRes.data?.id ?? null
       setSeasonId(sid)
       if (!sid) { setEvents([]); setHasMore(false); return }
+
+      // Resolve the season's weeks once: label map + the current active week
+      // (highest non-archived week_number) for default-open grouping.
+      const weeksRes = await weeks.listBySeason(sid)
+      const weekRows = weeksRes.data ?? []
+      const infoMap: WeekInfoById = {}
+      for (const w of weekRows) infoMap[w.id] = { weekNumber: w.week_number }
+      setWeekInfoById(infoMap)
+      const live = weekRows.filter(w => !w.is_archived)
+      const current = live.length
+        ? live.reduce((a, b) => (b.week_number > a.week_number ? b : a))
+        : null
+      setCurrentWeekId(current?.id ?? null)
 
       const { data } = await fetchPage(f, sid)
       const rows = (data ?? []).map(normalizeFeedRow)
@@ -125,5 +147,5 @@ export function useMarketMovesData() {
     }
   }, [loadingMore, hasMore, seasonId, events, filter])
 
-  return { loading, events, filter, setFilter, hasMore, loadMore, reload }
+  return { loading, events, filter, setFilter, hasMore, loadMore, reload, weekInfoById, currentWeekId }
 }

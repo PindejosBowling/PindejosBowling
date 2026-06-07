@@ -1,16 +1,16 @@
-import { useState, useCallback } from 'react'
-import { View, Text, FlatList, StyleSheet, RefreshControl, ActivityIndicator } from 'react-native'
+import { useState, useCallback, useMemo } from 'react'
+import { View, Text, TouchableOpacity, FlatList, StyleSheet, RefreshControl, ActivityIndicator } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useNavigation, useFocusEffect } from '@react-navigation/native'
 import { NativeStackNavigationProp } from '@react-navigation/native-stack'
-import { colors, fonts } from '../theme'
+import { colors, fonts, radius } from '../theme'
 import ScreenHeader from '../components/ScreenHeader'
 import LoadingView from '../components/LoadingView'
 import PillFilter from '../components/PillFilter'
 import MarketMoveCard from '../components/MarketMoveCard'
 import BetDetailModal from '../components/BetDetailModal'
 import PvPChallengeDetailModal from '../components/PvPChallengeDetailModal'
-import { useMarketMovesData, FeedFilter } from '../hooks/useMarketMovesData'
+import { useMarketMovesData, FeedFilter, WeekInfoById } from '../hooks/useMarketMovesData'
 import { useRefresh } from '../hooks/useRefresh'
 import { useAuthStore } from '../stores/authStore'
 import { PinsinoStackParamList } from '../navigation/types'
@@ -31,11 +31,59 @@ const FILTERS: { key: FeedFilter; label: string }[] = [
 ]
 const LABEL_BY_KEY = Object.fromEntries(FILTERS.map(f => [f.key, f.label]))
 
+// Stable key for the bucket of events whose week was deleted (week_id → NULL).
+const NO_WEEK_KEY = '__noweek__'
+
+interface WeekGroup {
+  key: string
+  weekId: string | null
+  weekNumber: number | null
+  events: FeedEventView[]
+}
+
+// Group the feed (already published_at desc) into week containers. Events keep
+// their desc order within a week; weeks sort most-recent → least; the orphan
+// "no week" bucket (deleted weeks) sorts last. Pure + uncached — the screen
+// wraps it in useMemo (project rule 5).
+function groupEventsByWeek(events: FeedEventView[], weekInfoById: WeekInfoById): WeekGroup[] {
+  const byKey = new Map<string, WeekGroup>()
+  for (const e of events) {
+    const key = e.weekId ?? NO_WEEK_KEY
+    let group = byKey.get(key)
+    if (!group) {
+      group = {
+        key,
+        weekId: e.weekId,
+        weekNumber: e.weekId ? (weekInfoById[e.weekId]?.weekNumber ?? null) : null,
+        events: [],
+      }
+      byKey.set(key, group)
+    }
+    group.events.push(e)
+  }
+  return [...byKey.values()].sort((a, b) => {
+    if (a.weekNumber == null) return 1
+    if (b.weekNumber == null) return -1
+    return b.weekNumber - a.weekNumber
+  })
+}
+
 export default function MarketMovesScreen() {
   const navigation = useNavigation<Nav>()
   const playerId = useAuthStore(s => s.playerId)
-  const { loading, events, filter, setFilter, hasMore, loadMore, reload } = useMarketMovesData()
+  const { loading, events, filter, setFilter, hasMore, loadMore, reload, weekInfoById, currentWeekId } = useMarketMovesData()
   const { refreshing, onRefresh } = useRefresh(reload)
+
+  const groups = useMemo(() => groupEventsByWeek(events, weekInfoById), [events, weekInfoById])
+
+  // Default-open the current active week; everything else collapsed. An override
+  // map records explicit user toggles so we never need a seeding effect that
+  // races the async week/event loads.
+  const [overrides, setOverrides] = useState<Record<string, boolean>>({})
+  const defaultOpenKey = currentWeekId ?? groups[0]?.key
+  const isExpanded = (key: string) => overrides[key] ?? (key === defaultOpenKey)
+  const toggle = (key: string) =>
+    setOverrides(prev => ({ ...prev, [key]: !(prev[key] ?? (key === defaultOpenKey)) }))
 
   // Refresh whenever the screen regains focus (opened or revisited) so events for
   // cancelled outcomes — which cascade-delete from the feed — drop off without a
@@ -97,11 +145,30 @@ export default function MarketMovesScreen() {
         />
       </View>
       <FlatList
-        data={events}
-        keyExtractor={e => e.id}
+        data={groups}
+        keyExtractor={g => g.key}
         style={styles.list}
         contentContainerStyle={styles.content}
-        renderItem={({ item }) => <MarketMoveCard event={item} onPress={onPressFor(item)} />}
+        renderItem={({ item }) => {
+          const expanded = isExpanded(item.key)
+          const title = item.weekNumber != null ? `Week ${item.weekNumber}` : 'Other Moves'
+          return (
+            <View style={styles.weekGroup}>
+              <TouchableOpacity
+                style={[styles.weekHeader, expanded && styles.weekHeaderExpanded]}
+                onPress={() => toggle(item.key)}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.weekTitle}>{title}</Text>
+                <Text style={styles.weekCount}>{item.events.length}</Text>
+                <Text style={[styles.chevron, expanded && styles.chevronUp]}>›</Text>
+              </TouchableOpacity>
+              {expanded && item.events.map(e => (
+                <MarketMoveCard key={e.id} event={e} onPress={onPressFor(e)} />
+              ))}
+            </View>
+          )
+        }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.muted} />}
         onEndReachedThreshold={0.4}
         onEndReached={() => { if (hasMore) loadMore() }}
@@ -135,6 +202,43 @@ const styles = StyleSheet.create({
   list: { flex: 1 },
   content: { paddingHorizontal: 16, paddingBottom: 40, paddingTop: 4 },
   footer: { paddingVertical: 16 },
+
+  // Collapsible week container. The header is a distinct bar; expanded events
+  // render beneath as the standard MarketMoveCards.
+  weekGroup: { marginBottom: 16 },
+  weekHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.surface2,
+    borderRadius: radius.cardMd,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  weekHeaderExpanded: {
+    borderBottomLeftRadius: 0,
+    borderBottomRightRadius: 0,
+    marginBottom: 10,
+  },
+  weekTitle: {
+    flex: 1,
+    fontFamily: fonts.barlowCondensed,
+    fontSize: 16,
+    color: colors.text,
+    letterSpacing: 0.3,
+  },
+  weekCount: {
+    fontFamily: fonts.barlowCondensed,
+    fontSize: 13,
+    color: colors.muted,
+    marginRight: 10,
+  },
+  chevron: {
+    fontFamily: fonts.barlowCondensed,
+    fontSize: 20,
+    color: colors.muted,
+    transform: [{ rotate: '90deg' }],
+  },
+  chevronUp: { transform: [{ rotate: '-90deg' }] },
   emptyCard: {
     backgroundColor: colors.surface,
     borderRadius: 14,
