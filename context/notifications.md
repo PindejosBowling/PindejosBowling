@@ -41,9 +41,22 @@ contracts awaiting the player's response (reusing `isReceivedForPlayer` from
    that route). No per-route `if`.
 4. **Tab badge** — `RootNavigator` renders `totalCount(counts)` (sum of all sources) as the Pinsino
    `tabBarBadge`, capped at `99+`.
-5. **Stay fresh** — `PinsinoScreen` calls `refresh()` on focus, so badges update after a user acts inside
-   a subpage (e.g. responding to a PvP contract) and returns. Any screen can call
-   `useNotificationStore.getState().refresh()` directly after a mutation.
+5. **Stay fresh** — `PinsinoScreen` calls `refresh()` on focus, so badges are correct on return to the
+   hub. But focus alone is **not** sufficient: a subpage that mutates the data behind a badge (e.g.
+   responding to a PvP contract) leaves the tile badge **and** the live tab-bar badge stale until the hub
+   re-focuses. Therefore any screen that performs such a mutation **MUST** call
+   `useNotificationStore.getState().refresh()` directly after it — do not rely on the hub's focus refresh.
+
+   The clean way is to refresh at the same chokepoint that reloads the screen's own data, so the two never
+   drift. In `PvPScreen` the inbox reload and the badge refresh are bundled into one `reloadAll` that every
+   focus, pull-to-refresh, and post-mutation `onChanged` callback runs:
+
+   ```ts
+   const reloadAll = useCallback(
+     () => Promise.all([reload(), useNotificationStore.getState().refresh()]).then(() => {}),
+     [reload],
+   )
+   ```
 
 ## Adding a notification to a new tile
 

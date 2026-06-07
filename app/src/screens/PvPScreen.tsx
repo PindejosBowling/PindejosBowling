@@ -11,6 +11,7 @@ import PvPChallengeDetailModal from '../components/PvPChallengeDetailModal'
 import { usePvpData, PvpChallengeView } from '../hooks/usePvpData'
 import { useRefresh } from '../hooks/useRefresh'
 import { useAuthStore } from '../stores/authStore'
+import { useNotificationStore } from '../stores/notificationStore'
 import { PinsinoStackParamList } from '../navigation/types'
 
 type Nav = NativeStackNavigationProp<PinsinoStackParamList>
@@ -20,12 +21,22 @@ export default function PvPScreen() {
   const playerId = useAuthStore(s => s.playerId)
 
   const { loading, balance, inbox, openBoard, record, reload } = usePvpData(playerId)
-  const { refreshing, onRefresh } = useRefresh(reload)
+
+  // Reload the inbox AND the Pinsino notification badges together. The pending-action
+  // count (tile + tab-bar badge) is derived from the same "received" contracts shown
+  // here, so any mutation that changes this list must re-fetch the badge counts too —
+  // otherwise the badge stays stale until PinsinoScreen re-focuses.
+  const reloadAll = useCallback(
+    () => Promise.all([reload(), useNotificationStore.getState().refresh()]).then(() => {}),
+    [reload],
+  )
+
+  const { refreshing, onRefresh } = useRefresh(reloadAll)
   const [detailId, setDetailId] = useState<string | null>(null)
 
   // Refresh on return (e.g. after creating a challenge). The hook's own mount load
   // covers the first paint; subsequent focus reloads are silent (no full-screen loader).
-  useFocusEffect(useCallback(() => { reload() }, [reload]))
+  useFocusEffect(useCallback(() => { reloadAll() }, [reloadAll]))
 
   if (loading) return <LoadingView label="Loading…" />
 
@@ -126,7 +137,7 @@ export default function PvPScreen() {
         <PvPChallengeDetailModal
           challengeId={detailId}
           onClose={() => setDetailId(null)}
-          onChanged={reload}
+          onChanged={reloadAll}
         />
       )}
     </SafeAreaView>
