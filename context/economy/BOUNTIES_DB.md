@@ -22,6 +22,14 @@
 > `create_house_bounty` and `enter_bounty_as_hunter` are reachable by clients. The
 > function is kept (not dropped) for a future player-sponsor phase; re-`GRANT` to
 > restore. Rationale + the planned admin-approval gate: `ECONOMIC_DESIGN_BOUNTIES.md` §3.3.
+>
+> **Settle at any time.** `20260607222000_bounty_settle_anytime.sql` relaxes
+> `settle_bounty` to accept an `open` **or** `closed` bounty (was `closed`-only), so the
+> admin no longer has to `close_bounty` first; `settled` stays idempotent. The §417 step
+> below that requires `status='closed'` is historical — read it as "status IN
+> ('open','closed')". Destructive `cancel_bounty` already has **no** status guard and so
+> works post-settlement (it deletes pin rows by `bounty_post_id` then the root, clawing back
+> any settlement payouts) — unchanged by this migration.
 
 Handoff spec for the **database layer** of the Bounty Board feature. Self-contained and
 executable independently of the app-layer spec (`economy/BOUNTIES_APP.md`), which depends on
@@ -420,7 +428,8 @@ Idempotent manual settlement (design §8, §25.5, §26).
 
 1. Admin gate. Resolve the admin's `players.id` (`v_admin_id`) from `auth.uid()`.
 2. Load `bounty_post FOR UPDATE`. **Idempotency:** `RETURN` early if `status='settled'`.
-   Require `status='closed'` (RAISE otherwise — a bounty must be closed before settling).
+   Require `status IN ('open','closed')` (RAISE otherwise) — settle at any time, no
+   pre-close needed (migration `…222000_bounty_settle_anytime`).
 3. Validate `p_outcome IN ('sponsor_win','hunter_win')` and
    `length(p_admin_settlement_reasoning) > 0`.
 4. Require ≥1 hunter (`COUNT(bounty_hunter_stakes) >= 1`); if zero, the bounty has no action

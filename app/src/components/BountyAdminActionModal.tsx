@@ -50,9 +50,12 @@ export default function BountyAdminActionModal({ bounty: b, onClose, onDone }: P
   }
 
   function cancel() {
+    const msg = b.status === 'settled'
+      ? 'This erases the bounty economically and publicly — every payout from settlement is clawed back as if it never happened. This cannot be undone.'
+      : 'This erases the bounty economically and publicly — all escrow is refunded as if it never happened. This cannot be undone.'
     Alert.alert(
       'Cancel this bounty?',
-      'This erases the bounty economically and publicly — all escrow is refunded as if it never happened. This cannot be undone.',
+      msg,
       [
         { text: 'Keep it', style: 'cancel' },
         { text: 'Erase bounty', style: 'destructive', onPress: () => run('Bounty cancelled', () => bountyPosts.cancel(b.id)) },
@@ -87,7 +90,7 @@ export default function BountyAdminActionModal({ bounty: b, onClose, onDone }: P
               </>
             )}
 
-            {b.status === 'closed' && (
+            {b.status !== 'settled' && (
               <>
                 <Text style={styles.section}>SETTLE</Text>
                 <Text style={styles.label}>SETTLEMENT REASONING (REQUIRED, PUBLIC)</Text>

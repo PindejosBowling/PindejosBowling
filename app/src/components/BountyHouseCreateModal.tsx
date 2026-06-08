@@ -116,12 +116,12 @@ export default function BountyHouseCreateModal({ weekId, onClose, onDone }: Prop
 
             <View style={styles.row}>
               <View style={styles.rowCol}>
-                <Text style={styles.label}>REWARD / HUNTER</Text>
-                <TextInput style={styles.input} value={reward} onChangeText={t => setReward(t.replace(/[^0-9]/g, ''))} placeholder={`min ${MIN_REWARD_PER_HUNTER}`} placeholderTextColor={colors.muted2} keyboardType="number-pad" />
-              </View>
-              <View style={styles.rowCol}>
                 <Text style={styles.label}>HUNTER STAKE</Text>
                 <TextInput style={styles.input} value={hunterStake} onChangeText={t => setHunterStake(t.replace(/[^0-9]/g, ''))} placeholder={`min ${MIN_HUNTER_STAKE}`} placeholderTextColor={colors.muted2} keyboardType="number-pad" />
+              </View>
+              <View style={styles.rowCol}>
+                <Text style={styles.label}>REWARD / HUNTER</Text>
+                <TextInput style={styles.input} value={reward} onChangeText={t => setReward(t.replace(/[^0-9]/g, ''))} placeholder={`min ${MIN_REWARD_PER_HUNTER}`} placeholderTextColor={colors.muted2} keyboardType="number-pad" />
               </View>
               <View style={styles.rowCol}>
                 <Text style={styles.label}>MAX HUNTERS</Text>

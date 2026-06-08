@@ -335,14 +335,17 @@ tappable → `BountyDetail` via its `bounty_post_id`; not required for v1.
 - **Create House bounty** button → a form (Title / Description / Sponsor bounty amount /
   Hunter stake amount / Close time) → `bountyPosts.createHouse` → toast + reload.
 - Per-bounty admin actions (in a modal, `<Toast/>` inside):
-  - **Close** (open → closed) → confirm → `bountyPosts.close(id)` → toast + reload.
-  - **Settle** (closed bounty) → pick **Sponsor Wins** or **Hunters Win** + required
-    `admin_settlement_reasoning` (with the payout preview from §4 shown — the admin **never**
-    enters amounts, design §8, §25.5) → `bountyPosts.settle(id, outcome, reasoning)` → toast
-    + reload.
-  - **Cancel** (destructive, any state) → confirm with a clear "this erases the bounty
-    economically and publicly" warning → `bountyPosts.cancel(id)` → toast + reload. Mirror
-    the cancel UX in `PvPAdminScreen` / `PinsinoSportsbookScreen`.
+  - **Close** (open → closed) → confirm → `bountyPosts.close(id)` → toast + reload. Optional —
+    settling no longer requires a prior close.
+  - **Settle** (any non-`settled` bounty — `open` or `closed`) → pick **Sponsor Wins** or
+    **Hunters Win** + required `admin_settlement_reasoning` (with the payout preview from §4
+    shown — the admin **never** enters amounts, design §8, §25.5) →
+    `bountyPosts.settle(id, outcome, reasoning)` → toast + reload. Backed by migration
+    `…222000_bounty_settle_anytime` (the RPC accepts `open`/`closed`).
+  - **Cancel** (destructive, **any** state incl. `settled`) → confirm with a clear "this
+    erases the bounty economically and publicly" warning → `bountyPosts.cancel(id)` → toast +
+    reload. Post-settlement this claws back the distributed payouts (the copy adapts for the
+    `settled` case). Mirror the cancel UX in `PvPAdminScreen` / `PinsinoSportsbookScreen`.
 - Show escrow held + hunter list per bounty (reuse the detail components).
 
 ---

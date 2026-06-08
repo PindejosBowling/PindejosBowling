@@ -25,7 +25,7 @@ interface BorrowConfirmModalProps {
 const GENERAL_WARNING =
   'Borrowed pins increase your available balance, but not your net worth. Debt accrues weekly ' +
   'interest until repaid. If you miss a week in the PBL, there will be no pincome to garnish, but weekly interest ' +
-  'is still applied.'
+  'is still accumulated.'
 
 export default function BorrowConfirmModal({ product, onClose, onBorrowed }: BorrowConfirmModalProps) {
   const { showToast } = useUiStore()

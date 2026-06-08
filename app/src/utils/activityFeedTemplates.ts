@@ -194,7 +194,7 @@ export function renderFeedEvent(row: FeedEventView): FeedRenderParts {
     case 'bounty_board.bounty_posted': {
       // House bounties have no actor → the Pinsino is the poster.
       const poster = row.actorName ?? 'The Pinsino'
-      const title = p.bounty_title ? `: "${p.bounty_title}."` : '.'
+      const title = p.bounty_title ? `: "${p.bounty_title}"` : '.'
       return { ...meta, line: `${poster} posted a bounty${title}` }
     }
 
