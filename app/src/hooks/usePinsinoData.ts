@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect } from 'react'
-import { weeks, seasons, betMarkets, bets, pinLedger, loanLedger, loans, pvpChallenges, bountyPosts } from '../utils/supabase/db'
+import { weeks, seasons, betMarkets, bets, pinLedger, loanLedger, loans, pvpChallenges, bountyPosts, teamSlots } from '../utils/supabase/db'
 
 // One bettable side of a market (a single `bet_selections` row, flattened).
 // Generic over market_type — over/under is the first consumer, but the shape
@@ -23,6 +23,9 @@ export interface LineView {
   subjectName: string
   gameNumber: number | null
   line: number | null        // shared line when every selection shares one (O/U); else null
+  // Optional left-column metadata line, shown where O/U renders "LINE 142.5".
+  // Lets lineless markets (moneyline → "MONEYLINE · vs Team 3") carry context.
+  subtitle?: string
   selections: SelectionView[]
   // Game in progress: market closed for betting, still shown but not bettable.
   inProgress: boolean
@@ -66,13 +69,14 @@ export interface LineCategory {
 
 export function lineCategory(line: LineView): LineCategory {
   switch (line.marketType) {
+    case 'moneyline':
+      // Shown first within each game, above the player overs.
+      return { key: 'moneyline', label: 'Moneylines', sortOrder: 0 }
     case 'over_under':
       // Only the "over" side is bettable in the UI (the "under" is hidden — see
       // SportsbookScreen / context/betting-line-board.md), so the section reads
       // "Player Overs" rather than "Player Over/Unders".
-      return { key: 'player_ou', label: 'Player Overs', sortOrder: 0 }
-    case 'moneyline':
-      return { key: 'moneyline', label: 'Moneylines', sortOrder: 1 }
+      return { key: 'player_ou', label: 'Player Overs', sortOrder: 1 }
     default:
       return { key: line.marketType, label: line.title || line.marketType, sortOrder: 99 }
   }
@@ -221,6 +225,25 @@ function normalizeMarket(m: any): LineView {
   }
 }
 
+// Sportsbook social policy: a player may only bet their OWN team to win. Each
+// moneyline market is reduced to the single selection for the player's week team
+// (the opponent side is hidden). It's reshaped to mirror a player-prop row:
+//   subject "Your Team" · subtitle "MONEYLINE · vs <opponent>" · button "WIN".
+// The opponent's label is the metadata we keep before dropping that selection.
+// Markets not involving the player's team (the other matchups) drop out — so a
+// player sees exactly their own team's moneyline per game.
+function toYourTeamMoneyline(line: LineView, myTeamId: string | null): LineView | null {
+  const mine = myTeamId ? line.selections.find(s => s.key === myTeamId) : undefined
+  if (!mine) return null
+  const opponent = line.selections.find(s => s.key !== mine.key)
+  return {
+    ...line,
+    subjectName: 'Your Team',
+    subtitle: opponent ? `MONEYLINE · vs ${opponent.label}` : 'MONEYLINE',
+    selections: [{ ...mine, label: 'Win' }],
+  }
+}
+
 export function usePinsinoData(playerId: string | null) {
   const [loading, setLoading] = useState(true)
   const [balance, setBalance] = useState(0)
@@ -264,6 +287,15 @@ export function usePinsinoData(playerId: string | null) {
       let marketsData: any[] = []
       let moneylineData: any[] = []
       let weekBetsData: any[] = []
+      // The player's team for this week — drives "Your Team" on the moneyline board.
+      let myTeamId: string | null = null
+      if (weekId && playerId) {
+        fetches.push(
+          teamSlots.getTeamForPlayerWeek(playerId, weekId).then(({ data }) => {
+            myTeamId = data?.team_id ?? null
+          })
+        )
+      }
       if (weekId) {
         fetches.push(
           betMarkets.listActiveOUByWeek(weekId).then(({ data }) => {
@@ -455,7 +487,18 @@ export function usePinsinoData(playerId: string | null) {
           : null
       )
 
-      setOpenLines([...marketsData, ...moneylineData].map(normalizeMarket))
+      // Build the board: O/U lines pass through; moneylines are reduced to the
+      // player's own team ("Your Team"), dropping matchups they're not in.
+      const openLinesResolved: LineView[] = []
+      for (const line of [...marketsData, ...moneylineData].map(normalizeMarket)) {
+        if (line.marketType === 'moneyline') {
+          const ml = toYourTeamMoneyline(line, myTeamId)
+          if (ml) openLinesResolved.push(ml)
+        } else {
+          openLinesResolved.push(line)
+        }
+      }
+      setOpenLines(openLinesResolved)
       setWeekBets(weekBetViews)
       setSettledBets(settledBetsData.map(normalizeBet))
       setLeaderboard(board)

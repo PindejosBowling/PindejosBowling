@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { Fragment, useMemo, useState } from 'react'
 import {
   View,
   Text,
@@ -244,6 +244,28 @@ export default function SportsbookScreen() {
 
   const maxWager = balance
 
+  // One market row, shared by the collapsible (O/U) and headerless (moneyline)
+  // section layouts. Single mode opens the wager sheet; parlay mode toggles the
+  // slip; an in-progress game makes every side inert.
+  function renderLine(line: LineView, isLast: boolean, groupInProgress: boolean) {
+    const slipLeg = parlayLegs.find(l => l.marketId === line.marketId)
+    return (
+      <LineRow
+        line={line}
+        isLast={isLast}
+        inProgress={groupInProgress}
+        onSelect={sel =>
+          placeMode === 'parlay' ? toggleParlayLeg(line, sel) : onSingleSelect(line, sel)
+        }
+        selectionState={sel =>
+          placeMode === 'parlay'
+            ? { selected: slipLeg?.selectionId === sel.selectionId, disabled: isSelfTank(line, sel) }
+            : { disabled: balance < 10 || isSelfTank(line, sel) }
+        }
+      />
+    )
+  }
+
   if (loading) return <LoadingView label="Loading…" />
 
   return (
@@ -321,6 +343,24 @@ export default function SportsbookScreen() {
                   // Closing is all-or-nothing per game, so a category is in
                   // progress once any of its lines is closed.
                   const groupInProgress = lines.some(l => l.inProgress)
+                  // Moneylines: headerless. The "Your Team" row is self-explanatory
+                  // (one per game), so it renders inline with no collapsible header.
+                  if (category.key === 'moneyline') {
+                    return (
+                      <View key={category.key}>
+                        {groupInProgress && (
+                          <Text style={styles.adminHint}>{closedBettingNote(lines[0])}</Text>
+                        )}
+                        <View style={styles.card}>
+                          {lines.map((line, idx) => (
+                            <Fragment key={line.marketId}>
+                              {renderLine(line, idx === lines.length - 1, groupInProgress)}
+                            </Fragment>
+                          ))}
+                        </View>
+                      </View>
+                    )
+                  }
                   return (
                     <LineRowContainer
                       key={category.key}
@@ -335,21 +375,7 @@ export default function SportsbookScreen() {
                           // Keep a line visible while collapsed if it's in the
                           // parlay slip — lets players build across sections.
                           pinned: placeMode === 'parlay' && !!slipLeg,
-                          render: (isLast: boolean) => (
-                            <LineRow
-                              line={line}
-                              isLast={isLast}
-                              inProgress={groupInProgress}
-                              onSelect={sel =>
-                                placeMode === 'parlay' ? toggleParlayLeg(line, sel) : onSingleSelect(line, sel)
-                              }
-                              selectionState={sel =>
-                                placeMode === 'parlay'
-                                  ? { selected: slipLeg?.selectionId === sel.selectionId, disabled: isSelfTank(line, sel) }
-                                  : { disabled: balance < 10 || isSelfTank(line, sel) }
-                              }
-                            />
-                          ),
+                          render: (isLast: boolean) => renderLine(line, isLast, groupInProgress),
                         }
                       })}
                     />

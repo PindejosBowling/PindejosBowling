@@ -309,6 +309,15 @@ export const teamSlots = {
       .eq('teams.week_id', weekId)
       .order('team_id')
       .order('slot'),
+  // The team a player is assigned to for a given week (drives "Your Team" on the
+  // moneyline board). Null if they aren't slotted that week.
+  getTeamForPlayerWeek: (playerId: string, weekId: string) =>
+    supabase
+      .from('team_slots')
+      .select('team_id, teams!inner(week_id)')
+      .eq('player_id', playerId)
+      .eq('teams.week_id', weekId)
+      .maybeSingle(),
   listByPlayer: (playerId: string) =>
     supabase
       .from('team_slots')
