@@ -144,6 +144,11 @@ export default function SeasonRegistrationScreen() {
 
   function confirmDeleteSeason() {
     if (!activeSeason || saving) return
+    // Only an open (registration) season is safe to delete — guarded again in the DB.
+    if (!activeSeason.registration_open) {
+      showToast('Only a season with open registration can be deleted', 'error')
+      return
+    }
     Alert.alert(
       `Delete Season ${activeSeason.number}?`,
       'This permanently removes the season and its registrations. This cannot be undone.',
@@ -255,24 +260,28 @@ export default function SeasonRegistrationScreen() {
               })}
             </View>
 
+            {/* Close + Delete are only valid for an OPEN season. Once registration
+                closes, the season accrues real game data and must not be deleted. */}
             {isOpen && (
-              <TouchableOpacity
-                style={[styles.closeBtn, saving && styles.btnDisabled]}
-                onPress={closeRegistration}
-                disabled={saving}
-                activeOpacity={0.8}
-              >
-                <Text style={styles.closeBtnText}>Close Registration & Lock Roster</Text>
-              </TouchableOpacity>
+              <>
+                <TouchableOpacity
+                  style={[styles.closeBtn, saving && styles.btnDisabled]}
+                  onPress={closeRegistration}
+                  disabled={saving}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.closeBtnText}>Close Registration & Lock Roster</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.deleteBtn, saving && styles.btnDisabled]}
+                  onPress={confirmDeleteSeason}
+                  disabled={saving}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.deleteBtnText}>Delete Season</Text>
+                </TouchableOpacity>
+              </>
             )}
-            <TouchableOpacity
-              style={[styles.deleteBtn, saving && styles.btnDisabled]}
-              onPress={confirmDeleteSeason}
-              disabled={saving}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.deleteBtnText}>Delete Season</Text>
-            </TouchableOpacity>
           </View>
         )}
       </ScrollView>
