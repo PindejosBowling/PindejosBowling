@@ -37,10 +37,10 @@ export default function PinsinoLeaderboardScreen() {
             race to amass the biggest pin fortune by any means necessary.
           </Text>
           <Text style={styles.rulesBody}>
-            Earn pins by bowling games in the PBL, winning bets at the Sportsbook, leveraging loans from the Loan Shark, and challenging rivals directly in PvP.
+            Earn pins by bowling games in the PBL, winning bets at the Sportsbook, challenging rivals directly in PvP, collecting Bounties issued by the Pinsino, and leveraging loans from the Loan Shark.
           </Text>
           <Text style={styles.rulesBody}>
-            When a season ends, whoever sits atop this board is crowned the season's Titan and then the next season will start fresh.
+            When a season ends, whoever sits atop this board is crowned this season's Titan and then the next season will start fresh.
           </Text>
         </View>
 
