@@ -1,36 +1,29 @@
-import { useMemo, useState, useCallback } from 'react'
+import { useMemo, useState } from 'react'
 import {
   View,
   Text,
   ScrollView,
   RefreshControl,
   StyleSheet,
-  TouchableOpacity,
-  ActivityIndicator,
-  Alert,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useNavigation } from '@react-navigation/native'
 import { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { colors, fonts, radius } from '../theme'
-import { useUiStore } from '../stores/uiStore'
-import { useAuthStore } from '../stores/authStore'
 import { useRegistrationData } from '../hooks/useRegistrationData'
 import { useRefresh } from '../hooks/useRefresh'
-import { registrations, seasons } from '../utils/supabase/db'
 import { MoreStackParamList } from '../navigation/types'
 import LoadingView from '../components/LoadingView'
 import ScreenHeader from '../components/ScreenHeader'
 import PillFilter from '../components/PillFilter'
-import AdminOpenRegistrationModal from '../components/AdminOpenRegistrationModal'
 
 type Nav = NativeStackNavigationProp<MoreStackParamList>
 
 type SeasonStatus = 'open' | 'ongoing' | 'completed'
 
 const STATUS_LABEL: Record<SeasonStatus, string> = {
-  open: 'OPEN',
-  ongoing: 'ONGOING',
+  open: 'OPEN FOR REGISTRATION',
+  ongoing: 'IN PROGRESS',
   completed: 'COMPLETED',
 }
 
@@ -46,15 +39,10 @@ function formatDate(date: string | null): string {
 
 export default function RegistrationScreen() {
   const navigation = useNavigation<Nav>()
-  const { loading, rawRegistrations, seasonList, allPlayers, reload } = useRegistrationData()
+  const { loading, rawRegistrations, seasonList, reload } = useRegistrationData()
   const { refreshing, onRefresh } = useRefresh(reload)
-  const { showToast } = useUiStore()
-  const playerId = useAuthStore(s => s.playerId)
-  const isAdmin = useAuthStore(s => s.role) === 'admin'
 
   const [selectedNumber, setSelectedNumber] = useState<string | null>(null)
-  const [saving, setSaving] = useState(false)
-  const [showOpenModal, setShowOpenModal] = useState(false)
 
   const openSeason = useMemo(
     () => seasonList.find(s => s.registration_open) ?? null,
@@ -75,93 +63,24 @@ export default function RegistrationScreen() {
     [activeNumber, seasonList],
   )
 
-  const registrantIds = useMemo(() => {
-    const ids = new Set<string>()
-    for (const r of rawRegistrations) {
-      if (activeSeason && r.season_id === activeSeason.id) ids.add(r.player_id)
-    }
-    return ids
-  }, [rawRegistrations, activeSeason])
-
   // Registered players for the active season, sorted by name (read-only display).
   const registrants = useMemo(() => {
     if (!activeSeason) return []
     return rawRegistrations
       .filter(r => r.season_id === activeSeason.id)
-      .map(r => ({ id: r.player_id, name: r.players?.name ?? 'Unknown' }))
+      .map(r => ({
+        id: r.player_id,
+        name: r.players?.name ?? 'Unknown',
+        paid: r.payment_received,
+      }))
       .sort((a, b) => a.name.localeCompare(b.name))
   }, [rawRegistrations, activeSeason])
 
-  const isOpen = !!activeSeason?.registration_open
-  const status: 'open' | 'ongoing' | 'completed' = isOpen
+  const status: SeasonStatus = activeSeason?.registration_open
     ? 'open'
     : activeSeason?.is_active
       ? 'ongoing'
       : 'completed'
-  const isSelfRegistered = playerId != null && registrantIds.has(playerId)
-
-  async function setRegistered(pid: string, registered: boolean) {
-    if (!activeSeason || saving) return
-    setSaving(true)
-    try {
-      const { error } = registered
-        ? await registrations.insert({ season_id: activeSeason.id, player_id: pid })
-        : await registrations.remove(activeSeason.id, pid)
-      if (error) { showToast(error.message, 'error'); return }
-      await reload()
-    } catch {
-      showToast('Could not update registration', 'error')
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  const toggleSelf = useCallback(() => {
-    if (playerId) setRegistered(playerId, !isSelfRegistered)
-  }, [playerId, isSelfRegistered, activeSeason, saving])
-
-  async function closeRegistration() {
-    if (!activeSeason || saving) return
-    setSaving(true)
-    try {
-      const { error } = await seasons.update(activeSeason.id, { registration_open: false, is_active: true })
-      if (error) { showToast(error.message, 'error'); return }
-      showToast(`Registration closed for Season ${activeSeason.number}`, 'success')
-      await reload()
-    } catch {
-      showToast('Could not close registration', 'error')
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  async function deleteSeason() {
-    if (!activeSeason || saving) return
-    setSaving(true)
-    try {
-      const { error } = await seasons.remove(activeSeason.id)
-      if (error) { showToast(error.message, 'error'); return }
-      showToast(`Deleted Season ${activeSeason.number}`, 'success')
-      setSelectedNumber(null)
-      await reload()
-    } catch {
-      showToast('Could not delete season', 'error')
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  function confirmDeleteSeason() {
-    if (!activeSeason || saving) return
-    Alert.alert(
-      `Delete Season ${activeSeason.number}?`,
-      'This permanently removes the season and its registrations. This cannot be undone.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Delete', style: 'destructive', onPress: deleteSeason },
-      ],
-    )
-  }
 
   if (loading && rawRegistrations.length === 0) return <LoadingView label="Loading registration" />
 
@@ -175,16 +94,6 @@ export default function RegistrationScreen() {
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.muted} />
         }
       >
-        {isAdmin && !openSeason && (
-          <TouchableOpacity
-            style={styles.openBtn}
-            onPress={() => setShowOpenModal(true)}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.openBtnText}>＋ Open Registration for a New Season</Text>
-          </TouchableOpacity>
-        )}
-
         <PillFilter
           items={seasonNumbers}
           value={activeNumber}
@@ -225,95 +134,28 @@ export default function RegistrationScreen() {
               {registrants.length} {registrants.length === 1 ? 'player' : 'players'} registered
             </Text>
 
-            {/* Self register/withdraw — any signed-in player, open season only */}
-            {isOpen && playerId && (
-              <TouchableOpacity
-                style={[styles.selfBtn, isSelfRegistered ? styles.selfBtnOut : styles.selfBtnIn, saving && styles.btnDisabled]}
-                onPress={toggleSelf}
-                disabled={saving}
-                activeOpacity={0.8}
-              >
-                {saving ? (
-                  <ActivityIndicator size="small" color={isSelfRegistered ? colors.danger : colors.bg} />
-                ) : (
-                  <Text style={[styles.selfBtnText, isSelfRegistered ? styles.selfBtnTextOut : styles.selfBtnTextIn]}>
-                    {isSelfRegistered ? 'Withdraw me' : "I'm in — Register me"}
-                  </Text>
-                )}
-              </TouchableOpacity>
-            )}
-
-            {/* Admin: manage the full roster for an open season */}
-            {isOpen && isAdmin ? (
-              <>
-                <Text style={styles.sectionLabel}>MANAGE ROSTER</Text>
-                <View style={styles.rosterBox}>
-                  {allPlayers.map(p => {
-                    const registered = registrantIds.has(p.id)
-                    return (
-                      <TouchableOpacity
-                        key={p.id}
-                        style={styles.playerRow}
-                        onPress={() => setRegistered(p.id, !registered)}
-                        disabled={saving}
-                        activeOpacity={0.7}
-                      >
-                        <View style={[styles.checkbox, registered && styles.checkboxOn]}>
-                          {registered && <Text style={styles.checkmark}>✓</Text>}
-                        </View>
-                        <Text style={[styles.playerName, registered && styles.playerNameOn]}>{p.name}</Text>
-                      </TouchableOpacity>
-                    )
-                  })}
-                </View>
-                <TouchableOpacity
-                  style={[styles.closeBtn, saving && styles.btnDisabled]}
-                  onPress={closeRegistration}
-                  disabled={saving}
-                  activeOpacity={0.8}
-                >
-                  <Text style={styles.closeBtnText}>Close Registration & Lock Roster</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.deleteBtn, saving && styles.btnDisabled]}
-                  onPress={confirmDeleteSeason}
-                  disabled={saving}
-                  activeOpacity={0.8}
-                >
-                  <Text style={styles.deleteBtnText}>Delete Season</Text>
-                </TouchableOpacity>
-              </>
+            <Text style={styles.sectionLabel}>REGISTERED</Text>
+            {registrants.length === 0 ? (
+              <Text style={styles.empty}>No one registered yet.</Text>
             ) : (
-              // Read-only registrant list (closed season, or non-admin view)
-              <>
-                <Text style={styles.sectionLabel}>REGISTERED</Text>
-                {registrants.length === 0 ? (
-                  <Text style={styles.empty}>No one registered yet.</Text>
-                ) : (
-                  <View style={styles.rosterBox}>
-                    {registrants.map(p => (
-                      <View key={p.id} style={styles.playerRow}>
-                        <View style={[styles.checkbox, styles.checkboxOn]}>
-                          <Text style={styles.checkmark}>✓</Text>
-                        </View>
-                        <Text style={[styles.playerName, styles.playerNameOn]}>{p.name}</Text>
-                      </View>
-                    ))}
+              <View style={styles.rosterBox}>
+                {registrants.map(p => (
+                  <View key={p.id} style={styles.playerRow}>
+                    <Text style={styles.playerName}>{p.name}</Text>
+                    <View
+                      style={[styles.statusPill, p.paid ? styles.pillComplete : styles.pillPending]}
+                    >
+                      <Text style={[styles.pillText, p.paid ? styles.pillTextComplete : styles.pillTextPending]}>
+                        {p.paid ? 'Complete' : 'Pending'}
+                      </Text>
+                    </View>
                   </View>
-                )}
-              </>
+                ))}
+              </View>
             )}
           </View>
         )}
       </ScrollView>
-
-      {isAdmin && (
-        <AdminOpenRegistrationModal
-          visible={showOpenModal}
-          onClose={() => setShowOpenModal(false)}
-          onCreated={reload}
-        />
-      )}
     </SafeAreaView>
   )
 }
@@ -321,22 +163,6 @@ export default function RegistrationScreen() {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.bg },
   content: { paddingBottom: 32 },
-
-  openBtn: {
-    marginHorizontal: 16,
-    marginTop: 14,
-    backgroundColor: colors.accent,
-    borderRadius: radius.cardSm,
-    paddingVertical: 13,
-    alignItems: 'center',
-  },
-  openBtnText: {
-    fontFamily: fonts.barlowCondensed,
-    fontSize: 15,
-    color: colors.bg,
-    fontWeight: '700',
-    letterSpacing: 0.5,
-  },
 
   panel: {
     marginHorizontal: 16,
@@ -378,18 +204,6 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
 
-  selfBtn: {
-    borderRadius: radius.cardSm,
-    paddingVertical: 13,
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  selfBtnIn: { backgroundColor: colors.accent },
-  selfBtnOut: { backgroundColor: 'transparent', borderWidth: 1, borderColor: colors.danger },
-  selfBtnText: { fontFamily: fonts.barlowCondensed, fontSize: 15, fontWeight: '700', letterSpacing: 0.5 },
-  selfBtnTextIn: { color: colors.bg },
-  selfBtnTextOut: { color: colors.danger },
-
   sectionLabel: {
     fontFamily: fonts.barlowCondensed,
     fontSize: 11,
@@ -407,54 +221,25 @@ const styles = StyleSheet.create({
   playerRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     paddingHorizontal: 12,
-    paddingVertical: 9,
+    paddingVertical: 10,
     gap: 10,
   },
-  checkbox: {
-    width: 20,
-    height: 20,
-    borderRadius: 4,
-    borderWidth: 2,
-    borderColor: colors.border2,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  checkboxOn: { backgroundColor: colors.accent, borderColor: colors.accent },
-  checkmark: { fontSize: 13, color: colors.bg, fontWeight: '700', lineHeight: 15 },
-  playerName: { fontFamily: fonts.barlowCondensed, fontSize: 15, color: colors.muted, letterSpacing: 0.3 },
-  playerNameOn: { color: colors.text, fontWeight: '700' },
+  playerName: { fontFamily: fonts.barlowCondensed, fontSize: 15, color: colors.text, letterSpacing: 0.3, fontWeight: '700' },
 
-  closeBtn: {
-    borderRadius: radius.cardSm,
-    paddingVertical: 12,
-    alignItems: 'center',
+  statusPill: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 20,
     borderWidth: 1,
-    borderColor: colors.danger,
   },
-  closeBtnText: {
-    fontFamily: fonts.barlowCondensed,
-    fontSize: 14,
-    color: colors.danger,
-    fontWeight: '700',
-    letterSpacing: 0.5,
-  },
-  deleteBtn: {
-    marginTop: 10,
-    borderRadius: radius.cardSm,
-    paddingVertical: 12,
-    alignItems: 'center',
-    backgroundColor: colors.danger,
-  },
-  deleteBtnText: {
-    fontFamily: fonts.barlowCondensed,
-    fontSize: 14,
-    color: colors.bg,
-    fontWeight: '700',
-    letterSpacing: 0.5,
-  },
+  pillComplete: { backgroundColor: 'rgba(74,222,128,0.12)', borderColor: colors.success },
+  pillPending: { backgroundColor: 'transparent', borderColor: colors.muted2 },
+  pillText: { fontFamily: fonts.barlowCondensed, fontSize: 12, letterSpacing: 0.5 },
+  pillTextComplete: { color: colors.success },
+  pillTextPending: { color: colors.muted2 },
 
-  btnDisabled: { opacity: 0.5 },
   empty: {
     fontFamily: fonts.barlow,
     fontSize: 14,

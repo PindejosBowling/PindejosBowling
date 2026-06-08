@@ -35,9 +35,10 @@ interface EditState {
   lastName: string
   phone: string | null
   is_active: boolean
+  jersey_purchased: boolean
 }
 
-const EMPTY_EDIT: EditState = { id: null, firstName: '', lastName: '', phone: '', is_active: true }
+const EMPTY_EDIT: EditState = { id: null, firstName: '', lastName: '', phone: '', is_active: true, jersey_purchased: false }
 
 // Normalize to E.164 (+1XXXXXXXXXX for US). Returns null if input is blank.
 function normalizePhone(raw: string | null): string | null {
@@ -74,7 +75,7 @@ export default function PlayerManagementScreen() {
   }
 
   function openEdit(player: Player) {
-    setEditModal({ id: player.id, firstName: player.first_name, lastName: player.last_name, phone: player.phone, is_active: player.is_active })
+    setEditModal({ id: player.id, firstName: player.first_name, lastName: player.last_name, phone: player.phone, is_active: player.is_active, jersey_purchased: player.jersey_purchased })
   }
 
   function closeModal() {
@@ -105,6 +106,7 @@ export default function PlayerManagementScreen() {
           last_name: lastName,
           phone: normalizePhone(editModal.phone),
           is_active: editModal.is_active,
+          jersey_purchased: editModal.jersey_purchased,
         })
         if (error) { showToast(error.message, 'error'); return }
         showToast(`Updated ${displayName}`, 'success')
@@ -115,6 +117,7 @@ export default function PlayerManagementScreen() {
           last_name: lastName,
           phone: normalizePhone(editModal.phone),
           is_active: editModal.is_active,
+          jersey_purchased: editModal.jersey_purchased,
         })
         if (error) { showToast(error.message, 'error'); return }
         showToast(`Added ${displayName}`, 'success')
@@ -217,6 +220,19 @@ export default function PlayerManagementScreen() {
                   </TouchableOpacity>
                 </View>
 
+                <View style={styles.toggleRow}>
+                  <Text style={styles.fieldLabel}>JERSEY PURCHASED</Text>
+                  <TouchableOpacity
+                    style={[styles.togglePill, editModal.jersey_purchased && styles.togglePillOn]}
+                    onPress={() => setEditModal(prev => prev ? { ...prev, jersey_purchased: !prev.jersey_purchased } : null)}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[styles.togglePillText, editModal.jersey_purchased && styles.togglePillTextOn]}>
+                      {editModal.jersey_purchased ? 'Yes' : 'No'}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+
                 <View style={styles.btnRow}>
                   <TouchableOpacity
                     style={styles.btnCancel}
@@ -262,7 +278,10 @@ function PlayerRow({
   return (
     <View style={styles.row}>
       <View style={styles.rowInfo}>
-        <Text style={styles.rowName}>{player.name}</Text>
+        <Text style={styles.rowName}>
+          {player.name}
+          {player.jersey_purchased ? <Text style={styles.jerseyMark}>  🎽</Text> : null}
+        </Text>
         {player.phone ? <Text style={styles.rowPhone}>{player.phone}</Text> : null}
       </View>
       <TouchableOpacity
@@ -329,6 +348,7 @@ const styles = StyleSheet.create({
     color: colors.muted,
     marginTop: 2,
   },
+  jerseyMark: { fontSize: 13 },
 
   statusPill: {
     paddingHorizontal: 10,

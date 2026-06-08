@@ -14,6 +14,8 @@ import PlayerManagementScreen from '../screens/PlayerManagementScreen'
 import ProfilePicturesScreen from '../screens/ProfilePicturesScreen'
 import PastGamesScreen from '../screens/PastGamesScreen'
 import RegistrationScreen from '../screens/RegistrationScreen'
+import RegistrationAdminScreen from '../screens/RegistrationAdminScreen'
+import SeasonRegistrationScreen from '../screens/SeasonRegistrationScreen'
 import PinsinoAdminScreen from '../screens/PinsinoAdminScreen'
 import PinsinoAccountingScreen from '../screens/PinsinoAccountingScreen'
 import PinsinoSportsbookScreen from '../screens/PinsinoSportsbookScreen'
@@ -43,6 +45,8 @@ export default function MoreStackNavigator() {
       <Stack.Screen name="ProfilePictures" component={ProfilePicturesScreen} options={{ title: 'Profile Pictures' }} />
       <Stack.Screen name="PastGames" component={PastGamesScreen} options={{ title: 'Past Games' }} />
       <Stack.Screen name="Registration" component={RegistrationScreen} options={{ title: 'Registration' }} />
+      <Stack.Screen name="RegistrationAdmin" component={RegistrationAdminScreen} options={{ title: 'Registration Admin' }} />
+      <Stack.Screen name="SeasonRegistration" component={SeasonRegistrationScreen} options={{ title: 'Season Registration' }} />
       <Stack.Screen name="PinsinoAdmin" component={PinsinoAdminScreen} options={{ title: 'Pinsino Admin' }} />
       <Stack.Screen name="PinsinoAccounting" component={PinsinoAccountingScreen} options={{ title: 'Accounting' }} />
       <Stack.Screen name="PinsinoSportsbook" component={PinsinoSportsbookScreen} options={{ title: 'Sportsbook' }} />

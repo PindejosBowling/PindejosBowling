@@ -35,7 +35,7 @@ export default function MoreHomeScreen() {
   ]
 
   const adminTiles: Tile[] = [
-    { icon: '👥', label: 'Players',         onPress: () => navigation.navigate('PlayerManagement') },
+    { icon: '📝', label: 'Registration',    onPress: () => navigation.navigate('RegistrationAdmin') },
     { icon: '🖼️', label: 'Profile Pictures', onPress: () => navigation.navigate('ProfilePictures') },
     { icon: '🥇', label: 'End Season',     onPress: () => setShowEndSeason(true) },
     { icon: '🏁', label: 'Playoffs',       onPress: () => navigation.navigate('Playoffs') },
