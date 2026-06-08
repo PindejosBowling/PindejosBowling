@@ -5,6 +5,7 @@ export interface RegistrationRow {
   id: string
   season_id: string
   player_id: string
+  payment_received: boolean
   created_at: string
   players: { id: string; name: string | null } | null
 }
@@ -14,6 +15,7 @@ export interface SeasonOption {
   number: number
   registration_open: boolean
   is_active: boolean
+  bowling_night: string
   start_date: string
   end_date: string | null
 }
@@ -44,6 +46,7 @@ export function useRegistrationData() {
           number: s.number,
           registration_open: s.registration_open,
           is_active: s.is_active,
+          bowling_night: s.bowling_night,
           start_date: s.start_date,
           end_date: s.end_date,
         })),

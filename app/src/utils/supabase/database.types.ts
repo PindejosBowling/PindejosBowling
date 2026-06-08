@@ -1231,6 +1231,7 @@ export type Database = {
           first_name: string
           id: string
           is_active: boolean
+          jersey_purchased: boolean
           last_name: string
           name: string | null
           phone: string | null
@@ -1242,8 +1243,9 @@ export type Database = {
           avatar_path?: string | null
           created_at?: string
           first_name: string
-          id: string
+          id?: string
           is_active?: boolean
+          jersey_purchased?: boolean
           last_name: string
           name?: string | null
           phone?: string | null
@@ -1257,6 +1259,7 @@ export type Database = {
           first_name?: string
           id?: string
           is_active?: boolean
+          jersey_purchased?: boolean
           last_name?: string
           name?: string | null
           phone?: string | null
@@ -1592,6 +1595,7 @@ export type Database = {
         Row: {
           created_at: string
           id: string
+          payment_received: boolean
           player_id: string
           season_id: string
           updated_at: string
@@ -1599,6 +1603,7 @@ export type Database = {
         Insert: {
           created_at?: string
           id?: string
+          payment_received?: boolean
           player_id: string
           season_id: string
           updated_at?: string
@@ -1606,6 +1611,7 @@ export type Database = {
         Update: {
           created_at?: string
           id?: string
+          payment_received?: boolean
           player_id?: string
           season_id?: string
           updated_at?: string

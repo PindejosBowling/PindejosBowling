@@ -80,6 +80,8 @@ export const registrations = {
     supabase.from('registrations').select('*, players(id, name)').eq('season_id', seasonId),
   insert: (data: TablesInsert<'registrations'>) =>
     supabase.from('registrations').insert(data),
+  setPayment: (seasonId: string, playerId: string, payment_received: boolean) =>
+    supabase.from('registrations').update({ payment_received }).eq('season_id', seasonId).eq('player_id', playerId),
   remove: (seasonId: string, playerId: string) =>
     supabase.from('registrations').delete().eq('season_id', seasonId).eq('player_id', playerId),
 }

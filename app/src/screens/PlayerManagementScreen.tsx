@@ -35,9 +35,23 @@ interface EditState {
   lastName: string
   phone: string | null
   is_active: boolean
+  jersey_purchased: boolean
 }
 
-const EMPTY_EDIT: EditState = { id: null, firstName: '', lastName: '', phone: '', is_active: true }
+const EMPTY_EDIT: EditState = { id: null, firstName: '', lastName: '', phone: '', is_active: true, jersey_purchased: false }
+
+// Format a US number for display as the user types: "(555) 555-5555".
+// The +1 country code is assumed (added on save by normalizePhone), so only
+// the 10 national digits are shown. Tolerates a pasted leading "1" or "+1".
+function formatUsPhone(raw: string | null): string {
+  let digits = (raw ?? '').replace(/\D/g, '')
+  if (digits.length === 11 && digits.startsWith('1')) digits = digits.slice(1)
+  digits = digits.slice(0, 10)
+  if (digits.length === 0) return ''
+  if (digits.length < 4) return `(${digits}`
+  if (digits.length < 7) return `(${digits.slice(0, 3)}) ${digits.slice(3)}`
+  return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`
+}
 
 // Normalize to E.164 (+1XXXXXXXXXX for US). Returns null if input is blank.
 function normalizePhone(raw: string | null): string | null {
@@ -74,7 +88,7 @@ export default function PlayerManagementScreen() {
   }
 
   function openEdit(player: Player) {
-    setEditModal({ id: player.id, firstName: player.first_name, lastName: player.last_name, phone: player.phone, is_active: player.is_active })
+    setEditModal({ id: player.id, firstName: player.first_name, lastName: player.last_name, phone: formatUsPhone(player.phone), is_active: player.is_active, jersey_purchased: player.jersey_purchased })
   }
 
   function closeModal() {
@@ -105,16 +119,17 @@ export default function PlayerManagementScreen() {
           last_name: lastName,
           phone: normalizePhone(editModal.phone),
           is_active: editModal.is_active,
+          jersey_purchased: editModal.jersey_purchased,
         })
         if (error) { showToast(error.message, 'error'); return }
         showToast(`Updated ${displayName}`, 'success')
       } else {
         const { error } = await players.insert({
-          id: crypto.randomUUID(),
           first_name: firstName,
           last_name: lastName,
           phone: normalizePhone(editModal.phone),
           is_active: editModal.is_active,
+          jersey_purchased: editModal.jersey_purchased,
         })
         if (error) { showToast(error.message, 'error'); return }
         showToast(`Added ${displayName}`, 'success')
@@ -195,11 +210,12 @@ export default function PlayerManagementScreen() {
                 <Text style={styles.fieldLabel}>PHONE</Text>
                 <TextInput
                   style={styles.input}
-                  placeholder="Phone number"
+                  placeholder="(555) 555-5555"
                   placeholderTextColor={colors.muted}
                   value={editModal.phone ?? ''}
-                  onChangeText={v => setEditModal(prev => prev ? { ...prev, phone: v || null } : null)}
+                  onChangeText={v => setEditModal(prev => prev ? { ...prev, phone: formatUsPhone(v) } : null)}
                   keyboardType="phone-pad"
+                  maxLength={14}
                   returnKeyType="done"
                   onSubmitEditing={save}
                 />
@@ -213,6 +229,19 @@ export default function PlayerManagementScreen() {
                   >
                     <Text style={[styles.togglePillText, editModal.is_active && styles.togglePillTextOn]}>
                       {editModal.is_active ? 'Yes' : 'No'}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+
+                <View style={styles.toggleRow}>
+                  <Text style={styles.fieldLabel}>JERSEY PURCHASED</Text>
+                  <TouchableOpacity
+                    style={[styles.togglePill, editModal.jersey_purchased && styles.togglePillOn]}
+                    onPress={() => setEditModal(prev => prev ? { ...prev, jersey_purchased: !prev.jersey_purchased } : null)}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[styles.togglePillText, editModal.jersey_purchased && styles.togglePillTextOn]}>
+                      {editModal.jersey_purchased ? 'Yes' : 'No'}
                     </Text>
                   </TouchableOpacity>
                 </View>
@@ -262,7 +291,10 @@ function PlayerRow({
   return (
     <View style={styles.row}>
       <View style={styles.rowInfo}>
-        <Text style={styles.rowName}>{player.name}</Text>
+        <Text style={styles.rowName}>
+          {player.name}
+          {player.jersey_purchased ? <Text style={styles.jerseyMark}>  🎽</Text> : null}
+        </Text>
         {player.phone ? <Text style={styles.rowPhone}>{player.phone}</Text> : null}
       </View>
       <TouchableOpacity
@@ -329,6 +361,7 @@ const styles = StyleSheet.create({
     color: colors.muted,
     marginTop: 2,
   },
+  jerseyMark: { fontSize: 13 },
 
   statusPill: {
     paddingHorizontal: 10,
