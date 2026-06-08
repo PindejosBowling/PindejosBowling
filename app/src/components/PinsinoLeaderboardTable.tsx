@@ -10,7 +10,7 @@ type Props = {
   limit?: number
   /**
    * `summary` shows only name + net (compact landing-page preview).
-   * `detail` shows the full pins/wagers/debt/net breakdown. Defaults to `detail`.
+   * `detail` shows the full pins/open-action/debt/net breakdown. Defaults to `detail`.
    */
   mode?: 'summary' | 'detail'
 }
@@ -41,7 +41,7 @@ export default function PinsinoLeaderboardTable({
         {!isSummary && (
           <>
             <Text style={[styles.sbHeaderCell, styles.sbBalCell]}>Pins</Text>
-            <Text style={[styles.sbHeaderCell, styles.sbWagerCell]}>Wagers</Text>
+            <Text style={[styles.sbHeaderCell, styles.sbWagerCell]}>Open</Text>
             <Text style={[styles.sbHeaderCell, styles.sbDebtCell]}>Debt</Text>
           </>
         )}
@@ -69,7 +69,7 @@ export default function PinsinoLeaderboardTable({
             {!isSummary && (
               <>
                 <Text style={styles.sbBalance}>{p.balance.toLocaleString()}</Text>
-                <Text style={styles.sbWager}>{p.wagers > 0 ? p.wagers.toLocaleString() : ''}</Text>
+                <Text style={styles.sbWager}>{p.openAction > 0 ? p.openAction.toLocaleString() : ''}</Text>
                 <Text style={styles.sbDebt}>{p.debt > 0 ? `−${p.debt.toLocaleString()}` : ''}</Text>
               </>
             )}

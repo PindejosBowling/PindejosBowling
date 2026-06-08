@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect } from 'react'
-import { weeks, seasons, betMarkets, bets, pinLedger, loanLedger, loans } from '../utils/supabase/db'
+import { weeks, seasons, betMarkets, bets, pinLedger, loanLedger, loans, pvpChallenges, bountyPosts } from '../utils/supabase/db'
 
 // One bettable side of a market (a single `bet_selections` row, flattened).
 // Generic over market_type — over/under is the first consumer, but the shape
@@ -122,9 +122,9 @@ export interface LeaderboardEntry {
   playerId: string
   name: string
   balance: number
-  wagers: number        // sum of stakes on pending bets (already debited from balance)
+  openAction: number    // at-risk escrow: pending bets + locked PvP + active bounties
   debt: number          // outstanding active-loan debt (≥ 0)
-  netWorth: number      // balance + wagers − debt
+  netWorth: number      // balance + openAction − debt
   movement: 'up' | 'down' | 'same' | null
 }
 
@@ -228,6 +228,10 @@ export function usePinsinoData(playerId: string | null) {
   const [myBetMarketIds, setMyBetMarketIds] = useState<Set<string>>(new Set())
   // Caller's own loan figures (net-worth context near the balance card)
   const [debt, setDebt] = useState(0)
+  // Caller's own at-risk pins escrowed across the Pinsino — pending sportsbook
+  // bets + locked PvP contracts + active bounty entries. Already debited from
+  // balance at placement, so this recovers the at-risk portion for the net calc.
+  const [openAction, setOpenAction] = useState(0)
   const [activeLoan, setActiveLoan] = useState<ActiveLoanSummary | null>(null)
 
   const load = useCallback(async () => {
@@ -264,6 +268,10 @@ export function usePinsinoData(playerId: string | null) {
       let settledBetsData: any[] = []
       // Per-player active-loan debt (sum of loan_ledger rows on active loans)
       let seasonDebt: any[] = []
+      // Season-wide escrowed "open action" sources for the leaderboard's net-worth:
+      // locked PvP contracts + all bounties (active hunter stakes summed per player).
+      let seasonPvpData: any[] = []
+      let seasonBountyData: any[] = []
       if (seasonId) {
         fetches.push(
           pinLedger.listBySeasonForLeaderboard(seasonId).then(({ data }) => {
@@ -274,6 +282,12 @@ export function usePinsinoData(playerId: string | null) {
           }),
           loanLedger.listActiveBySeason(seasonId).then(({ data }) => {
             seasonDebt = data ?? []
+          }),
+          pvpChallenges.listLockedBySeason(seasonId).then(({ data }) => {
+            seasonPvpData = data ?? []
+          }),
+          bountyPosts.listBySeason(seasonId).then(({ data }) => {
+            seasonBountyData = data ?? []
           })
         )
       }
@@ -339,12 +353,29 @@ export function usePinsinoData(playerId: string | null) {
           byPlayer[pid].priorBalance += e.amount
         }
       }
-      // Sum of stakes on pending bets per player. Stakes are already debited from
-      // balance at placement, so this recovers the at-risk portion for display.
-      const wagersByPlayer: Record<string, number> = {}
+      // Per-player "open action": at-risk pins escrowed across the Pinsino,
+      // already debited from balance at placement, so this recovers the at-risk
+      // portion for display + the net-worth calc. Three sources:
+      //  • Sportsbook — stakes on pending bets.
+      //  • PvP — each side's stake on locked (accepted, unsettled) contracts.
+      //  • Bounties — active (unsettled) hunter-entry stakes. (Player sponsorship
+      //    is House-only in v1, so there's no player sponsor escrow.)
+      const openActionByPlayer: Record<string, number> = {}
+      const addAction = (pid: string | null | undefined, amount: number) => {
+        if (!pid || !amount) return
+        openActionByPlayer[pid] = (openActionByPlayer[pid] ?? 0) + amount
+      }
       for (const b of weekBetViews) {
-        if (b.status === 'pending') {
-          wagersByPlayer[b.playerId] = (wagersByPlayer[b.playerId] ?? 0) + b.stake
+        if (b.status === 'pending') addAction(b.playerId, b.stake)
+      }
+      for (const c of seasonPvpData) {
+        if (c.status !== 'locked') continue
+        addAction(c.creator_player_id, c.creator_stake)
+        addAction(c.counterparty_player_id, c.counterparty_stake)
+      }
+      for (const bounty of seasonBountyData) {
+        for (const s of (bounty.bounty_hunter_stakes ?? [])) {
+          if (s.status === 'active') addAction(s.player_id, s.stake_amount)
         }
       }
 
@@ -372,15 +403,15 @@ export function usePinsinoData(playerId: string | null) {
 
       const board = activePlayers
         .map(({ playerId, name, balance }) => {
-          const wagers = wagersByPlayer[playerId] ?? 0
+          const openAction = openActionByPlayer[playerId] ?? 0
           const debt = debtByPlayer[playerId] ?? 0
           return {
             playerId,
             name,
             balance,
-            wagers,
+            openAction,
             debt,
-            netWorth: balance + wagers - debt,
+            netWorth: balance + openAction - debt,
           }
         })
         .sort((a, b) => b.netWorth - a.netWorth)
@@ -397,6 +428,8 @@ export function usePinsinoData(playerId: string | null) {
       const myActiveLoan = myLoansData.find((l: any) => l.status === 'active')
 
       setDebt(myDebt)
+      // The caller's own at-risk pins fall straight out of the per-player map.
+      setOpenAction(playerId ? (openActionByPlayer[playerId] ?? 0) : 0)
       setActiveLoan(
         myActiveLoan
           ? {
@@ -423,5 +456,5 @@ export function usePinsinoData(playerId: string | null) {
 
   useEffect(() => { load() }, [load])
 
-  return { loading, balance, debt, netWorth: balance - debt, activeLoan, openLines, myBets, weekBets, settledBets, leaderboard, myBetMarketIds, currentWeekId, currentSeasonId, reload: load }
+  return { loading, balance, debt, openAction, netWorth: balance + openAction - debt, activeLoan, openLines, myBets, weekBets, settledBets, leaderboard, myBetMarketIds, currentWeekId, currentSeasonId, reload: load }
 }
