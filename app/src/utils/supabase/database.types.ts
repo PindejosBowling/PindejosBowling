@@ -1243,7 +1243,7 @@ export type Database = {
           avatar_path?: string | null
           created_at?: string
           first_name: string
-          id: string
+          id?: string
           is_active?: boolean
           jersey_purchased?: boolean
           last_name: string

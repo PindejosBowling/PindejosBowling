@@ -40,6 +40,19 @@ interface EditState {
 
 const EMPTY_EDIT: EditState = { id: null, firstName: '', lastName: '', phone: '', is_active: true, jersey_purchased: false }
 
+// Format a US number for display as the user types: "(555) 555-5555".
+// The +1 country code is assumed (added on save by normalizePhone), so only
+// the 10 national digits are shown. Tolerates a pasted leading "1" or "+1".
+function formatUsPhone(raw: string | null): string {
+  let digits = (raw ?? '').replace(/\D/g, '')
+  if (digits.length === 11 && digits.startsWith('1')) digits = digits.slice(1)
+  digits = digits.slice(0, 10)
+  if (digits.length === 0) return ''
+  if (digits.length < 4) return `(${digits}`
+  if (digits.length < 7) return `(${digits.slice(0, 3)}) ${digits.slice(3)}`
+  return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`
+}
+
 // Normalize to E.164 (+1XXXXXXXXXX for US). Returns null if input is blank.
 function normalizePhone(raw: string | null): string | null {
   const trimmed = (raw ?? '').trim()
@@ -75,7 +88,7 @@ export default function PlayerManagementScreen() {
   }
 
   function openEdit(player: Player) {
-    setEditModal({ id: player.id, firstName: player.first_name, lastName: player.last_name, phone: player.phone, is_active: player.is_active, jersey_purchased: player.jersey_purchased })
+    setEditModal({ id: player.id, firstName: player.first_name, lastName: player.last_name, phone: formatUsPhone(player.phone), is_active: player.is_active, jersey_purchased: player.jersey_purchased })
   }
 
   function closeModal() {
@@ -112,7 +125,6 @@ export default function PlayerManagementScreen() {
         showToast(`Updated ${displayName}`, 'success')
       } else {
         const { error } = await players.insert({
-          id: crypto.randomUUID(),
           first_name: firstName,
           last_name: lastName,
           phone: normalizePhone(editModal.phone),
@@ -198,11 +210,12 @@ export default function PlayerManagementScreen() {
                 <Text style={styles.fieldLabel}>PHONE</Text>
                 <TextInput
                   style={styles.input}
-                  placeholder="Phone number"
+                  placeholder="(555) 555-5555"
                   placeholderTextColor={colors.muted}
                   value={editModal.phone ?? ''}
-                  onChangeText={v => setEditModal(prev => prev ? { ...prev, phone: v || null } : null)}
+                  onChangeText={v => setEditModal(prev => prev ? { ...prev, phone: formatUsPhone(v) } : null)}
                   keyboardType="phone-pad"
+                  maxLength={14}
                   returnKeyType="done"
                   onSubmitEditing={save}
                 />
