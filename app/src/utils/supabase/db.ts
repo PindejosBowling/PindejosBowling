@@ -46,6 +46,13 @@ export const players = {
     supabase.from('players').select('*').order('name'),
   listActive: () =>
     supabase.from('players').select('*').eq('is_active', true).order('name'),
+  // Players registered for a given season (inner join → only registered rows).
+  listBySeason: (seasonId: string) =>
+    supabase
+      .from('players')
+      .select('*, registrations!inner(season_id)')
+      .eq('registrations.season_id', seasonId)
+      .order('name'),
   getById: (id: string) =>
     supabase.from('players').select('*').eq('id', id).single(),
   getByName: (name: string) =>
