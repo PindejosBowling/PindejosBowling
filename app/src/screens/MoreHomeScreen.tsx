@@ -28,8 +28,7 @@ export default function MoreHomeScreen() {
     { icon: '🏆', label: 'Records',      onPress: () => navigation.navigate('LeagueRecords') },
     { icon: '⚔️',  label: 'Head to Head', onPress: () => navigation.navigate('HeadToHead') },
     { icon: '🧪', label: 'Chemistry',    onPress: () => navigation.navigate('Chemistry') },
-    { icon: '📅', label: 'Past Seasons', onPress: () => navigation.navigate('PastSeasons') },
-    { icon: '🎳', label: 'Past Games',   onPress: () => navigation.navigate('PastGames') },
+    { icon: '📜', label: 'History',      onPress: () => navigation.navigate('History') },
     { icon: '📝', label: 'Registration', onPress: () => navigation.navigate('Registration') },
     { icon: '🗑️', label: 'Trash Board',  onPress: () => navigation.navigate('TrashBoard') },
   ]

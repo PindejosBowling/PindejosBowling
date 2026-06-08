@@ -3,12 +3,11 @@ export type MoreStackParamList = {
   LeagueRecords: undefined
   HeadToHead: undefined
   Chemistry: undefined
-  PastSeasons: undefined
+  History: undefined
   TrashBoard: undefined
   Playoffs: undefined
   PlayerManagement: undefined
   ProfilePictures: undefined
-  PastGames: undefined
   Registration: undefined
   RegistrationAdmin: undefined
   SeasonRegistration: undefined
