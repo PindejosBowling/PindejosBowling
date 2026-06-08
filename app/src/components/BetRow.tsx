@@ -34,7 +34,8 @@ export default function BetRow({
           <>
             {bet.legs.map((leg, i) => (
               <Text key={i} style={styles.betSubject}>
-                {leg.subjectName} · {leg.pick?.toUpperCase()} {leg.line.toFixed(1)}
+                {leg.subjectName} · {leg.pick?.toUpperCase()}
+                {leg.marketType === 'over_under' ? ` ${leg.line.toFixed(1)}` : ''}
                 {leg.gameNumber != null ? ` (G${leg.gameNumber})` : ''}
                 {leg.result ? ` — ${leg.result.toUpperCase()}` : ''}
               </Text>
@@ -46,7 +47,8 @@ export default function BetRow({
         ) : (
           <>
             <Text style={styles.betSubject}>
-              {bet.subjectName} · {bet.pick?.toUpperCase()} {bet.line.toFixed(1)}
+              {bet.subjectName} · {bet.pick?.toUpperCase()}
+              {bet.marketType === 'over_under' ? ` ${bet.line.toFixed(1)}` : ''}
               {bet.gameNumber != null ? ` · G${bet.gameNumber}` : ''}
             </Text>
             <Text style={styles.betDetails}>

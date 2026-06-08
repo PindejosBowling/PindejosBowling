@@ -166,6 +166,7 @@ export default function MatchupsScreen() {
     setStartingGame(gameNum)
     try {
       await betMarkets.setOUStatusByWeekGame(weekId, gameNum, started ? 'closed' : 'open')
+      await betMarkets.setMoneylineStatusByWeekGame(weekId, gameNum, started ? 'closed' : 'open')
       if (started) {
         await pvpChallenges.closeOpenForGame(weekId, gameNum)
         setOpenGames(prev => ({ ...prev, [gameNum]: true }))
@@ -195,6 +196,8 @@ export default function MatchupsScreen() {
       // schedule game now exists so it creates its RSVP-driven O/U lines (same call
       // team-gen makes for game 3). Idempotent.
       await betMarkets.syncOUForWeek(weekId, [nextGameNum])
+      // Moneylines do derive from the new games rows — sync them too. Idempotent.
+      await betMarkets.syncMoneylineForWeek(weekId)
       await reload()
     } finally {
       setAddingGame(false)

@@ -35,9 +35,12 @@ export default function LineRow({ line, isLast, inProgress, selectionState, onSe
     >
       <View style={styles.lineInfo}>
         <Text style={styles.lineName}>{line.subjectName}</Text>
-        {line.line != null && (
+        {/* Subtitle wins when set (e.g. moneyline metadata); else the O/U line. */}
+        {line.subtitle != null ? (
+          <Text style={styles.lineValue}>{line.subtitle}</Text>
+        ) : line.line != null ? (
           <Text style={styles.lineValue}>LINE  {line.line.toFixed(1)}</Text>
-        )}
+        ) : null}
       </View>
       <View style={styles.pickBtns}>
         {line.selections.map(sel => {

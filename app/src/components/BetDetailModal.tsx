@@ -104,7 +104,8 @@ export default function BetDetailModal({ bet, onClose }: BetDetailModalProps) {
             <Text style={styles.label}>{bet.legCount > 1 ? `LEGS (${bet.legCount})` : 'SELECTION'}</Text>
             {bet.legs.map((leg, i) => (
               <Text key={i} style={[styles.value, { marginTop: i === 0 ? 0 : 4 }]}>
-                {leg.subjectName} · {leg.pick?.toUpperCase()} {leg.line.toFixed(1)}
+                {leg.subjectName} · {leg.pick?.toUpperCase()}
+                {leg.marketType === 'over_under' ? ` ${leg.line.toFixed(1)}` : ''}
                 {leg.gameNumber != null ? ` · G${leg.gameNumber}` : ''}
                 {leg.actualScore != null && (
                   <>

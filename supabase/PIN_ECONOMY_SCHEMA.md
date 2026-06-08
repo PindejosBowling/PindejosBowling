@@ -78,7 +78,8 @@ bet_markets ──< bet_selections                 bet_offers
 | `title` text | Display label. |
 | `week_id` uuid → weeks | Scope. **Nullable** — null = season-long / futures. `ON DELETE CASCADE`. |
 | `game_number` int | Nullable; `>= 1` when present. |
-| `subject_player_id` uuid → players | The player a line/prop is about (e.g. the O/U subject). `ON DELETE CASCADE`. |
+| `subject_player_id` uuid → players | The player a line/prop is about (e.g. the O/U subject). `ON DELETE CASCADE`. Null for moneylines. |
+| `subject_game_id` uuid → games | The game (matchup) a market is about — the **moneyline** subject. `ON DELETE CASCADE`. Null for O/U. Mirrors `subject_player_id`: one or the other is set. Indexed. |
 | `params` jsonb | Type-specific descriptive bits so arbitrary props don't each need a table. Default `{}`. |
 | `status` text | `open` \| `closed` \| `settled` \| `void`. |
 | `result_value` numeric(6,1) | Generic settled outcome (e.g. the subject's actual game score), optional. |
@@ -101,7 +102,7 @@ A market is the parent of its selections (`ON DELETE CASCADE`).
 | `sort_order` int | Display ordering. |
 
 - **Over/under:** two selections, `over` and `under`, sharing the same `line`.
-- **Moneyline:** one selection per side (e.g. each player/team), `line` null.
+- **Moneyline (as built):** one selection per **team** in a game, `key = team_id`, `label = "Team N"`, `line` null, even-money `2.000`. Market `subject_game_id` points at the matchup.
 - **Prop:** `yes`/`no`, or N choices.
 
 ### `bets` — the stake (single source of truth for money placed)
@@ -189,7 +190,7 @@ Created when an offer is accepted; links the two opposing `bets`.
 | Feature | Expressed as |
 |---|---|
 | **Over/under** | `bet_markets(market_type=over_under, subject_player_id, game_number)` + two `bet_selections` (`over`/`under`) sharing a `line`, each with `odds`. |
-| **Moneyline** | `bet_markets(market_type=moneyline)` + one selection per side, `line` null. |
+| **Moneyline (LIVE)** | `bet_markets(market_type=moneyline, subject_game_id, game_number)` + one selection per team (`key=team_id`, `line` null, even-money). Auto-generated per game (`sync_moneyline_markets_for_week`), auto-settled by higher combined team score (`settle_betting_for_week`). |
 | **Prop (arbitrary)** | `bet_markets(market_type=prop, params=<definition>)` + N selections. No new table. |
 | **Single bet** | one `bets` row + one `bet_legs` row (`side=back`). |
 | **Parlay** | one `bets` row + N `bet_legs` rows; combined odds = Π(leg odds). |
@@ -297,10 +298,15 @@ All `SECURITY DEFINER`, pinned `search_path`, identity from `auth.uid()`/`auth.j
 | `sync_over_under_markets_for_week(week_id, extra_games default {})` | RSVP-driven create/refund of O/U markets + selections, derived from `rsvp` + `scores`. `extra_games` adds schedule games (team-gen game 3, or matchups admin "+ Add Game N"). Idempotent. `authenticated`. |
 | `remove_over_under_markets_for_game(week_id, game_number)` | **Admin.** Inverse of the sync's *create*: refund every bet on that week+game's O/U markets (delete the ledger pair[s] by `bet_id`, restoring balances — parlays touching the game refund whole) and drop the markets. Used when the matchups admin removes a schedule game (sync never prunes a removed game, since its target set only ever grows). |
 | `place_house_bet(selection_ids[], stake)` | Atomic, balance-checked, anti-tank-checked house bet; writes `bets` + `bet_legs` + the `bet_stake` double-entry pair. Parlay-shaped (O/U passes one selection). Returns `bets.id`. `authenticated`. |
+| `sync_moneyline_markets_for_week(week_id)` | Schedule-driven create of even-money moneyline markets + team selections (one per `games` row). Wired to **team generation / add-game**, not RSVP. Idempotent (create-only). `authenticated`. |
+| `place_house_bet(selection_ids[], stake)` | (above — market-type-agnostic; moneyline needs no change). |
 | `settle_market(market_id, result_value)` | **Admin.** Settle one O/U market: set selection results, derive leg results (back/lay), finalize bets, post payout/refund pairs. Idempotent. |
-| `settle_betting_for_week(week_id)` | **Admin.** On archive: credit `score_credit` (once) + settle every open O/U market against the subject's actual score. |
+| `settle_moneyline_market(market_id)` | **Admin.** Settle one moneyline market from its game's scores — winner = higher combined team total, ties → push. No score input. Idempotent. |
+| `settle_betting_for_week(week_id)` | **Admin.** On archive: credit `score_credit` (once) + settle every open O/U market (vs. the subject's score) **and** every moneyline market (vs. team totals); scoreless markets are closed without a result. |
 | `cancel_bet(bet_id)` | **Admin.** Total undo: delete the bet's ledger pair(s) + the bet; re-open a settled market if it was its last bet. |
-| `settle_market_internal(market_id, result_value)` | Private engine (no grants); the settlement body shared by `settle_market` / `settle_betting_for_week`. |
+| `settle_market_internal(market_id, result_value)` | Private engine (no grants); the **O/U** settlement body. |
+| `settle_moneyline_market_internal(market_id)` | Private engine (no grants); the **moneyline** settlement body (computes team totals, sets results). |
+| `finalize_bets_for_market(market_id)` | Private engine (no grants); the **shared** bet-finalization body (leg back/lay results + bet resolution + payout/refund pairs), called by both settlement engines once selection results are set. |
 | `is_registered_player(phone)` | Pre-login gate (anon-callable). |
 
 Anti-tanking is also enforced by the `bet_legs_no_self_tank` BEFORE INSERT/UPDATE
@@ -412,14 +418,15 @@ bets shipped as a pure-UI addition on top of the existing model:
 >   correlated (hot/cold night, lane condition), so `P(all over)` exceeds `Π(0.5)`
 >   while the parlay still only pays `×2^N` → underpriced → +EV. (A cross-market
 >   correlation — a player's Over + their team's moneyline — is the textbook case
->   real books block, but moneyline isn't live yet, so it can't occur today.)
+>   real books block, and **moneyline is now live**, so this parlay *can* be built
+>   today. It's an open integrity item, not blocked in code.)
 
 **Next (schema already supports it):**
 
 1. **Peer bets** (`bet_offers` / `bet_matches`): `create_bet_offer`,
    `accept_bet_offer` RPCs + escrow settlement — all `SECURITY DEFINER`,
    integrity-checked, double-entry (peer is zero-sum between players, rake → house).
-2. **Moneyline / props:** new `bet_markets.market_type` + selections (§7).
+2. **Moneyline — DONE.** Game moneylines are live: even-money, auto-generated per matchup, auto-settled by combined team score (`subject_game_id`, `sync_moneyline_markets_for_week`, `settle_moneyline_market`). **Props** remain (new `bet_markets.market_type` + selections, §7).
 
 ### Open product decisions (do not block the schema)
 - Peer **rake** percentage (`bet_matches.rake` defaults to 0).
@@ -448,6 +455,10 @@ bets shipped as a pure-UI addition on top of the existing model:
 | `migrations/20260605011338_decommission_legacy_betting.sql` | Phase 2 WS6 — drop legacy tables / RPCs / trigger / `placed_bet_id`; prune type CHECK. |
 | `migrations/20260605120219_add_week_id_to_pin_ledger.sql` | Add `week_id` FK to `pin_ledger`; backfill existing rows; update `place_house_bet`, `settle_market_internal`, `settle_betting_for_week` to stamp it on new entries. |
 | `migrations/20260605215407_remove_ou_markets_for_game.sql` | `remove_over_under_markets_for_game(week_id, game_number)` — admin refund + teardown of a removed schedule game's O/U markets (inverse of the sync's create path). |
+| `migrations/20260608140000_bet_markets_subject_game.sql` | **Moneyline 1/3** — `bet_markets.subject_game_id` (+ index). |
+| `migrations/20260608140100_sync_moneyline_markets.sql` | **Moneyline 2/3** — `sync_moneyline_markets_for_week` (even-money market per matchup). |
+| `migrations/20260608140200_moneyline_settlement.sql` | **Moneyline 3/3** — extract `finalize_bets_for_market`; `settle_moneyline_market[_internal]`; extend `settle_betting_for_week`. |
+| `migrations/20260608140300_moneyline_title_no_game_suffix.sql` | Moneyline title cleanup (drop the redundant "· Game N"). |
 | `app/src/utils/supabase/db.ts` | Typed query objects (`betMarkets` / `bets` / `pinLedger` + RPC wrappers). |
 | `app/src/hooks/useBettingData.ts` | Normalizes the market/bet graph into flat `LineView` / `BetView`. |
 | `supabase/AUTH.md` | Auth / JWT / RLS architecture. |

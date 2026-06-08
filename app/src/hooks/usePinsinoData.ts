@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect } from 'react'
-import { weeks, seasons, betMarkets, bets, pinLedger, loanLedger, loans, pvpChallenges, bountyPosts } from '../utils/supabase/db'
+import { weeks, seasons, betMarkets, bets, pinLedger, loanLedger, loans, pvpChallenges, bountyPosts, teamSlots } from '../utils/supabase/db'
 
 // One bettable side of a market (a single `bet_selections` row, flattened).
 // Generic over market_type — over/under is the first consumer, but the shape
@@ -23,6 +23,9 @@ export interface LineView {
   subjectName: string
   gameNumber: number | null
   line: number | null        // shared line when every selection shares one (O/U); else null
+  // Optional left-column metadata line, shown where O/U renders "LINE 142.5".
+  // Lets lineless markets (moneyline → "MONEYLINE · vs Team 3") carry context.
+  subtitle?: string
   selections: SelectionView[]
   // Game in progress: market closed for betting, still shown but not bettable.
   inProgress: boolean
@@ -66,10 +69,14 @@ export interface LineCategory {
 
 export function lineCategory(line: LineView): LineCategory {
   switch (line.marketType) {
-    case 'over_under':
-      return { key: 'player_ou', label: 'Player Over/Unders', sortOrder: 0 }
     case 'moneyline':
-      return { key: 'moneyline', label: 'Moneylines', sortOrder: 1 }
+      // Shown first within each game, above the player overs.
+      return { key: 'moneyline', label: 'Moneylines', sortOrder: 0 }
+    case 'over_under':
+      // Only the "over" side is bettable in the UI (the "under" is hidden — see
+      // SportsbookScreen / context/betting-line-board.md), so the section reads
+      // "Player Overs" rather than "Player Over/Unders".
+      return { key: 'player_ou', label: 'Player Overs', sortOrder: 1 }
     default:
       return { key: line.marketType, label: line.title || line.marketType, sortOrder: 99 }
   }
@@ -82,12 +89,13 @@ export function closedBettingNote(line: LineView): string {
   return 'The Pinsino does not take action while this market is in progress'
 }
 
-// One resolved leg of a bet (a single backed over/under selection).
+// One resolved leg of a bet (a single backed selection).
 export interface LegView {
   marketId: string          // the leg's market — settled independently (admin settle)
+  marketType: string        // 'over_under' | 'moneyline' | … (gates line display)
   subjectName: string
-  pick: string              // selection key: 'over' | 'under'
-  line: number
+  pick: string              // display label: 'Over' / 'Under' / a team name
+  line: number              // the O/U line; meaningless (0) for lineless markets
   gameNumber: number | null
   actualScore: number | null
   result: string | null     // won | lost | push | void | null (pending)
@@ -104,11 +112,12 @@ export interface BetView {
   status: string            // pending | won | lost | push | void | cancelled
   settledAt: string | null
   potentialPayout: number
-  pick: string              // first leg's selection key: 'over' | 'under'
+  pick: string              // first leg's selection label ('Over' / a team name)
   line: number
   gameNumber: number | null
   subjectName: string
   marketId: string          // first leg's market
+  marketType: string        // first leg's market_type (gates line display)
   marketStatus: string
   actualScore: number | null
   weekNumber: number | null
@@ -144,8 +153,11 @@ export function normalizeBet(b: any): BetView {
     const mkt = sel?.bet_markets
     return {
       marketId: mkt?.id ?? '',
-      subjectName: mkt?.subject?.name ?? '—',
-      pick: sel?.key ?? '',
+      marketType: mkt?.market_type ?? '',
+      subjectName: mkt?.subject?.name ?? mkt?.title ?? '—',
+      // Prefer the selection label (readable for every market type — a team name
+      // for moneylines, whose `key` is a team uuid) over the raw key.
+      pick: sel?.label ?? sel?.key ?? '',
       line: Number(leg?.line_at_placement ?? sel?.line ?? 0),
       gameNumber: mkt?.game_number ?? null,
       actualScore: mkt?.result_value != null ? Number(mkt.result_value) : null,
@@ -164,11 +176,12 @@ export function normalizeBet(b: any): BetView {
     status: b.status,
     settledAt: b.settled_at,
     potentialPayout: b.potential_payout,
-    pick: firstSel?.key ?? '',
+    pick: firstSel?.label ?? firstSel?.key ?? '',
     line: Number(firstLeg?.line_at_placement ?? firstSel?.line ?? 0),
     gameNumber: firstMkt?.game_number ?? null,
-    subjectName: firstMkt?.subject?.name ?? '—',
+    subjectName: firstMkt?.subject?.name ?? firstMkt?.title ?? '—',
     marketId: firstMkt?.id ?? '',
+    marketType: firstMkt?.market_type ?? '',
     marketStatus: firstMkt?.status ?? '',
     actualScore: firstMkt?.result_value != null ? Number(firstMkt.result_value) : null,
     weekNumber: firstMkt?.weeks?.week_number ?? null,
@@ -202,11 +215,32 @@ function normalizeMarket(m: any): LineView {
     marketType: m.market_type,
     title: m.title ?? '',
     subjectPlayerId: m.subject_player_id ?? null,
-    subjectName: m.subject?.name ?? '—',
+    // O/U markets name a player (subject); moneylines name a matchup via the
+    // market title (subject is a game, so the player embed resolves null).
+    subjectName: m.subject?.name ?? m.title ?? '—',
     gameNumber: m.game_number ?? null,
     line: sharedLine,
     selections,
     inProgress: m.status === 'closed',
+  }
+}
+
+// Sportsbook social policy: a player may only bet their OWN team to win. Each
+// moneyline market is reduced to the single selection for the player's week team
+// (the opponent side is hidden). It's reshaped to mirror a player-prop row:
+//   subject "Your Team" · subtitle "MONEYLINE · vs <opponent>" · button "WIN".
+// The opponent's label is the metadata we keep before dropping that selection.
+// Markets not involving the player's team (the other matchups) drop out — so a
+// player sees exactly their own team's moneyline per game.
+function toYourTeamMoneyline(line: LineView, myTeamId: string | null): LineView | null {
+  const mine = myTeamId ? line.selections.find(s => s.key === myTeamId) : undefined
+  if (!mine) return null
+  const opponent = line.selections.find(s => s.key !== mine.key)
+  return {
+    ...line,
+    subjectName: 'Your Team',
+    subtitle: opponent ? `MONEYLINE · vs ${opponent.label}` : 'MONEYLINE',
+    selections: [{ ...mine, label: 'Win' }],
   }
 }
 
@@ -249,13 +283,26 @@ export function usePinsinoData(playerId: string | null) {
 
       const fetches: PromiseLike<any>[] = []
 
-      // Open O/U markets + all bets for this week
+      // Open O/U + moneyline markets + all bets for this week
       let marketsData: any[] = []
+      let moneylineData: any[] = []
       let weekBetsData: any[] = []
+      // The player's team for this week — drives "Your Team" on the moneyline board.
+      let myTeamId: string | null = null
+      if (weekId && playerId) {
+        fetches.push(
+          teamSlots.getTeamForPlayerWeek(playerId, weekId).then(({ data }) => {
+            myTeamId = data?.team_id ?? null
+          })
+        )
+      }
       if (weekId) {
         fetches.push(
           betMarkets.listActiveOUByWeek(weekId).then(({ data }) => {
             marketsData = data ?? []
+          }),
+          betMarkets.listActiveMoneylineByWeek(weekId).then(({ data }) => {
+            moneylineData = data ?? []
           }),
           bets.listByWeek(weekId).then(({ data }) => {
             weekBetsData = data ?? []
@@ -440,7 +487,18 @@ export function usePinsinoData(playerId: string | null) {
           : null
       )
 
-      setOpenLines(marketsData.map(normalizeMarket))
+      // Build the board: O/U lines pass through; moneylines are reduced to the
+      // player's own team ("Your Team"), dropping matchups they're not in.
+      const openLinesResolved: LineView[] = []
+      for (const line of [...marketsData, ...moneylineData].map(normalizeMarket)) {
+        if (line.marketType === 'moneyline') {
+          const ml = toYourTeamMoneyline(line, myTeamId)
+          if (ml) openLinesResolved.push(ml)
+        } else {
+          openLinesResolved.push(line)
+        }
+      }
+      setOpenLines(openLinesResolved)
       setWeekBets(weekBetViews)
       setSettledBets(settledBetsData.map(normalizeBet))
       setLeaderboard(board)

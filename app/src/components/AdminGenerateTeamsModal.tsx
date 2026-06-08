@@ -299,6 +299,11 @@ export default function AdminGenerateTeamsModal({ visible, onClose }: Props) {
       const { error: eSync } = await betMarkets.syncOUForWeek(weekId, scheduleGames)
       if (eSync) console.warn('Failed to sync O/U markets:', eSync.message)
 
+      // Moneylines derive from the matchups (games rows) just written, so sync
+      // them now too (one even-money market per game). Idempotent.
+      const { error: eMl } = await betMarkets.syncMoneylineForWeek(weekId)
+      if (eMl) console.warn('Failed to sync moneyline markets:', eMl.message)
+
       showToast('Teams saved', 'success')
       set({ genTeams: null, genSwapTarget: null })
       onClose()

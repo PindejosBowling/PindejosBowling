@@ -22,6 +22,7 @@ import {
   rsvp as dbRsvp,
   weeks as dbWeeks,
   betMarkets as dbBetMarkets,
+  seasons as dbSeasons,
 } from '../utils/supabase/db'
 import type { Tables } from '../utils/supabase/database.types'
 import { initials } from '../utils/helpers'
@@ -45,9 +46,11 @@ export default function RsvpScreen() {
   }
 
   const load = useCallback(async () => {
+    const seasonRes = await dbSeasons.getCurrent()
     const [weekRes, playersRes] = await Promise.all([
       dbWeeks.getCurrent(),
-      dbPlayers.listActive(),
+      // Only show players registered for the current season.
+      seasonRes.data ? dbPlayers.listBySeason(seasonRes.data.id) : dbPlayers.list(),
     ])
     if (playersRes.data) setPlayerList(playersRes.data)
     if (weekRes.data) {
