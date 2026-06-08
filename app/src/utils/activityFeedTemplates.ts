@@ -52,7 +52,7 @@ export type Importance = 'low' | 'normal' | 'highlight' | 'major'
 
 // Only the non-default tiers are listed; everything else falls through to 'normal'
 // (e.g. sportsbook_parlay_placed, loan_shark_loan_taken/special_offer,
-// pvp_challenge_accepted, bounty_board_bounty_posted/bounty_closed).
+// pvp_challenge_accepted, bounty_board_bounty_closed).
 const EVENT_IMPORTANCE: Record<string, Importance> = {
   sportsbook_bet_placed: 'low',
   bounty_board_hunter_joined: 'low',
@@ -62,6 +62,7 @@ const EVENT_IMPORTANCE: Record<string, Importance> = {
   sportsbook_parlay_hit: 'highlight',
   loan_shark_loan_repaid: 'highlight',
   pvp_challenge_settled: 'highlight',
+  bounty_board_bounty_posted: 'highlight',
   bounty_board_sponsor_won: 'highlight',
   bounty_board_hunters_won: 'highlight',
 

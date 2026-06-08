@@ -24,11 +24,11 @@ type Nav = NativeStackNavigationProp<PinsinoStackParamList>
 // back to the hook's FeedFilter values.
 const FILTERS: { key: FeedFilter; label: string }[] = [
   { key: 'all', label: 'All' },
+  { key: 'highlights', label: 'Highlights' },
   { key: 'sportsbook', label: 'Sportsbook' },
   { key: 'loan_shark', label: 'Loan Shark' },
   { key: 'pvp', label: 'PvP' },
   { key: 'bounty_board', label: 'Bounties' },
-  { key: 'highlights', label: 'Highlights' },
 ]
 const LABEL_BY_KEY = Object.fromEntries(FILTERS.map(f => [f.key, f.label]))
 
