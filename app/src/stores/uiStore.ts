@@ -18,7 +18,7 @@ interface UiStore {
   chemExpanded: boolean
   h2hP1: string | null
   h2hP2: string | null
-  pastGamesSeason: string | null
+  historySeason: string | null
   toasts: Toast[]
   set: (partial: Partial<UiStore>) => void
   showToast: (msg: string, type?: string) => void
@@ -36,7 +36,7 @@ export const useUiStore = create<UiStore>((set, get) => ({
   chemExpanded: false,
   h2hP1: null,
   h2hP2: null,
-  pastGamesSeason: null,
+  historySeason: null,
   toasts: [],
   set: (partial) => set(partial),
   showToast: (msg, type = '') => {

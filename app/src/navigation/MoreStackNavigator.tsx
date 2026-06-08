@@ -7,12 +7,11 @@ import MoreHomeScreen from '../screens/MoreHomeScreen'
 import LeagueRecordsScreen from '../screens/LeagueRecordsScreen'
 import HeadToHeadScreen from '../screens/HeadToHeadScreen'
 import ChemistryScreen from '../screens/ChemistryScreen'
-import PastSeasonsScreen from '../screens/PastSeasonsScreen'
+import HistoryScreen from '../screens/HistoryScreen'
 import TrashBoardScreen from '../screens/TrashBoardScreen'
 import PlayoffsScreen from '../screens/PlayoffsScreen'
 import PlayerManagementScreen from '../screens/PlayerManagementScreen'
 import ProfilePicturesScreen from '../screens/ProfilePicturesScreen'
-import PastGamesScreen from '../screens/PastGamesScreen'
 import RegistrationScreen from '../screens/RegistrationScreen'
 import RegistrationAdminScreen from '../screens/RegistrationAdminScreen'
 import SeasonRegistrationScreen from '../screens/SeasonRegistrationScreen'
@@ -38,12 +37,11 @@ export default function MoreStackNavigator() {
       <Stack.Screen name="LeagueRecords" component={LeagueRecordsScreen} options={{ title: 'League Records' }} />
       <Stack.Screen name="HeadToHead" component={HeadToHeadScreen} options={{ title: 'Head to Head' }} />
       <Stack.Screen name="Chemistry" component={ChemistryScreen} options={{ title: 'Chemistry' }} />
-      <Stack.Screen name="PastSeasons" component={PastSeasonsScreen} options={{ title: 'Past Seasons' }} />
+      <Stack.Screen name="History" component={HistoryScreen} options={{ title: 'History' }} />
       <Stack.Screen name="TrashBoard" component={TrashBoardScreen} options={{ title: 'Trash Board' }} />
       <Stack.Screen name="Playoffs" component={PlayoffsScreen} options={{ title: 'Playoffs' }} />
       <Stack.Screen name="PlayerManagement" component={PlayerManagementScreen} options={{ title: 'Player Management' }} />
       <Stack.Screen name="ProfilePictures" component={ProfilePicturesScreen} options={{ title: 'Profile Pictures' }} />
-      <Stack.Screen name="PastGames" component={PastGamesScreen} options={{ title: 'Past Games' }} />
       <Stack.Screen name="Registration" component={RegistrationScreen} options={{ title: 'Registration' }} />
       <Stack.Screen name="RegistrationAdmin" component={RegistrationAdminScreen} options={{ title: 'Registration Admin' }} />
       <Stack.Screen name="SeasonRegistration" component={SeasonRegistrationScreen} options={{ title: 'Season Registration' }} />

@@ -1,6 +1,3 @@
-import { useState, useCallback, useEffect } from 'react'
-import { seasons, scores, games } from '../utils/supabase/db'
-
 interface PlayerScore {
   name: string
   score: number
@@ -102,33 +99,4 @@ export function computePastGamesFromSupabase(
 
   result.sort((a, b) => b.weekNumber - a.weekNumber)
   return result
-}
-
-export function usePastGamesData() {
-  const [loading, setLoading] = useState(true)
-  const [seasonList, setSeasonList] = useState<{ id: string; number: number }[]>([])
-  const [rawScores, setRawScores] = useState<any[]>([])
-  const [rawSchedule, setRawSchedule] = useState<any[]>([])
-
-  const load = useCallback(async () => {
-    setLoading(true)
-    try {
-      const [seasonsRes, scoresRes, scheduleRes] = await Promise.all([
-        seasons.list(),
-        scores.listForPastGames(),
-        games.listForArchivedWeeks(),
-      ])
-      setSeasonList((seasonsRes.data ?? []).filter(s => !s.registration_open).map(s => ({ id: s.id, number: s.number })))
-      setRawScores(scoresRes.data ?? [])
-      setRawSchedule(scheduleRes.data ?? [])
-    } catch (e) {
-      console.error('usePastGamesData error:', e)
-    } finally {
-      setLoading(false)
-    }
-  }, [])
-
-  useEffect(() => { load() }, [load])
-
-  return { loading, seasonList, rawScores, rawSchedule, reload: load }
 }

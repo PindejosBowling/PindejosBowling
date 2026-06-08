@@ -183,13 +183,16 @@ export const scores = {
       )
       .eq('team_slots.teams.weeks.is_archived', true)
       .not('score', 'is', null),
-  listForPastGames: () =>
+  // Superset query backing the consolidated History screen — covers both
+  // computeStandingsFromSupabase (needs players.id, week_id, season_id, week_number)
+  // and computePastGamesFromSupabase (needs team_number, bowled_at, weeks.id).
+  listForHistory: () =>
     supabase
       .from('scores')
       .select(
         'game_id, score,' +
-        'team_slots!inner(player_id, team_id, is_fill,' +
-          'players(name),' +
+        'team_slots!inner(id, player_id, team_id, is_fill,' +
+          'players(id, name),' +
           'teams!inner(team_number, week_id,' +
             'weeks!inner(id, season_id, week_number, bowled_at, is_archived)' +
           ')' +
