@@ -27,10 +27,11 @@ type PinsinoNav = NativeStackNavigationProp<PinsinoStackParamList>
 const TILE_WIDTH = (Dimensions.get('window').width - 48) / 3
 
 // Subpage menu tiles (groundwork for more Pinsino subpages — add one line each)
-const MENU_TILES: { icon: string; label: string; route: 'PinsinoLeaderboard' | 'Sportsbook' | 'LoanShark' | 'PvP' | 'MarketMoves' }[] = [
+const MENU_TILES: { icon: string; label: string; route: 'PinsinoLeaderboard' | 'Sportsbook' | 'LoanShark' | 'PvP' | 'MarketMoves' | 'BountyBoard' }[] = [
   { icon: '👀', label: 'Market Moves', route: 'MarketMoves' },
   { icon: '🏟️', label: 'Sportsbook', route: 'Sportsbook' },
   { icon: '⚔️', label: 'PvP', route: 'PvP' },
+  { icon: '🎯', label: 'Bounties', route: 'BountyBoard' },
   { icon: '🦈', label: 'Loan Shark', route: 'LoanShark' },
 ]
 
@@ -39,7 +40,7 @@ export default function PinsinoScreen() {
   const playerName = useAuthStore(s => s.playerName)
   const navigation = useNavigation<PinsinoNav>()
 
-  const { loading, balance, debt, netWorth, leaderboard, reload } = usePinsinoData(playerId)
+  const { loading, balance, debt, openAction, netWorth, leaderboard, reload } = usePinsinoData(playerId)
   const { refreshing, onRefresh } = useRefresh(reload)
 
   // Pending-action counts for the tile badges. Refresh on focus so they reflect
@@ -72,10 +73,20 @@ export default function PinsinoScreen() {
           <Text style={styles.balanceLabel}>YOUR BALANCE</Text>
           <Text style={styles.balanceValue}>{balance.toLocaleString()}</Text>
           <Text style={styles.balanceUnit}>PINS</Text>
-          {debt > 0 && (
+          {(debt > 0 || openAction > 0) && (
             <View style={styles.netRow}>
-              <Text style={styles.owedText}>OWED −{debt.toLocaleString()}</Text>
-              <Text style={styles.netDivider}>·</Text>
+              {openAction > 0 && (
+                <>
+                  <Text style={styles.openActionText}>OPEN {openAction.toLocaleString()}</Text>
+                  <Text style={styles.netDivider}>·</Text>
+                </>
+              )}
+              {debt > 0 && (
+                <>
+                  <Text style={styles.owedText}>OWED −{debt.toLocaleString()}</Text>
+                  <Text style={styles.netDivider}>·</Text>
+                </>
+              )}
               <Text style={[styles.netText, netWorth < 0 && styles.netTextNeg]}>
                 NET {netWorth.toLocaleString()}
               </Text>
@@ -167,6 +178,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
     marginTop: 10,
+  },
+  openActionText: {
+    fontFamily: fonts.barlowCondensed,
+    fontSize: 13,
+    letterSpacing: 1,
+    color: colors.accent,
   },
   owedText: {
     fontFamily: fonts.barlowCondensed,

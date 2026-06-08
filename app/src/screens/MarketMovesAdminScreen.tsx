@@ -42,8 +42,6 @@ const FILTER_LABELS: Record<string, string> = {
   major: 'Major',
 }
 
-const IMPORTANCE_OPTIONS = ['normal', 'highlight', 'major']
-
 export default function MarketMovesAdminScreen() {
   const navigation = useNavigation()
   const isAdmin = useAuthStore(s => s.role) === 'admin'
@@ -288,10 +286,10 @@ function ModerationModal({
 
 // ── Post system event modal (design §19.1) ───────────────────────────────────
 // v1 catalog supports one sourceless, public, no-actor event the admin can post:
-// loan_shark_special_offer (§11.3). Importance is selectable.
+// loan_shark_special_offer (§11.3). Importance is derived from the event type by
+// the Market Moves feature (importanceForEvent) — not selectable here.
 function PostSystemEventModal({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
   const { showToast } = useUiStore()
-  const [importance, setImportance] = useState('normal')
   const [busy, setBusy] = useState(false)
 
   async function submit() {
@@ -302,7 +300,6 @@ function PostSystemEventModal({ onClose, onDone }: { onClose: () => void; onDone
         eventType: 'loan_shark_special_offer',
         templateKey: 'loan_shark.special_offer',
         publicPayload: {},
-        importance,
       })
       if (error) { showToast(error.message, 'error'); return }
       showToast('Event posted', 'success')
@@ -321,14 +318,6 @@ function PostSystemEventModal({ onClose, onDone }: { onClose: () => void; onDone
           <Text style={styles.modalTitle}>Post system event</Text>
           <Text style={styles.modalLine}>🦈 The Loan Shark is offering dangerous terms this week.</Text>
           <Text style={styles.modalHint}>Posts a public Loan Shark special-offer card to the feed.</Text>
-
-          <Text style={styles.fieldLabel}>IMPORTANCE</Text>
-          <PillFilter
-            items={IMPORTANCE_OPTIONS}
-            value={importance}
-            onChange={setImportance}
-            renderLabel={i => i.charAt(0).toUpperCase() + i.slice(1)}
-          />
 
           <View style={styles.modalBtns}>
             <TouchableOpacity style={styles.modalCancel} onPress={onClose} activeOpacity={0.7}>

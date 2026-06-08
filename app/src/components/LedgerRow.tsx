@@ -41,6 +41,12 @@ function actionLabel(type: string, perspective: 'player' | 'house'): string {
       return perspective === 'house' ? 'CHALLENGE PAYOUT' : 'CHALLENGE WIN'
     case 'pvp_refund':
       return perspective === 'house' ? 'REFUND ISSUED' : 'CHALLENGE REFUND'
+    case 'bounty_sponsor_stake':
+      return perspective === 'house' ? 'BOUNTY ESCROW' : 'BOUNTY POSTED'
+    case 'bounty_hunter_stake':
+      return perspective === 'house' ? 'BOUNTY ESCROW' : 'JOINED A HUNT'
+    case 'bounty_payout':
+      return perspective === 'house' ? 'BOUNTY PAYOUT' : 'BOUNTY WIN'
     default:
       return type.replace(/_/g, ' ').toUpperCase()
   }

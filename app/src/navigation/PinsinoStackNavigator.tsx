@@ -12,6 +12,9 @@ import PvPScreen from '../screens/PvPScreen'
 import PvPBoardScreen from '../screens/PvPBoardScreen'
 import PvPCreateScreen from '../screens/PvPCreateScreen'
 import MarketMovesScreen from '../screens/MarketMovesScreen'
+import BountyBoardScreen from '../screens/BountyBoardScreen'
+import BountyCreateScreen from '../screens/BountyCreateScreen'
+import BountyDetailScreen from '../screens/BountyDetailScreen'
 
 const Stack = createNativeStackNavigator<PinsinoStackParamList>()
 
@@ -32,6 +35,9 @@ export default function PinsinoStackNavigator() {
       <Stack.Screen name="PvPBoard" component={PvPBoardScreen} options={{ title: 'Challenge Board' }} />
       <Stack.Screen name="PvPCreate" component={PvPCreateScreen} options={{ title: 'New Challenge' }} />
       <Stack.Screen name="MarketMoves" component={MarketMovesScreen} options={{ title: 'Market Moves' }} />
+      <Stack.Screen name="BountyBoard" component={BountyBoardScreen} options={{ title: 'Bounties' }} />
+      <Stack.Screen name="BountyCreate" component={BountyCreateScreen} options={{ title: 'Post a Bounty' }} />
+      <Stack.Screen name="BountyDetail" component={BountyDetailScreen} options={{ title: 'Bounty' }} />
     </Stack.Navigator>
   )
 }

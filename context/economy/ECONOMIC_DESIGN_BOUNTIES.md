@@ -10,6 +10,27 @@ For v1, all bounties are manually settled by an admin. The app does not need to 
 
 This document is self-contained and written to support database and application-layer implementation.
 
+> **⚠️ Mechanic revision (supersedes the original early-hunter anti-dilution model).**
+> The hunter payout mechanic has been redesigned to the **"All Comers"** model (see
+> §13–§14). The original model treated the sponsor bounty as a fixed pie split by
+> entry order (`floor(S / entry_number)`), which rewarded early hunters by making
+> every *later* hunter's offer worse — a land-grab that discouraged group play.
+> **The new model:** the sponsor sets a flat **reward per hunter** `R`, a **hunter
+> stake** `H`, and a **max hunters** `m`, and escrows `R × m` up front. Every hunter
+> who wins receives `H + R` — identical regardless of join order or count. Combined
+> with the **collective win rule** (if *any* hunter satisfies the bounty, the whole
+> pack wins), more hunters raise everyone's odds, so recruiting teammates is the
+> dominant strategy. The House seed is gone for sponsor bounties; the House only
+> subsidizes a *House-sponsored* bounty that loses to the hunters. The as-built
+> schema/RPCs are in `supabase/migrations/20260607220000_bounty_all_comers.sql`;
+> §15+ below predate the revision and should be read through this lens.
+>
+> **v1 is House-only (see §3.1).** Only the Pinsino sponsors bounties; players join as
+> hunters. Player-sponsored bounties are deferred for integrity reasons and the create
+> path is gated off (UI button hidden; `create_sponsor_bounty` revoked from
+> `authenticated` in `20260607221500_bounty_house_only_v1.sql`). The code path is kept
+> for a future player-sponsor phase.
+
 ---
 
 ## 1. Purpose
@@ -121,6 +142,43 @@ Examples:
 
 A “Back Yourself” bounty is not a separate schema type. It is simply a `sponsor_bounty` where the player-sponsor writes the bounty about their own performance.
 
+### 3.3 v1 sponsorship policy — House-only (integrity decision)
+
+**For v1, only `house_bounty` is enabled. Players join as hunters only.** The
+`sponsor_bounty` type, schema, and RPC are retained but the create path is gated off
+(the app hides the "Post a Bounty" entry point and `create_sponsor_bounty` is revoked
+from `authenticated` in `20260607221500_bounty_house_only_v1.sql`).
+
+The governing rule:
+
+> A bounty is integrity-safe only if **no participant can influence the real-world
+> outcome in the direction that pays them.**
+
+A player sponsor fails this rule three ways, because the counterparty is a competitor
+who bowls:
+
+1. **Tanking.** A condition the sponsor influences lets them steer the outcome toward
+   their winning side — most dangerously a *negative* or *team* condition they can
+   deliberately miss to keep the hunter stakes (the pin economy paying a player to bowl
+   badly — a violation of "bounties never affect gameplay", §28.1).
+2. **Collusion / wash transfers.** Manual freeform settlement lets two friends stage a
+   bounty whose only purpose is to move pins between them, polluting the leaderboard.
+3. **Targeting.** Freeform text can describe a third party who never opted in
+   ("hunters win if Bob chokes"), even though `subject_player_id` was removed (§19.1).
+
+The House is structurally immune: it does not bowl (cannot tank), it sets and curates
+the condition (can frame "hunter win" as a *positive achievement* so it aligns with
+good bowling), and it is not a competitor. The valuable, safe essence of a bounty is
+the **crowd-vs-House** dynamic; **player-vs-player action already lives on the PvP
+Challenge board**, so House-only loses little.
+
+**Re-enabling player bounties later** (a possible "back yourself, positive-framed"
+phase) should go behind an **admin-approval gate**: a player posts a *proposal*
+(`pending_approval`), escrow locks only on admin approval, and conditions that are
+self-negative, team-tankable, or subject-targeted are rejected. To restore: re-add the
+UI CTA and re-`GRANT EXECUTE` on `create_sponsor_bounty` (ideally with the approval
+status flow).
+
 ---
 
 ## 4. Design Goals
@@ -130,8 +188,10 @@ The Bounty Board should:
 1. **Give players a reason to create action.**  
    The sponsor is not donating pins. The sponsor is taking a side against the field.
 
-2. **Reward early hunters.**  
-   Early hunters should not be punished when more hunters join later.
+2. **Reward joining the pack — never punish it.**  
+   No hunter is penalized for joining late, and no hunter's payout shrinks when more
+   hunters pile in. With the collective win rule, more hunters help everyone, so the
+   board rewards building a posse rather than racing for an early slot.
 
 3. **Preserve the pooled bounty feel.**  
    The feature should not devolve into sponsors setting custom sportsbook odds.
@@ -444,218 +504,101 @@ The House is intentionally subsidizing bounty action through seed, not extractin
 
 ---
 
-## 13. Early Hunter Anti-Dilution
+## 13. The "All Comers" Hunter Mechanic
 
-### 13.1 Problem
+### 13.1 Problem with a fixed pie
 
-In a simple pooled bounty, each hunter’s upside declines as more hunters enter.
+If the sponsor bounty `S` is a fixed prize that hunters divide, every distribution
+is a bad trade. A naive equal split pays each hunter `S / N`, so every new hunter
+dilutes everyone. The original fix snapshotted entry-order terms
+(`floor(S / entry_number)`): that protected *existing* hunters but made the offer to
+each *next* hunter worse, turning the board into a land-grab for early slots that
+then went dead. Either way, a fixed pie means more hunters = less for someone.
 
-Without House seed, if hunters win, each hunter’s profit is:
+### 13.2 Design solution — the sponsor takes on all comers
 
-```text
-S / N
-```
-
-where:
-
-```text
-S = sponsor bounty amount
-N = hunter count
-```
-
-Example:
+The sponsor does not post one pie to be divided. The sponsor offers the **same bet
+to every hunter**:
 
 ```text
-Sponsor bounty = 300
-Hunter stake = 50
+R = reward_per_hunter      -- what each hunter wins
+H = hunter_stake_amount    -- what each hunter risks to join
+m = max_hunters            -- how many hunters the sponsor will take on
 ```
 
-| Hunters | Hunter profit if hunters win |
-|---:|---:|
-| 1 | +300 |
-| 2 | +150 |
-| 3 | +100 |
-| 6 | +50 |
-| 10 | +30 |
-
-This creates a bad incentive.
-
-A hunter may enter early because the terms look attractive, but later hunters can pile in and dilute the early hunter’s expected payoff.
-
-That disincentivizes early action.
-
-### 13.2 Design Solution
-
-The Bounty Board uses **early hunter anti-dilution**.
-
-When a hunter enters, the system snapshots that hunter’s entry-order-based protected profit.
+The sponsor escrows their full, bounded maximum liability up front:
 
 ```text
-protected_hunter_profit = floor(S / entry_number)
+sponsor escrow = R × m
 ```
 
-Where:
+Each hunter stakes `H` to join, up to `m` hunters (capacity is hard-capped because
+the sponsor only escrowed `R × m`). Every hunter is offered the identical deal: risk
+`H`, win `R`.
+
+### 13.3 Collective win rule
+
+A bounty settles `sponsor_win` or `hunter_win` for the **whole pack**. If *any*
+hunter satisfies the bounty condition, the hunters win and **every** hunter is paid.
+This is what makes recruiting pay off: bringing another hunter raises the chance the
+condition is met, so each hunter's expected value *rises* with the size of the pack.
+
+### 13.4 Payouts
 
 ```text
-entry_number = 1 for the first hunter
-entry_number = 2 for the second hunter
-entry_number = 3 for the third hunter
-...
+hunter_win:   every hunter receives  H + R      (stake back + the flat reward)
+sponsor_win:  the sponsor collects every H, and gets their escrow back
 ```
 
-This means early hunters receive better terms because they took earlier risk.
+There is no entry-order advantage, no dilution, and no race. A hunter is strictly
+better off when more hunters join (higher win odds, same `R`).
 
-Later hunters may still enter, but they accept the currently available, more diluted upside.
-
-### 13.3 Example
-
-Assume:
+### 13.5 Example
 
 ```text
-Sponsor bounty = 300
-Hunter stake = 50
+R = 100, H = 50, m = 8     -> sponsor escrows 100 × 8 = 800
+3 hunters join.
 ```
 
-| Hunter Entry | Protected Profit | Total Payout if Hunters Win |
-|---:|---:|---:|
-| #1 | 300 | 350 |
-| #2 | 150 | 200 |
-| #3 | 100 | 150 |
-| #4 | 75 | 125 |
-| #5 | 60 | 110 |
-| #6 | 50 | 100 |
-| #7 | 42 | 92 |
-| #8 | 37 | 87 |
+| Outcome | Each hunter | Sponsor (net over lifecycle) |
+|---|---|---|
+| hunters win | `50 + 100 = 150` | pays `3 × 100 = 300`; unused `5 × 100 = 500` escrow returned → net **−300** |
+| sponsor wins | loses their `50` | collects `3 × 50 = 150`; escrow returned → net **+150** |
 
-If the hunters win, Hunter #1 receives 350 total, Hunter #2 receives 200 total, and so on.
-
-Additional hunters never reduce the protected payout of earlier hunters.
-
-### 13.4 Strategic Effect
-
-This creates a good timing game:
-
-```text
-Early hunters:
-  better payout terms
-  less information
-
-Late hunters:
-  worse payout terms
-  more information / more social proof
-```
-
-This makes early participation attractive without forcing every hunter to receive the same payout.
+Join order is irrelevant — Hunter #1 and Hunter #3 receive exactly the same.
 
 ---
 
-## 14. Pinsino House Seed
+## 14. House Funding
 
-### 14.1 What House Seed Does
+### 14.1 Sponsor bounties are House-neutral
 
-The Pinsino adds House seed at settlement to honor the anti-dilution promises made to hunters.
+For a player-sponsored bounty, every event is a balanced player+House pair and the
+House nets to **zero** in both outcomes. The sponsor funds the rewards out of their
+own escrow; the House merely holds escrow in between. There is **no House seed** for
+sponsor bounties (the old anti-dilution subsidy is gone).
 
-The House seed is not chosen by the sponsor.
+### 14.2 House bounties
 
-The House seed is not stored on individual hunter stake rows.
-
-The House seed is derived from the bounty’s final protected hunter-profit obligations.
-
-### 14.2 House Seed Formula
-
-At settlement:
+A `house_bounty` is sponsored by the Pinsino. The House posts no create-time escrow;
+it funds the rewards only if the hunters win:
 
 ```text
-total_protected_hunter_profit = SUM(protected_hunter_profit for all hunter entries)
-
-total_house_seed = max(0, total_protected_hunter_profit - sponsor_bounty_amount)
+house_bounty, hunter_win:   House pays n × R  (the House subsidy / "seed")
+house_bounty, sponsor_win:  House keeps the n × H hunter stakes
 ```
 
-Then:
+`total_house_seed` on the settlement row is therefore `n × R` for a House bounty
+that loses to the hunters, and `0` for every sponsor bounty. It is a House-funded
+subsidy, never a rake — the House takes no cut of player-vs-player bounty action.
 
-```text
-total_pot = sponsor_bounty_amount + total_hunter_stakes + total_house_seed
-```
+### 14.3 Unused escrow
 
-### 14.3 Why This Works
-
-The sponsor bounty funds the first layer of hunter upside.
-
-If total protected hunter profit exceeds the sponsor bounty amount, the Pinsino contributes the difference.
-
-This means:
-
-- early hunters are protected from dilution;
-- late hunters can still enter at visibly lower terms;
-- sponsors are rewarded for creating bounties that attract action;
-- the House subsidizes engagement without letting sponsors directly set custom odds or custom subsidy amounts.
-
-### 14.4 Example
-
-Assume:
-
-```text
-Sponsor bounty = 300
-Hunter stake = 50
-Hunters entered = 4
-```
-
-Protected profits:
-
-| Hunter | Protected Profit |
-|---:|---:|
-| #1 | 300 |
-| #2 | 150 |
-| #3 | 100 |
-| #4 | 75 |
-
-So:
-
-```text
-total_protected_hunter_profit = 625
-sponsor_bounty_amount = 300
-total_house_seed = 625 - 300 = 325
-total_hunter_stakes = 4 × 50 = 200
-total_pot = 300 + 200 + 325 = 825
-```
-
-If hunters win:
-
-| Hunter | Payout |
-|---:|---:|
-| #1 | 350 |
-| #2 | 200 |
-| #3 | 150 |
-| #4 | 125 |
-
-Total hunter payout:
-
-```text
-350 + 200 + 150 + 125 = 825
-```
-
-If sponsor wins:
-
-```text
-Sponsor receives 825
-```
-
-For a player sponsor, this means the sponsor gets their original sponsor bounty back, all hunter stakes, and the Pinsino seed value generated by the action.
-
-This is intentional. The sponsor created attractive action and took the sponsor-side risk.
-
-### 14.5 House Seed Is a Subsidy, Not a Rake
-
-The House does not take a cut of bounty action.
-
-The House seed is a House-funded subsidy to make the Bounty Board more fun and to protect early hunters.
-
-This is consistent with treating the House as an effectively infinite operational reserve for trialing economic mechanics, while still preserving ledger-first accounting.
-
-When House seed pays players, it is recorded as a House-to-player transfer through normal bounty payout ledger entries.
+When fewer than `m` hunters join, the sponsor's unmatched escrow `(m − n) × R` is
+returned to the sponsor at settlement (a `bounty_payout` ledger pair). The sponsor
+only ever loses reward for hunters who actually joined.
 
 ---
-
 ## 15. Sponsor Incentives
 
 A player sponsor should publish a bounty because they are taking a strategic position against the field.

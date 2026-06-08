@@ -38,9 +38,46 @@ export interface FeedEventView {
   sportsbookBetId: string | null
   loanId: string | null
   pvpChallengeId: string | null
+  bountySourceId: string | null
   // Admin moderation metadata.
   suppressionReason: string | null
 }
+
+// ── Importance (Market Moves owns this, not the DB) ──────────────────────────
+// Importance is a derived property of the event type, NOT a stored column. Like
+// feed copy, it lives in app code so what counts as a "highlight" can evolve
+// without an RPC change or rewriting historical rows. `importanceForEvent` is the
+// single source of truth; the publish RPC no longer computes or stores it.
+export type Importance = 'low' | 'normal' | 'highlight' | 'major'
+
+// Only the non-default tiers are listed; everything else falls through to 'normal'
+// (e.g. sportsbook_parlay_placed, loan_shark_loan_taken/special_offer,
+// pvp_challenge_accepted, bounty_board_bounty_closed).
+const EVENT_IMPORTANCE: Record<string, Importance> = {
+  sportsbook_bet_placed: 'low',
+  bounty_board_hunter_joined: 'low',
+
+  sportsbook_big_ticket_placed: 'highlight',
+  sportsbook_big_win: 'highlight',
+  sportsbook_parlay_hit: 'highlight',
+  loan_shark_loan_repaid: 'highlight',
+  pvp_challenge_settled: 'highlight',
+  bounty_board_bounty_posted: 'highlight',
+  bounty_board_sponsor_won: 'highlight',
+  bounty_board_hunters_won: 'highlight',
+
+  sportsbook_weekly_house_result: 'major',
+}
+
+export function importanceForEvent(eventType: string): Importance {
+  return EVENT_IMPORTANCE[eventType] ?? 'normal'
+}
+
+// Event types that surface under the Market Moves "Highlights" filter. Derived
+// from the map so it can never drift from importanceForEvent.
+export const HIGHLIGHT_EVENT_TYPES: string[] = Object.entries(EVENT_IMPORTANCE)
+  .filter(([, v]) => v === 'highlight' || v === 'major')
+  .map(([k]) => k)
 
 export interface FeedRenderParts {
   icon: string // feature emoji
@@ -60,6 +97,7 @@ const FEATURE_META: Record<string, { icon: string; sourceLabel: string }> = {
   sportsbook: { icon: '🏟️', sourceLabel: 'Sportsbook' },
   loan_shark: { icon: '🦈', sourceLabel: 'Loan Shark' },
   pvp: { icon: '⚔️', sourceLabel: 'PvP' },
+  bounty_board: { icon: '🎯', sourceLabel: 'Bounty Board' },
   system: { icon: '🏛️', sourceLabel: 'The House' },
   admin: { icon: '📊', sourceLabel: 'The House' },
 }
@@ -188,6 +226,49 @@ export function renderFeedEvent(row: FeedEventView): FeedRenderParts {
             amount: { value: num(p.pot), tone: 'positive', label: 'WON' },
             winner: { name: actorOf(row) },
           }
+
+    case 'bounty_board.bounty_posted': {
+      // House bounties have no actor → the Pinsino is the poster.
+      const poster = row.actorName ?? 'The Pinsino'
+      const title = p.bounty_title ? `: "${p.bounty_title}"` : '.'
+      return { ...meta, line: `${poster} posted a bounty${title}` }
+    }
+
+    case 'bounty_board.hunter_joined':
+      return {
+        ...meta,
+        line: p.bounty_title
+          ? `${actorOf(row)} joined the hunt on "${p.bounty_title}."`
+          : `${actorOf(row)} joined the hunt.`,
+      }
+
+    case 'bounty_board.bounty_closed':
+      return {
+        ...meta,
+        line: p.bounty_title
+          ? `The bounty "${p.bounty_title}" stopped taking hunters.`
+          : 'A bounty stopped taking hunters.',
+      }
+
+    case 'bounty_board.sponsor_won': {
+      const poster = row.actorName ?? 'The Pinsino'
+      return {
+        ...meta,
+        line: p.bounty_title
+          ? `${poster} survived the hunt on "${p.bounty_title}."`
+          : `${poster} survived the hunt.`,
+        amount: num(p.total_pot) ? { value: num(p.total_pot), tone: 'positive', label: 'POT' } : undefined,
+      }
+    }
+
+    case 'bounty_board.hunters_won':
+      return {
+        ...meta,
+        line: p.bounty_title
+          ? `The hunters got paid on "${p.bounty_title}."`
+          : 'The hunters got paid.',
+        amount: num(p.total_pot) ? { value: num(p.total_pot), tone: 'positive', label: 'POT' } : undefined,
+      }
 
     case 'loan_shark.special_offer':
       // Posted as a system/admin event, but it reads as a Loan Shark move — force

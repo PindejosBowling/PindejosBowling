@@ -1,5 +1,6 @@
 import { supabase } from './client'
 import type { TablesInsert, TablesUpdate, Json } from './database.types'
+import { HIGHLIGHT_EVENT_TYPES } from '../activityFeedTemplates'
 
 export const boardPosts = {
   list: () =>
@@ -689,6 +690,99 @@ export const pvpLedger = {
       .order('created_at', { ascending: false }),
 }
 
+// ── Bounty Board (bounty_post → bounty_hunter_stakes / bounty_settlements / ──────
+//    bounty_payouts) ────────────────────────────────────────────────────────────
+// Public, pooled, manually-settled sponsor/house bounties with early-hunter
+// anti-dilution + a House seed. Lifecycle-only rows; escrow lives directly on
+// pin_ledger tagged with bounty_post_id. All player write paths (create-sponsor /
+// enter) and admin tools (create-house / close / settle / cancel) go through
+// SECURITY DEFINER RPCs. The single players FK on bounty_post is disambiguated by
+// its constraint name; bounty_hunter_stakes / bounty_payouts use the implicit embed.
+const BOUNTY_SPONSOR = 'sponsor:players!bounty_post_sponsor_player_id_fkey(name)'
+
+export interface CreateBountyArgs {
+  weekId: string
+  title: string
+  description: string
+  rewardPerHunter: number              // R — what each hunter wins
+  hunterStakeAmount: number            // H — what each hunter risks
+  maxHunters: number                   // m — caps the sponsor's escrow at R*m
+  closesAt: string                     // ISO timestamp (computed app-side, design §11)
+}
+
+export const bountyPosts = {
+  // Public board: open bounties accepting hunters, current season.
+  listOpenBySeason: (seasonId: string) =>
+    supabase.from('bounty_post')
+      .select('*, ' + BOUNTY_SPONSOR + ', ' +
+              'bounty_hunter_stakes(id, player_id, entry_number, protected_hunter_profit, stake_amount, status)')
+      .eq('season_id', seasonId)
+      .eq('status', 'open')
+      .order('created_at', { ascending: false }),
+
+  // Everything involving this player (sponsored or hunted) for the season.
+  // The .or() across the embedded relation filters the embed, not the parent, so
+  // it's bucketed client-side; the broad season fetch keeps it to one round trip.
+  listByPlayerSeason: (seasonId: string) =>
+    supabase.from('bounty_post')
+      .select('*, ' + BOUNTY_SPONSOR + ', bounty_hunter_stakes(*)')
+      .eq('season_id', seasonId)
+      .order('created_at', { ascending: false }),
+
+  // Admin: bounties to manage for the season (filter client-side by status/type/week).
+  listBySeason: (seasonId: string) =>
+    supabase.from('bounty_post')
+      .select('*, ' + BOUNTY_SPONSOR + ', bounty_hunter_stakes(*)')
+      .eq('season_id', seasonId)
+      .order('created_at', { ascending: false }),
+
+  // Detail: one bounty with hunters, settlement, and payouts.
+  getById: (bountyId: string) =>
+    supabase.from('bounty_post')
+      .select('*, ' + BOUNTY_SPONSOR + ', ' +
+              'bounty_hunter_stakes(*, players(name)), ' +
+              'bounty_settlements(*), bounty_payouts(*, players(name))')
+      .eq('id', bountyId).single(),
+
+  createSponsor: (a: CreateBountyArgs) =>
+    supabase.rpc('create_sponsor_bounty', {
+      p_week_id: a.weekId,
+      p_title: a.title,
+      p_description: a.description,
+      p_reward_per_hunter: a.rewardPerHunter,
+      p_hunter_stake_amount: a.hunterStakeAmount,
+      p_max_hunters: a.maxHunters,
+      p_closes_at: a.closesAt,
+    }),
+  createHouse: (a: CreateBountyArgs) =>
+    supabase.rpc('create_house_bounty', {
+      p_week_id: a.weekId,
+      p_title: a.title,
+      p_description: a.description,
+      p_reward_per_hunter: a.rewardPerHunter,
+      p_hunter_stake_amount: a.hunterStakeAmount,
+      p_max_hunters: a.maxHunters,
+      p_closes_at: a.closesAt,
+    }),
+  enter: (bountyId: string) => supabase.rpc('enter_bounty_as_hunter', { p_bounty_post_id: bountyId }),
+  close: (bountyId: string) => supabase.rpc('close_bounty', { p_bounty_post_id: bountyId }),
+  settle: (bountyId: string, outcome: 'sponsor_win' | 'hunter_win', reasoning: string) =>
+    supabase.rpc('settle_bounty', {
+      p_bounty_post_id: bountyId,
+      p_outcome: outcome,
+      p_admin_settlement_reasoning: reasoning,
+    }),
+  cancel: (bountyId: string) => supabase.rpc('cancel_bounty', { p_bounty_post_id: bountyId }),
+}
+
+// Bounty-related ledger rows are plain pin_ledger rows tagged with bounty_post_id.
+export const bountyLedger = {
+  listByPost: (bountyId: string) =>
+    supabase.from('pin_ledger').select('*, players(name)')
+      .eq('bounty_post_id', bountyId)
+      .order('created_at', { ascending: false }),
+}
+
 // ── Activity Feed ("Market Moves") — activity_feed_events ────────────────────
 // The public economic newswire. One narrative row per feed-worthy economic
 // action; the feed never moves pins (read-derived only). Copy is rendered in the
@@ -727,11 +821,13 @@ export const activityFeed = {
     return q.order('published_at', { ascending: false }).order('id', { ascending: false }).limit(50)
   },
 
-  // Highlights filter (design §15.2): importance in ('highlight','major').
+  // Highlights filter (design §15.2). Importance is app-owned (not a DB column),
+  // so we filter by the event types the Market Moves feature deems highlight/major
+  // (HIGHLIGHT_EVENT_TYPES, derived from importanceForEvent).
   listHighlights: (seasonId: string, cursor?: FeedCursor) => {
     let q = supabase.from('activity_feed_events').select(FEED_GRAPH)
       .eq('season_id', seasonId).eq('status', 'published').eq('visibility', 'public')
-      .in('importance', ['highlight', 'major'])
+      .in('event_type', HIGHLIGHT_EVENT_TYPES)
     if (cursor) q = q.or(feedCursorFilter(cursor))
     return q.order('published_at', { ascending: false }).order('id', { ascending: false }).limit(50)
   },
@@ -748,14 +844,13 @@ export const activityFeed = {
     supabase.rpc('restore_activity_event', { p_event_id: eventId }),
   createSystemEvent: (args: {
     sourceFeature: 'system' | 'admin'; eventType: string; templateKey: string
-    publicPayload: Json; importance: string
+    publicPayload: Json
   }) =>
     supabase.rpc('create_system_activity_event', {
       p_source_feature: args.sourceFeature,
       p_event_type: args.eventType,
       p_template_key: args.templateKey,
       p_public_payload: args.publicPayload,
-      p_importance: args.importance,
     }),
 }
 
