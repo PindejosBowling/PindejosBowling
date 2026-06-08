@@ -7,7 +7,7 @@ import DateTimePicker from '@react-native-community/datetimepicker'
 import { colors, fonts, radius } from '../theme'
 import Toast from './Toast'
 import { useUiStore } from '../stores/uiStore'
-import { bountyPosts, players } from '../utils/supabase/db'
+import { bountyPosts, registrations, seasons } from '../utils/supabase/db'
 import {
   MIN_REWARD_PER_HUNTER, MIN_HUNTER_STAKE, MIN_MAX_HUNTERS, MAX_MAX_HUNTERS,
   MAX_TITLE_LEN, MAX_DESCRIPTION_LEN, defaultBountyCloseAt, formatCloseTime,
@@ -32,12 +32,14 @@ export default function BountyHouseCreateModal({ weekId, onClose, onDone }: Prop
   const [pickerOpen, setPickerOpen] = useState(false)
   const [saving, setSaving] = useState(false)
 
-  // Default Max Hunters to the number of active players in the current season.
-  // Only seeds the field while it's still untouched/empty.
+  // Default Max Hunters to the number of players registered for the current
+  // season. Only seeds the field while it's still untouched/empty.
   useEffect(() => {
     let cancelled = false
     ;(async () => {
-      const { data } = await players.listActive()
+      const { data: season } = await seasons.getCurrent()
+      if (cancelled || !season) return
+      const { data } = await registrations.listBySeason(season.id)
       if (cancelled || !data) return
       const count = Math.min(data.length, MAX_MAX_HUNTERS)
       if (count >= MIN_MAX_HUNTERS) setMaxHunters(prev => (prev ? prev : String(count)))
@@ -97,7 +99,7 @@ export default function BountyHouseCreateModal({ weekId, onClose, onDone }: Prop
         <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={() => !saving && onClose()} />
         <View style={styles.sheet}>
           <Text style={styles.title}>New House Bounty</Text>
-          <Text style={styles.subtitle}>Posted by the Pinsino · no escrow until hunters win</Text>
+          <Text style={styles.subtitle}>Posted by the Pinsino · Let the Hunt Begin</Text>
 
           <ScrollView style={styles.body} keyboardShouldPersistTaps="handled">
             <Text style={styles.label}>TITLE</Text>
