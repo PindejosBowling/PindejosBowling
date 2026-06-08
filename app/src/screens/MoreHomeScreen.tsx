@@ -34,11 +34,11 @@ export default function MoreHomeScreen() {
   ]
 
   const adminTiles: Tile[] = [
+    { icon: '🏦', label: 'Pinsino Admin',  onPress: () => navigation.navigate('PinsinoAdmin') },
     { icon: '📝', label: 'Registration',    onPress: () => navigation.navigate('RegistrationAdmin') },
     { icon: '🖼️', label: 'Profile Pictures', onPress: () => navigation.navigate('ProfilePictures') },
     { icon: '🥇', label: 'End Season',     onPress: () => setShowEndSeason(true) },
     { icon: '🏁', label: 'Playoffs',       onPress: () => navigation.navigate('Playoffs') },
-    { icon: '🏦', label: 'Pinsino Admin',  onPress: () => navigation.navigate('PinsinoAdmin') },
   ]
 
   return (

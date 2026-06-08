@@ -40,7 +40,7 @@ export default function PinsinoLeaderboardScreen() {
             Earn pins by bowling games in the PBL, winning bets at the Sportsbook, challenging rivals directly in PvP, and collecting Bounties issued by the Pinsino.
           </Text>
           <Text style={styles.rulesBody}>
-            The Loan Shark is happy to provide his services too, for those players brave (or foolish) enough to accept his terms.
+            The Loan Shark is happy to provide his services too, for a price.
           </Text>
           <Text style={styles.rulesBody}>
             When a season ends, whoever sits atop this board is crowned this season's Titan and then the next season will start fresh.

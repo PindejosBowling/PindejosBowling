@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { Fragment, useMemo, useState } from 'react'
 import {
   View,
   Text,
@@ -75,6 +75,23 @@ interface BetModalState {
   wager: string
 }
 
+// UI-only policy: the "under" side of player O/U lines is hidden from the
+// Sportsbook. Betting on a leaguemate to do *poorly* has negative social
+// dynamics in a small rec league, so we don't surface it as a pick. This is a
+// pure presentation filter — the selection still exists in the DB and the
+// place/settlement RPCs (`place_house_bet`, etc.) handle `under` unchanged, so
+// the mechanic can be restored by removing this filter. See AGENTS.md.
+function isSelectionHiddenInUI(line: LineView, sel: SelectionView): boolean {
+  return line.marketType === 'over_under' && sel.key === 'under'
+}
+
+// Drop UI-hidden selections from a line, returning the same object when nothing
+// changes (keeps referential stability for memoization downstream).
+function withVisibleSelections(line: LineView): LineView {
+  const selections = line.selections.filter(s => !isSelectionHiddenInUI(line, s))
+  return selections.length === line.selections.length ? line : { ...line, selections }
+}
+
 export default function SportsbookScreen() {
   const playerId = useAuthStore(s => s.playerId)
   const { showToast } = useUiStore()
@@ -106,7 +123,11 @@ export default function SportsbookScreen() {
       group: LineGroup
       categories: Map<string, { category: LineCategory; lines: LineView[] }>
     }>()
-    for (const line of openLines) {
+    for (const rawLine of openLines) {
+      // Strip UI-hidden selections (e.g. the "under" side) before the line ever
+      // reaches the board, so it can't be picked, parlayed, or shown in the sheet.
+      const line = withVisibleSelections(rawLine)
+      if (line.selections.length === 0) continue
       const group = lineGroup(line)
       let g = games.get(group.key)
       if (!g) { g = { group, categories: new Map() }; games.set(group.key, g) }
@@ -223,6 +244,28 @@ export default function SportsbookScreen() {
 
   const maxWager = balance
 
+  // One market row, shared by the collapsible (O/U) and headerless (moneyline)
+  // section layouts. Single mode opens the wager sheet; parlay mode toggles the
+  // slip; an in-progress game makes every side inert.
+  function renderLine(line: LineView, isLast: boolean, groupInProgress: boolean) {
+    const slipLeg = parlayLegs.find(l => l.marketId === line.marketId)
+    return (
+      <LineRow
+        line={line}
+        isLast={isLast}
+        inProgress={groupInProgress}
+        onSelect={sel =>
+          placeMode === 'parlay' ? toggleParlayLeg(line, sel) : onSingleSelect(line, sel)
+        }
+        selectionState={sel =>
+          placeMode === 'parlay'
+            ? { selected: slipLeg?.selectionId === sel.selectionId, disabled: isSelfTank(line, sel) }
+            : { disabled: balance < 10 || isSelfTank(line, sel) }
+        }
+      />
+    )
+  }
+
   if (loading) return <LoadingView label="Loading…" />
 
   return (
@@ -300,6 +343,24 @@ export default function SportsbookScreen() {
                   // Closing is all-or-nothing per game, so a category is in
                   // progress once any of its lines is closed.
                   const groupInProgress = lines.some(l => l.inProgress)
+                  // Moneylines: headerless. The "Your Team" row is self-explanatory
+                  // (one per game), so it renders inline with no collapsible header.
+                  if (category.key === 'moneyline') {
+                    return (
+                      <View key={category.key}>
+                        {groupInProgress && (
+                          <Text style={styles.adminHint}>{closedBettingNote(lines[0])}</Text>
+                        )}
+                        <View style={styles.card}>
+                          {lines.map((line, idx) => (
+                            <Fragment key={line.marketId}>
+                              {renderLine(line, idx === lines.length - 1, groupInProgress)}
+                            </Fragment>
+                          ))}
+                        </View>
+                      </View>
+                    )
+                  }
                   return (
                     <LineRowContainer
                       key={category.key}
@@ -314,21 +375,7 @@ export default function SportsbookScreen() {
                           // Keep a line visible while collapsed if it's in the
                           // parlay slip — lets players build across sections.
                           pinned: placeMode === 'parlay' && !!slipLeg,
-                          render: (isLast: boolean) => (
-                            <LineRow
-                              line={line}
-                              isLast={isLast}
-                              inProgress={groupInProgress}
-                              onSelect={sel =>
-                                placeMode === 'parlay' ? toggleParlayLeg(line, sel) : onSingleSelect(line, sel)
-                              }
-                              selectionState={sel =>
-                                placeMode === 'parlay'
-                                  ? { selected: slipLeg?.selectionId === sel.selectionId, disabled: isSelfTank(line, sel) }
-                                  : { disabled: balance < 10 || isSelfTank(line, sel) }
-                              }
-                            />
-                          ),
+                          render: (isLast: boolean) => renderLine(line, isLast, groupInProgress),
                         }
                       })}
                     />
