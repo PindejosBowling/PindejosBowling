@@ -75,6 +75,23 @@ interface BetModalState {
   wager: string
 }
 
+// UI-only policy: the "under" side of player O/U lines is hidden from the
+// Sportsbook. Betting on a leaguemate to do *poorly* has negative social
+// dynamics in a small rec league, so we don't surface it as a pick. This is a
+// pure presentation filter — the selection still exists in the DB and the
+// place/settlement RPCs (`place_house_bet`, etc.) handle `under` unchanged, so
+// the mechanic can be restored by removing this filter. See AGENTS.md.
+function isSelectionHiddenInUI(line: LineView, sel: SelectionView): boolean {
+  return line.marketType === 'over_under' && sel.key === 'under'
+}
+
+// Drop UI-hidden selections from a line, returning the same object when nothing
+// changes (keeps referential stability for memoization downstream).
+function withVisibleSelections(line: LineView): LineView {
+  const selections = line.selections.filter(s => !isSelectionHiddenInUI(line, s))
+  return selections.length === line.selections.length ? line : { ...line, selections }
+}
+
 export default function SportsbookScreen() {
   const playerId = useAuthStore(s => s.playerId)
   const { showToast } = useUiStore()
@@ -106,7 +123,11 @@ export default function SportsbookScreen() {
       group: LineGroup
       categories: Map<string, { category: LineCategory; lines: LineView[] }>
     }>()
-    for (const line of openLines) {
+    for (const rawLine of openLines) {
+      // Strip UI-hidden selections (e.g. the "under" side) before the line ever
+      // reaches the board, so it can't be picked, parlayed, or shown in the sheet.
+      const line = withVisibleSelections(rawLine)
+      if (line.selections.length === 0) continue
       const group = lineGroup(line)
       let g = games.get(group.key)
       if (!g) { g = { group, categories: new Map() }; games.set(group.key, g) }

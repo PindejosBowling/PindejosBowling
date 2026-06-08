@@ -67,7 +67,10 @@ export interface LineCategory {
 export function lineCategory(line: LineView): LineCategory {
   switch (line.marketType) {
     case 'over_under':
-      return { key: 'player_ou', label: 'Player Over/Unders', sortOrder: 0 }
+      // Only the "over" side is bettable in the UI (the "under" is hidden — see
+      // SportsbookScreen / context/betting-line-board.md), so the section reads
+      // "Player Overs" rather than "Player Over/Unders".
+      return { key: 'player_ou', label: 'Player Overs', sortOrder: 0 }
     case 'moneyline':
       return { key: 'moneyline', label: 'Moneylines', sortOrder: 1 }
     default:
