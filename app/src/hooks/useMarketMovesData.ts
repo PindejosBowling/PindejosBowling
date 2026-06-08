@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from 'react'
 import { seasons, activityFeed, weeks } from '../utils/supabase/db'
-import type { FeedEventView } from '../utils/activityFeedTemplates'
+import { importanceForEvent, type FeedEventView } from '../utils/activityFeedTemplates'
 
 export type FeedFilter = 'all' | 'sportsbook' | 'loan_shark' | 'pvp' | 'bounty_board' | 'highlights'
 
@@ -20,7 +20,8 @@ export function normalizeFeedRow(r: any): FeedEventView {
     sourceFeature: r.source_feature,
     eventType: r.event_type,
     templateKey: r.template_key,
-    importance: r.importance,
+    // Importance is app-owned (derived from event_type), not a stored column.
+    importance: importanceForEvent(r.event_type),
     status: r.status,
     visibility: r.visibility,
     publicPayload: (r.public_payload ?? {}) as Record<string, any>,

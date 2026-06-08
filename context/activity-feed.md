@@ -60,14 +60,15 @@ MarketMovesScreen   → renderFeedEvent(view)  → FeedRenderParts → card UI
 foundation + the `20260607180*` extensions that added placement payout, loan risk tier,
 and PvP):
 - `activity_feed_events` table — controlled-string CHECK columns (`source_feature`,
-  `event_type`, `visibility`, `importance`, `status`), nullable source FKs
+  `event_type`, `visibility`, `status`), nullable source FKs
   (`sportsbook_bet_id`, `loan_id`, `pvp_challenge_id`), the `activity_feed_one_source_check`
   (at most one source FK), partial-unique dedup indexes per `(<source_fk>, event_type)`,
   and **tightened RLS** (anon/authenticated read only `published`+`public`; a separate
   admin-read-all policy; admin-only direct writes).
 - `publish_activity_event(...)` — validates feature, event_type (against the in-function
   **catalog** `CASE` block), source-FK↔feature consistency, actor requirement, and
-  `template_key`; applies catalog defaults for importance/visibility; inserts with
+  `template_key`; applies the catalog default for **visibility** (importance is **not** a
+  DB concept — see the note under the catalog table); inserts with
   `ON CONFLICT DO NOTHING` (idempotent — a re-run RPC never double-posts). The PvP
   migration extended its signature with a trailing `p_pvp_challenge_id uuid DEFAULT NULL`
   (see Recipe B).
@@ -114,6 +115,16 @@ mirrored by the `switch (row.templateKey)` in `renderFeedEvent` (client copy).
 | `pvp_challenge_accepted` | `pvp.challenge_accepted` | normal | pvp | `accept_pvp_challenge` | `{pot, …}` |
 | `pvp_challenge_settled` | `pvp.challenge_settled` | highlight | pvp | `settle_pvp_challenge` | `{outcome, pot, …}` |
 
+> **`importance` is app-owned, not a DB column** (as of
+> `20260607230000_feed_importance_to_app.sql`). The table no longer has an `importance`
+> column and `publish_activity_event` no longer sets one. The `importance` column above is
+> the **app** mapping defined by the Market Moves feature in
+> [activityFeedTemplates.ts](../app/src/utils/activityFeedTemplates.ts) (`EVENT_IMPORTANCE`
+> / `importanceForEvent`), keyed by `event_type`; events not listed there default to
+> `normal`. The "Highlights" filter queries by the derived `HIGHLIGHT_EVENT_TYPES`
+> (event types mapping to `highlight`/`major`), not by a stored column. Change what counts
+> as a highlight by editing that map — no migration needed.
+>
 > **`public_payload` is always league-safe.** Loan events carry **only** `risk_level` (the
 > product's tier: `low`/`medium`/`high`/`extreme`) — never an amount, rate, garnishment,
 > product name, or debt (a tier is a vague category, not a number; §11). The renderer
@@ -135,9 +146,11 @@ Use this when the source feature already has a source-FK column on `activity_fee
 
 1. **DB — register it in the catalog.** Add a `WHEN '<event_type>'` branch to the `CASE`
    block in `publish_activity_event` (new migration that `CREATE OR REPLACE`s the helper),
-   setting `default_importance`, `default_visibility`, `requires_actor`, `allowed_source_fk`,
-   and the canonical `template_key`. Also add the new `event_type` (and `template_key` if
-   you constrain it) to the table's `CHECK` constraint via the same or a prior migration.
+   setting `default_visibility`, `requires_actor`, `allowed_source_fk`, and the canonical
+   `template_key`. Also add the new `event_type` (and `template_key` if you constrain it) to
+   the table's `CHECK` constraint via the same or a prior migration. **Importance is set in
+   the app, not here** — if the event should surface under Highlights, add it to
+   `EVENT_IMPORTANCE` in [activityFeedTemplates.ts](../app/src/utils/activityFeedTemplates.ts).
 2. **DB — publish it.** In the source RPC, after the pin/ledger writes and inside the same
    transaction, `PERFORM public.publish_activity_event('<feature>', '<event_type>', …)`.
    Pass the concrete source FK; build a **league-safe** `public_payload` (snapshot the
@@ -213,10 +226,11 @@ PvP migration (`20260607180200_activity_feed_pvp.sql`) is the worked, copyable e
   **not** touch the source action.
 - `restore_activity_event(p_event_id)` — reverses it (only meaningful while the source row
   still exists; a cancelled source already cascade-deleted the feed row).
-- `create_system_activity_event(feature, event_type, template_key, public_payload, importance)`
+- `create_system_activity_event(feature, event_type, template_key, public_payload)`
   — admin wrapper over the writer for sourceless announcements (v1: `loan_shark_special_offer`).
   Resolves the current season + latest live week; the writer rejects any `event_type` that
-  requires a source FK.
+  requires a source FK. (No `importance` arg — a system post's importance is derived from its
+  `event_type` in the app like any other event.)
 
 All three are admin-gated, `SECURITY DEFINER`, `SET search_path = ''`, and exposed in
 `db.ts` as `activityFeed.suppress / restore / createSystemEvent`.

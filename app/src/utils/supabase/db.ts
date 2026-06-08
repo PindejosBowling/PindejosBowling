@@ -1,5 +1,6 @@
 import { supabase } from './client'
 import type { TablesInsert, TablesUpdate, Json } from './database.types'
+import { HIGHLIGHT_EVENT_TYPES } from '../activityFeedTemplates'
 
 export const boardPosts = {
   list: () =>
@@ -820,11 +821,13 @@ export const activityFeed = {
     return q.order('published_at', { ascending: false }).order('id', { ascending: false }).limit(50)
   },
 
-  // Highlights filter (design §15.2): importance in ('highlight','major').
+  // Highlights filter (design §15.2). Importance is app-owned (not a DB column),
+  // so we filter by the event types the Market Moves feature deems highlight/major
+  // (HIGHLIGHT_EVENT_TYPES, derived from importanceForEvent).
   listHighlights: (seasonId: string, cursor?: FeedCursor) => {
     let q = supabase.from('activity_feed_events').select(FEED_GRAPH)
       .eq('season_id', seasonId).eq('status', 'published').eq('visibility', 'public')
-      .in('importance', ['highlight', 'major'])
+      .in('event_type', HIGHLIGHT_EVENT_TYPES)
     if (cursor) q = q.or(feedCursorFilter(cursor))
     return q.order('published_at', { ascending: false }).order('id', { ascending: false }).limit(50)
   },
@@ -841,14 +844,13 @@ export const activityFeed = {
     supabase.rpc('restore_activity_event', { p_event_id: eventId }),
   createSystemEvent: (args: {
     sourceFeature: 'system' | 'admin'; eventType: string; templateKey: string
-    publicPayload: Json; importance: string
+    publicPayload: Json
   }) =>
     supabase.rpc('create_system_activity_event', {
       p_source_feature: args.sourceFeature,
       p_event_type: args.eventType,
       p_template_key: args.templateKey,
       p_public_payload: args.publicPayload,
-      p_importance: args.importance,
     }),
 }
 

@@ -80,11 +80,12 @@ export const activityFeed = {
     return q.order('published_at', { ascending: false }).order('id', { ascending: false }).limit(50)
   },
 
-  // Highlights filter (design §15.2): importance in ('highlight','major').
+  // Highlights filter (design §15.2). Importance is app-owned (derived from event_type),
+  // so this filters by HIGHLIGHT_EVENT_TYPES from activityFeedTemplates, not a DB column.
   listHighlights: (seasonId: string, cursor?: { publishedAt: string; id: string }) => {
     let q = supabase.from('activity_feed_events').select(FEED_GRAPH)
       .eq('season_id', seasonId).eq('status', 'published').eq('visibility', 'public')
-      .in('importance', ['highlight', 'major'])
+      .in('event_type', HIGHLIGHT_EVENT_TYPES)
     if (cursor) q = q.or(
       `published_at.lt.${cursor.publishedAt},and(published_at.eq.${cursor.publishedAt},id.lt.${cursor.id})`)
     return q.order('published_at', { ascending: false }).order('id', { ascending: false }).limit(50)
@@ -102,11 +103,10 @@ export const activityFeed = {
     supabase.rpc('restore_activity_event', { p_event_id: eventId }),
   createSystemEvent: (args: {
     sourceFeature: 'system' | 'admin'; eventType: string; templateKey: string;
-    publicPayload: Record<string, unknown>; importance: string }) =>
+    publicPayload: Record<string, unknown> }) =>
     supabase.rpc('create_system_activity_event', {
       p_source_feature: args.sourceFeature, p_event_type: args.eventType,
-      p_template_key: args.templateKey, p_public_payload: args.publicPayload,
-      p_importance: args.importance }),
+      p_template_key: args.templateKey, p_public_payload: args.publicPayload }),
 }
 ```
 
@@ -184,7 +184,8 @@ type FeedFilter = 'all' | 'sportsbook' | 'loan_shark' | 'highlights'
   `highlights → listHighlights`).
 - Normalize each row to `FeedEventView` (flatten the joined `actor`/`subject`/`secondary`
   name+avatar; keep `event_type`, `template_key`, `public_payload`, `published_at`, `id`,
-  `source_feature`, `importance`, the source FK ids). **Do not** render copy here —
+  `source_feature`, the source FK ids; set `importance` from `importanceForEvent(event_type)`
+  — it is app-derived, not read from the row). **Do not** render copy here —
   rendering is the screen's job via `renderFeedEvent` (§2).
 - Track the cursor from the last row (`{ publishedAt, id }`); `loadMore` fetches the next
   page and appends; `hasMore = lastPage.length === 50`. Changing `filter` calls `reload`.
@@ -260,8 +261,9 @@ pagination (design §15.4). Theme via `colors/fonts/radius`.
     → toast + reload (§14.2).
   - **Restore** (`suppressed` rows) → `activityFeed.restore(id)` → toast + reload (§14.3).
 - A **"Post system event"** form (design §19.1) — pick an event
-  (`loan_shark_special_offer` or a generic admin announcement), template key, importance,
-  and optional payload values → `activityFeed.createSystemEvent(...)` → toast + reload.
+  (`loan_shark_special_offer` or a generic admin announcement), template key, and optional
+  payload values → `activityFeed.createSystemEvent(...)` → toast + reload. (No importance
+  picker — a system post's importance is derived from its `event_type` in the app.)
 - **Do not** build the public feed as an audit log — moderation history lives on the row's
   suppression fields / a future admin audit log, not in the feed (§18.2).
 

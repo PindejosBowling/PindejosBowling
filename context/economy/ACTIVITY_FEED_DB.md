@@ -63,8 +63,11 @@ From `PIN_ECONOMY_SCHEMA.md` §5–§6 — non-negotiable:
   `public.<name>`. Resolve identity from `auth.uid()` — **never** accept a
   client-supplied player id. Admin gate:
   `IF ((SELECT auth.jwt()) -> 'app_metadata' ->> 'role') <> 'admin' THEN RAISE EXCEPTION 'Admin only'; END IF;`
-- **Controlled strings** (`source_feature`, `event_type`, `visibility`, `importance`,
-  `status`) enforced by `CHECK` constraints on the column (§23-Q7).
+- **Controlled strings** (`source_feature`, `event_type`, `visibility`, `status`) enforced
+  by `CHECK` constraints on the column (§23-Q7). **Importance is no longer a DB column** — as
+  of `20260607230000_feed_importance_to_app.sql` it is app-owned, derived from `event_type`
+  in [activityFeedTemplates.ts](../../app/src/utils/activityFeedTemplates.ts)
+  (`EVENT_IMPORTANCE` / `importanceForEvent`); references to `importance` below are historical.
 - The feed **never moves pins** and is read-derived only — it does not participate in the
   conservation invariant, but the RPC edits that publish into it must not alter any
   existing pin/ledger math (§7 verifies this).

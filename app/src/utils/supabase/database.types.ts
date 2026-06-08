@@ -12,6 +12,31 @@ export type Database = {
   __InternalSupabase: {
     PostgrestVersion: "14.5"
   }
+  graphql_public: {
+    Tables: {
+      [_ in never]: never
+    }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      graphql: {
+        Args: {
+          extensions?: Json
+          operationName?: string
+          query?: string
+          variables?: Json
+        }
+        Returns: Json
+      }
+    }
+    Enums: {
+      [_ in never]: never
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
+  }
   public: {
     Tables: {
       activity_feed_events: {
@@ -22,7 +47,6 @@ export type Database = {
           created_at: string
           event_type: string
           id: string
-          importance: string
           loan_id: string | null
           occurred_at: string
           public_payload: Json
@@ -49,7 +73,6 @@ export type Database = {
           created_at?: string
           event_type: string
           id?: string
-          importance?: string
           loan_id?: string | null
           occurred_at: string
           public_payload?: Json
@@ -76,7 +99,6 @@ export type Database = {
           created_at?: string
           event_type?: string
           id?: string
-          importance?: string
           loan_id?: string | null
           occurred_at?: string
           public_payload?: Json
@@ -1966,7 +1988,6 @@ export type Database = {
       create_system_activity_event: {
         Args: {
           p_event_type: string
-          p_importance: string
           p_public_payload: Json
           p_source_feature: string
           p_template_key: string
@@ -1994,7 +2015,6 @@ export type Database = {
           p_admin_payload: Json
           p_bounty_post_id?: string
           p_event_type: string
-          p_importance: string
           p_loan_id: string
           p_occurred_at: string
           p_public_payload: Json
@@ -2201,6 +2221,9 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
+  graphql_public: {
+    Enums: {},
+  },
   public: {
     Enums: {},
   },
