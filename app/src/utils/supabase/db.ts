@@ -375,6 +375,17 @@ export const betMarkets = {
       .select('game_number, status')
       .eq('week_id', weekId)
       .eq('market_type', 'over_under'),
+  // Active (open + closed-for-betting) moneyline markets for a week. Subject is a
+  // game (the matchup), so the player-subject embed in MARKET_GRAPH resolves null;
+  // the row label comes from the market title + the team-named selections.
+  listActiveMoneylineByWeek: (weekId: string) =>
+    supabase
+      .from('bet_markets')
+      .select(MARKET_GRAPH)
+      .eq('week_id', weekId)
+      .eq('market_type', 'moneyline')
+      .in('status', ['open', 'closed'])
+      .order('game_number'),
   // Start/reopen a game's betting: flip every O/U market for a week+game between
   // 'open' and 'closed' in one admin write. Closing blocks new bets (place_house_bet
   // rejects non-open selections) but leaves settlement intact (settle_betting_for_week
@@ -387,11 +398,25 @@ export const betMarkets = {
       .eq('market_type', 'over_under')
       .eq('game_number', gameNumber)
       .eq('status', status === 'closed' ? 'open' : 'closed'),
+  // Same open/close toggle for a week+game's moneyline markets (run alongside the
+  // O/U toggle when a game starts/reopens — both close so the board goes inert).
+  setMoneylineStatusByWeekGame: (weekId: string, gameNumber: number, status: 'open' | 'closed') =>
+    supabase
+      .from('bet_markets')
+      .update({ status })
+      .eq('week_id', weekId)
+      .eq('market_type', 'moneyline')
+      .eq('game_number', gameNumber)
+      .eq('status', status === 'closed' ? 'open' : 'closed'),
   // RSVP-driven create/refund of O/U markets (SECURITY DEFINER, server-side).
   // extraGames adds schedule game numbers not yet present (team-gen game 3); RSVP
   // passes none and the RPC defaults the target set to the established games / {1,2}.
   syncOUForWeek: (weekId: string, extraGames: number[] = []) =>
     supabase.rpc('sync_over_under_markets_for_week', { p_week_id: weekId, p_extra_games: extraGames }),
+  // Schedule-driven create of even-money moneyline markets (one per games row),
+  // SECURITY DEFINER. Run on team generation / when a game is added, not on RSVP.
+  syncMoneylineForWeek: (weekId: string) =>
+    supabase.rpc('sync_moneyline_markets_for_week', { p_week_id: weekId }),
   // Admin: refund every bet on a week+game's O/U markets and drop the markets —
   // the inverse of syncOUForWeek's create, used when a schedule game is removed.
   removeOUForGame: (weekId: string, gameNumber: number) =>
@@ -399,6 +424,10 @@ export const betMarkets = {
   // Admin: settle one market against the subject's actual score.
   settle: (marketId: string, resultValue: number) =>
     supabase.rpc('settle_market', { p_market_id: marketId, p_result_value: resultValue }),
+  // Admin: settle one moneyline market from its game's scores (winner = higher
+  // combined team total; tie → push). No score input — derived server-side.
+  settleMoneyline: (marketId: string) =>
+    supabase.rpc('settle_moneyline_market', { p_market_id: marketId }),
   // Admin: credit scores + settle all open markets for an archived week.
   settleForWeek: (weekId: string) =>
     supabase.rpc('settle_betting_for_week', { p_week_id: weekId }),
@@ -412,7 +441,7 @@ export const bets = {
       .select('*, players(name), ' + LEG_GRAPH)
       .eq('player_id', playerId)
       .order('placed_at', { ascending: false }),
-  // All bets with a leg on an over_under market in this week (Active Bets).
+  // All bets with a leg on an over_under or moneyline market in this week (Active Bets).
   listByWeek: (weekId: string) =>
     supabase
       .from('bets')
@@ -421,7 +450,7 @@ export const bets = {
         'bet_markets!inner(*, subject:players!bet_markets_subject_player_id_fkey(name))))'
       )
       .eq('bet_legs.bet_selections.bet_markets.week_id', weekId)
-      .eq('bet_legs.bet_selections.bet_markets.market_type', 'over_under')
+      .in('bet_legs.bet_selections.bet_markets.market_type', ['over_under', 'moneyline'])
       .order('placed_at', { ascending: false }),
   // All settled bets for a season (Settled Bets), with leg → selection → market(+week).
   listSettledBySeason: (seasonId: string) =>

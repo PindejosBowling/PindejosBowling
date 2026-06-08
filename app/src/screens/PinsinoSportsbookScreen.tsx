@@ -54,7 +54,7 @@ export default function PinsinoSportsbookScreen() {
   function confirmCancelBet(bet: BetView) {
     Alert.alert(
       'Cancel this bet?',
-      `Remove ${bet.bettorName}'s ${bet.legCount > 1 ? `${bet.legCount}-leg parlay` : `${bet.pick?.toUpperCase()} ${bet.line.toFixed(1)} bet on ${bet.subjectName} (Game ${bet.gameNumber})`}. This fully reverses the bet's pin effect — restoring the balance to before it was placed — and cannot be undone.`,
+      `Remove ${bet.bettorName}'s ${bet.legCount > 1 ? `${bet.legCount}-leg parlay` : `${bet.pick?.toUpperCase()}${bet.marketType === 'over_under' ? ` ${bet.line.toFixed(1)}` : ''} bet on ${bet.subjectName}${bet.gameNumber != null ? ` (Game ${bet.gameNumber})` : ''}`}. This fully reverses the bet's pin effect — restoring the balance to before it was placed — and cannot be undone.`,
       [
         { text: 'Keep Bet', style: 'cancel' },
         { text: 'Cancel Bet', style: 'destructive', onPress: () => cancelBet(bet) },

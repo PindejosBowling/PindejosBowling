@@ -1,6 +1,6 @@
 # Betting Line Board — Place Bets composition
 
-The **Place Bets** view in [src/screens/SportsbookScreen.tsx](../app/src/screens/SportsbookScreen.tsx) renders open betting markets as a board of collapsible sections. It is built as a **reusable, market-type-agnostic stack** so new market kinds (moneylines, props, team totals, season-long futures) drop in by adding data + a few pure helpers — **with no new rendering code**. Over/under is the first and currently only consumer. **Read this before adding a market type to the board.** (Schema/RPC side of adding a bet type lives in [supabase/PIN_ECONOMY_SCHEMA.md](../supabase/PIN_ECONOMY_SCHEMA.md) §7 — keep that authoritative; this section is the **UI** counterpart.)
+The **Place Bets** view in [src/screens/SportsbookScreen.tsx](../app/src/screens/SportsbookScreen.tsx) renders open betting markets as a board of collapsible sections. It is built as a **reusable, market-type-agnostic stack** so new market kinds (props, team totals, season-long futures) drop in by adding data + a few pure helpers — **with no new rendering code**. Over/under was the first consumer; **game moneylines** are the second (see the moneyline note below) — the board rendered them with no new component code, validating the seam. **Read this before adding a market type to the board.** (Schema/RPC side of adding a bet type lives in [supabase/PIN_ECONOMY_SCHEMA.md](../supabase/PIN_ECONOMY_SCHEMA.md) §7 — keep that authoritative; this section is the **UI** counterpart.)
 
 ### The layers (data → screen)
 
@@ -65,6 +65,16 @@ The **"under" side of player O/U lines is intentionally not bettable** from the 
 - **Where:** `SportsbookScreen.tsx` — `isSelectionHiddenInUI(line, sel)` (the policy predicate, `over_under` + `key === 'under'`) and `withVisibleSelections(line)` (strips hidden selections), applied once in the `lineGroups` `useMemo`. Because the filtered `LineView` is what flows into `LineRow`, the parlay slip, and the single-bet sheet, the `under` cannot be selected, parlayed, or shown anywhere downstream. A line that ends up with zero visible selections is dropped from the board.
 - **What is *not* touched:** the `under` `bet_selections` row, `normalizeMarket`, `selectionBetsAgainstSubject` (anti-tank still encodes `under` as the against-subject side), and the DB/RPC layer (`place_house_bet`, settlement) all handle `under` exactly as before. The mechanic is fully preserved server-side.
 - **Re-enabling:** delete `isSelectionHiddenInUI` / `withVisibleSelections` and restore the plain `for (const line of openLines)` loop in `lineGroups`. No DB or migration work needed. To hide a *different* side (or a side on a future market type) instead, extend `isSelectionHiddenInUI`.
+
+### Game moneylines (the second consumer)
+
+**Moneylines** ("which team wins this game?") are live alongside O/U, proving the seam — they reuse `LineRow` / `LineRowContainer` / the grouping unchanged. Key differences from O/U, all absorbed by the existing shapes:
+
+- **Subject = a game, not a player.** A new `bet_markets.subject_game_id` (uuid → `games.id`) points at the matchup; `subject_player_id` is null. `normalizeMarket` falls back `subjectName = subject?.name ?? title` (the title is `"Team A vs Team B"`), so the row's left label is the matchup and the two pick buttons are the team names (`bet_selections.key = team_id`, `label = "Team N"`).
+- **No line.** Every selection has `line = null` ⇒ `LineView.line = null` ⇒ `LineRow` hides the line value. Placed-bet views (`BetRow`, `BetDetailModal`, `SettleBetModal`, the admin cancel-confirm) gate `line.toFixed(1)` behind `marketType === 'over_under'`; `LegView`/`BetView` now carry `marketType`, and `pick` is the selection **label** (a team name) rather than its key (a uuid).
+- **Even money.** Both sides are `2.000`, so `parlayOdds = 2^N` stays exactly correct and moneyline legs parlay freely with O/U legs.
+- **No anti-tank.** `selectionBetsAgainstSubject` returns false for moneyline (betting your team to win is fine); `lineCategory` returns the `"Moneylines"` section under each `GAME N` group.
+- **Auto-generated, auto-settled.** `sync_moneyline_markets_for_week` creates one even-money market per `games` row (wired to **team generation / add-game**, not RSVP — moneylines derive from the schedule). Settlement is automatic on week-archive (`settle_betting_for_week`): winner = the team with the higher combined game score, ties → push. The admin `SettleBetModal` also exposes a manual per-leg path (`settle_moneyline_market`, no score input — derived from entered scores). DB details: [supabase/PIN_ECONOMY_SCHEMA.md](../supabase/PIN_ECONOMY_SCHEMA.md).
 
 ### Recipe — adding a new market type to the board
 

@@ -49,17 +49,22 @@ export default function SettleBetModal({ bet, onClose, onSettled }: SettleBetMod
   const isParlay = bet.legCount > 1
 
   async function settle() {
-    // Collect the unsettled legs, validating each entered score.
-    const toSettle: { marketId: string; value: number }[] = []
+    // Collect the unresolved legs. O/U legs need an entered score; moneyline legs
+    // settle from the game's scores server-side (no input).
+    const toSettle: { marketId: string; marketType: string; value?: number }[] = []
     for (let i = 0; i < bet.legs.length; i++) {
       const leg = bet.legs[i]
-      if (leg.actualScore != null) continue // already settled — locked
-      const a = parseInt(scores[i] ?? '', 10)
-      if (isNaN(a) || a < 0 || a > 300) {
-        showToast(`Enter a valid score (0–300) for ${leg.subjectName}`, 'error')
-        return
+      if (leg.result != null) continue // already resolved — locked
+      if (leg.marketType === 'over_under') {
+        const a = parseInt(scores[i] ?? '', 10)
+        if (isNaN(a) || a < 0 || a > 300) {
+          showToast(`Enter a valid score (0–300) for ${leg.subjectName}`, 'error')
+          return
+        }
+        toSettle.push({ marketId: leg.marketId, marketType: leg.marketType, value: a })
+      } else {
+        toSettle.push({ marketId: leg.marketId, marketType: leg.marketType })
       }
-      toSettle.push({ marketId: leg.marketId, value: a })
     }
 
     if (toSettle.length === 0) {
@@ -69,11 +74,14 @@ export default function SettleBetModal({ bet, onClose, onSettled }: SettleBetMod
 
     setSettling(true)
     try {
-      // Settle each leg's market in turn. settle_market is idempotent, so a
-      // leg already resolved by an earlier call is a no-op; the parlay finalizes
-      // automatically as its last leg lands.
-      for (const { marketId, value } of toSettle) {
-        const { error } = await betMarkets.settle(marketId, value)
+      // Settle each leg's market in turn. Both RPCs are idempotent, so a leg
+      // already resolved by an earlier call is a no-op; the parlay finalizes
+      // automatically as its last leg lands. Moneyline derives its winner from the
+      // game scores (errors if none recorded yet).
+      for (const item of toSettle) {
+        const { error } = item.marketType === 'over_under'
+          ? await betMarkets.settle(item.marketId, item.value!)
+          : await betMarkets.settleMoneyline(item.marketId)
         if (error) { showToast(error.message, 'error'); return }
       }
       showToast(isParlay ? 'Parlay settled' : 'Bet settled', 'success')
@@ -104,26 +112,31 @@ export default function SettleBetModal({ bet, onClose, onSettled }: SettleBetMod
           <Text style={styles.modalSubtitle}>
             {isParlay
               ? `${bet.bettorName} · enter each leg's actual score`
-              : `LINE: ${bet.line.toFixed(1)}`}
+              : bet.marketType === 'over_under'
+                ? `LINE: ${bet.line.toFixed(1)}`
+                : 'Settles from game scores'}
           </Text>
 
           <ScrollView style={styles.legs} keyboardShouldPersistTaps="handled">
             {bet.legs.map((leg, i) => {
-              const settled = leg.actualScore != null
+              const settled = leg.result != null
+              const isOU = leg.marketType === 'over_under'
               const value = scores[i] ?? ''
-              const preview = previewResult(value, leg.line)
+              const preview = isOU ? previewResult(value, leg.line) : null
               return (
                 <View key={i} style={[styles.legBlock, i > 0 && styles.legBlockBorder]}>
                   <Text style={styles.legSubject}>
-                    {leg.subjectName} · {leg.pick?.toUpperCase()} {leg.line.toFixed(1)}
+                    {leg.subjectName} · {leg.pick?.toUpperCase()}
+                    {isOU ? ` ${leg.line.toFixed(1)}` : ''}
                     {leg.gameNumber != null ? ` · G${leg.gameNumber}` : ''}
                   </Text>
                   {settled ? (
                     <Text style={styles.legSettled}>
-                      Settled · actual {leg.actualScore}
+                      Settled
+                      {leg.actualScore != null ? ` · actual ${leg.actualScore}` : ''}
                       {leg.result ? ` (${leg.result.toUpperCase()})` : ''}
                     </Text>
-                  ) : (
+                  ) : isOU ? (
                     <>
                       <TextInput
                         style={styles.wagerInput}
@@ -140,6 +153,11 @@ export default function SettleBetModal({ bet, onClose, onSettled }: SettleBetMod
                           : `${leg.subjectName}'s actual score${leg.gameNumber != null ? ` for game ${leg.gameNumber}` : ''}`}
                       </Text>
                     </>
+                  ) : (
+                    <Text style={styles.wagerHint}>
+                      Winner is the higher combined team score for game {leg.gameNumber}.
+                      Resolves from entered scores.
+                    </Text>
                   )}
                 </View>
               )

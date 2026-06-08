@@ -253,6 +253,7 @@ export type Database = {
           result_value: number | null
           settled_at: string | null
           status: string
+          subject_game_id: string | null
           subject_player_id: string | null
           title: string
           updated_at: string
@@ -268,6 +269,7 @@ export type Database = {
           result_value?: number | null
           settled_at?: string | null
           status?: string
+          subject_game_id?: string | null
           subject_player_id?: string | null
           title: string
           updated_at?: string
@@ -283,6 +285,7 @@ export type Database = {
           result_value?: number | null
           settled_at?: string | null
           status?: string
+          subject_game_id?: string | null
           subject_player_id?: string | null
           title?: string
           updated_at?: string
@@ -294,6 +297,13 @@ export type Database = {
             columns: ["created_by_player_id"]
             isOneToOne: false
             referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bet_markets_subject_game_id_fkey"
+            columns: ["subject_game_id"]
+            isOneToOne: false
+            referencedRelation: "games"
             referencedColumns: ["id"]
           },
           {
@@ -2009,6 +2019,10 @@ export type Database = {
         Args: { p_bounty_post_id: string }
         Returns: string
       }
+      finalize_bets_for_market: {
+        Args: { p_market_id: string }
+        Returns: undefined
+      }
       is_registered_player: { Args: { phone: string }; Returns: boolean }
       place_house_bet: {
         Args: { p_selection_ids: string[]; p_stake: number }
@@ -2076,6 +2090,14 @@ export type Database = {
         Args: { p_market_id: string; p_result_value: number }
         Returns: undefined
       }
+      settle_moneyline_market: {
+        Args: { p_market_id: string }
+        Returns: undefined
+      }
+      settle_moneyline_market_internal: {
+        Args: { p_market_id: string }
+        Returns: undefined
+      }
       settle_pvp_challenge: {
         Args: {
           p_admin_note: string
@@ -2088,6 +2110,10 @@ export type Database = {
       settle_pvp_for_week: { Args: { p_week_id: string }; Returns: undefined }
       suppress_activity_event: {
         Args: { p_event_id: string; p_reason: string }
+        Returns: undefined
+      }
+      sync_moneyline_markets_for_week: {
+        Args: { p_week_id: string }
         Returns: undefined
       }
       sync_over_under_markets_for_week: {
