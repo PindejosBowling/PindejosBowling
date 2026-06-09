@@ -8,7 +8,6 @@ import {
   Modal,
   StyleSheet,
   RefreshControl,
-  ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
 } from 'react-native'
@@ -26,6 +25,7 @@ import SettledBetsView from '../components/SettledBetsView'
 import BetDetailModal, { resultBadge, betReturnText } from '../components/BetDetailModal'
 import LineRow from '../components/LineRow'
 import LineRowContainer from '../components/LineRowContainer'
+import Button from '../components/Button'
 import {
   usePinsinoData,
   selectionBetsAgainstSubject,
@@ -408,18 +408,13 @@ export default function SportsbookScreen() {
               {parlayLegs.map(l => `${l.subjectName} ${l.selectionLabel.toUpperCase()}`).join(' · ')}
             </Text>
           </View>
-          <TouchableOpacity style={styles.slipClear} onPress={() => setParlayLegs([])} activeOpacity={0.7}>
-            <Text style={styles.slipClearText}>Clear</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.slipBuild, parlayLegs.length < 2 && styles.placeBtnDisabled]}
+          <Button variant="ghost" label="Clear" onPress={() => setParlayLegs([])} style={styles.slipClear} />
+          <Button
+            label={parlayLegs.length < 2 ? 'Add 2+' : 'Build'}
             onPress={() => { if (parlayLegs.length >= 2) setParlayModalOpen(true) }}
-            activeOpacity={0.7}
-          >
-            <Text style={styles.slipBuildText}>
-              {parlayLegs.length < 2 ? 'Add 2+' : 'Build'}
-            </Text>
-          </TouchableOpacity>
+            disabled={parlayLegs.length < 2}
+            style={styles.slipBuild}
+          />
         </View>
       )}
 
@@ -485,16 +480,7 @@ export default function SportsbookScreen() {
 
               <Text style={styles.modalWarning}>⚠ Bets can't be canceled once placed.</Text>
 
-              <TouchableOpacity
-                style={[styles.placeBtn, placing && styles.placeBtnDisabled]}
-                onPress={placeBet}
-                disabled={placing}
-                activeOpacity={0.7}
-              >
-                {placing
-                  ? <ActivityIndicator size="small" color={colors.bg} />
-                  : <Text style={styles.placeBtnText}>Place Bet</Text>}
-              </TouchableOpacity>
+              <Button label="Place Bet" size="lg" onPress={placeBet} loading={placing} disabled={placing} />
             </View>
           </KeyboardAvoidingView>
           <Toast />
@@ -551,16 +537,7 @@ export default function SportsbookScreen() {
 
               <Text style={styles.modalWarning}>⚠ Bets can't be canceled once placed.</Text>
 
-              <TouchableOpacity
-                style={[styles.placeBtn, placing && styles.placeBtnDisabled]}
-                onPress={placeParlay}
-                disabled={placing}
-                activeOpacity={0.7}
-              >
-                {placing
-                  ? <ActivityIndicator size="small" color={colors.bg} />
-                  : <Text style={styles.placeBtnText}>Place Parlay</Text>}
-              </TouchableOpacity>
+              <Button label="Place Parlay" size="lg" onPress={placeParlay} loading={placing} disabled={placing} />
             </View>
           </KeyboardAvoidingView>
           <Toast />
@@ -634,29 +611,8 @@ const styles = StyleSheet.create({
     color: colors.muted,
     marginTop: 1,
   },
-  slipClear: {
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-  },
-  slipClearText: {
-    fontFamily: fonts.barlowCondensed,
-    fontSize: 13,
-    color: colors.muted,
-    letterSpacing: 0.5,
-  },
-  slipBuild: {
-    backgroundColor: colors.accent,
-    borderRadius: radius.cardSm,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-  },
-  slipBuildText: {
-    fontFamily: fonts.barlowCondensed,
-    fontSize: 14,
-    fontWeight: '700',
-    color: colors.bg,
-    letterSpacing: 0.5,
-  },
+  slipClear: { paddingHorizontal: 10, paddingVertical: 8 },
+  slipBuild: { paddingHorizontal: 16, paddingVertical: 10 },
 
   // Parlay confirm modal leg list
   parlayLegList: { marginBottom: 16 },
@@ -789,19 +745,5 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: colors.danger,
     marginBottom: 16,
-  },
-  placeBtn: {
-    backgroundColor: colors.accent,
-    borderRadius: radius.cardSm,
-    paddingVertical: 14,
-    alignItems: 'center',
-  },
-  placeBtnDisabled: { opacity: 0.4 },
-  placeBtnText: {
-    fontFamily: fonts.barlowCondensed,
-    fontSize: 16,
-    fontWeight: '700',
-    color: colors.bg,
-    letterSpacing: 0.5,
   },
 })

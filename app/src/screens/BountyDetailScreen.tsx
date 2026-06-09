@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from 'react'
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, RefreshControl } from 'react-native'
+import { View, Text, ScrollView, StyleSheet, RefreshControl } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useNavigation, useRoute, useFocusEffect, RouteProp } from '@react-navigation/native'
 import { NativeStackNavigationProp } from '@react-navigation/native-stack'
@@ -7,6 +7,7 @@ import { colors, fonts, radius } from '../theme'
 import ScreenHeader from '../components/ScreenHeader'
 import LoadingView from '../components/LoadingView'
 import BountyEntryModal from '../components/BountyEntryModal'
+import Button from '../components/Button'
 import { useBountyDetail } from '../hooks/useBountyDetail'
 import { useRefresh } from '../hooks/useRefresh'
 import { useAuthStore } from '../stores/authStore'
@@ -177,9 +178,7 @@ export default function BountyDetailScreen() {
         )}
 
         {canJoin && (
-          <TouchableOpacity style={styles.joinBtn} onPress={() => setEntryOpen(true)} activeOpacity={0.7}>
-            <Text style={styles.joinText}>Join the Hunt</Text>
-          </TouchableOpacity>
+          <Button label="Join the Hunt" size="lg" onPress={() => setEntryOpen(true)} style={styles.joinBtn} />
         )}
       </ScrollView>
 
@@ -226,8 +225,7 @@ const styles = StyleSheet.create({
   reasoningLabel: { fontFamily: fonts.barlowCondensed, fontSize: 11, letterSpacing: 1.5, color: colors.muted, marginBottom: 4 },
   reasoning: { fontFamily: fonts.barlow, fontSize: 14, color: colors.text, lineHeight: 20 },
 
-  joinBtn: { backgroundColor: colors.accent, borderRadius: radius.cardSm, paddingVertical: 14, alignItems: 'center', marginTop: 24 },
-  joinText: { fontFamily: fonts.barlowCondensed, fontSize: 16, fontWeight: '700', color: colors.bg, letterSpacing: 0.5 },
+  joinBtn: { marginTop: 24 },
 
   emptyCard: {
     backgroundColor: colors.surface, borderRadius: radius.cardMd, borderWidth: 1, borderColor: colors.border,

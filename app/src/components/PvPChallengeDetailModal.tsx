@@ -332,14 +332,10 @@ export default function PvPChallengeDetailModal({ challengeId, onClose, onChange
                 )}
                 <View style={styles.actionRow}>
                   {actions.canCounter && (
-                    <TouchableOpacity style={styles.secondaryBtn} onPress={() => setCounterOpen(true)} activeOpacity={0.7}>
-                      <Text style={styles.secondaryBtnText}>Counter</Text>
-                    </TouchableOpacity>
+                    <Button variant="outline" label="Counter" onPress={() => setCounterOpen(true)} fullWidth style={styles.outlineSurface} />
                   )}
                   {actions.canDecline && (
-                    <TouchableOpacity style={[styles.secondaryBtn, declining && styles.btnDisabled]} onPress={confirmDecline} disabled={declining} activeOpacity={0.7}>
-                      <Text style={styles.declineText}>Decline</Text>
-                    </TouchableOpacity>
+                    <Button variant="outline" tone="danger" label="Decline" onPress={confirmDecline} disabled={declining} fullWidth style={styles.outlineSurface} />
                   )}
                 </View>
                 {actions.canRematch && (
@@ -350,14 +346,7 @@ export default function PvPChallengeDetailModal({ challengeId, onClose, onChange
                   />
                 )}
                 {actions.canCancel && (
-                  <TouchableOpacity
-                    style={[styles.cancelBtn, cancelling && styles.btnDisabled]}
-                    onPress={confirmCancel}
-                    disabled={cancelling}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={styles.declineText}>Cancel Challenge</Text>
-                  </TouchableOpacity>
+                  <Button variant="outline" tone="danger" label="Cancel Challenge" onPress={confirmCancel} disabled={cancelling} style={styles.outlineSurface} />
                 )}
               </View>
             )}
@@ -470,11 +459,7 @@ const styles = StyleSheet.create({
 
   actionStack: { marginTop: 18, gap: 8 },
   actionRow: { flexDirection: 'row', gap: 8 },
-  secondaryBtn: { flex: 1, backgroundColor: colors.surface, borderRadius: radius.cardSm, borderWidth: 1, borderColor: colors.border2, paddingVertical: 13, alignItems: 'center' },
-  cancelBtn: { backgroundColor: colors.surface, borderRadius: radius.cardSm, borderWidth: 1, borderColor: colors.danger, paddingVertical: 13, alignItems: 'center' },
-  secondaryBtnText: { fontFamily: fonts.barlowCondensed, fontSize: 15, fontWeight: '700', color: colors.text, letterSpacing: 0.5 },
-  declineText: { fontFamily: fonts.barlowCondensed, fontSize: 15, fontWeight: '700', color: colors.danger, letterSpacing: 0.5 },
-  btnDisabled: { opacity: 0.4 },
+  outlineSurface: { backgroundColor: colors.surface },
 
   emptyCard: { backgroundColor: colors.surface, borderRadius: radius.cardMd, borderWidth: 1, borderColor: colors.border, padding: 20, alignItems: 'center', margin: 16 },
   emptyText: { fontFamily: fonts.barlowCondensed, fontSize: 14, color: colors.muted },

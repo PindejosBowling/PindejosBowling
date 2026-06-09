@@ -5,7 +5,6 @@ import {
   TextInput,
   TouchableOpacity,
   StyleSheet,
-  ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
 } from 'react-native'
@@ -13,6 +12,7 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { colors, fonts, radius } from '../theme'
 import { supabase } from '../utils/supabase/client'
 import { players } from '../utils/supabase/db'
+import Button from '../components/Button'
 
 type Step = 'phone' | 'otp'
 
@@ -108,18 +108,7 @@ export default function LoginScreen() {
 
                 {!!error && <Text style={styles.error}>{error}</Text>}
 
-                <TouchableOpacity
-                  style={[styles.button, loading && styles.buttonDisabled]}
-                  onPress={handleSendCode}
-                  disabled={loading}
-                  activeOpacity={0.8}
-                >
-                  {loading ? (
-                    <ActivityIndicator color={colors.bg} />
-                  ) : (
-                    <Text style={styles.buttonText}>SEND CODE</Text>
-                  )}
-                </TouchableOpacity>
+                <Button label="SEND CODE" size="lg" onPress={handleSendCode} loading={loading} disabled={loading} style={styles.button} />
               </>
             ) : (
               <>
@@ -144,18 +133,7 @@ export default function LoginScreen() {
 
                 {!!error && <Text style={styles.error}>{error}</Text>}
 
-                <TouchableOpacity
-                  style={[styles.button, (loading || otp.length < 6) && styles.buttonDisabled]}
-                  onPress={handleVerify}
-                  disabled={loading || otp.length < 6}
-                  activeOpacity={0.8}
-                >
-                  {loading ? (
-                    <ActivityIndicator color={colors.bg} />
-                  ) : (
-                    <Text style={styles.buttonText}>VERIFY</Text>
-                  )}
-                </TouchableOpacity>
+                <Button label="VERIFY" size="lg" onPress={handleVerify} loading={loading} disabled={loading || otp.length < 6} style={styles.button} />
 
                 <TouchableOpacity
                   style={styles.back}
@@ -286,20 +264,7 @@ const styles = StyleSheet.create({
   },
   button: {
     width: '100%',
-    backgroundColor: colors.accent,
-    borderRadius: radius.cardSm,
-    paddingVertical: 14,
-    alignItems: 'center',
     marginTop: 4,
-  },
-  buttonDisabled: {
-    opacity: 0.55,
-  },
-  buttonText: {
-    fontFamily: fonts.barlowCondensedHeavy,
-    fontSize: 18,
-    color: colors.bg,
-    letterSpacing: 3,
   },
   back: {
     marginTop: 16,

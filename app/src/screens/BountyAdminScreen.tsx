@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, RefreshControl } from 'react-native'
+import { View, Text, ScrollView, StyleSheet, RefreshControl } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useNavigation } from '@react-navigation/native'
 import { NativeStackNavigationProp } from '@react-navigation/native-stack'
@@ -11,6 +11,7 @@ import PillFilter from '../components/PillFilter'
 import BountyCard from '../components/BountyCard'
 import BountyAdminActionModal from '../components/BountyAdminActionModal'
 import BountyHouseCreateModal from '../components/BountyHouseCreateModal'
+import Button from '../components/Button'
 import { useRefresh } from '../hooks/useRefresh'
 import { useAuthStore } from '../stores/authStore'
 import { seasons, weeks, bountyPosts } from '../utils/supabase/db'
@@ -76,9 +77,7 @@ export default function BountyAdminScreen() {
         contentContainerStyle={styles.content}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.muted} />}
       >
-        <TouchableOpacity style={styles.createBtn} onPress={() => setCreateOpen(true)} activeOpacity={0.7}>
-          <Text style={styles.createBtnText}>+ Create House Bounty</Text>
-        </TouchableOpacity>
+        <Button label="+ Create House Bounty" onPress={() => setCreateOpen(true)} style={styles.createBtn} />
 
         {rows.length === 0 ? (
           <View style={styles.emptyCard}><Text style={styles.emptyText}>No bounties for this filter.</Text></View>
@@ -102,8 +101,7 @@ export default function BountyAdminScreen() {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.bg },
   content: { paddingHorizontal: 16, paddingBottom: 40 },
-  createBtn: { backgroundColor: colors.accent, borderRadius: radius.cardSm, paddingVertical: 13, alignItems: 'center', marginTop: 4, marginBottom: 16 },
-  createBtnText: { fontFamily: fonts.barlowCondensed, fontSize: 15, fontWeight: '700', color: colors.bg, letterSpacing: 0.5 },
+  createBtn: { marginTop: 4, marginBottom: 16 },
   emptyCard: {
     backgroundColor: colors.surface, borderRadius: radius.cardMd, borderWidth: 1, borderColor: colors.border,
     padding: 20, alignItems: 'center', margin: 16,

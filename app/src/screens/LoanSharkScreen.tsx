@@ -15,6 +15,7 @@ import ScreenHeader from '../components/ScreenHeader'
 import LoadingView from '../components/LoadingView'
 import Toast from '../components/Toast'
 import BorrowConfirmModal from '../components/BorrowConfirmModal'
+import Button from '../components/Button'
 import { useLoanSharkData, LoanProductView, DebtLedgerEntry } from '../hooks/useLoanSharkData'
 import { useRefresh } from '../hooks/useRefresh'
 import { useAuthStore } from '../stores/authStore'
@@ -142,14 +143,7 @@ export default function LoanSharkScreen() {
                 placeholderTextColor={colors.muted2}
                 maxLength={7}
               />
-              <TouchableOpacity
-                style={[styles.repayBtn, repaying && styles.repayBtnDisabled]}
-                onPress={repay}
-                disabled={repaying}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.repayBtnText}>Repay</Text>
-              </TouchableOpacity>
+              <Button label="Repay" onPress={repay} disabled={repaying} style={styles.repayBtn} />
             </View>
 
             {/* Payment history (collapsible) */}
@@ -218,13 +212,7 @@ export default function LoanSharkScreen() {
                   {p.special_warning_text ? (
                     <Text style={styles.productWarn}>⚠ {p.special_warning_text}</Text>
                   ) : null}
-                  <TouchableOpacity
-                    style={styles.borrowBtn}
-                    onPress={() => setConfirmProduct(p)}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={styles.borrowBtnText}>Borrow</Text>
-                  </TouchableOpacity>
+                  <Button label="Borrow" onPress={() => setConfirmProduct(p)} style={styles.borrowBtn} />
                 </View>
               ))
             )}
@@ -317,20 +305,7 @@ const styles = StyleSheet.create({
     fontSize: 18,
     color: colors.text,
   },
-  repayBtn: {
-    backgroundColor: colors.accent,
-    borderRadius: radius.cardSm,
-    paddingHorizontal: 20,
-    justifyContent: 'center',
-  },
-  repayBtnDisabled: { opacity: 0.4 },
-  repayBtnText: {
-    fontFamily: fonts.barlowCondensed,
-    fontSize: 15,
-    fontWeight: '700',
-    color: colors.bg,
-    letterSpacing: 0.5,
-  },
+  repayBtn: { paddingHorizontal: 20 },
 
   historyToggle: {
     flexDirection: 'row',
@@ -413,20 +388,7 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     marginTop: 8,
   },
-  borrowBtn: {
-    backgroundColor: colors.accent,
-    borderRadius: radius.cardSm,
-    paddingVertical: 12,
-    alignItems: 'center',
-    marginTop: 14,
-  },
-  borrowBtnText: {
-    fontFamily: fonts.barlowCondensed,
-    fontSize: 15,
-    fontWeight: '700',
-    color: colors.bg,
-    letterSpacing: 0.5,
-  },
+  borrowBtn: { marginTop: 14 },
 
   emptyCard: {
     backgroundColor: colors.surface,

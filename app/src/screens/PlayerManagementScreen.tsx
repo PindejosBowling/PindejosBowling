@@ -7,7 +7,6 @@ import {
   Modal,
   TextInput,
   StyleSheet,
-  ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
   RefreshControl,
@@ -20,6 +19,7 @@ import { MoreStackParamList } from '../navigation/types'
 import ScreenHeader from '../components/ScreenHeader'
 import LoadingView from '../components/LoadingView'
 import Toast from '../components/Toast'
+import Button from '../components/Button'
 import { usePlayerManagementData } from '../hooks/usePlayerManagementData'
 import { useRefresh } from '../hooks/useRefresh'
 import { useUiStore } from '../stores/uiStore'
@@ -169,9 +169,7 @@ export default function PlayerManagementScreen() {
       )}
 
       <View style={[styles.addBar, { paddingBottom: insets.bottom + 12 }]}>
-        <TouchableOpacity style={styles.addBtn} onPress={openAdd} activeOpacity={0.8}>
-          <Text style={styles.addBtnText}>+ Add Player</Text>
-        </TouchableOpacity>
+        <Button label="+ Add Player" size="lg" onPress={openAdd} />
       </View>
 
       {editModal !== null && (
@@ -247,26 +245,14 @@ export default function PlayerManagementScreen() {
                 </View>
 
                 <View style={styles.btnRow}>
-                  <TouchableOpacity
-                    style={styles.btnCancel}
-                    onPress={closeModal}
-                    disabled={saving}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={styles.btnCancelText}>Cancel</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[styles.btnPrimary, (!editModal.firstName.trim() || !editModal.lastName.trim() || !(editModal.phone ?? '').trim() || saving) && styles.btnDisabled]}
+                  <Button label="Cancel" variant="secondary" onPress={closeModal} fullWidth />
+                  <Button
+                    label="Save"
                     onPress={save}
+                    loading={saving}
                     disabled={!editModal.firstName.trim() || !editModal.lastName.trim() || !(editModal.phone ?? '').trim() || saving}
-                    activeOpacity={0.7}
-                  >
-                    {saving ? (
-                      <ActivityIndicator size="small" color={colors.bg} />
-                    ) : (
-                      <Text style={styles.btnPrimaryText}>Save</Text>
-                    )}
-                  </TouchableOpacity>
+                    fullWidth
+                  />
                 </View>
               </TouchableOpacity>
             </TouchableOpacity>
@@ -410,19 +396,6 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: colors.border,
   },
-  addBtn: {
-    backgroundColor: colors.accent,
-    borderRadius: radius.cardSm,
-    paddingVertical: 14,
-    alignItems: 'center',
-  },
-  addBtnText: {
-    fontFamily: fonts.barlowCondensed,
-    fontSize: 16,
-    color: colors.bg,
-    fontWeight: '700',
-    letterSpacing: 0.5,
-  },
 
   // modal
   modalWrap: { flex: 1 },
@@ -491,33 +464,4 @@ const styles = StyleSheet.create({
   togglePillTextOn: { color: colors.accent },
 
   btnRow: { flexDirection: 'row', gap: 10 },
-  btnCancel: {
-    flex: 1,
-    paddingVertical: 12,
-    borderRadius: radius.cardSm,
-    borderWidth: 1,
-    borderColor: colors.border2,
-    alignItems: 'center',
-  },
-  btnCancelText: {
-    fontFamily: fonts.barlowCondensed,
-    fontSize: 15,
-    color: colors.muted,
-    letterSpacing: 0.5,
-  },
-  btnPrimary: {
-    flex: 1,
-    paddingVertical: 12,
-    borderRadius: radius.cardSm,
-    backgroundColor: colors.accent,
-    alignItems: 'center',
-  },
-  btnPrimaryText: {
-    fontFamily: fonts.barlowCondensed,
-    fontSize: 15,
-    color: colors.bg,
-    fontWeight: '700',
-    letterSpacing: 0.5,
-  },
-  btnDisabled: { opacity: 0.4 },
 })

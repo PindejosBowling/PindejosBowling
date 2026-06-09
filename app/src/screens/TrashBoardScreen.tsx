@@ -16,6 +16,7 @@ import { MoreStackParamList } from '../navigation/types'
 import AppHeader from '../components/AppHeader'
 import LoadingView from '../components/LoadingView'
 import ScreenHeader from '../components/ScreenHeader'
+import Button from '../components/Button'
 import { useUiStore } from '../stores/uiStore'
 import { timeAgo } from '../utils/helpers'
 import { colors, fonts, radius } from '../theme'
@@ -112,14 +113,7 @@ export default function TrashBoardScreen() {
                   multiline
                   numberOfLines={3}
                 />
-                <TouchableOpacity
-                  style={[styles.postBtn, !msg.trim() && styles.postBtnDisabled]}
-                  onPress={post}
-                  disabled={posting || !msg.trim()}
-                  activeOpacity={0.7}
-                >
-                  <Text style={styles.postBtnText}>{posting ? 'Posting…' : 'Post'}</Text>
-                </TouchableOpacity>
+                <Button label="Post" onPress={post} loading={posting} disabled={posting || !msg.trim()} style={styles.postBtn} />
               </View>
 
               {posts.length === 0 && (
@@ -183,22 +177,7 @@ const styles = StyleSheet.create({
     minHeight: 72,
     textAlignVertical: 'top',
   },
-  postBtn: {
-    backgroundColor: colors.accent,
-    borderRadius: radius.cardSm,
-    paddingVertical: 10,
-    alignItems: 'center',
-  },
-  postBtnDisabled: {
-    backgroundColor: colors.surface3,
-  },
-  postBtnText: {
-    fontFamily: fonts.barlowCondensed,
-    fontSize: 14,
-    fontWeight: '700',
-    color: colors.bg,
-    letterSpacing: 0.5,
-  },
+  postBtn: { paddingVertical: 10 },
   emptyState: {
     alignItems: 'center',
     paddingTop: 32,

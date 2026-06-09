@@ -85,57 +85,54 @@ export default function PvpAdminActionModal({ challenge: c, onClose, onDone }: P
             {isLocked && (
               <>
                 <Text style={styles.section}>MANUAL SETTLE</Text>
-                <TouchableOpacity
-                  style={styles.actBtn}
+                <Button
+                  variant="outline"
+                  label={`${c.creatorName} wins`}
                   disabled={saving}
                   onPress={() => confirm(`${c.creatorName} wins?`, () => run('Settled', () => pvpChallenges.settle(c.id, c.creatorId, note)))}
-                  activeOpacity={0.7}
-                >
-                  <Text style={styles.actText}>{c.creatorName} wins</Text>
-                </TouchableOpacity>
+                  style={styles.actSpacing}
+                />
                 {c.counterpartyId && (
-                  <TouchableOpacity
-                    style={styles.actBtn}
+                  <Button
+                    variant="outline"
+                    label={`${c.counterpartyName} wins`}
                     disabled={saving}
                     onPress={() => confirm(`${c.counterpartyName} wins?`, () => run('Settled', () => pvpChallenges.settle(c.id, c.counterpartyId, note)))}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={styles.actText}>{c.counterpartyName} wins</Text>
-                  </TouchableOpacity>
+                    style={styles.actSpacing}
+                  />
                 )}
                 {c.contractType !== 'custom' && (
-                  <TouchableOpacity
-                    style={styles.actBtn}
+                  <Button
+                    variant="outline"
+                    label="Auto-settle from scores (push if tied)"
                     disabled={saving}
                     onPress={() => confirm('Auto-settle from scores?', () => run('Settled from scores', () => pvpChallenges.settle(c.id, null, note)))}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={styles.actText}>Auto-settle from scores (push if tied)</Text>
-                  </TouchableOpacity>
+                    style={styles.actSpacing}
+                  />
                 )}
               </>
             )}
 
             <Text style={styles.section}>RESOLVE / REVERSE</Text>
             {(isLocked || c.status === 'settled') && (
-              <TouchableOpacity
-                style={[styles.actBtn, styles.dangerBtn]}
+              <Button
+                variant="outline"
+                tone="danger"
+                label="Void (refund both stakes)"
                 disabled={saving}
                 onPress={() => confirm('Void & refund both?', () => run('Voided — stakes refunded', () => pvpChallenges.void(c.id, note)))}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.dangerText}>Void (refund both stakes)</Text>
-              </TouchableOpacity>
+                style={styles.actSpacing}
+              />
             )}
             {(isLive || isLocked || c.status === 'settled') && (
-              <TouchableOpacity
-                style={[styles.actBtn, styles.dangerBtn]}
+              <Button
+                variant="outline"
+                tone="danger"
+                label="Cancel contract"
                 disabled={saving}
                 onPress={() => confirm('Cancel this contract?', () => run('Cancelled', () => pvpChallenges.cancel(c.id)))}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.dangerText}>Cancel contract</Text>
-              </TouchableOpacity>
+                style={styles.actSpacing}
+              />
             )}
           </ScrollView>
 
@@ -186,16 +183,5 @@ const styles = StyleSheet.create({
     minHeight: 56,
     textAlignVertical: 'top',
   },
-  actBtn: {
-    backgroundColor: colors.surface2,
-    borderRadius: radius.cardSm,
-    borderWidth: 1,
-    borderColor: colors.border2,
-    paddingVertical: 13,
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  actText: { fontFamily: fonts.barlowCondensed, fontSize: 15, color: colors.text, letterSpacing: 0.5 },
-  dangerBtn: { borderColor: colors.danger },
-  dangerText: { fontFamily: fonts.barlowCondensed, fontSize: 15, color: colors.danger, letterSpacing: 0.5 },
+  actSpacing: { marginBottom: 8 },
 })

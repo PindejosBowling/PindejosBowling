@@ -377,17 +377,7 @@ export default function AdminGenerateTeamsModal({ visible, onClose }: Props) {
                 </Text>
               </View>
 
-              <TouchableOpacity
-                style={[styles.generateBtn, generating && styles.generateBtnDisabled]}
-                onPress={doGenerate}
-                disabled={generating}
-                activeOpacity={0.7}
-              >
-                {generating ? (
-                  <ActivityIndicator size="small" color={colors.bg} style={{ marginRight: 8 }} />
-                ) : null}
-                <Text style={styles.generateBtnText}>{generating ? 'Generating…' : 'Generate'}</Text>
-              </TouchableOpacity>
+              <Button label="Generate" onPress={doGenerate} loading={generating} disabled={generating} style={styles.generateBtn} />
             </View>
 
             {genTeams && (
@@ -433,15 +423,7 @@ export default function AdminGenerateTeamsModal({ visible, onClose }: Props) {
                   </View>
                 ))}
 
-                <TouchableOpacity
-                  style={[styles.useTeamsBtn, confirming && styles.useTeamsBtnDisabled]}
-                  onPress={useTeams}
-                  disabled={confirming}
-                  activeOpacity={0.7}
-                >
-                  {confirming ? <ActivityIndicator size="small" color={colors.bg} style={{ marginRight: 8 }} /> : null}
-                  <Text style={styles.useTeamsBtnText}>{confirming ? 'Saving…' : 'Use These Teams'}</Text>
-                </TouchableOpacity>
+                <Button label="Use These Teams" onPress={useTeams} loading={confirming} disabled={confirming} style={styles.useTeamsBtn} />
               </>
             )}
             </>) : null}
@@ -551,24 +533,7 @@ const styles = StyleSheet.create({
     color: colors.accent,
     fontWeight: '700',
   },
-  generateBtn: {
-    backgroundColor: colors.accent,
-    borderRadius: radius.cardSm,
-    paddingVertical: 11,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  generateBtnDisabled: {
-    backgroundColor: colors.surface3,
-  },
-  generateBtnText: {
-    fontFamily: fonts.barlowCondensed,
-    fontSize: 15,
-    fontWeight: '700',
-    color: colors.bg,
-    letterSpacing: 0.5,
-  },
+  generateBtn: { paddingVertical: 11 },
   sectionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -663,26 +628,7 @@ const styles = StyleSheet.create({
   swapBtnTextActive: {
     color: colors.accent,
   },
-  useTeamsBtn: {
-    backgroundColor: colors.accent,
-    borderRadius: radius.cardSm,
-    paddingVertical: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 4,
-    marginBottom: 4,
-  },
-  useTeamsBtnDisabled: {
-    backgroundColor: colors.surface3,
-  },
-  useTeamsBtnText: {
-    fontFamily: fonts.barlowCondensed,
-    fontSize: 15,
-    fontWeight: '700',
-    color: colors.bg,
-    letterSpacing: 0.5,
-  },
+  useTeamsBtn: { marginTop: 4, marginBottom: 4 },
   btnRow: {
     paddingHorizontal: 24,
     paddingVertical: 16,
