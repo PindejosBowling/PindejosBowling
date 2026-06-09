@@ -6,10 +6,10 @@ import {
   TouchableOpacity,
   StyleSheet,
   Platform,
-  ActivityIndicator,
 } from 'react-native'
 import { colors, fonts, radius } from '../theme'
 import Toast from './Toast'
+import Button from './Button'
 import { useUiStore } from '../stores/uiStore'
 import { loans } from '../utils/supabase/db'
 import type { LoanProductView } from '../hooks/useLoanSharkData'
@@ -90,19 +90,15 @@ export default function BorrowConfirmModal({ product, onClose, onBorrowed }: Bor
             </Text>
           </View>
 
-          <TouchableOpacity
-            style={[styles.confirmBtn, borrowing && styles.confirmBtnDisabled]}
+          <Button
+            label={`Borrow ${product.borrow_amount.toLocaleString()} Pins`}
+            size="lg"
             onPress={confirm}
+            loading={borrowing}
             disabled={borrowing}
-            activeOpacity={0.7}
-          >
-            {borrowing
-              ? <ActivityIndicator size="small" color={colors.bg} />
-              : <Text style={styles.confirmBtnText}>Borrow {product.borrow_amount.toLocaleString()} Pins</Text>}
-          </TouchableOpacity>
-          <TouchableOpacity onPress={() => !borrowing && onClose()} activeOpacity={0.7}>
-            <Text style={styles.cancelText}>Cancel</Text>
-          </TouchableOpacity>
+            style={styles.confirmBtn}
+          />
+          <Button label="Cancel" variant="ghost" onPress={() => !borrowing && onClose()} />
         </View>
       </View>
       <Toast />
@@ -192,27 +188,5 @@ const styles = StyleSheet.create({
     color: colors.muted,
     lineHeight: 17,
   },
-  confirmBtn: {
-    backgroundColor: colors.accent,
-    borderRadius: radius.cardSm,
-    paddingVertical: 14,
-    alignItems: 'center',
-    marginTop: 20,
-  },
-  confirmBtnDisabled: { opacity: 0.4 },
-  confirmBtnText: {
-    fontFamily: fonts.barlowCondensed,
-    fontSize: 16,
-    fontWeight: '700',
-    color: colors.bg,
-    letterSpacing: 0.5,
-  },
-  cancelText: {
-    fontFamily: fonts.barlowCondensed,
-    fontSize: 14,
-    color: colors.muted,
-    textAlign: 'center',
-    paddingVertical: 14,
-    letterSpacing: 0.5,
-  },
+  confirmBtn: { marginTop: 20 },
 })
