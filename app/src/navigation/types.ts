@@ -23,6 +23,7 @@ export type MoreStackParamList = {
 export type StandingsStackParamList = {
   StandingsList: undefined
   PlayerDetail: { name: string }
+  FrameStats: { name: string }
 }
 
 export type PinsinoStackParamList = {
