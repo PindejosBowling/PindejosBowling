@@ -1,11 +1,44 @@
 # Components Consolidation Audit
 
-> **Status:** Audit / backlog. This document does **not** describe completed work — it
-> identifies opportunities. Each opportunity below is independently executable.
+> **Status:** In progress. This document is part audit / backlog, part progress checkpoint.
+> The **Progress checkpoint** table below tracks which opportunities have landed; the
+> catalog entries carry per-item status banners. Each not-started opportunity is still
+> independently executable as originally specced.
 >
 > **Audience:** implementing agents. Every claim carries `file:line` references; every
 > opportunity carries an explicit *Affected files / blast radius* list and an *Acceptance*
 > line you can check against.
+
+---
+
+## Progress checkpoint
+
+_Last updated: 2026-06-09 (branch `components-work`)._
+
+| ID | Opportunity | Status | Notes |
+|---|---|---|---|
+| **P3** | Theme tokens (`overlay`, `spacing`) | ✅ **Done** | `colors.overlay` + `spacing` in [theme.ts](app/src/theme.ts); all 17 modal backdrops use `colors.overlay` (0 `rgba(0,0,0` left in components); `OddsBlock` accentDim literals gone. Optional `text` presets **not** added; `spacing.*` migration left lazy. |
+| **P1** | `<Button>` primitive | ✅ **Done (expanded)** | [Button.tsx](app/src/components/Button.tsx) shipped and **fully fanned out** — adopted by ~14 components + ~14 screens, well past the 3-modal pilot. **API diverged from spec — read the P1 banner before building M1/M2.** |
+| **P2** | `<TextField>` / `<Input>` | ⬜ Not started | No `TextField.tsx` yet. Form modals still hand-roll `TextInput`. |
+| **M1** | `<ModalSheet>` base | ⬜ Not started | No `ModalSheet.tsx`. All 17 modals still hand-roll the scaffold + inside-Modal `<Toast/>`. |
+| **M2** | `<ConfirmDialog>` | ⬜ Not started | Blocked on M1 + P1 (P1 ready). |
+| **R1** | `<ListRow>` primitive | ⬜ Not started | No `ListRow.tsx`. |
+| **C1** | `<Card>` shell | ⬜ Not started | No `Card.tsx`. |
+| **C2** | `<EmptyStateCard>` | ⬜ Not started | Folds into C1. |
+| **L1** | Merge Bets views → `<BetsView>` + extract `utils/bet.ts` | ⬜ Not started | Both views still exist; no `utils/bet.ts`; helpers still exported from `BetDetailModal`. |
+| **S1** | `<SegmentedControl>` | ⬜ Not started | `PillFilter` / `ToggleGroup` / `GamePicker` still separate. |
+| **A1** | `<AvatarCircle>` | ⬜ Not started | `PlayerScoreRow` + `HistoricalTeamBlock` still inline initials circles. |
+| — | Directory reorg + barrel | ⬜ Not started | `components/` still flat (41 files, no `index.ts`). |
+
+**Next up:** the P-tier substrate is the gate for the modal track. P3 is done and P1 is done,
+so **P2 (`<TextField>`) and M1 (`<ModalSheet>`) are the highest-leverage next moves** — once
+both land, M2 + the form-modal migrations collapse the most lines. The list/card/selector track
+(R1, C1, C2, L1, S1, A1) is independent and can proceed in parallel.
+
+> ⚠️ **Inventory drift:** the line counts in the Inventory snapshot below predate the P1
+> rollout. Many modals/screens shed their local `btn*`/`confirmBtn*` styles when they adopted
+> `<Button>`, so several "Lines" figures now read high. Treat the table as a structural map,
+> not an exact line census, until it's re-measured.
 >
 > **Scope of this audit:** `app/src/components/` — 41 components, ~6,834 lines. The
 > directory's consistency enabled fast feature shipping, but rapid growth produced
@@ -137,6 +170,16 @@ moving it.
 
 ### P3 — Theme token additions (do first)
 
+> ✅ **DONE.** [theme.ts](app/src/theme.ts) now exports `colors.overlay`
+> (`rgba(0,0,0,0.7)`, [theme.ts:16](app/src/theme.ts#L16)) and `spacing`
+> ([theme.ts:19-25](app/src/theme.ts#L19-L25)). All 17 modal backdrops reference
+> `colors.overlay` (grep: 0 `rgba(0,0,0` left in `components/`); the `OddsBlock` `accentDim`
+> literals are gone. **Not done (deliberately deferred):** the optional `text` typography
+> presets were not added, and the `spacing.*` migration of magic numbers was left lazy
+> (apply only when a file is edited for another reason). The lone remaining `232,255,71`
+> outside `theme.ts` is a distinct 0.04 tint in [MatchupsScreen.tsx:662](app/src/screens/MatchupsScreen.tsx#L662),
+> not the `accentDim` value.
+
 **Problem:** [app/src/theme.ts](app/src/theme.ts) exposes only `colors`, `fonts`, `radius`.
 Three categories of value are therefore hardcoded across components:
 - **Modal overlay color** — 17 modals hardcode the backdrop fill, and they aren't even
@@ -184,6 +227,28 @@ app/src/components` returns only `colors.overlay` references (or, deliberately, 
 ---
 
 ### P1 — `<Button>` primitive (highest-impact gap)
+
+> ✅ **DONE (shipped + fully fanned out).** [Button.tsx](app/src/components/Button.tsx) exists
+> and is adopted across ~14 components (every form/confirm modal, `PvPChallengeDetailModal`,
+> etc.) **and** ~14 screens — far beyond the original 3-modal pilot. The hand-rolled
+> `btn*`/`confirmBtn*` styles have been deleted from migrated files.
+>
+> **⚠️ The as-built API diverged from the spec below — agents building M1/M2 or migrating
+> remaining call sites must read the real signature in [Button.tsx](app/src/components/Button.tsx#L11-L30), not this entry:**
+> - **Variants** are `'primary' | 'secondary' | 'ghost' | 'danger' | 'gold' | 'outline'` —
+>   `outline` was **added** (surface-filled bordered button with a colored label, fixed 13pt;
+>   `ghost` is borderless, fixed 14pt).
+> - **`size`** is `'md' | 'lg'` (12/15 and 14/16) — there is **no `'sm'`**.
+> - **`tone`** (`'default' | 'danger'`) was added: recolors the `outline` variant's border +
+>   label to `colors.danger`.
+> - **`selectable` mode** was added: renders a form-field-styled trigger row showing
+>   `value`/`placeholder` + a `›` chevron (used as a picker-opening field). This absorbed the
+>   "select field" shape that P2's `<TextField>` might otherwise own — **factor this in when
+>   building P2** so the two don't overlap.
+> - **No `fullWidth` change**, `loading`, `disabled`, `style` are as specced.
+>
+> Remaining (non-blocking): a few screens still hand-roll one-off `TouchableOpacity`s that
+> aren't button-shaped (chips, tab rows) — those are out of scope for `<Button>`.
 
 **Problem:** There is **no shared button component**. ~30 components each hand-roll a
 `TouchableOpacity` + near-identical styles. The canonical primary-button shape recurs
