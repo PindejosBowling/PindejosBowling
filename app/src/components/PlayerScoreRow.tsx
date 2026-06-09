@@ -23,9 +23,12 @@ interface PlayerScoreRowProps {
    * screen acts purely as a calculator for them.
    */
   onCommit?: () => void
+  // When true the saved score is shown as static text (no inline editing) — used
+  // where editing happens through the admin week editor instead of this row.
+  readOnly?: boolean
 }
 
-export default function PlayerScoreRow({ player, gameNum, mode, leagueAvg, onCommit }: PlayerScoreRowProps) {
+export default function PlayerScoreRow({ player, gameNum, mode, leagueAvg, onCommit, readOnly }: PlayerScoreRowProps) {
   const { pendingScores, set } = usePendingStore()
 
   const expectedScore = player.effectiveAvg > 0 ? Math.round(player.effectiveAvg) : '—'
@@ -80,9 +83,11 @@ export default function PlayerScoreRow({ player, gameNum, mode, leagueAvg, onCom
       <View style={styles.scoreGroup}>
         <Text style={styles.gameLabel}>G{gameNum}</Text>
         {player.isFill ? (
-          <Text style={styles.scoreDisplay}>{Math.round(leagueAvg)}</Text>
+          <Text style={styles.scoreDisplay}>{hasValue ? displayValue : Math.round(leagueAvg)}</Text>
         ) : mode === 'expected' ? (
           <Text style={[styles.scoreDisplay, { color: colors.muted }]}>{expectedScore}</Text>
+        ) : readOnly ? (
+          <Text style={[styles.scoreDisplay, !hasValue && { color: colors.muted2 }]}>{hasValue ? displayValue : '—'}</Text>
         ) : (
           <TextInput
             style={[

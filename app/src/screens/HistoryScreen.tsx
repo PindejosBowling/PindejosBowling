@@ -5,15 +5,19 @@ import { useNavigation } from '@react-navigation/native'
 import { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { colors, fonts, radius } from '../theme'
 import { useUiStore } from '../stores/uiStore'
+import { useAuthStore } from '../stores/authStore'
 import { useHistoryData } from '../hooks/useHistoryData'
 import { computePastGamesFromSupabase } from '../hooks/usePastGamesData'
 import { computeStandingsFromSupabase } from '../hooks/useStandingsData'
 import { useRefresh } from '../hooks/useRefresh'
+import { useWeekEditor } from '../hooks/useWeekEditor'
 import { MoreStackParamList } from '../navigation/types'
 import LoadingView from '../components/LoadingView'
 import ScreenHeader from '../components/ScreenHeader'
 import PillFilter from '../components/PillFilter'
 import HistoricalTeamBlock from '../components/HistoricalTeamBlock'
+import EditableWeek from '../components/EditableWeek'
+import ConfirmBar from '../components/ConfirmBar'
 
 type Nav = NativeStackNavigationProp<MoreStackParamList>
 
@@ -28,7 +32,11 @@ export default function HistoryScreen() {
   const navigation = useNavigation<Nav>()
   const { loading, seasonList, rawScores, rawSchedule, champsBySeason, reload } = useHistoryData()
   const { historySeason, set } = useUiStore()
+  const isAdmin = useAuthStore(s => s.role) === 'admin'
   const { refreshing, onRefresh } = useRefresh(reload)
+
+  // One archived week editable at a time (a single screen-level ConfirmBar).
+  const [editingWeekId, setEditingWeekId] = useState<string | null>(null)
 
   const seasonNumbers = useMemo(
     () => seasonList.slice().sort((a, b) => b.number - a.number).map(s => String(s.number)),
@@ -66,6 +74,10 @@ export default function HistoryScreen() {
     return { top, champs, playerCount: standings.length, weeks: weekIds.size, leagueAvg }
   }, [rawScores, rawSchedule, activeSeasonId, champsBySeason])
 
+  // Admin inline editor for the week currently being edited (scores, roster,
+  // swaps, fills). Reloads History data on save so summaries recompute.
+  const editor = useWeekEditor(editingWeekId, !!editingWeekId, summary?.leagueAvg ?? 0, reload)
+
   const weekGames = useMemo(
     () => computePastGamesFromSupabase(rawScores, rawSchedule, activeSeasonId),
     [rawScores, rawSchedule, activeSeasonId],
@@ -88,7 +100,7 @@ export default function HistoryScreen() {
       <ScreenHeader title="History" onBack={() => navigation.navigate('MoreHome')} />
 
       <ScrollView
-        contentContainerStyle={styles.content}
+        contentContainerStyle={[styles.content, editor.pendingCount > 0 && styles.contentEditing]}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent} />
         }
@@ -100,7 +112,7 @@ export default function HistoryScreen() {
             <PillFilter
               items={seasonNumbers}
               value={activeSeason}
-              onChange={(s) => set({ historySeason: s })}
+              onChange={(s) => { setEditingWeekId(null); set({ historySeason: s }) }}
               renderLabel={(s) => `Season ${s}`}
             />
 
@@ -125,27 +137,46 @@ export default function HistoryScreen() {
             ) : (
               weekGames.map((week) => {
                 const expanded = expandedWeeks.has(week.weekId)
+                const isEditing = editingWeekId === week.weekId
                 return (
                   <View key={week.weekId} style={styles.weekCard}>
                     <TouchableOpacity
-                      style={[styles.weekHeader, expanded && styles.weekHeaderExpanded]}
+                      style={[styles.weekHeader, (expanded || isEditing) && styles.weekHeaderExpanded]}
                       onPress={() => toggleWeek(week.weekId)}
                       activeOpacity={0.7}
                     >
                       <Text style={styles.weekTitle}>
                         Week {week.weekNumber}{week.bowledAt ? ` - ${formatDate(week.bowledAt)}` : ''}
                       </Text>
+                      {isAdmin && (expanded || isEditing) && (
+                        <TouchableOpacity
+                          style={[styles.editBtn, isEditing && styles.editBtnActive]}
+                          onPress={() => setEditingWeekId(isEditing ? null : week.weekId)}
+                          activeOpacity={0.7}
+                        >
+                          <Text style={[styles.editBtnText, isEditing && styles.editBtnActiveText]}>
+                            {isEditing ? 'Done' : 'Edit'}
+                          </Text>
+                        </TouchableOpacity>
+                      )}
                       <Text style={[styles.chevron, expanded && styles.chevronUp]}>›</Text>
                     </TouchableOpacity>
 
-                    {expanded && week.games.map((game, i) => (
+                    {isEditing ? (
+                      <View style={styles.editorWrap}>
+                        {editor.loading ? (
+                          <LoadingView label="Loading editor" />
+                        ) : (
+                          <EditableWeek editor={editor} />
+                        )}
+                      </View>
+                    ) : expanded && week.games.map((game, i) => (
                       <View key={game.gameNumber} style={[styles.gameSection, i > 0 && styles.gameSectionBorder]}>
                         <Text style={styles.gameLabel}>GAME {game.gameNumber}</Text>
                         <HistoricalTeamBlock
                           team={`Team ${game.teamA.teamNumber}`}
                           players={game.teamA.players
-                            .filter(p => !p.isFill)
-                            .map(p => ({ name: p.name, score: p.score, present: true }))}
+                            .map(p => ({ name: p.name, score: p.score, present: true, isFill: p.isFill }))}
                           total={game.teamA.total}
                           winner={game.winner === 'A'}
                         />
@@ -157,8 +188,7 @@ export default function HistoryScreen() {
                         <HistoricalTeamBlock
                           team={`Team ${game.teamB.teamNumber}`}
                           players={game.teamB.players
-                            .filter(p => !p.isFill)
-                            .map(p => ({ name: p.name, score: p.score, present: true }))}
+                            .map(p => ({ name: p.name, score: p.score, present: true, isFill: p.isFill }))}
                           total={game.teamB.total}
                           winner={game.winner === 'B'}
                         />
@@ -171,6 +201,17 @@ export default function HistoryScreen() {
           </>
         )}
       </ScrollView>
+
+      {isAdmin && editingWeekId && editor.pendingCount > 0 && (
+        <ConfirmBar
+          icon="✏️"
+          title={editor.saving ? `Saving ${editor.pendingCount} change${editor.pendingCount !== 1 ? 's' : ''}...` : `${editor.pendingCount} unsaved change${editor.pendingCount !== 1 ? 's' : ''}`}
+          subtext={editor.saving ? undefined : 'Save or discard your changes'}
+          saving={editor.saving}
+          onDiscard={editor.discard}
+          onSave={async () => { await editor.save(); setEditingWeekId(null) }}
+        />
+      )}
     </SafeAreaView>
   )
 }
@@ -187,6 +228,29 @@ function StatRow({ label, value }: { label: string; value: string }) {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.bg },
   content: { paddingBottom: 40 },
+  contentEditing: { paddingBottom: 40 + 57 },
+  editorWrap: { padding: 12 },
+  editBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    marginRight: 8,
+    borderRadius: radius.cardSm,
+    borderWidth: 1,
+    borderColor: colors.border2,
+  },
+  editBtnActive: {
+    borderColor: colors.accent,
+    backgroundColor: colors.accentDim,
+  },
+  editBtnText: {
+    fontFamily: fonts.barlowCondensed,
+    fontSize: 12,
+    color: colors.muted,
+    letterSpacing: 0.5,
+  },
+  editBtnActiveText: {
+    color: colors.accent,
+  },
 
   card: {
     backgroundColor: colors.surface,
