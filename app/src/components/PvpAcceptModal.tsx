@@ -1,9 +1,10 @@
 import { useState } from 'react'
 import {
-  Modal, View, Text, TouchableOpacity, StyleSheet, Platform, ActivityIndicator, ScrollView,
+  Modal, View, Text, TouchableOpacity, StyleSheet, Platform, ScrollView,
 } from 'react-native'
-import { colors, fonts, radius } from '../theme'
+import { colors, fonts } from '../theme'
 import Toast from './Toast'
+import Button from './Button'
 import { useUiStore } from '../stores/uiStore'
 import { pvpChallenges } from '../utils/supabase/db'
 import { CONTRACT_TYPE_LABEL, CONTRACT_TYPE_RULE } from '../utils/pvp'
@@ -75,19 +76,15 @@ export default function PvpAcceptModal({ challenge: c, viewerId, onClose, onDone
             </Text>
           </ScrollView>
 
-          <TouchableOpacity
-            style={[styles.confirmBtn, saving && styles.confirmBtnDisabled]}
+          <Button
+            label={`Accept & Stake ${myStake.toLocaleString()}`}
+            size="lg"
             onPress={confirm}
+            loading={saving}
             disabled={saving}
-            activeOpacity={0.7}
-          >
-            {saving
-              ? <ActivityIndicator size="small" color={colors.bg} />
-              : <Text style={styles.confirmText}>Accept & Stake {myStake.toLocaleString()}</Text>}
-          </TouchableOpacity>
-          <TouchableOpacity onPress={() => !saving && onClose()} activeOpacity={0.7}>
-            <Text style={styles.cancel}>Cancel</Text>
-          </TouchableOpacity>
+            style={styles.confirmBtn}
+          />
+          <Button label="Cancel" variant="ghost" onPress={() => !saving && onClose()} />
         </View>
       </View>
       <Toast />
@@ -115,8 +112,5 @@ const styles = StyleSheet.create({
   rowValueAccent: { fontFamily: fonts.barlowCondensedHeavy, fontSize: 18, color: colors.accent },
   rule: { fontFamily: fonts.barlow, fontSize: 13, color: colors.muted, lineHeight: 19, marginTop: 6 },
   note: { fontFamily: fonts.barlow, fontSize: 12, color: colors.muted2, lineHeight: 17, marginTop: 10 },
-  confirmBtn: { backgroundColor: colors.accent, borderRadius: radius.cardSm, paddingVertical: 14, alignItems: 'center', marginTop: 18 },
-  confirmBtnDisabled: { opacity: 0.4 },
-  confirmText: { fontFamily: fonts.barlowCondensed, fontSize: 16, fontWeight: '700', color: colors.bg, letterSpacing: 0.5 },
-  cancel: { fontFamily: fonts.barlowCondensed, fontSize: 14, color: colors.muted, textAlign: 'center', paddingVertical: 14 },
+  confirmBtn: { marginTop: 18 },
 })
