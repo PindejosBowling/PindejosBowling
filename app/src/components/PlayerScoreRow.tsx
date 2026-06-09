@@ -17,9 +17,15 @@ interface PlayerScoreRowProps {
   gameNum: number
   mode: 'scores' | 'expected'
   leagueAvg: number
+  /**
+   * Called when the input loses focus (admins only). Used to flush pending
+   * scores to the DB in the background — players leave this undefined so the
+   * screen acts purely as a calculator for them.
+   */
+  onCommit?: () => void
 }
 
-export default function PlayerScoreRow({ player, gameNum, mode, leagueAvg }: PlayerScoreRowProps) {
+export default function PlayerScoreRow({ player, gameNum, mode, leagueAvg, onCommit }: PlayerScoreRowProps) {
   const { pendingScores, set } = usePendingStore()
 
   const expectedScore = player.effectiveAvg > 0 ? Math.round(player.effectiveAvg) : '—'
@@ -90,6 +96,7 @@ export default function PlayerScoreRow({ player, gameNum, mode, leagueAvg }: Pla
             placeholderTextColor={colors.muted2}
             value={displayValue}
             onChangeText={onChangeText}
+            onBlur={onCommit}
           />
         )}
       </View>

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import {
   View,
   Text,
@@ -109,7 +109,6 @@ export default function MatchupsScreen() {
   }
 
   const hasPendingScores = Object.keys(pendingScores).length > 0
-  const pendingCount = Object.keys(pendingScores).length
 
   function discardScores() {
     setPending({ pendingScores: {} })
@@ -205,34 +204,55 @@ export default function MatchupsScreen() {
     }
   }
 
-  async function saveScores() {
-    const keys = Object.keys(pendingScores)
+  // Admin-only background save. Triggered when an admin leaves a score input
+  // (PlayerScoreRow's onBlur) — there is no manual Save button. Players never
+  // call this; for them the screen is a pure pin-total calculator.
+  //
+  // The flush reads pending scores straight from the store (not the render
+  // closure) so a save kicked off by one blur always sees the latest edits, and
+  // it self-guards against overlap: a blur landing mid-flush queues exactly one
+  // follow-up rather than racing a second concurrent write.
+  const flushingRef = useRef(false)
+  const flushQueuedRef = useRef(false)
+
+  async function flushScores() {
+    if (flushingRef.current) { flushQueuedRef.current = true; return }
+    const pending = usePendingStore.getState().pendingScores
+    const keys = Object.keys(pending)
     if (!keys.length) return
+    flushingRef.current = true
     setSaving(true)
     try {
       const toUpsert = keys
-        .filter(k => pendingScores[k] !== '')
+        .filter(k => pending[k] !== '')
         .map(k => {
           const [teamSlotId, gameNum] = k.split('|')
           const gameNumber = parseInt(gameNum)
-          return { team_slot_id: teamSlotId, game_id: gameIdByNumber[gameNumber], score: parseInt(pendingScores[k]) }
+          return { team_slot_id: teamSlotId, game_id: gameIdByNumber[gameNumber], score: parseInt(pending[k]) }
         })
       const toDelete = keys
-        .filter(k => pendingScores[k] === '')
+        .filter(k => pending[k] === '')
         .map(k => { const [teamSlotId, gameNum] = k.split('|'); return { teamSlotId, gameId: gameIdByNumber[parseInt(gameNum)] } })
 
       if (toUpsert.length) await scores.upsert(toUpsert)
       await Promise.all(toDelete.map(({ teamSlotId, gameId }) => scores.remove(teamSlotId, gameId)))
+      // Clear only the keys we just persisted, preserving any edits the admin
+      // made while the save was in flight (those will flush on their own blur).
+      const after = usePendingStore.getState().pendingScores
+      const next = { ...after }
+      for (const k of keys) if (next[k] === pending[k]) delete next[k]
+      setPending({ pendingScores: next })
       await reload()
-      setPending({ pendingScores: {} })
     } finally {
+      flushingRef.current = false
       setSaving(false)
+      if (flushQueuedRef.current) { flushQueuedRef.current = false; flushScores() }
     }
   }
 
   const floatingPadding =
     (isAdmin && hasSavedScores ? ARCHIVE_BAR_HEIGHT : 0) +
-    (isAdmin && hasPendingScores ? CONFIRM_BAR_HEIGHT : 0)
+    (isAdmin && saving ? CONFIRM_BAR_HEIGHT : 0)
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -324,6 +344,7 @@ export default function MatchupsScreen() {
                                     gameNum={round.num}
                                     mode={matchupsView as 'scores' | 'expected'}
                                     leagueAvg={leagueAvg}
+                                    onCommit={isAdmin ? flushScores : undefined}
                                   />
                                 ))}
                               </View>
@@ -342,6 +363,7 @@ export default function MatchupsScreen() {
                                     gameNum={round.num}
                                     mode={matchupsView as 'scores' | 'expected'}
                                     leagueAvg={leagueAvg}
+                                    onCommit={isAdmin ? flushScores : undefined}
                                   />
                                 ))}
                                 {matchupsView === 'expected' ? (
@@ -372,6 +394,7 @@ export default function MatchupsScreen() {
                                     gameNum={round.num}
                                     mode={matchupsView as 'scores' | 'expected'}
                                     leagueAvg={leagueAvg}
+                                    onCommit={isAdmin ? flushScores : undefined}
                                   />
                                 ))}
                                 {matchupsView === 'expected' ? (
@@ -487,15 +510,15 @@ export default function MatchupsScreen() {
               </View>
             )}
 
-            {/* Floating save/discard bar */}
-            {isAdmin && hasPendingScores && (
+            {/* Passive background-save indicator — admins auto-save on blur, so
+                there is no Save button, just feedback while the flush is running. */}
+            {isAdmin && saving && (
               <ConfirmBar
                 icon="✏️"
-                title={saving ? `Saving ${pendingCount} score${pendingCount !== 1 ? 's' : ''}...` : `${pendingCount} unsaved score${pendingCount !== 1 ? 's' : ''}`}
-                subtext={saving ? undefined : 'Save or discard your changes'}
-                saving={saving}
+                title="Saving scores…"
+                saving={true}
                 onDiscard={discardScores}
-                onSave={saveScores}
+                onSave={flushScores}
               />
             )}
           </View>
