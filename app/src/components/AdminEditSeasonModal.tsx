@@ -201,7 +201,7 @@ export default function AdminEditSeasonModal({ season, onClose, onSaved }: Props
 const styles = StyleSheet.create({
   backdrop: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.7)',
+    backgroundColor: colors.overlay,
     justifyContent: 'center',
     paddingHorizontal: 24,
   },

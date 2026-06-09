@@ -184,7 +184,7 @@ export default function SettleBetModal({ bet, onClose, onSettled }: SettleBetMod
 const styles = StyleSheet.create({
   modalBackdrop: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.7)',
+    backgroundColor: colors.overlay,
     justifyContent: 'flex-end',
   },
   modalSheet: {

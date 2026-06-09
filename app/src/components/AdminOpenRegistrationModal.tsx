@@ -245,7 +245,7 @@ export default function AdminOpenRegistrationModal({ visible, onClose, onCreated
 const styles = StyleSheet.create({
   backdrop: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.7)',
+    backgroundColor: colors.overlay,
     justifyContent: 'center',
     paddingHorizontal: 24,
   },

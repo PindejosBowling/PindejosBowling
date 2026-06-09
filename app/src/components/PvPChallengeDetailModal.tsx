@@ -385,7 +385,7 @@ const styles = StyleSheet.create({
   // and capped so there's always margin on every side to tap out of.
   backdrop: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.7)',
+    backgroundColor: colors.overlay,
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 16,

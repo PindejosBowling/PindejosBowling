@@ -132,7 +132,7 @@ const styles = StyleSheet.create({
     color: colors.muted,
   },
   chipFav: {
-    backgroundColor: 'rgba(232,255,71,0.12)',
+    backgroundColor: colors.accentDim,
     borderRadius: 6,
     paddingHorizontal: 7,
     paddingVertical: 2,
@@ -176,7 +176,7 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   favTag: {
-    backgroundColor: 'rgba(232,255,71,0.12)',
+    backgroundColor: colors.accentDim,
     borderRadius: 4,
     paddingHorizontal: 5,
     paddingVertical: 1,
