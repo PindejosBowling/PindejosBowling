@@ -207,7 +207,7 @@ export default function LoanSharkScreen() {
                   <Text style={styles.productAmount}>{p.borrow_amount.toLocaleString()} pins</Text>
                   <View style={styles.productRates}>
                     <Text style={styles.productRate}>
-                      {Math.round(p.weekly_interest_rate * 100)}% pinterest/wk
+                      {Math.round(p.weekly_interest_rate * 100)}% pinterest/week
                     </Text>
                     <Text style={styles.rateDivider}>·</Text>
                     <Text style={styles.productRate}>
