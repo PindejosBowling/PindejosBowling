@@ -14,6 +14,7 @@ import { weeks, rsvp, players, teamSlots, teams as teamsDb, games, scores, seaso
 import type { TablesInsert } from '../utils/supabase/database.types'
 import { colors, fonts, radius } from '../theme'
 import Toast from './Toast'
+import Button from './Button'
 
 interface Props {
   visible: boolean
@@ -447,14 +448,7 @@ export default function AdminGenerateTeamsModal({ visible, onClose }: Props) {
           </ScrollView>
 
           <View style={styles.btnRow}>
-            <TouchableOpacity
-              style={styles.btnCancel}
-              onPress={handleClose}
-              disabled={generating || confirming}
-              activeOpacity={0.7}
-            >
-              <Text style={styles.btnCancelText}>Cancel</Text>
-            </TouchableOpacity>
+            <Button label="Cancel" variant="secondary" onPress={handleClose} />
           </View>
         </View>
       </View>
@@ -694,18 +688,5 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     borderTopWidth: 1,
     borderTopColor: colors.border,
-  },
-  btnCancel: {
-    paddingVertical: 12,
-    borderRadius: radius.cardSm,
-    borderWidth: 1,
-    borderColor: colors.border2,
-    alignItems: 'center',
-  },
-  btnCancelText: {
-    fontFamily: fonts.barlowCondensed,
-    fontSize: 15,
-    color: colors.muted,
-    letterSpacing: 0.5,
   },
 })

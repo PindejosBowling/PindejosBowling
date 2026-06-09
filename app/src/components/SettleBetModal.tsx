@@ -8,11 +8,11 @@ import {
   StyleSheet,
   KeyboardAvoidingView,
   Platform,
-  ActivityIndicator,
   ScrollView,
 } from 'react-native'
 import { colors, fonts, radius } from '../theme'
 import Toast from './Toast'
+import Button from './Button'
 import { useUiStore } from '../stores/uiStore'
 import { betMarkets } from '../utils/supabase/db'
 import type { BetView } from '../hooks/usePinsinoData'
@@ -164,16 +164,14 @@ export default function SettleBetModal({ bet, onClose, onSettled }: SettleBetMod
             })}
           </ScrollView>
 
-          <TouchableOpacity
-            style={[styles.placeBtn, settling && styles.placeBtnDisabled]}
+          <Button
+            label={isParlay ? 'Settle Parlay' : 'Settle Bet'}
+            size="lg"
             onPress={settle}
+            loading={settling}
             disabled={settling}
-            activeOpacity={0.7}
-          >
-            {settling
-              ? <ActivityIndicator size="small" color={colors.bg} />
-              : <Text style={styles.placeBtnText}>{isParlay ? 'Settle Parlay' : 'Settle Bet'}</Text>}
-          </TouchableOpacity>
+            style={styles.placeBtn}
+          />
         </View>
       </KeyboardAvoidingView>
       <Toast />
@@ -243,19 +241,5 @@ const styles = StyleSheet.create({
     color: colors.muted,
     marginTop: 6,
   },
-  placeBtn: {
-    backgroundColor: colors.accent,
-    borderRadius: radius.cardSm,
-    paddingVertical: 14,
-    alignItems: 'center',
-    marginTop: 20,
-  },
-  placeBtnDisabled: { opacity: 0.4 },
-  placeBtnText: {
-    fontFamily: fonts.barlowCondensed,
-    fontSize: 16,
-    fontWeight: '700',
-    color: colors.bg,
-    letterSpacing: 0.5,
-  },
+  placeBtn: { marginTop: 20 },
 })

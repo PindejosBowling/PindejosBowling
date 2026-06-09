@@ -5,6 +5,7 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { colors, fonts, radius } from '../theme'
 import LoadingView from './LoadingView'
 import Toast from './Toast'
+import Button from './Button'
 import PvpAcceptModal from './PvpAcceptModal'
 import PvpCounterModal from './PvpCounterModal'
 import LineDuelLines from './LineDuelLines'
@@ -327,9 +328,7 @@ export default function PvPChallengeDetailModal({ challengeId, onClose, onChange
             {(actions.canAccept || actions.canDecline || actions.canCounter || actions.canRematch || actions.canCancel) && (
               <View style={styles.actionStack}>
                 {actions.canAccept && (
-                  <TouchableOpacity style={styles.primaryBtn} onPress={() => setAcceptOpen(true)} activeOpacity={0.7}>
-                    <Text style={styles.primaryBtnText}>Accept</Text>
-                  </TouchableOpacity>
+                  <Button label="Accept" size="lg" onPress={() => setAcceptOpen(true)} />
                 )}
                 <View style={styles.actionRow}>
                   {actions.canCounter && (
@@ -344,13 +343,11 @@ export default function PvPChallengeDetailModal({ challengeId, onClose, onChange
                   )}
                 </View>
                 {actions.canRematch && (
-                  <TouchableOpacity
-                    style={styles.primaryBtn}
+                  <Button
+                    label="Rematch — Double or Nothing"
+                    size="lg"
                     onPress={() => { onClose(); navigation.navigate('PvPCreate', { rematchOfId: c.id }) }}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={styles.primaryBtnText}>Rematch — Double or Nothing</Text>
-                  </TouchableOpacity>
+                  />
                 )}
                 {actions.canCancel && (
                   <TouchableOpacity
@@ -473,8 +470,6 @@ const styles = StyleSheet.create({
 
   actionStack: { marginTop: 18, gap: 8 },
   actionRow: { flexDirection: 'row', gap: 8 },
-  primaryBtn: { backgroundColor: colors.accent, borderRadius: radius.cardSm, paddingVertical: 14, alignItems: 'center' },
-  primaryBtnText: { fontFamily: fonts.barlowCondensed, fontSize: 16, fontWeight: '700', color: colors.bg, letterSpacing: 0.5 },
   secondaryBtn: { flex: 1, backgroundColor: colors.surface, borderRadius: radius.cardSm, borderWidth: 1, borderColor: colors.border2, paddingVertical: 13, alignItems: 'center' },
   cancelBtn: { backgroundColor: colors.surface, borderRadius: radius.cardSm, borderWidth: 1, borderColor: colors.danger, paddingVertical: 13, alignItems: 'center' },
   secondaryBtnText: { fontFamily: fonts.barlowCondensed, fontSize: 15, fontWeight: '700', color: colors.text, letterSpacing: 0.5 },

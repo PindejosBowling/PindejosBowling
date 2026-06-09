@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
   Modal, View, Text, TextInput, TouchableOpacity, StyleSheet,
-  KeyboardAvoidingView, Platform, ActivityIndicator, ScrollView,
+  KeyboardAvoidingView, Platform, ScrollView,
 } from 'react-native'
 import DateTimePicker from '@react-native-community/datetimepicker'
 import { colors, fonts, radius } from '../theme'
 import Toast from './Toast'
+import Button from './Button'
 import { useUiStore } from '../stores/uiStore'
 import { bountyPosts, players, seasons } from '../utils/supabase/db'
 import {
@@ -150,17 +151,15 @@ export default function BountyHouseCreateModal({ weekId, onClose, onDone }: Prop
             {error && <Text style={styles.errorText}>{error}</Text>}
           </ScrollView>
 
-          <TouchableOpacity
-            style={[styles.submitBtn, (error || saving) && styles.submitBtnDisabled]}
+          <Button
+            label="Post House Bounty"
+            size="lg"
             onPress={submit}
+            loading={saving}
             disabled={!!error || saving}
-            activeOpacity={0.7}
-          >
-            {saving ? <ActivityIndicator size="small" color={colors.bg} /> : <Text style={styles.submitText}>Post House Bounty</Text>}
-          </TouchableOpacity>
-          <TouchableOpacity onPress={() => !saving && onClose()} activeOpacity={0.7}>
-            <Text style={styles.close}>Cancel</Text>
-          </TouchableOpacity>
+            style={styles.submitBtn}
+          />
+          <Button label="Cancel" variant="ghost" onPress={() => !saving && onClose()} />
         </View>
       </KeyboardAvoidingView>
       <Toast />
@@ -193,8 +192,5 @@ const styles = StyleSheet.create({
   dateBtnText: { fontFamily: fonts.barlowCondensed, fontSize: 15, color: colors.text },
   dateBtnChevron: { fontFamily: fonts.barlowCondensed, fontSize: 18, color: colors.muted },
   errorText: { fontFamily: fonts.barlow, fontSize: 13, color: colors.danger, marginTop: 12 },
-  submitBtn: { backgroundColor: colors.accent, borderRadius: radius.cardSm, paddingVertical: 14, alignItems: 'center', marginTop: 14 },
-  submitBtnDisabled: { opacity: 0.4 },
-  submitText: { fontFamily: fonts.barlowCondensed, fontSize: 16, fontWeight: '700', color: colors.bg, letterSpacing: 0.5 },
-  close: { fontFamily: fonts.barlowCondensed, fontSize: 14, color: colors.muted, textAlign: 'center', paddingVertical: 14 },
+  submitBtn: { marginTop: 14 },
 })

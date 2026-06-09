@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react'
 import {
   Modal, View, Text, TextInput, TouchableOpacity, StyleSheet,
-  KeyboardAvoidingView, Platform, ActivityIndicator, ScrollView,
+  KeyboardAvoidingView, Platform, ScrollView,
 } from 'react-native'
 import { colors, fonts, radius } from '../theme'
 import Toast from './Toast'
+import Button from './Button'
 import { useUiStore } from '../stores/uiStore'
 import { pvpChallenges, seasons, games, CounterPvpArgs } from '../utils/supabase/db'
 import LineDuelLines from './LineDuelLines'
@@ -254,16 +255,14 @@ export default function PvpCounterModal({ challenge: c, viewerId, balance, onClo
             </View>
           </ScrollView>
 
-          <TouchableOpacity
-            style={[styles.confirmBtn, (saving || !validStake) && styles.confirmBtnDisabled]}
+          <Button
+            label="Send Counteroffer"
+            size="lg"
             onPress={confirm}
+            loading={saving}
             disabled={saving || !validStake}
-            activeOpacity={0.7}
-          >
-            {saving
-              ? <ActivityIndicator size="small" color={colors.bg} />
-              : <Text style={styles.confirmText}>Send Counteroffer</Text>}
-          </TouchableOpacity>
+            style={styles.confirmBtn}
+          />
         </View>
       </KeyboardAvoidingView>
       <Toast />
@@ -310,7 +309,5 @@ const styles = StyleSheet.create({
   potRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', marginTop: 18 },
   potLabel: { fontFamily: fonts.barlow, fontSize: 13, color: colors.muted },
   potValue: { fontFamily: fonts.barlowCondensedHeavy, fontSize: 18, color: colors.accent },
-  confirmBtn: { backgroundColor: colors.accent, borderRadius: radius.cardSm, paddingVertical: 14, alignItems: 'center', marginTop: 18 },
-  confirmBtnDisabled: { opacity: 0.4 },
-  confirmText: { fontFamily: fonts.barlowCondensed, fontSize: 16, fontWeight: '700', color: colors.bg, letterSpacing: 0.5 },
+  confirmBtn: { marginTop: 18 },
 })

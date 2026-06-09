@@ -5,6 +5,7 @@ import {
 } from 'react-native'
 import { colors, fonts, radius } from '../theme'
 import Toast from './Toast'
+import Button from './Button'
 import { useUiStore } from '../stores/uiStore'
 import { pvpChallenges } from '../utils/supabase/db'
 import { CONTRACT_TYPE_LABEL, STATUS_LABEL } from '../utils/pvp'
@@ -139,9 +140,7 @@ export default function PvpAdminActionModal({ challenge: c, onClose, onDone }: P
           </ScrollView>
 
           {saving && <ActivityIndicator size="small" color={colors.accent} style={{ marginTop: 12 }} />}
-          <TouchableOpacity onPress={() => !saving && onClose()} activeOpacity={0.7}>
-            <Text style={styles.close}>Close</Text>
-          </TouchableOpacity>
+          <Button variant="ghost" label="Close" onPress={() => !saving && onClose()} />
         </View>
       </KeyboardAvoidingView>
       <Toast />
@@ -199,5 +198,4 @@ const styles = StyleSheet.create({
   actText: { fontFamily: fonts.barlowCondensed, fontSize: 15, color: colors.text, letterSpacing: 0.5 },
   dangerBtn: { borderColor: colors.danger },
   dangerText: { fontFamily: fonts.barlowCondensed, fontSize: 15, color: colors.danger, letterSpacing: 0.5 },
-  close: { fontFamily: fonts.barlowCondensed, fontSize: 14, color: colors.muted, textAlign: 'center', paddingVertical: 14 },
 })
