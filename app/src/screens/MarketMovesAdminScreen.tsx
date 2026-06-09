@@ -18,6 +18,7 @@ import ScreenHeader from '../components/ScreenHeader'
 import LoadingView from '../components/LoadingView'
 import Toast from '../components/Toast'
 import PillFilter from '../components/PillFilter'
+import Button from '../components/Button'
 import { useRefresh } from '../hooks/useRefresh'
 import { useAuthStore } from '../stores/authStore'
 import { useUiStore } from '../stores/uiStore'
@@ -122,9 +123,7 @@ export default function MarketMovesAdminScreen() {
         contentContainerStyle={styles.content}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.muted} />}
       >
-        <TouchableOpacity style={styles.postBtn} onPress={() => setPostOpen(true)} activeOpacity={0.7}>
-          <Text style={styles.postBtnText}>+ Post system event</Text>
-        </TouchableOpacity>
+        <Button variant="outline" label="+ Post system event" onPress={() => setPostOpen(true)} style={styles.postBtn} />
 
         {filtered.length === 0 ? (
           <View style={styles.emptyCard}>
@@ -265,17 +264,8 @@ function ModerationModal({
           )}
 
           <View style={styles.modalBtns}>
-            <TouchableOpacity style={styles.modalCancel} onPress={onClose} activeOpacity={0.7}>
-              <Text style={styles.modalCancelText}>Cancel</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.modalConfirm, busy && styles.btnDisabled]}
-              onPress={submit}
-              disabled={busy}
-              activeOpacity={0.7}
-            >
-              <Text style={styles.modalConfirmText}>{suppressing ? 'Suppress' : 'Restore'}</Text>
-            </TouchableOpacity>
+            <Button variant="outline" label="Cancel" onPress={onClose} fullWidth style={styles.modalCancel} />
+            <Button label={suppressing ? 'Suppress' : 'Restore'} onPress={submit} disabled={busy} fullWidth />
           </View>
         </View>
         <Toast />
@@ -320,17 +310,8 @@ function PostSystemEventModal({ onClose, onDone }: { onClose: () => void; onDone
           <Text style={styles.modalHint}>Posts a public Loan Shark special-offer card to the feed.</Text>
 
           <View style={styles.modalBtns}>
-            <TouchableOpacity style={styles.modalCancel} onPress={onClose} activeOpacity={0.7}>
-              <Text style={styles.modalCancelText}>Cancel</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.modalConfirm, busy && styles.btnDisabled]}
-              onPress={submit}
-              disabled={busy}
-              activeOpacity={0.7}
-            >
-              <Text style={styles.modalConfirmText}>Post</Text>
-            </TouchableOpacity>
+            <Button variant="outline" label="Cancel" onPress={onClose} fullWidth style={styles.modalCancel} />
+            <Button label="Post" onPress={submit} disabled={busy} fullWidth />
           </View>
         </View>
         <Toast />
@@ -343,16 +324,7 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.bg },
   content: { paddingHorizontal: 16, paddingBottom: 40, paddingTop: 4 },
 
-  postBtn: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.cardSm,
-    borderWidth: 1,
-    borderColor: colors.border2,
-    paddingVertical: 12,
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  postBtnText: { fontFamily: fonts.barlowCondensed, fontSize: 14, color: colors.accent, letterSpacing: 0.5 },
+  postBtn: { paddingVertical: 12, marginBottom: 16 },
 
   card: {
     backgroundColor: colors.surface,
@@ -409,23 +381,7 @@ const styles = StyleSheet.create({
   },
   fieldLabel: { fontFamily: fonts.barlowCondensed, fontSize: 11, letterSpacing: 1.5, color: colors.muted, marginTop: 14 },
   modalBtns: { flexDirection: 'row', gap: 10, marginTop: 18 },
-  modalCancel: {
-    flex: 1,
-    backgroundColor: colors.surface2,
-    borderRadius: radius.cardSm,
-    paddingVertical: 12,
-    alignItems: 'center',
-  },
-  modalCancelText: { fontFamily: fonts.barlowCondensed, fontSize: 15, color: colors.text, letterSpacing: 0.5 },
-  modalConfirm: {
-    flex: 1,
-    backgroundColor: colors.accent,
-    borderRadius: radius.cardSm,
-    paddingVertical: 12,
-    alignItems: 'center',
-  },
-  modalConfirmText: { fontFamily: fonts.barlowCondensed, fontSize: 15, fontWeight: '700', color: colors.bg, letterSpacing: 0.5 },
-  btnDisabled: { opacity: 0.4 },
+  modalCancel: { borderWidth: 0, paddingVertical: 12 },
 
   emptyCard: {
     backgroundColor: colors.surface,

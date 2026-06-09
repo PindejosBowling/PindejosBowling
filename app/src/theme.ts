@@ -13,6 +13,15 @@ export const colors = {
   muted2:    '#55555e',
   success:   '#4ade80',
   danger:    '#ff4f6d',
+  overlay:   'rgba(0,0,0,0.7)',
+}
+
+export const spacing = {
+  xs: 4,
+  sm: 8,
+  md: 12,
+  lg: 16,
+  xl: 24,
 }
 
 export const fonts = {

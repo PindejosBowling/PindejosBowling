@@ -1,9 +1,10 @@
 import { useState } from 'react'
 import {
-  Modal, View, Text, TouchableOpacity, StyleSheet, Platform, ActivityIndicator, ScrollView,
+  Modal, View, Text, TouchableOpacity, StyleSheet, Platform, ScrollView,
 } from 'react-native'
-import { colors, fonts, radius } from '../theme'
+import { colors, fonts } from '../theme'
 import Toast from './Toast'
+import Button from './Button'
 import { useUiStore } from '../stores/uiStore'
 import { bountyPosts } from '../utils/supabase/db'
 import { hunterPayout } from '../utils/bounty'
@@ -65,19 +66,15 @@ export default function BountyEntryModal({ bounty: b, onClose, onDone }: Props) 
             </Text>
           </ScrollView>
 
-          <TouchableOpacity
-            style={[styles.confirmBtn, saving && styles.confirmBtnDisabled]}
+          <Button
+            label={`Join & Stake ${stake.toLocaleString()}`}
+            size="lg"
             onPress={confirm}
+            loading={saving}
             disabled={saving}
-            activeOpacity={0.7}
-          >
-            {saving
-              ? <ActivityIndicator size="small" color={colors.bg} />
-              : <Text style={styles.confirmText}>Join & Stake {stake.toLocaleString()}</Text>}
-          </TouchableOpacity>
-          <TouchableOpacity onPress={() => !saving && onClose()} activeOpacity={0.7}>
-            <Text style={styles.cancel}>Cancel</Text>
-          </TouchableOpacity>
+            style={styles.confirmBtn}
+          />
+          <Button label="Cancel" variant="ghost" onPress={() => !saving && onClose()} />
         </View>
       </View>
       <Toast />
@@ -86,7 +83,7 @@ export default function BountyEntryModal({ bounty: b, onClose, onDone }: Props) 
 }
 
 const styles = StyleSheet.create({
-  backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'flex-end' },
+  backdrop: { flex: 1, backgroundColor: colors.overlay, justifyContent: 'flex-end' },
   sheet: {
     backgroundColor: colors.surface,
     borderTopLeftRadius: 20,
@@ -102,8 +99,5 @@ const styles = StyleSheet.create({
   copy: { fontFamily: fonts.barlow, fontSize: 15, color: colors.text, lineHeight: 24 },
   bold: { fontFamily: fonts.barlowCondensed, color: colors.accent },
   note: { fontFamily: fonts.barlow, fontSize: 12, color: colors.muted2, lineHeight: 18, marginTop: 12 },
-  confirmBtn: { backgroundColor: colors.accent, borderRadius: radius.cardSm, paddingVertical: 14, alignItems: 'center', marginTop: 18 },
-  confirmBtnDisabled: { opacity: 0.4 },
-  confirmText: { fontFamily: fonts.barlowCondensed, fontSize: 16, fontWeight: '700', color: colors.bg, letterSpacing: 0.5 },
-  cancel: { fontFamily: fonts.barlowCondensed, fontSize: 14, color: colors.muted, textAlign: 'center', paddingVertical: 14 },
+  confirmBtn: { marginTop: 18 },
 })

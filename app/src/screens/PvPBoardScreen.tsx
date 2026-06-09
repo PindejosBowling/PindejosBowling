@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from 'react'
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, RefreshControl } from 'react-native'
+import { View, Text, ScrollView, StyleSheet, RefreshControl } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useNavigation, useFocusEffect } from '@react-navigation/native'
 import { NativeStackNavigationProp } from '@react-navigation/native-stack'
@@ -11,6 +11,7 @@ import PvpChallengeRow from '../components/PvpChallengeRow'
 import PvpAcceptModal from '../components/PvpAcceptModal'
 import PvpCounterModal from '../components/PvpCounterModal'
 import PvPChallengeDetailModal from '../components/PvPChallengeDetailModal'
+import Button from '../components/Button'
 import { usePvpData, PvpChallengeView } from '../hooks/usePvpData'
 import { useRefresh } from '../hooks/useRefresh'
 import { useAuthStore } from '../stores/authStore'
@@ -66,13 +67,11 @@ export default function PvPBoardScreen() {
         contentContainerStyle={styles.content}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.muted} />}
       >
-        <TouchableOpacity
-          style={styles.postBtn}
+        <Button
+          label="+ Post Open Challenge"
           onPress={() => navigation.navigate('PvPCreate', { openBoard: true })}
-          activeOpacity={0.7}
-        >
-          <Text style={styles.postBtnText}>+ Post Open Challenge</Text>
-        </TouchableOpacity>
+          style={styles.postBtn}
+        />
 
         {myOpen.length > 0 && (
           <>
@@ -103,17 +102,14 @@ export default function PvPBoardScreen() {
                 onPress={() => setDetailId(c.id)}
               />
               <View style={styles.actionRow}>
-                <TouchableOpacity
-                  style={[styles.actBtn, styles.acceptBtn, balance < c.creatorStake && styles.actBtnDisabled]}
+                <Button
+                  label="Accept"
                   onPress={() => setAcceptTarget(c)}
                   disabled={balance < c.creatorStake}
-                  activeOpacity={0.7}
-                >
-                  <Text style={styles.acceptText}>Accept</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={[styles.actBtn, styles.counterBtn]} onPress={() => setCounterTarget(c)} activeOpacity={0.7}>
-                  <Text style={styles.counterText}>Counter</Text>
-                </TouchableOpacity>
+                  fullWidth
+                  style={styles.actBtn}
+                />
+                <Button variant="outline" label="Counter" onPress={() => setCounterTarget(c)} fullWidth style={[styles.actBtn, styles.counterBtn]} />
               </View>
             </View>
           ))
@@ -152,15 +148,7 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.bg },
   content: { paddingHorizontal: 16, paddingBottom: 40 },
 
-  postBtn: {
-    backgroundColor: colors.accent,
-    borderRadius: radius.cardSm,
-    paddingVertical: 13,
-    alignItems: 'center',
-    marginTop: 4,
-    marginBottom: 16,
-  },
-  postBtnText: { fontFamily: fonts.barlowCondensed, fontSize: 15, fontWeight: '700', color: colors.bg, letterSpacing: 0.5 },
+  postBtn: { marginTop: 4, marginBottom: 16 },
 
   sectionLabel: {
     fontFamily: fonts.barlowCondensed,
@@ -172,12 +160,8 @@ const styles = StyleSheet.create({
   },
 
   actionRow: { flexDirection: 'row', gap: 8, marginTop: -2, marginBottom: 16 },
-  actBtn: { flex: 1, borderRadius: radius.cardSm, paddingVertical: 11, alignItems: 'center' },
-  actBtnDisabled: { opacity: 0.4 },
-  acceptBtn: { backgroundColor: colors.accent },
-  acceptText: { fontFamily: fonts.barlowCondensed, fontSize: 14, fontWeight: '700', color: colors.bg, letterSpacing: 0.5 },
-  counterBtn: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border2 },
-  counterText: { fontFamily: fonts.barlowCondensed, fontSize: 14, fontWeight: '700', color: colors.text, letterSpacing: 0.5 },
+  actBtn: { paddingVertical: 11 },
+  counterBtn: { backgroundColor: colors.surface },
 
   emptyCard: {
     backgroundColor: colors.surface,

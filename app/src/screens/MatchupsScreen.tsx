@@ -20,6 +20,7 @@ import ConfirmBar from '../components/ConfirmBar'
 import AdminArchiveModal from '../components/AdminArchiveModal'
 import AdminGenerateTeamsModal from '../components/AdminGenerateTeamsModal'
 import ToggleGroup from '../components/ToggleGroup'
+import Button from '../components/Button'
 import { useMatchupsData } from '../hooks/useMatchupsData'
 import { useUiStore } from '../stores/uiStore'
 import { usePendingStore } from '../stores/pendingStore'
@@ -462,13 +463,7 @@ export default function MatchupsScreen() {
                 <View style={styles.emptyState}>
                   <Text style={styles.emptyText}>This week's teams haven't been set up yet.</Text>
                   {isAdmin && (
-                    <TouchableOpacity
-                      style={styles.generateBtn}
-                      onPress={() => setShowGenerateTeams(true)}
-                      activeOpacity={0.7}
-                    >
-                      <Text style={styles.generateBtnText}>🎲 Generate Teams</Text>
-                    </TouchableOpacity>
+                    <Button label="🎲 Generate Teams" onPress={() => setShowGenerateTeams(true)} style={styles.generateBtn} />
                   )}
                 </View>
               )}
@@ -754,21 +749,7 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: colors.muted,
   },
-  generateBtn: {
-    marginTop: 20,
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: radius.cardSm,
-    borderWidth: 1,
-    borderColor: colors.accent,
-    backgroundColor: colors.accentDim,
-  },
-  generateBtnText: {
-    fontFamily: fonts.barlowCondensed,
-    fontSize: 15,
-    color: colors.accent,
-    letterSpacing: 0.5,
-  },
+  generateBtn: { marginTop: 20, paddingHorizontal: 20 },
   gameCtrlRow: {
     flexDirection: 'row',
     gap: 8,

@@ -6,7 +6,6 @@ import {
   TextInput,
   TouchableOpacity,
   StyleSheet,
-  ActivityIndicator,
   Platform,
 } from 'react-native'
 import DateTimePicker from '@react-native-community/datetimepicker'
@@ -14,6 +13,7 @@ import { useUiStore } from '../stores/uiStore'
 import { seasons, seasonChampions, pinLedger } from '../utils/supabase/db'
 import { colors, fonts, radius } from '../theme'
 import Toast from './Toast'
+import Button from './Button'
 
 interface Props {
   visible: boolean
@@ -218,21 +218,14 @@ export default function AdminOpenRegistrationModal({ visible, onClose, onCreated
           )}
 
           <View style={styles.btnRow}>
-            <TouchableOpacity style={styles.btnCancel} onPress={handleClose} disabled={saving} activeOpacity={0.7}>
-              <Text style={styles.btnCancelText}>Cancel</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.btnPrimary, saving && styles.btnDisabled]}
+            <Button label="Cancel" variant="secondary" onPress={handleClose} fullWidth />
+            <Button
+              label="Open Registration"
               onPress={submit}
+              loading={saving}
               disabled={saving}
-              activeOpacity={0.7}
-            >
-              {saving ? (
-                <ActivityIndicator size="small" color={colors.bg} />
-              ) : (
-                <Text style={styles.btnPrimaryText}>Open Registration</Text>
-              )}
-            </TouchableOpacity>
+              fullWidth
+            />
           </View>
         </TouchableOpacity>
       </TouchableOpacity>
@@ -245,7 +238,7 @@ export default function AdminOpenRegistrationModal({ visible, onClose, onCreated
 const styles = StyleSheet.create({
   backdrop: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.7)',
+    backgroundColor: colors.overlay,
     justifyContent: 'center',
     paddingHorizontal: 24,
   },
@@ -309,33 +302,4 @@ const styles = StyleSheet.create({
   dateBtnChevron: { fontFamily: fonts.barlow, fontSize: 18, color: colors.muted, marginTop: -1 },
   iosPicker: { marginBottom: 8, tintColor: colors.accent },
   btnRow: { flexDirection: 'row', gap: 10, marginTop: 14 },
-  btnCancel: {
-    flex: 1,
-    paddingVertical: 12,
-    borderRadius: radius.cardSm,
-    borderWidth: 1,
-    borderColor: colors.border2,
-    alignItems: 'center',
-  },
-  btnCancelText: {
-    fontFamily: fonts.barlowCondensed,
-    fontSize: 15,
-    color: colors.muted,
-    letterSpacing: 0.5,
-  },
-  btnPrimary: {
-    flex: 1,
-    paddingVertical: 12,
-    borderRadius: radius.cardSm,
-    backgroundColor: colors.accent,
-    alignItems: 'center',
-  },
-  btnPrimaryText: {
-    fontFamily: fonts.barlowCondensed,
-    fontSize: 15,
-    color: colors.bg,
-    fontWeight: '700',
-    letterSpacing: 0.5,
-  },
-  btnDisabled: { opacity: 0.4 },
 })

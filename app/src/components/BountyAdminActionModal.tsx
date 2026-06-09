@@ -5,6 +5,7 @@ import {
 } from 'react-native'
 import { colors, fonts, radius } from '../theme'
 import Toast from './Toast'
+import Button from './Button'
 import { useUiStore } from '../stores/uiStore'
 import { bountyPosts } from '../utils/supabase/db'
 import { bountyEconomics, hunterPayout } from '../utils/bounty'
@@ -79,14 +80,13 @@ export default function BountyAdminActionModal({ bounty: b, onClose, onDone }: P
             {b.status === 'open' && (
               <>
                 <Text style={styles.section}>CLOSE</Text>
-                <TouchableOpacity
-                  style={styles.actBtn}
+                <Button
+                  variant="outline"
+                  label="Close to new hunters"
                   disabled={saving}
                   onPress={() => run('Bounty closed', () => bountyPosts.close(b.id))}
-                  activeOpacity={0.7}
-                >
-                  <Text style={styles.actText}>Close to new hunters</Text>
-                </TouchableOpacity>
+                  style={styles.actSpacing}
+                />
               </>
             )}
 
@@ -117,25 +117,17 @@ export default function BountyAdminActionModal({ bounty: b, onClose, onDone }: P
                   )}
                 </View>
 
-                <TouchableOpacity style={styles.actBtn} disabled={saving} onPress={() => settle('sponsor_win', 'Sponsor wins')} activeOpacity={0.7}>
-                  <Text style={styles.actText}>Sponsor Wins</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.actBtn} disabled={saving} onPress={() => settle('hunter_win', 'Hunters win')} activeOpacity={0.7}>
-                  <Text style={styles.actText}>Hunters Win</Text>
-                </TouchableOpacity>
+                <Button variant="outline" label="Sponsor Wins" disabled={saving} onPress={() => settle('sponsor_win', 'Sponsor wins')} style={styles.actSpacing} />
+                <Button variant="outline" label="Hunters Win" disabled={saving} onPress={() => settle('hunter_win', 'Hunters win')} style={styles.actSpacing} />
               </>
             )}
 
             <Text style={styles.section}>DESTRUCTIVE</Text>
-            <TouchableOpacity style={[styles.actBtn, styles.dangerBtn]} disabled={saving} onPress={cancel} activeOpacity={0.7}>
-              <Text style={styles.dangerText}>Cancel (erase bounty)</Text>
-            </TouchableOpacity>
+            <Button variant="outline" tone="danger" label="Cancel (erase bounty)" disabled={saving} onPress={cancel} style={styles.actSpacing} />
           </ScrollView>
 
           {saving && <ActivityIndicator size="small" color={colors.accent} style={{ marginTop: 12 }} />}
-          <TouchableOpacity onPress={() => !saving && onClose()} activeOpacity={0.7}>
-            <Text style={styles.close}>Close</Text>
-          </TouchableOpacity>
+          <Button variant="ghost" label="Close" onPress={() => !saving && onClose()} />
         </View>
       </KeyboardAvoidingView>
       <Toast />
@@ -144,7 +136,7 @@ export default function BountyAdminActionModal({ bounty: b, onClose, onDone }: P
 }
 
 const styles = StyleSheet.create({
-  backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'flex-end' },
+  backdrop: { flex: 1, backgroundColor: colors.overlay, justifyContent: 'flex-end' },
   sheet: {
     backgroundColor: colors.surface, borderTopLeftRadius: 20, borderTopRightRadius: 20,
     borderWidth: 1, borderColor: colors.border, padding: 24, paddingBottom: Platform.OS === 'ios' ? 40 : 24,
@@ -166,12 +158,5 @@ const styles = StyleSheet.create({
   kv: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 6 },
   kvValue: { fontFamily: fonts.barlowCondensed, fontSize: 15, color: colors.text },
   muted: { fontFamily: fonts.barlow, fontSize: 13, color: colors.muted, flex: 1, marginRight: 8 },
-  actBtn: {
-    backgroundColor: colors.surface2, borderRadius: radius.cardSm, borderWidth: 1, borderColor: colors.border2,
-    paddingVertical: 13, alignItems: 'center', marginBottom: 8,
-  },
-  actText: { fontFamily: fonts.barlowCondensed, fontSize: 15, color: colors.text, letterSpacing: 0.5 },
-  dangerBtn: { borderColor: colors.danger },
-  dangerText: { fontFamily: fonts.barlowCondensed, fontSize: 15, color: colors.danger, letterSpacing: 0.5 },
-  close: { fontFamily: fonts.barlowCondensed, fontSize: 14, color: colors.muted, textAlign: 'center', paddingVertical: 14 },
+  actSpacing: { marginBottom: 8 },
 })

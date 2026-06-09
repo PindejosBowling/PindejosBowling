@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react'
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, RefreshControl } from 'react-native'
+import { View, Text, ScrollView, StyleSheet, RefreshControl } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useNavigation, useFocusEffect } from '@react-navigation/native'
 import { NativeStackNavigationProp } from '@react-navigation/native-stack'
@@ -8,6 +8,7 @@ import ScreenHeader from '../components/ScreenHeader'
 import LoadingView from '../components/LoadingView'
 import PvpChallengeRow from '../components/PvpChallengeRow'
 import PvPChallengeDetailModal from '../components/PvPChallengeDetailModal'
+import Button from '../components/Button'
 import { usePvpData, PvpChallengeView } from '../hooks/usePvpData'
 import { useRefresh } from '../hooks/useRefresh'
 import { useAuthStore } from '../stores/authStore'
@@ -102,20 +103,14 @@ export default function PvPScreen() {
 
         {/* Entry points */}
         <View style={styles.actions}>
-          <TouchableOpacity
-            style={styles.primaryBtn}
-            onPress={() => navigation.navigate('PvPCreate')}
-            activeOpacity={0.7}
-          >
-            <Text style={styles.primaryBtnText}>New Challenge</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.secondaryBtn}
+          <Button label="New Challenge" onPress={() => navigation.navigate('PvPCreate')} fullWidth style={styles.primaryBtn} />
+          <Button
+            variant="outline"
+            label={`Challenge Board${openBoard.length > 0 ? ` (${openBoard.length})` : ''}`}
             onPress={() => navigation.navigate('PvPBoard')}
-            activeOpacity={0.7}
-          >
-            <Text style={styles.secondaryBtnText}>Challenge Board{openBoard.length > 0 ? ` (${openBoard.length})` : ''}</Text>
-          </TouchableOpacity>
+            fullWidth
+            style={styles.secondaryBtn}
+          />
         </View>
 
         {/* Inbox */}
@@ -180,24 +175,8 @@ const styles = StyleSheet.create({
   balancePillValue: { fontFamily: fonts.barlowCondensedHeavy, fontSize: 20, color: colors.accent },
 
   actions: { flexDirection: 'row', gap: 8, marginBottom: 24 },
-  primaryBtn: {
-    flex: 1,
-    backgroundColor: colors.accent,
-    borderRadius: radius.cardSm,
-    paddingVertical: 14,
-    alignItems: 'center',
-  },
-  primaryBtnText: { fontFamily: fonts.barlowCondensed, fontSize: 15, fontWeight: '700', color: colors.bg, letterSpacing: 0.5 },
-  secondaryBtn: {
-    flex: 1,
-    backgroundColor: colors.surface,
-    borderRadius: radius.cardSm,
-    borderWidth: 1,
-    borderColor: colors.border2,
-    paddingVertical: 14,
-    alignItems: 'center',
-  },
-  secondaryBtnText: { fontFamily: fonts.barlowCondensed, fontSize: 15, fontWeight: '700', color: colors.text, letterSpacing: 0.5 },
+  primaryBtn: { paddingVertical: 14 },
+  secondaryBtn: { paddingVertical: 14, backgroundColor: colors.surface },
 
   sectionLabel: {
     fontFamily: fonts.barlowCondensed,

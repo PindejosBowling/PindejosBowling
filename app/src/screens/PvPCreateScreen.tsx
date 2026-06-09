@@ -10,6 +10,7 @@ import ScreenHeader from '../components/ScreenHeader'
 import LoadingView from '../components/LoadingView'
 import ToggleGroup from '../components/ToggleGroup'
 import PlayerPickerModal from '../components/PlayerPickerModal'
+import Button from '../components/Button'
 import LineDuelLines from '../components/LineDuelLines'
 import GamePicker from '../components/GamePicker'
 import Toast from '../components/Toast'
@@ -262,14 +263,14 @@ export default function PvPCreateScreen() {
         {/* Opponent */}
         <Text style={styles.label}>OPPONENT</Text>
         <View style={styles.opponentRow}>
-          <TouchableOpacity
-            style={[styles.opponentBtn, openBoard && styles.opponentBtnDisabled]}
+          <Button
+            selectable
+            value={opponentName}
+            placeholder="Select player…"
             onPress={() => setPickerOpen(true)}
             disabled={openBoard}
-            activeOpacity={0.7}
-          >
-            <Text style={styles.opponentBtnText}>{opponentName ?? 'Select player…'}</Text>
-          </TouchableOpacity>
+            fullWidth
+          />
           <TouchableOpacity
             style={[styles.boardToggle, openBoard && styles.boardToggleOn]}
             onPress={() => setOpenBoard(o => !o)}
@@ -512,14 +513,13 @@ export default function PvPCreateScreen() {
           </Text>
         </View>
 
-        <TouchableOpacity
-          style={[styles.submitBtn, (submitting || !validStake) && styles.submitBtnDisabled]}
+        <Button
+          label={openBoard ? 'Post Challenge' : 'Send Challenge'}
+          size="lg"
           onPress={submit}
           disabled={submitting || !validStake}
-          activeOpacity={0.7}
-        >
-          <Text style={styles.submitBtnText}>{openBoard ? 'Post Challenge' : 'Send Challenge'}</Text>
-        </TouchableOpacity>
+          style={styles.submitBtn}
+        />
       </ScrollView>
 
       <PlayerPickerModal
@@ -571,17 +571,6 @@ const styles = StyleSheet.create({
   customToggleTextOn: { color: colors.accent },
 
   opponentRow: { flexDirection: 'row', gap: 8 },
-  opponentBtn: {
-    flex: 1,
-    backgroundColor: colors.surface2,
-    borderRadius: radius.cardSm,
-    borderWidth: 1,
-    borderColor: colors.border2,
-    paddingHorizontal: 14,
-    paddingVertical: 13,
-  },
-  opponentBtnDisabled: { opacity: 0.4 },
-  opponentBtnText: { fontFamily: fonts.barlowCondensed, fontSize: 16, color: colors.text },
   boardToggle: {
     borderRadius: radius.cardSm,
     borderWidth: 1,
@@ -651,13 +640,5 @@ const styles = StyleSheet.create({
   confirmRule: { fontFamily: fonts.barlow, fontSize: 13, color: colors.muted, lineHeight: 19, marginVertical: 6 },
   confirmNote: { fontFamily: fonts.barlow, fontSize: 12, color: colors.muted2, lineHeight: 17, marginTop: 6 },
 
-  submitBtn: {
-    backgroundColor: colors.accent,
-    borderRadius: radius.cardSm,
-    paddingVertical: 15,
-    alignItems: 'center',
-    marginTop: 20,
-  },
-  submitBtnDisabled: { opacity: 0.4 },
-  submitBtnText: { fontFamily: fonts.barlowCondensed, fontSize: 16, fontWeight: '700', color: colors.bg, letterSpacing: 0.5 },
+  submitBtn: { marginTop: 20 },
 })

@@ -10,6 +10,7 @@ import { colors, fonts, radius } from '../theme'
 import ScreenHeader from '../components/ScreenHeader'
 import LoadingView from '../components/LoadingView'
 import Toast from '../components/Toast'
+import Button from '../components/Button'
 import { useRefresh } from '../hooks/useRefresh'
 import { useAuthStore } from '../stores/authStore'
 import { useUiStore } from '../stores/uiStore'
@@ -208,14 +209,13 @@ export default function BountyCreateScreen() {
 
         {error && <Text style={styles.errorText}>{error}</Text>}
 
-        <TouchableOpacity
-          style={[styles.submitBtn, (error || submitting) && styles.submitBtnDisabled]}
+        <Button
+          label={submitting ? 'Posting…' : 'Post Bounty'}
+          size="lg"
           onPress={submit}
           disabled={!!error || submitting}
-          activeOpacity={0.7}
-        >
-          <Text style={styles.submitText}>{submitting ? 'Posting…' : 'Post Bounty'}</Text>
-        </TouchableOpacity>
+          style={styles.submitBtn}
+        />
       </ScrollView>
       <Toast />
     </SafeAreaView>
@@ -261,7 +261,5 @@ const styles = StyleSheet.create({
 
   errorText: { fontFamily: fonts.barlow, fontSize: 13, color: colors.danger, marginTop: 14 },
 
-  submitBtn: { backgroundColor: colors.accent, borderRadius: radius.cardSm, paddingVertical: 15, alignItems: 'center', marginTop: 18 },
-  submitBtnDisabled: { opacity: 0.4 },
-  submitText: { fontFamily: fonts.barlowCondensed, fontSize: 16, fontWeight: '700', color: colors.bg, letterSpacing: 0.5 },
+  submitBtn: { marginTop: 18 },
 })
