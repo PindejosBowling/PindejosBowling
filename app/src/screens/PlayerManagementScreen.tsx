@@ -428,7 +428,7 @@ const styles = StyleSheet.create({
   modalWrap: { flex: 1 },
   backdrop: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.7)',
+    backgroundColor: colors.overlay,
     justifyContent: 'center',
     paddingHorizontal: 24,
   },
@@ -479,7 +479,7 @@ const styles = StyleSheet.create({
     borderColor: colors.muted2,
   },
   togglePillOn: {
-    backgroundColor: 'rgba(232,255,71,0.12)',
+    backgroundColor: colors.accentDim,
     borderColor: colors.accent,
   },
   togglePillText: {
