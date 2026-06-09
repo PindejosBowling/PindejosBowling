@@ -338,8 +338,9 @@ export const teamSlots = {
       )
       .eq('player_id', playerId)
       .eq('teams.weeks.is_archived', true),
+  // Chains .select() so callers (e.g. the week editor) get the new slot ids back.
   insert: (data: TablesInsert<'team_slots'> | TablesInsert<'team_slots'>[]) =>
-    supabase.from('team_slots').insert(data),
+    supabase.from('team_slots').insert(data).select(),
   update: (id: string, data: TablesUpdate<'team_slots'>) =>
     supabase.from('team_slots').update(data).eq('id', id),
   remove: (id: string) =>

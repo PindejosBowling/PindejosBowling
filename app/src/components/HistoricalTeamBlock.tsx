@@ -6,6 +6,7 @@ interface Player {
   name: string
   score?: number | string
   present: boolean
+  isFill?: boolean
 }
 
 interface Props {
@@ -20,18 +21,18 @@ export default function HistoricalTeamBlock({ team, players, total, winner }: Pr
     <View style={styles.block}>
       <Text style={[styles.teamLabel, winner && styles.teamLabelWinner]}>{team}</Text>
 
-      {players.map((p) => (
-        <View key={p.name} style={[styles.playerRow, !p.present && styles.playerRowAbsent]}>
+      {players.map((p, i) => (
+        <View key={`${p.name}-${i}`} style={[styles.playerRow, !p.present && styles.playerRowAbsent]}>
           <View style={styles.avatar}>
-            <Text style={styles.avatarText}>{initials(p.name)}</Text>
+            <Text style={styles.avatarText}>{p.isFill ? '∅' : initials(p.name)}</Text>
           </View>
-          <Text style={[styles.playerName, !p.present && styles.playerNameAbsent]} numberOfLines={1}>
-            {p.name}{!p.present ? ' ' : ''}
+          <Text style={[styles.playerName, (!p.present || p.isFill) && styles.playerNameAbsent, p.isFill && styles.playerNameFill]} numberOfLines={1}>
+            {p.isFill ? 'League Avg Fill' : p.name}{!p.present ? ' ' : ''}
             {!p.present ? <Text style={styles.absentTag}>OUT</Text> : null}
           </Text>
           <View style={styles.scoreGroup}>
-            <Text style={styles.scoreLabel}>Score</Text>
-            <Text style={[styles.scoreVal, !p.score && styles.scoreMuted]}>
+            <Text style={styles.scoreLabel}>{p.isFill ? 'Fill' : 'Score'}</Text>
+            <Text style={[styles.scoreVal, p.isFill && styles.scoreFill, !p.score && styles.scoreMuted]}>
               {p.score || '—'}
             </Text>
           </View>
@@ -80,6 +81,7 @@ const styles = StyleSheet.create({
   avatarText: { fontFamily: fonts.barlowCondensed, fontSize: 12, color: colors.muted },
   playerName: { flex: 1, fontFamily: fonts.barlow, fontSize: 14, color: colors.text },
   playerNameAbsent: { color: colors.muted },
+  playerNameFill: { fontStyle: 'italic' },
   absentTag: {
     fontFamily: fonts.barlowCondensed,
     fontSize: 10,
@@ -101,6 +103,7 @@ const styles = StyleSheet.create({
     color: colors.text,
   },
   scoreMuted: { color: colors.muted },
+  scoreFill: { color: colors.gold },
 
   totalRow: {
     flexDirection: 'row',
