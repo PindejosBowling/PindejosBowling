@@ -195,6 +195,21 @@ CREATE TABLE games (
   team_b_id uuid NOT NULL
 );
 
+CREATE TABLE lanetalk_game_imports (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  source_url text NOT NULL,
+  game_number integer NOT NULL,
+  classification text NOT NULL,
+  player_id uuid,
+  team_slot_id uuid,
+  week_id uuid,
+  score integer,
+  played_at timestamp with time zone,
+  payload jsonb NOT NULL,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now()
+);
+
 CREATE TABLE loan_ledger (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   loan_id uuid NOT NULL,
@@ -627,6 +642,18 @@ ALTER TABLE games ADD CONSTRAINT games_team_a_id_fkey FOREIGN KEY (team_a_id) RE
 
 ALTER TABLE games ADD CONSTRAINT games_team_b_id_fkey FOREIGN KEY (team_b_id) REFERENCES teams(id) ON DELETE CASCADE;
 
+ALTER TABLE lanetalk_game_imports ADD CONSTRAINT lanetalk_game_imports_classification_check CHECK ((classification = ANY (ARRAY['official'::text, 'recreational'::text])));
+
+ALTER TABLE lanetalk_game_imports ADD CONSTRAINT lanetalk_game_imports_pkey PRIMARY KEY (id);
+
+ALTER TABLE lanetalk_game_imports ADD CONSTRAINT lanetalk_game_imports_player_id_fkey FOREIGN KEY (player_id) REFERENCES players(id) ON DELETE SET NULL;
+
+ALTER TABLE lanetalk_game_imports ADD CONSTRAINT lanetalk_game_imports_team_slot_id_fkey FOREIGN KEY (team_slot_id) REFERENCES team_slots(id) ON DELETE SET NULL;
+
+ALTER TABLE lanetalk_game_imports ADD CONSTRAINT lanetalk_game_imports_url_game_key UNIQUE (source_url, game_number);
+
+ALTER TABLE lanetalk_game_imports ADD CONSTRAINT lanetalk_game_imports_week_id_fkey FOREIGN KEY (week_id) REFERENCES weeks(id) ON DELETE SET NULL;
+
 ALTER TABLE loan_ledger ADD CONSTRAINT loan_ledger_loan_id_fkey FOREIGN KEY (loan_id) REFERENCES loans(id) ON DELETE CASCADE;
 
 ALTER TABLE loan_ledger ADD CONSTRAINT loan_ledger_pin_ledger_id_fkey FOREIGN KEY (pin_ledger_id) REFERENCES pin_ledger(id) ON DELETE SET NULL;
@@ -925,6 +952,10 @@ CREATE INDEX idx_pin_ledger_house ON public.pin_ledger USING btree (season_id) W
 CREATE INDEX idx_pin_ledger_player_season ON public.pin_ledger USING btree (player_id, season_id);
 
 CREATE INDEX idx_pin_ledger_season ON public.pin_ledger USING btree (season_id);
+
+CREATE INDEX lanetalk_game_imports_player_id_idx ON public.lanetalk_game_imports USING btree (player_id);
+
+CREATE INDEX lanetalk_game_imports_week_id_idx ON public.lanetalk_game_imports USING btree (week_id);
 
 CREATE INDEX loan_ledger_loan_id_idx ON public.loan_ledger USING btree (loan_id);
 
@@ -1229,6 +1260,15 @@ CREATE POLICY "admin can insert" ON games AS PERMISSIVE FOR INSERT TO authentica
 
 CREATE POLICY "authenticated can read" ON games AS PERMISSIVE FOR SELECT TO authenticated
   USING (true);
+
+ALTER TABLE lanetalk_game_imports ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "admin can read all" ON lanetalk_game_imports AS PERMISSIVE FOR SELECT TO authenticated
+  USING ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
+
+CREATE POLICY "admin can update" ON lanetalk_game_imports AS PERMISSIVE FOR UPDATE TO authenticated
+  USING ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text))
+  WITH CHECK ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
 
 ALTER TABLE loan_ledger ENABLE ROW LEVEL SECURITY;
 
@@ -4569,6 +4609,8 @@ CREATE TRIGGER set_updated_at BEFORE UPDATE ON public.bounty_settlements FOR EAC
 CREATE TRIGGER games_same_week_check BEFORE INSERT OR UPDATE OF team_a_id, team_b_id ON public.games FOR EACH ROW EXECUTE FUNCTION games_same_week();
 
 CREATE TRIGGER set_updated_at BEFORE UPDATE ON public.games FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+CREATE TRIGGER set_updated_at BEFORE UPDATE ON public.lanetalk_game_imports FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
 CREATE TRIGGER set_updated_at BEFORE UPDATE ON public.loan_ledger FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 

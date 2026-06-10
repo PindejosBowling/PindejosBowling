@@ -19,11 +19,13 @@ export type MoreStackParamList = {
   MarketMovesAdmin: undefined
   BountyAdmin: undefined
   LeagueToolsAdmin: undefined
+  LanetalkImportAdmin: undefined
 }
 
 export type StandingsStackParamList = {
   StandingsList: undefined
   PlayerDetail: { name: string }
+  FrameStats: { name: string; playerId: string }
 }
 
 export type PinsinoStackParamList = {

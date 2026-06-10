@@ -12,31 +12,6 @@ export type Database = {
   __InternalSupabase: {
     PostgrestVersion: "14.5"
   }
-  graphql_public: {
-    Tables: {
-      [_ in never]: never
-    }
-    Views: {
-      [_ in never]: never
-    }
-    Functions: {
-      graphql: {
-        Args: {
-          extensions?: Json
-          operationName?: string
-          query?: string
-          variables?: Json
-        }
-        Returns: Json
-      }
-    }
-    Enums: {
-      [_ in never]: never
-    }
-    CompositeTypes: {
-      [_ in never]: never
-    }
-  }
   public: {
     Tables: {
       activity_feed_events: {
@@ -895,6 +870,73 @@ export type Database = {
             columns: ["team_b_id"]
             isOneToOne: false
             referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      lanetalk_game_imports: {
+        Row: {
+          classification: string
+          created_at: string
+          game_number: number
+          id: string
+          payload: Json
+          played_at: string | null
+          player_id: string | null
+          score: number | null
+          source_url: string
+          team_slot_id: string | null
+          updated_at: string
+          week_id: string | null
+        }
+        Insert: {
+          classification: string
+          created_at?: string
+          game_number: number
+          id?: string
+          payload: Json
+          played_at?: string | null
+          player_id?: string | null
+          score?: number | null
+          source_url: string
+          team_slot_id?: string | null
+          updated_at?: string
+          week_id?: string | null
+        }
+        Update: {
+          classification?: string
+          created_at?: string
+          game_number?: number
+          id?: string
+          payload?: Json
+          played_at?: string | null
+          player_id?: string | null
+          score?: number | null
+          source_url?: string
+          team_slot_id?: string | null
+          updated_at?: string
+          week_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lanetalk_game_imports_player_id_fkey"
+            columns: ["player_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lanetalk_game_imports_team_slot_id_fkey"
+            columns: ["team_slot_id"]
+            isOneToOne: false
+            referencedRelation: "team_slots"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lanetalk_game_imports_week_id_fkey"
+            columns: ["week_id"]
+            isOneToOne: false
+            referencedRelation: "weeks"
             referencedColumns: ["id"]
           },
         ]
@@ -2261,9 +2303,6 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
-  graphql_public: {
-    Enums: {},
-  },
   public: {
     Enums: {},
   },

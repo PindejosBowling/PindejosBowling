@@ -23,8 +23,8 @@ interface BorrowConfirmModalProps {
 }
 
 const GENERAL_WARNING =
-  'Borrowed pins increase your available balance, but not your net worth. Debt accrues weekly ' +
-  'interest until repaid. If you miss a week in the PBL, there will be no pincome to garnish, but weekly interest ' +
+  'Borrowed pins increase your available balance immediately. In exchange, the shark will take his cut of your weekly pincome before charging interest on the remaining balance. ' +
+  'If you miss a week in the PBL, there will be no pincome to garnish, but weekly interest ' +
   'is still accumulated.'
 
 export default function BorrowConfirmModal({ product, onClose, onBorrowed }: BorrowConfirmModalProps) {
@@ -68,12 +68,12 @@ export default function BorrowConfirmModal({ product, onClose, onBorrowed }: Bor
             </View>
             <View style={styles.statGrid}>
               <View style={styles.statCell}>
-                <Text style={styles.statLabel}>WEEKLY INTEREST</Text>
-                <Text style={styles.statValue}>{interestPct}%</Text>
+                <Text style={styles.statLabel}>WEEKLY PINCOME CUT</Text>
+                <Text style={styles.statValue}>{garnishPct}%</Text>
               </View>
               <View style={styles.statCell}>
-                <Text style={styles.statLabel}>GARNISHMENT</Text>
-                <Text style={styles.statValue}>{garnishPct}%</Text>
+                <Text style={styles.statLabel}>WEEKLY PINTEREST</Text>
+                <Text style={styles.statValue}>{interestPct}%</Text>
               </View>
             </View>
 
