@@ -67,14 +67,14 @@ export default function PlayerPinsinoScreen() {
   }, [ledger])
 
   const bonusEntries = useMemo(
-    () => ledger.filter(e => e.weekNumber === null),
+    () => ledger.filter(e => e.type === 'bonus'),
     [ledger],
   )
 
   const ledgerByWeek = useMemo(() => {
     const map: Record<number, LedgerEntry[]> = {}
     for (const entry of ledger) {
-      if (entry.weekNumber === null) continue
+      if (entry.type === 'bonus' || entry.weekNumber === null) continue
       if (!map[entry.weekNumber]) map[entry.weekNumber] = []
       map[entry.weekNumber].push(entry)
     }

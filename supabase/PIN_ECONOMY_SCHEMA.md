@@ -313,6 +313,18 @@ Anti-tanking is also enforced by the `bet_legs_no_self_tank` BEFORE INSERT/UPDAT
 trigger on `bet_legs` (rejects backing `under` / laying `over` on your own market).
 Open/close a market with a direct admin `UPDATE bet_markets SET status` (no RPC).
 
+**Deleting a market is self-cleaning.** A `refund_bets_before_market_delete`
+BEFORE DELETE trigger on `bet_markets` refunds (deletes the `pin_ledger` pair[s]
+by `bet_id`, restoring balances) and deletes every bet with a leg on the market
+being removed — so a raw `DELETE FROM bet_markets` (console / any non-RPC path),
+not just `remove_over_under_markets_for_game`, tears down correctly and across
+all market types. Without it the FK cascade only flows downward
+(`bet_markets → bet_selections → bet_legs`), orphaning the parent `bets` row and
+leaving its `bet_stake` ledger pair un-reversed (`pin_ledger.bet_id` is `ON DELETE
+SET NULL`). Parlays touching the market refund whole (the bet delete cascades its
+legs on other games). Composes with the RPC (which deletes bets first → trigger
+is then a no-op); no recursion.
+
 ### RPC / function conventions (REQUIRED for new functions)
 
 - `SECURITY DEFINER` only when bypassing RLS is genuinely needed; always
@@ -459,6 +471,7 @@ bets shipped as a pure-UI addition on top of the existing model:
 | `migrations/20260608140100_sync_moneyline_markets.sql` | **Moneyline 2/3** — `sync_moneyline_markets_for_week` (even-money market per matchup). |
 | `migrations/20260608140200_moneyline_settlement.sql` | **Moneyline 3/3** — extract `finalize_bets_for_market`; `settle_moneyline_market[_internal]`; extend `settle_betting_for_week`. |
 | `migrations/20260608140300_moneyline_title_no_game_suffix.sql` | Moneyline title cleanup (drop the redundant "· Game N"). |
+| `migrations/20260610003542_refund_bets_before_market_delete.sql` | `refund_bets_before_market_delete` BEFORE DELETE trigger on `bet_markets` — makes any market delete (not just the RPC) refund + tear down its bets, fixing the orphaned-bet / un-reversed-ledger class of bug (see §5 "Deleting a market is self-cleaning"). |
 | `app/src/utils/supabase/db.ts` | Typed query objects (`betMarkets` / `bets` / `pinLedger` + RPC wrappers). |
 | `app/src/hooks/useBettingData.ts` | Normalizes the market/bet graph into flat `LineView` / `BetView`. |
 | `supabase/AUTH.md` | Auth / JWT / RLS architecture. |
