@@ -1,5 +1,21 @@
 # PindejosBowling Native — Agent Reference
 
+## ⛔ HARD CONSTRAINTS — read first, no exceptions
+
+Every agent working in this codebase MUST follow these rules. They override any default behavior. Full text + commands in [context/agent-rules.md](context/agent-rules.md).
+
+1. **Migrations only.** ALL database changes go through `.sql` files in `supabase/migrations/` applied via `supabase db push`. NEVER execute `INSERT`/`UPDATE`/`DELETE`/DDL directly against the live database. The Supabase CLI is for exactly two things: reading (`db query`) and pushing migrations (`db push`).
+2. **Never read migrations to learn the current schema.** Migration files are append-only *history* full of since-superseded DDL. Current-state DDL lives in [supabase/schema.sql](supabase/schema.sql) (generated snapshot — never hand-edit; regenerate with `./supabase/refresh-schema-snapshot.sh` as the last step of every push). Schema prose/invariants: [context/database-schema.md](context/database-schema.md) and [supabase/PIN_ECONOMY_SCHEMA.md](supabase/PIN_ECONOMY_SCHEMA.md). Only open a migration to understand history or to author a new one.
+3. **Supabase CLI setup.** Every `supabase` command needs `SUPABASE_ACCESS_TOKEN` loaded from `app/.env.local` plus `--linked --workdir $(pwd)` — otherwise it fails with 401. No MCP server is configured.
+4. **All data comes from Supabase; all queries live in `db.ts`.** Never build ad-hoc joins from raw `supabase` client calls — add a method to `src/utils/supabase/db.ts`.
+5. **"Current season" ≠ highest number.** It is `is_active = true` AND `registration_open = false` — always `seasons.getCurrent()`, never `getLatest()`.
+6. **Compute functions are pure and uncached.** Always wrap them in `useMemo` at the screen level; no memoization inside hooks or compute functions.
+7. **All ids are `uuid` / TypeScript `string`.** No integer keys anywhere.
+8. **No test suite.** Verify behavior via the Expo dev server (`expo start`).
+9. **This `AGENTS.md` is an INDEX, never a content file.** Reference material lives in self-contained markdown files under [context/](context/), one file per domain — `AGENTS.md` holds only a one-line table row per file plus these rules. When documenting a finding, pattern, or system: prefer updating the existing `context/*.md` file; otherwise create a new `context/<domain>.md` and add a row linking to it in the matching table below. Never paste reference content into `AGENTS.md`, and never reintroduce a `references/` directory.
+
+## Project overview
+
 React Native / Expo app for a recreational bowling league called "Pindejos." Players track weekly matchups, scores, standings, RSVPs, and historical stats. The sole backend is a Supabase Postgres database accessed via typed query objects in `src/utils/supabase/db.ts`.
 
 This file is an **index**. The detailed reference is split across [context/](context/) — read the file relevant to your task rather than loading everything. Each file is self-contained.
@@ -16,7 +32,7 @@ This file is an **index**. The detailed reference is split across [context/](con
 | [context/betting-line-board.md](context/betting-line-board.md) | The Place Bets line board — the market-type-agnostic stack, data shapes, seam helpers, the recipe for adding a new market type to the UI, and the **UI policy hiding the "under" side** (social-dynamics reason; mechanic preserved in the DB/RPC layer) |
 | [context/patterns.md](context/patterns.md) | Key patterns (useMemo, pull-to-refresh, toasts-in-modals, optimistic edits, admin flows) and the theme system (colors / fonts / radius) |
 | [context/file-map.md](context/file-map.md) | The full `app/` source tree with a one-line note per file |
-| [context/agent-rules.md](context/agent-rules.md) | Page-creation workflow + the numbered hard rules for agents (migrations-only DB changes, Supabase CLI usage, "current season", uuid ids, etc.) |
+| [context/agent-rules.md](context/agent-rules.md) | The full text of the hard constraints above (incl. CLI commands, migration workflow) + additional agent notes (auth layer, `useRefresh`, hook exports) |
 | [context/page-creation.md](context/page-creation.md) | The page-creation blueprint — the four-layer stack (migration → `db.ts` → hook → screen → navigation), type/schema-snapshot regeneration commands, screen skeleton + theme tokens, and the end-to-end checklist. Always reference when adding/editing a screen or making schema changes. |
 
 ## Cross-cutting systems ([context/](context/))
@@ -54,13 +70,3 @@ Product/design references and per-feature implementation specs for the pin econo
 
 - **Betting / pin economy schema:** [supabase/PIN_ECONOMY_SCHEMA.md](supabase/PIN_ECONOMY_SCHEMA.md) — authoritative for `pin_ledger`, the canonical betting tables, accounting/lifecycle, every RPC, RLS, and how to add a bet type. Read before touching any `bet_*` / `pin_ledger` code.
 - **Auth:** [supabase/AUTH.md](supabase/AUTH.md) — JWT hook, trigger, RLS patterns, role management.
-
-## Hard rules (full text in [context/agent-rules.md](context/agent-rules.md))
-
-1. All data comes from Supabase; all queries live in `db.ts`.
-2. **ALL database changes go through migration files** applied via `supabase db push` — never write to the DB directly. The Supabase CLI is for reading (`db query`) and pushing migrations only. **Migration files are append-only *history* and contain plenty of since-superseded DDL — never read or grep them to learn the *current* schema. For current-state DDL read [`supabase/schema.sql`](supabase/schema.sql) (a generated snapshot; regenerate with `./supabase/refresh-schema-snapshot.sh` as the last step of every push); for schema prose/invariants see [context/database-schema.md](context/database-schema.md) and [supabase/PIN_ECONOMY_SCHEMA.md](supabase/PIN_ECONOMY_SCHEMA.md). Only open a migration to understand history or when authoring a new one.**
-3. The Supabase CLI needs `SUPABASE_ACCESS_TOKEN` from `app/.env.local` + `--linked --workdir $(pwd)`.
-4. "Current season" = `is_active = true` AND `registration_open = false` (`seasons.getCurrent()`), **not** highest number.
-5. Compute functions are pure and uncached — always wrap them in `useMemo` at the screen level.
-6. All ids are `uuid` / TypeScript `string`. No test suite — verify via `expo start`.
-7. **This `AGENTS.md` is an INDEX, never a content file.** Reference material lives in self-contained markdown files under [context/](context/), one file per domain — `AGENTS.md` holds only a one-line table row per file plus these rules. When you document a finding, pattern, or system: **prefer updating the existing `context/*.md` file** if the topic reasonably fits one; **otherwise create a new `context/<domain>.md`** and add a row linking to it in the matching table above ("Context map" or "Cross-cutting systems"). Never paste reference content directly into `AGENTS.md`, and never reintroduce a `references/` directory.
