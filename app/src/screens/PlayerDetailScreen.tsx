@@ -20,6 +20,7 @@ import {
   computeExpandedMatchups,
 } from '../hooks/usePlayerDetailData'
 import { initials } from '../utils/helpers'
+import { useHasFrameStats } from '../hooks/useFrameStatsData'
 import LoadingView from '../components/LoadingView'
 import PillFilter from '../components/PillFilter'
 import ScreenHeader from '../components/ScreenHeader'
@@ -93,6 +94,8 @@ export default function PlayerDetailScreen() {
     return { points, avg, chartWidth }
   }, [playerId, allScores, activeSeasonId, profile, screenWidth])
 
+  const hasFrameStats = useHasFrameStats(playerId)
+
   function toggleWeek(key: string) {
     set({ expandedWeek: expandedWeek === key ? null : key })
   }
@@ -133,6 +136,24 @@ export default function PlayerDetailScreen() {
             <StatTile label="Season Avg" value={profile.seasonAvg > 0 ? profile.seasonAvg.toFixed(1) : '—'} />
             <StatTile label="Games" value={String(profile.totalGames)} />
           </View>
+        ) : null}
+
+        {/* Frame-level game details (when we have Lanetalk data) */}
+        {hasFrameStats ? (
+          <TouchableOpacity
+            style={styles.frameStatsBtn}
+            activeOpacity={0.7}
+            onPress={() => (navigation as any).navigate('FrameStats', { name, playerId })}
+          >
+            <View style={styles.frameStatsIcon}>
+              <Text style={{ fontSize: 18 }}>🎳</Text>
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.frameStatsLabel}>Game Details</Text>
+              <Text style={styles.frameStatsSub}>Frame-by-frame scorecards & pin stats</Text>
+            </View>
+            <Text style={styles.frameStatsChevron}>›</Text>
+          </TouchableOpacity>
         ) : null}
 
         {/* Personal records */}
@@ -430,6 +451,42 @@ const styles = StyleSheet.create({
     color: colors.muted,
     textAlign: 'center',
     marginTop: 24,
+  },
+
+  frameStatsBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.surface,
+    borderRadius: radius.cardMd,
+    padding: 14,
+    marginHorizontal: 16,
+    marginBottom: 16,
+    gap: 12,
+  },
+  frameStatsIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: radius.icon,
+    backgroundColor: colors.surface2,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  frameStatsLabel: {
+    fontFamily: fonts.barlowCondensed,
+    fontSize: 16,
+    color: colors.text,
+    letterSpacing: 0.5,
+  },
+  frameStatsSub: {
+    fontFamily: fonts.barlow,
+    fontSize: 12,
+    color: colors.muted,
+    marginTop: 1,
+  },
+  frameStatsChevron: {
+    fontFamily: fonts.barlowCondensed,
+    fontSize: 24,
+    color: colors.muted,
   },
 })
 

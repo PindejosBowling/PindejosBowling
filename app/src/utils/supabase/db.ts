@@ -938,3 +938,93 @@ export const weeks = {
   update: (id: string, data: TablesUpdate<'weeks'>) =>
     supabase.from('weeks').update(data).eq('id', id),
 }
+
+// ── Lanetalk imports ────────────────────────────────────────────────────────
+// One row per parsed game from a Lanetalk "shared session" link. Writes happen
+// server-side in the `lanetalk-import` Edge Function (fetch → parse → fuzzy-match
+// the bowler to a slotted player → classify Official/Recreational by score);
+// the app only invokes it and reads the results (admin-gated via RLS).
+
+/** Per-game line in the Edge Function's response summary. */
+export interface LanetalkImportGameSummary {
+  gameNumber: number
+  score: number | null
+  classification: 'official' | 'recreational'
+}
+
+/** Shape returned by the `lanetalk-import` Edge Function. */
+export interface LanetalkImportSummary {
+  ok: boolean
+  weekResolved?: boolean
+  weekId?: string
+  matchedPlayer?: string | null
+  games?: LanetalkImportGameSummary[]
+  officialCount?: number
+  recreationalCount?: number
+  message?: string
+  /** Failure stage tag from the Edge Function (e.g. 'fetch_status', 'auth_not_admin'). */
+  stage?: string
+  /** Per-request id — present on every response; grep the function logs by it. */
+  reqId?: string
+  /** Stage-specific diagnostics (status, bodySnippet, parsed player/date, etc.). */
+  debug?: Record<string, unknown>
+}
+
+export const lanetalkImports = {
+  // Invoke the Edge Function to fetch, parse, match and write a link's games.
+  // The function returns recoverable failures as 200 { ok:false, … } but auth
+  // (403) and server (500) failures as non-2xx — for those, supabase-js puts a
+  // generic FunctionsHttpError in `error` and the real JSON body (with stage /
+  // message / debug) on error.context. Normalize both into one summary so the
+  // caller always sees the function's actual message and diagnostics.
+  run: async (url: string): Promise<LanetalkImportSummary> => {
+    const { data, error } = await supabase.functions.invoke<LanetalkImportSummary>(
+      'lanetalk-import', { body: { url } },
+    )
+    if (error) {
+      const ctx = (error as { context?: unknown }).context
+      if (ctx instanceof Response) {
+        try {
+          const body = await ctx.json()
+          if (body && typeof body === 'object') return body as LanetalkImportSummary
+        } catch { /* body wasn't JSON — fall through to the generic message */ }
+      }
+      return { ok: false, stage: 'invoke', message: error.message ?? 'Import failed' }
+    }
+    return data ?? { ok: false, stage: 'invoke', message: 'Import failed (empty response)' }
+  },
+  listRecent: () =>
+    supabase
+      .from('lanetalk_game_imports')
+      .select('*, players(name), weeks(week_number, bowled_at)')
+      .order('created_at', { ascending: false })
+      .limit(200),
+  listBySourceUrl: (url: string) =>
+    supabase
+      .from('lanetalk_game_imports')
+      .select('*, players(name)')
+      .eq('source_url', url)
+      .order('game_number'),
+  // Every imported game for one player, oldest first — frame-level game details.
+  // Note: lanetalk_game_imports RLS is admin-read-only, so non-admins get zero
+  // rows (which also hides the "Game Details" entry point on PlayerDetail).
+  listByPlayer: (playerId: string) =>
+    supabase
+      .from('lanetalk_game_imports')
+      .select('game_number, score, played_at, source_url, classification, payload')
+      .eq('player_id', playerId)
+      .order('played_at', { ascending: true, nullsFirst: true })
+      .order('game_number', { ascending: true }),
+  // Whether a player has any imported games — drives the PlayerDetail entry point.
+  countByPlayer: (playerId: string) =>
+    supabase
+      .from('lanetalk_game_imports')
+      .select('id', { count: 'exact', head: true })
+      .eq('player_id', playerId),
+  // Admin re-classification of a single imported game (Official ⇄ Recreational).
+  setClassification: (id: string, classification: 'official' | 'recreational') =>
+    supabase
+      .from('lanetalk_game_imports')
+      .update({ classification })
+      .eq('id', id),
+}
