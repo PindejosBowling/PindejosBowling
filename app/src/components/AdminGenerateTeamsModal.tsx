@@ -324,6 +324,12 @@ export default function AdminGenerateTeamsModal({ visible, onClose }: Props) {
       const { error: eMl } = await betMarkets.syncMoneylineForWeek(weekId)
       if (eMl) console.warn('Failed to sync moneyline markets:', eMl.message)
 
+      // Fresh matchups put the week back in a pre-game state: lines closed by
+      // Start Game before the regen must reopen (survivors keep their status
+      // through the syncs, which only create/prune).
+      const { error: eReopen } = await betMarkets.reopenOUForWeek(weekId)
+      if (eReopen) console.warn('Failed to reopen O/U markets:', eReopen.message)
+
       showToast('Teams saved', 'success')
       set({ genTeams: null, genSwapTarget: null })
       onClose()

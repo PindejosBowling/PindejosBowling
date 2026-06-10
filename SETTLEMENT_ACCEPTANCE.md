@@ -31,10 +31,15 @@ double-mint, double-pay, or double-garnish).
 
 ### A1. Score credit (pincome mint) — the economy's only faucet
 
-- [ ] **V1** Real player with scores in week N → after archive, one `score_credit` row per
+- [x] **V1** Real player with scores in week N → after archive, one `score_credit` row per
   game (`Week N Game G: X pins`). Observe: PlayerPinsinoScreen → Activity ("PINCOME" rows),
   balance ↑, PinsinoScreen leaderboard reorders.
+  *Accepted 2026-06-10 (S2W6): two credits (150/175), exact descriptions, balance +325;
+  ledger + DB verified; hard-unarchive reversed both rows exactly.*
 - [ ] **V2** Fill-in player (`is_fill = true`) and player with no score → **no** credit rows.
+  *No-score half accepted 2026-06-10: unscored in-player got zero ledger rows, their O/U
+  markets went `closed` ungraded, and (by the `score IS NOT NULL` stats convention) no
+  standings W/L. Fill-in half deferred — fold into the I9 cycle (unscored-fills roster).*
 
 ### A2. Over/Under bet settlement (`bet_payout` / `bet_refund`)
 
@@ -174,7 +179,10 @@ triggers on `rsvp`/`team_slots`/`games`, and a no-pending-bets backstop in
   triggers fire regardless of client sync calls). Verify markets track the change.
 - [ ] **I10** Clear Matchups (Reset): teams wiped → moneylines cascade-refund; O/U
   ownership reverts to RSVP and the explicit sync recreates lines for all in-players
-  (including any pruned while undrafted).
+  (including any pruned while undrafted). *Also verify the 2026-06-10 finding/fix:
+  lines closed by Start Game must come back `open` after Clear Matchups **and** after
+  team regen (`reopenOUForWeek` — surviving lines used to stay stranded `closed`,
+  unbettable with no reopen toggle visible).*
 
 **Backstop (the fail-safe — verify both branches):**
 

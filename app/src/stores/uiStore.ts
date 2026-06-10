@@ -20,8 +20,12 @@ interface UiStore {
   h2hP2: string | null
   historySeason: string | null
   toasts: Toast[]
+  // Bumped by useWeekClock (Realtime `weeks` events / app foreground) so
+  // week-derived UI (AppHeader) refetches the current week from the DB.
+  weekVersion: number
   set: (partial: Partial<UiStore>) => void
   showToast: (msg: string, type?: string) => void
+  bumpWeekVersion: () => void
 }
 
 export const useUiStore = create<UiStore>((set, get) => ({
@@ -38,7 +42,9 @@ export const useUiStore = create<UiStore>((set, get) => ({
   h2hP2: null,
   historySeason: null,
   toasts: [],
+  weekVersion: 0,
   set: (partial) => set(partial),
+  bumpWeekVersion: () => set((state) => ({ weekVersion: state.weekVersion + 1 })),
   showToast: (msg, type = '') => {
     const id = Date.now() + Math.random()
     set((state) => ({ toasts: [...state.toasts, { id, msg, type }] }))

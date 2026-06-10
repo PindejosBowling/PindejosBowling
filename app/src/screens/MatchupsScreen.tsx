@@ -133,6 +133,9 @@ export default function MatchupsScreen() {
       // in-players that were pruned while undrafted. (The roster-change DB
       // triggers can't fire here: the cascade deletes resolve to no week.)
       await betMarkets.syncOUForWeek(weekId)
+      // The reset puts the week back in a pre-game state: lines closed by Start
+      // Game must reopen rather than stay stranded unbettable.
+      await betMarkets.reopenOUForWeek(weekId)
       await reload()
     }
     if (Platform.OS === 'web') {

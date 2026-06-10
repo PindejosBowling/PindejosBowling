@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity } from 'react-native'
 import { colors, fonts } from '../theme'
 import { weeks, seasons } from '../utils/supabase/db'
 import { useAuthStore } from '../stores/authStore'
+import { useUiStore } from '../stores/uiStore'
 import ProfileMenuModal from './ProfileMenuModal'
 import PlayerAvatar from './PlayerAvatar'
 
@@ -12,13 +13,14 @@ export default function AppHeader() {
   const [showProfile, setShowProfile] = useState(false)
   const playerName = useAuthStore(s => s.playerName)
   const playerId = useAuthStore(s => s.playerId)
+  const weekVersion = useUiStore(s => s.weekVersion)
 
   useEffect(() => {
     Promise.all([weeks.getCurrent(), seasons.getCurrent()]).then(([weekRes, seasonRes]) => {
       setWeekNumber(weekRes.data?.week_number ?? null)
       setSeasonNumber(seasonRes.data?.number ?? null)
     })
-  }, [])
+  }, [weekVersion])
 
   const weekLabel = weekNumber != null ? `Week ${weekNumber}` : 'Week 1'
   const seasonLabel = seasonNumber != null ? `Season ${seasonNumber}` : ''

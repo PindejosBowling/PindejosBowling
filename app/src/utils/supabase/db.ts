@@ -425,6 +425,17 @@ export const betMarkets = {
       .eq('market_type', 'moneyline')
       .eq('game_number', gameNumber)
       .eq('status', status === 'closed' ? 'open' : 'closed'),
+  // Reopen every closed O/U line for a week. Clear Matchups returns the week to a
+  // pre-game state, so Start Game's betting suspension must not survive the reset —
+  // surviving lines (both players still RSVP'd in) would otherwise be stranded
+  // unbettable with no games row left to expose the reopen toggle.
+  reopenOUForWeek: (weekId: string) =>
+    supabase
+      .from('bet_markets')
+      .update({ status: 'open' })
+      .eq('week_id', weekId)
+      .eq('market_type', 'over_under')
+      .eq('status', 'closed'),
   // Create/refund of O/U markets (SECURITY DEFINER, server-side). Line ownership:
   // RSVP owns the lines until the week has teams; the roster (team_slots) owns
   // them after — ineligible subjects and game numbers outside the schedule are
