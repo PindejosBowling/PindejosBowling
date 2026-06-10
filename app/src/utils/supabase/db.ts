@@ -996,7 +996,7 @@ export const lanetalkImports = {
   listRecent: () =>
     supabase
       .from('lanetalk_game_imports')
-      .select('*, players(name)')
+      .select('*, players(name), weeks(week_number, bowled_at)')
       .order('created_at', { ascending: false })
       .limit(200),
   listBySourceUrl: (url: string) =>

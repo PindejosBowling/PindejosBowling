@@ -20,7 +20,7 @@
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { parseLanetalk } from './parseLanetalk.ts'
-import { classifyGames, chooseSlot, matchPlayer, type SlotCandidate, type SlotOfficialScores } from './match.ts'
+import { classifyGames, chooseSlot, matchPlayer, type OfficialScore, type SlotCandidate, type SlotOfficialScores } from './match.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -221,18 +221,20 @@ Deno.serve(async (req) => {
     if (matched) {
       const { data: scoreRows, error: scoreErr } = await admin
         .from('scores')
-        .select('score, team_slot_id, team_slots!inner(teams!inner(week_id))')
+        .select('score, team_slot_id, games!inner(game_number), team_slots!inner(teams!inner(week_id))')
         .eq('team_slots.teams.week_id', weekId)
         .in('team_slot_id', matched.teamSlotIds)
         .not('score', 'is', null)
       if (scoreErr) return fail('score_lookup', `Score lookup failed: ${scoreErr.message}`, 500, { weekId, teamSlotIds: matched.teamSlotIds, error: scoreErr.message })
-      const bySlot = new Map<string, number[]>(matched.teamSlotIds.map(id => [id, []]))
+      const bySlot = new Map<string, OfficialScore[]>(matched.teamSlotIds.map(id => [id, []]))
       for (const r of (scoreRows ?? []) as any[]) {
-        bySlot.get(r.team_slot_id as string)?.push(r.score as number)
+        bySlot.get(r.team_slot_id as string)?.push({ gameNumber: r.games.game_number as number, score: r.score as number })
       }
+      // Order each slot's scores by the league game number so classification can
+      // align them positionally against the session's games (in play order).
       const slots: SlotOfficialScores[] = matched.teamSlotIds.map(id => ({
         teamSlotId: id,
-        officialScores: bySlot.get(id) ?? [],
+        officialScores: (bySlot.get(id) ?? []).sort((a, b) => a.gameNumber - b.gameNumber),
       }))
       chosenSlot = chooseSlot(session.games, slots)
     }
@@ -247,11 +249,13 @@ Deno.serve(async (req) => {
 
     // ── Classify + build one row per game ─────────────────────────────────────
     const classified = classifyGames(session.games, officialScores)
-    const rows = classified.map(({ game, classification }) => {
+    const rows = classified.map(({ game, classification, gameNumber }) => {
       const teamSlotId = classification === 'official' && chosenSlot ? chosenSlot.teamSlotId : null
+      // game_number is the resolved league/derived number; the raw Lanetalk session
+      // position is preserved inside `payload` (via the `...game` spread).
       return {
         source_url: url,
-        game_number: game.game_number,
+        game_number: gameNumber,
         classification,
         player_id: matched?.playerId ?? null,
         team_slot_id: teamSlotId,
@@ -275,8 +279,8 @@ Deno.serve(async (req) => {
       weekResolved: true,
       weekId,
       matchedPlayer: matched?.name ?? null,
-      games: classified.map(({ game, classification }) => ({
-        gameNumber: game.game_number,
+      games: classified.map(({ game, classification, gameNumber }) => ({
+        gameNumber,
         score: game.score,
         classification,
       })),

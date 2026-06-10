@@ -118,9 +118,24 @@ function multisetOverlap(a: number[], b: number[]): number {
   return count
 }
 
+/** One recorded official score and the league game it belongs to (games.game_number). */
+export interface OfficialScore {
+  gameNumber: number
+  score: number
+}
+
 export interface SlotOfficialScores {
   teamSlotId: string
-  officialScores: number[]
+  /** This slot's official scores, ordered by the league game number (game 1, 2, …). */
+  officialScores: OfficialScore[]
+}
+
+/** Play order: by played_at (nulls last), then the Lanetalk session position. */
+function byPlayOrder(a: LanetalkGame, b: LanetalkGame): number {
+  const ta = a.played_at ?? ''
+  const tb = b.played_at ?? ''
+  if (ta !== tb) return ta < tb ? -1 : 1
+  return a.game_number - b.game_number
 }
 
 /**
@@ -142,7 +157,7 @@ export function chooseSlot(
   let best = slots[0]
   let bestOverlap = -1
   for (const slot of slots) {
-    const overlap = multisetOverlap(sessionScores, slot.officialScores)
+    const overlap = multisetOverlap(sessionScores, slot.officialScores.map(o => o.score))
     if (overlap > bestOverlap) {
       bestOverlap = overlap
       best = slot
@@ -154,30 +169,48 @@ export function chooseSlot(
 export interface ClassifiedGame {
   game: LanetalkGame
   classification: 'official' | 'recreational'
+  /**
+   * The game's resolved number. Official games take their league game number
+   * (from the matched recorded score); recreational games are numbered
+   * sequentially after the highest official number, in play order. Unique within
+   * a session, so it can be stored directly as game_number.
+   */
+  gameNumber: number
 }
 
 /**
- * Greedy one-to-one classification in play order: a parsed game whose total
- * equals an as-yet-unconsumed official score is Official; the rest Recreational.
- * With no official scores (e.g. unmatched player) every game is Recreational.
+ * Classify + number games against the slot's official scores by an ordered
+ * (positional) subsequence match rather than an any-position value match. Walk
+ * the session's games in play order alongside the official scores in league game
+ * order: each game whose total equals the next still-unmatched official score is
+ * Official and takes that league game number; the pointer then advances.
+ * Everything else is Recreational and, in a second pass, is numbered sequentially
+ * starting just past the highest official game number. Because the league
+ * ordering is authoritative, duplicate totals resolve positionally — official
+ * games never "conflict". With no official scores (e.g. unmatched player) every
+ * game is Recreational, numbered 1..N in play order.
  */
-export function classifyGames(games: LanetalkGame[], officialScores: number[]): ClassifiedGame[] {
-  const remaining = [...officialScores]
-  const ordered = [...games].sort((a, b) => {
-    const ta = a.played_at ?? ''
-    const tb = b.played_at ?? ''
-    if (ta !== tb) return ta < tb ? -1 : 1
-    return a.game_number - b.game_number
-  })
+export function classifyGames(games: LanetalkGame[], officialScores: OfficialScore[]): ClassifiedGame[] {
+  const ordered = [...games].sort(byPlayOrder)
   const result = new Map<LanetalkGame, ClassifiedGame>()
+  // Pass 1: official subsequence match — officials take their league game number.
+  let ptr = 0
+  let maxOfficial = 0
   for (const game of ordered) {
-    const idx = game.score == null ? -1 : remaining.indexOf(game.score)
-    if (idx >= 0) {
-      remaining.splice(idx, 1)
-      result.set(game, { game, classification: 'official' })
+    if (ptr < officialScores.length && game.score != null && game.score === officialScores[ptr].score) {
+      const gameNumber = officialScores[ptr].gameNumber
+      result.set(game, { game, classification: 'official', gameNumber })
+      if (gameNumber > maxOfficial) maxOfficial = gameNumber
+      ptr++
     } else {
-      result.set(game, { game, classification: 'recreational' })
+      result.set(game, { game, classification: 'recreational', gameNumber: 0 })
     }
+  }
+  // Pass 2: number recreational games sequentially after the last official one.
+  let recNext = maxOfficial + 1
+  for (const game of ordered) {
+    const c = result.get(game)!
+    if (c.classification === 'recreational') c.gameNumber = recNext++
   }
   // Preserve the caller's original game order in the output.
   return games.map(g => result.get(g)!)

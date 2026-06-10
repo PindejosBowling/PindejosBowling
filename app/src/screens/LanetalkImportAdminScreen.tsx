@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useCallback } from 'react'
 import {
   View, Text, ScrollView, StyleSheet, RefreshControl, TextInput, TouchableOpacity, ActivityIndicator, Platform,
 } from 'react-native'
@@ -29,6 +29,8 @@ const CLASSIFICATION_OPTIONS: { key: Classification; label: string; color: strin
 ]
 
 interface GroupGame {
+  // game_number is resolved by the importer: official games take their league
+  // game number, recreational games are numbered sequentially after them.
   id: string
   gameNumber: number
   score: number | null
@@ -41,6 +43,19 @@ interface ImportGroup {
   playerName: string | null
   createdAt: string
   games: GroupGame[]
+}
+interface WeekGroup {
+  weekKey: string
+  weekNumber: number | null
+  bowledAt: string | null
+  players: ImportGroup[]
+}
+
+function formatDate(bowledAt: string | null): string {
+  if (!bowledAt) return ''
+  const [year, month, day] = bowledAt.split('-').map(Number)
+  const d = new Date(year, month - 1, day)
+  return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })
 }
 
 export default function LanetalkImportAdminScreen() {
@@ -59,19 +74,29 @@ export default function LanetalkImportAdminScreen() {
   const [classEdits, setClassEdits] = useState<Record<string, Classification>>({})
   const [savingIds, setSavingIds] = useState<Set<string>>(new Set())
 
-  const groups = useMemo<ImportGroup[]>(() => {
-    // Group rows that share the same week_id AND player_id into one player's set
-    // of records. Rows without a matched player (player_id null) can't be merged
-    // by player, so they fall back to grouping by source_url.
-    const map = new Map<string, ImportGroup>()
+  const weekGroups = useMemo<WeekGroup[]>(() => {
+    // Two-level grouping: by the league week each import resolved to, then within
+    // a week by player. Rows that share week_id AND player_id collapse into one
+    // player set; rows without a matched player (player_id null) fall back to
+    // grouping by source_url. Imports whose week was deleted (week_id null) bucket
+    // under a single "no week" group.
+    const playerMap = new Map<string, ImportGroup>()
+    const weeks = new Map<string, WeekGroup>()
     for (const r of rawImports) {
+      const weekKey = r.week_id ?? 'unassigned'
+      let wg = weeks.get(weekKey)
+      if (!wg) {
+        wg = { weekKey, weekNumber: r.weeks?.week_number ?? null, bowledAt: r.weeks?.bowled_at ?? null, players: [] }
+        weeks.set(weekKey, wg)
+      }
       const key = r.player_id && r.week_id
         ? `${r.week_id}::${r.player_id}`
         : `url::${r.source_url}`
-      let g = map.get(key)
+      let g = playerMap.get(key)
       if (!g) {
         g = { key, sourceUrl: r.source_url, playerName: r.players?.name ?? null, createdAt: r.created_at, games: [] }
-        map.set(key, g)
+        playerMap.set(key, g)
+        wg.players.push(g)
       }
       g.games.push({
         id: r.id,
@@ -81,16 +106,37 @@ export default function LanetalkImportAdminScreen() {
         playedAt: r.played_at ?? null,
       })
     }
-    const out = [...map.values()]
-    // Sort each group's games first-to-last by played_at (nulls last, then game number).
-    out.forEach(g => g.games.sort((a, b) => {
-      if (a.playedAt && b.playedAt) return a.playedAt < b.playedAt ? -1 : a.playedAt > b.playedAt ? 1 : a.gameNumber - b.gameNumber
-      if (a.playedAt) return -1
-      if (b.playedAt) return 1
-      return a.gameNumber - b.gameNumber
-    }))
+    // Order each player group's games by their resolved game number (official games
+    // 1..K first, then recreational games numbered after them).
+    for (const g of playerMap.values()) {
+      g.games.sort((a, b) => a.gameNumber - b.gameNumber)
+    }
+    // Newest week first; the "no week" bucket sinks to the bottom.
+    const out = [...weeks.values()]
+    out.sort((a, b) => {
+      if (a.weekNumber == null) return 1
+      if (b.weekNumber == null) return -1
+      return b.weekNumber - a.weekNumber
+    })
     return out
   }, [rawImports])
+
+  // The most-recent week (the one we're importing into) defaults to expanded so
+  // it's ready to review on load; older weeks default collapsed. `toggledWeeks`
+  // holds only the weeks the admin has flipped away from that default.
+  const [toggledWeeks, setToggledWeeks] = useState<Set<string>>(new Set())
+  const mostRecentWeekKey = weekGroups[0]?.weekKey ?? null
+  const isWeekExpanded = useCallback((weekKey: string) => {
+    const defaultExpanded = weekKey === mostRecentWeekKey
+    return toggledWeeks.has(weekKey) ? !defaultExpanded : defaultExpanded
+  }, [toggledWeeks, mostRecentWeekKey])
+  const toggleWeek = useCallback((weekKey: string) => {
+    setToggledWeeks(prev => {
+      const next = new Set(prev)
+      next.has(weekKey) ? next.delete(weekKey) : next.add(weekKey)
+      return next
+    })
+  }, [])
 
   async function runImport() {
     const link = url.trim()
@@ -202,29 +248,50 @@ export default function LanetalkImportAdminScreen() {
         )}
 
         <Text style={styles.sectionHeader}>RECENT IMPORTS</Text>
-        {groups.length === 0 ? (
+        {weekGroups.length === 0 ? (
           <View style={styles.emptyCard}><Text style={styles.emptyText}>No imports yet.</Text></View>
         ) : (
-          groups.map(g => (
-            <View key={g.key} style={styles.groupCard}>
-              <View style={styles.groupHeader}>
-                <Text style={styles.groupPlayer}>{g.playerName ?? 'No player match'}</Text>
-                <Text style={styles.groupUrl} numberOfLines={1}>{g.sourceUrl}</Text>
+          weekGroups.map(wg => {
+            const expanded = isWeekExpanded(wg.weekKey)
+            const title = wg.weekNumber != null
+              ? `Week ${wg.weekNumber}${wg.bowledAt ? ` - ${formatDate(wg.bowledAt)}` : ''}`
+              : 'No week match'
+            return (
+              <View key={wg.weekKey} style={styles.weekCard}>
+                <TouchableOpacity
+                  style={[styles.weekHeader, expanded && styles.weekHeaderExpanded]}
+                  onPress={() => toggleWeek(wg.weekKey)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.weekTitle}>{title}</Text>
+                  <Text style={[styles.chevron, expanded && styles.chevronUp]}>›</Text>
+                </TouchableOpacity>
+
+                {expanded && wg.players.map((g, gi) => (
+                  <View key={g.key} style={[styles.groupCard, gi > 0 && styles.groupCardBorder]}>
+                    <View style={styles.groupHeader}>
+                      <Text style={styles.groupPlayer}>{g.playerName ?? 'No player match'}</Text>
+                      <Text style={styles.groupUrl} numberOfLines={1}>{g.sourceUrl}</Text>
+                    </View>
+                    {g.games.map((game) => (
+                      <View key={game.id} style={styles.gameRow}>
+                        <Text style={[styles.gameCol, styles.gameLabel]}>Game {game.gameNumber}</Text>
+                        <Text style={[styles.gameCol, styles.gameScore]}>{game.score ?? '—'}</Text>
+                        <View style={[styles.gameCol, styles.gameClassCol]}>
+                          <Dropdown
+                            options={CLASSIFICATION_OPTIONS}
+                            value={classEdits[game.id] ?? game.classification}
+                            onChange={(key) => changeClassification(game, key)}
+                            disabled={savingIds.has(game.id)}
+                          />
+                        </View>
+                      </View>
+                    ))}
+                  </View>
+                ))}
               </View>
-              {g.games.map((game) => (
-                <View key={game.id} style={styles.gameRow}>
-                  <Text style={styles.gameLabel}>Game {game.gameNumber}</Text>
-                  <Text style={styles.gameScore}>{game.score ?? '—'}</Text>
-                  <Dropdown
-                    options={CLASSIFICATION_OPTIONS}
-                    value={classEdits[game.id] ?? game.classification}
-                    onChange={(key) => changeClassification(game, key)}
-                    disabled={savingIds.has(game.id)}
-                  />
-                </View>
-              ))}
-            </View>
-          ))
+            )
+          })
         )}
       </ScrollView>
 
@@ -308,14 +375,34 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     marginLeft: 4,
   },
-  groupCard: {
+  weekCard: {
     backgroundColor: colors.surface,
     borderRadius: radius.cardMd,
     borderWidth: 1,
     borderColor: colors.border,
-    padding: 14,
     marginBottom: 12,
+    overflow: 'hidden',
   },
+  weekHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  weekHeaderExpanded: { borderBottomWidth: 1, borderBottomColor: colors.border },
+  weekTitle: {
+    flex: 1,
+    fontFamily: fonts.barlowCondensed,
+    fontSize: 16,
+    color: colors.text,
+    letterSpacing: 0.3,
+    marginRight: 8,
+  },
+  chevron: { fontFamily: fonts.barlowCondensed, fontSize: 20, color: colors.muted, transform: [{ rotate: '90deg' }] },
+  chevronUp: { transform: [{ rotate: '-90deg' }] },
+  groupCard: { paddingHorizontal: 14, paddingVertical: 12 },
+  groupCardBorder: { borderTopWidth: 1, borderTopColor: colors.border },
   groupHeader: { marginBottom: 8 },
   groupPlayer: { fontFamily: fonts.barlowCondensed, fontSize: 17, color: colors.text, letterSpacing: 0.3 },
   groupUrl: { fontFamily: fonts.barlow, fontSize: 11, color: colors.muted2, marginTop: 2 },
@@ -326,8 +413,10 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: colors.border,
   },
-  gameLabel: { fontFamily: fonts.barlowCondensed, fontSize: 15, color: colors.text, flex: 1 },
-  gameScore: { fontFamily: fonts.barlowCondensed, fontSize: 18, color: colors.text, width: 48, textAlign: 'right', marginRight: 12 },
+  gameCol: { flex: 1 },
+  gameClassCol: { alignItems: 'center' },
+  gameLabel: { fontFamily: fonts.barlowCondensed, fontSize: 15, color: colors.text, textAlign: 'center' },
+  gameScore: { fontFamily: fonts.barlowCondensed, fontSize: 18, color: colors.text, textAlign: 'center' },
   emptyCard: {
     backgroundColor: colors.surface,
     borderRadius: radius.cardMd,
