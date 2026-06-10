@@ -10,6 +10,7 @@ import { MoreStackParamList } from '../navigation/types'
 import ScreenHeader from '../components/ScreenHeader'
 import LoadingView from '../components/LoadingView'
 import Toast from '../components/Toast'
+import Dropdown from '../components/Dropdown'
 import { useRefresh } from '../hooks/useRefresh'
 import { useAuthStore } from '../stores/authStore'
 import { useUiStore } from '../stores/uiStore'
@@ -20,12 +21,22 @@ type Nav = NativeStackNavigationProp<MoreStackParamList>
 
 const monoFont = Platform.select({ ios: 'Menlo', android: 'monospace', default: 'monospace' })
 
+type Classification = 'official' | 'recreational'
+
+const CLASSIFICATION_OPTIONS: { key: Classification; label: string; color: string; tint: string }[] = [
+  { key: 'official', label: 'Official', color: colors.success, tint: 'rgba(74,222,128,0.15)' },
+  { key: 'recreational', label: 'Recreational', color: colors.muted, tint: 'rgba(122,122,133,0.15)' },
+]
+
 interface GroupGame {
+  id: string
   gameNumber: number
   score: number | null
-  classification: 'official' | 'recreational'
+  classification: Classification
+  playedAt: string | null
 }
 interface ImportGroup {
+  key: string
   sourceUrl: string
   playerName: string | null
   createdAt: string
@@ -43,19 +54,41 @@ export default function LanetalkImportAdminScreen() {
   const [busy, setBusy] = useState(false)
   const [result, setResult] = useState<LanetalkImportSummary | null>(null)
   const [showDebug, setShowDebug] = useState(false)
+  // Optimistic per-game classification edits, keyed by row id, plus the set of
+  // rows currently being saved (to disable their toggle while in flight).
+  const [classEdits, setClassEdits] = useState<Record<string, Classification>>({})
+  const [savingIds, setSavingIds] = useState<Set<string>>(new Set())
 
   const groups = useMemo<ImportGroup[]>(() => {
+    // Group rows that share the same week_id AND player_id into one player's set
+    // of records. Rows without a matched player (player_id null) can't be merged
+    // by player, so they fall back to grouping by source_url.
     const map = new Map<string, ImportGroup>()
     for (const r of rawImports) {
-      let g = map.get(r.source_url)
+      const key = r.player_id && r.week_id
+        ? `${r.week_id}::${r.player_id}`
+        : `url::${r.source_url}`
+      let g = map.get(key)
       if (!g) {
-        g = { sourceUrl: r.source_url, playerName: r.players?.name ?? null, createdAt: r.created_at, games: [] }
-        map.set(r.source_url, g)
+        g = { key, sourceUrl: r.source_url, playerName: r.players?.name ?? null, createdAt: r.created_at, games: [] }
+        map.set(key, g)
       }
-      g.games.push({ gameNumber: r.game_number, score: r.score, classification: r.classification })
+      g.games.push({
+        id: r.id,
+        gameNumber: r.game_number,
+        score: r.score,
+        classification: r.classification,
+        playedAt: r.played_at ?? null,
+      })
     }
     const out = [...map.values()]
-    out.forEach(g => g.games.sort((a, b) => a.gameNumber - b.gameNumber))
+    // Sort each group's games first-to-last by played_at (nulls last, then game number).
+    out.forEach(g => g.games.sort((a, b) => {
+      if (a.playedAt && b.playedAt) return a.playedAt < b.playedAt ? -1 : a.playedAt > b.playedAt ? 1 : a.gameNumber - b.gameNumber
+      if (a.playedAt) return -1
+      if (b.playedAt) return 1
+      return a.gameNumber - b.gameNumber
+    }))
     return out
   }, [rawImports])
 
@@ -79,6 +112,24 @@ export default function LanetalkImportAdminScreen() {
       showToast(data.message ?? 'Import failed', 'error')
     } finally {
       setBusy(false)
+    }
+  }
+
+  async function changeClassification(game: GroupGame, next: Classification) {
+    if (next === (classEdits[game.id] ?? game.classification)) return
+    if (savingIds.has(game.id)) return
+    const prev = classEdits[game.id] ?? game.classification
+    setClassEdits(m => ({ ...m, [game.id]: next }))
+    setSavingIds(s => new Set(s).add(game.id))
+    try {
+      const { error } = await lanetalkImports.setClassification(game.id, next)
+      if (error) throw error
+      showToast(`Game ${game.gameNumber} marked ${next === 'official' ? 'Official' : 'Recreational'}`, 'success')
+    } catch (e: any) {
+      setClassEdits(m => ({ ...m, [game.id]: prev }))
+      showToast(e?.message ?? 'Could not update classification', 'error')
+    } finally {
+      setSavingIds(s => { const n = new Set(s); n.delete(game.id); return n })
     }
   }
 
@@ -155,26 +206,21 @@ export default function LanetalkImportAdminScreen() {
           <View style={styles.emptyCard}><Text style={styles.emptyText}>No imports yet.</Text></View>
         ) : (
           groups.map(g => (
-            <View key={g.sourceUrl} style={styles.groupCard}>
+            <View key={g.key} style={styles.groupCard}>
               <View style={styles.groupHeader}>
                 <Text style={styles.groupPlayer}>{g.playerName ?? 'No player match'}</Text>
                 <Text style={styles.groupUrl} numberOfLines={1}>{g.sourceUrl}</Text>
               </View>
-              {g.games.map(game => (
-                <View key={game.gameNumber} style={styles.gameRow}>
+              {g.games.map((game) => (
+                <View key={game.id} style={styles.gameRow}>
                   <Text style={styles.gameLabel}>Game {game.gameNumber}</Text>
                   <Text style={styles.gameScore}>{game.score ?? '—'}</Text>
-                  <View style={[
-                    styles.badge,
-                    game.classification === 'official' ? styles.badgeOfficial : styles.badgeRec,
-                  ]}>
-                    <Text style={[
-                      styles.badgeText,
-                      game.classification === 'official' ? styles.badgeTextOfficial : styles.badgeTextRec,
-                    ]}>
-                      {game.classification === 'official' ? 'Official' : 'Recreational'}
-                    </Text>
-                  </View>
+                  <Dropdown
+                    options={CLASSIFICATION_OPTIONS}
+                    value={classEdits[game.id] ?? game.classification}
+                    onChange={(key) => changeClassification(game, key)}
+                    disabled={savingIds.has(game.id)}
+                  />
                 </View>
               ))}
             </View>
@@ -282,12 +328,6 @@ const styles = StyleSheet.create({
   },
   gameLabel: { fontFamily: fonts.barlowCondensed, fontSize: 15, color: colors.text, flex: 1 },
   gameScore: { fontFamily: fonts.barlowCondensed, fontSize: 18, color: colors.text, width: 48, textAlign: 'right', marginRight: 12 },
-  badge: { borderRadius: radius.cardSm, paddingHorizontal: 10, paddingVertical: 4 },
-  badgeOfficial: { backgroundColor: 'rgba(74,222,128,0.15)' },
-  badgeRec: { backgroundColor: 'rgba(122,122,133,0.15)' },
-  badgeText: { fontFamily: fonts.barlowCondensed, fontSize: 12, letterSpacing: 0.4 },
-  badgeTextOfficial: { color: colors.success },
-  badgeTextRec: { color: colors.muted },
   emptyCard: {
     backgroundColor: colors.surface,
     borderRadius: radius.cardMd,

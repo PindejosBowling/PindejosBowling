@@ -1266,6 +1266,10 @@ ALTER TABLE lanetalk_game_imports ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "admin can read all" ON lanetalk_game_imports AS PERMISSIVE FOR SELECT TO authenticated
   USING ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
 
+CREATE POLICY "admin can update" ON lanetalk_game_imports AS PERMISSIVE FOR UPDATE TO authenticated
+  USING ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text))
+  WITH CHECK ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
+
 ALTER TABLE loan_ledger ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "admin can delete" ON loan_ledger AS PERMISSIVE FOR DELETE TO authenticated

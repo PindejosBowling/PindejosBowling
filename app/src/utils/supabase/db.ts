@@ -1021,4 +1021,10 @@ export const lanetalkImports = {
       .from('lanetalk_game_imports')
       .select('id', { count: 'exact', head: true })
       .eq('player_id', playerId),
+  // Admin re-classification of a single imported game (Official ⇄ Recreational).
+  setClassification: (id: string, classification: 'official' | 'recreational') =>
+    supabase
+      .from('lanetalk_game_imports')
+      .update({ classification })
+      .eq('id', id),
 }
