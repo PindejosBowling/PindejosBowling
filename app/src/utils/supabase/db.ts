@@ -939,12 +939,12 @@ export const weeks = {
     supabase.from('weeks').update(data).eq('id', id),
 }
 
-// Admin-only League Tools: atomic weekly archive + reversible unarchive.
+// Admin-only Archives: atomic weekly archive + reversible unarchive.
 // archive_week replaces the old multi-step client archive (lock → settle → next
 // week) with one transaction that also snapshots everything settlement touches.
 // unarchive_week restores the economy to the archive-time checkpoint, always
 // destroys week N+1, and (mode 'hard') unlocks the score lock. See ARCHIVE.md.
-export const leagueTools = {
+export const archives = {
   archiveWeek: (weekId: string) =>
     supabase.rpc('archive_week', { p_week_id: weekId }),
   // mode: 'soft' keeps is_archived (re-derive same scores); 'hard' reopens scores.

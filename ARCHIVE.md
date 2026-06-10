@@ -48,7 +48,7 @@ Problems:
 2. **A reversible mirror.** `unarchive_week(p_week_id, p_mode, p_force)` that restores the economy to
    the exact pre-archive checkpoint, **always destroys week N+1**, so re-running `archive_week(N)`
    re-derives everything fresh on a clean slate.
-3. **An admin "League Tools" screen** to drive it safely (LIFO guard + downstream-activity warning).
+3. **An admin "Archives" screen** to drive it safely (LIFO guard + downstream-activity warning).
 
 ---
 
@@ -220,7 +220,7 @@ event re-publishes; N+1 is recreated. A new `active` run + snapshot is written.
 
 ## 5. App layer
 
-- **`app/src/utils/supabase/db.ts`** — add a `leagueTools` object (mirror the `betMarkets`/`weeks`
+- **`app/src/utils/supabase/db.ts`** — add an `archives` object (mirror the `betMarkets`/`weeks`
   patterns):
   - `archiveWeek(weekId)` → `supabase.rpc('archive_week', { p_week_id: weekId })`
   - `unarchiveWeek(weekId, mode, force)` → `supabase.rpc('unarchive_week', { p_week_id: weekId, p_mode: mode, p_force: force })`
@@ -228,8 +228,8 @@ event re-publishes; N+1 is recreated. A new `active` run + snapshot is written.
   - A downstream-activity summary query for the confirmation sheet (counts of N+1 scores/bets/loans/pvp/rsvp).
 - **`app/src/components/AdminArchiveModal.tsx`** — replace the three
   `weeks.update` / `betMarkets.settleForWeek` / `weeks.insert` calls in `confirm()` with a single
-  `leagueTools.archiveWeek(activeWeek.id)`. Same UX, now atomic + audited.
-- **New screen `app/src/screens/LeagueToolsAdminScreen.tsx`** — gate with
+  `archives.archiveWeek(activeWeek.id)`. Same UX, now atomic + audited.
+- **New screen `app/src/screens/ArchivesScreen.tsx`** — gate with
   `const isAdmin = useAuthStore(s => s.role) === 'admin'` (same pattern as `PinsinoAdminScreen.tsx`).
   List archived weeks; each row offers **Soft Unarchive** and **Hard Unarchive**. On tap: a confirmation
   sheet that (a) explains the chosen mode's exact effect, (b) lists any N+1 downstream activity, (c) on
@@ -278,8 +278,8 @@ These differ from the older migration files; the live `schema.sql` is authoritat
 | `supabase/schema.sql` → `settle_pvp_challenge` (≈L3905) / `settle_pvp_for_week` (≈L4142) | PvP settlement + week-scoped `close_open_pvp_challenges`; feed event week-stamped. |
 | `supabase/migrations/20260610003542_refund_bets_before_market_delete.sql` | Trigger that makes N+1 deletion self-refunding. |
 | `app/src/components/AdminArchiveModal.tsx` | Refactor to one RPC. |
-| `app/src/utils/supabase/db.ts` | New `leagueTools` query object. |
-| `app/src/screens/LeagueToolsAdminScreen.tsx` (new) + `app/src/navigation/MoreStackNavigator.tsx` + `app/src/screens/MoreHomeScreen.tsx` | The admin UI + registration. |
+| `app/src/utils/supabase/db.ts` | New `archives` query object. |
+| `app/src/screens/ArchivesScreen.tsx` (new) + `app/src/navigation/MoreStackNavigator.tsx` + `app/src/screens/MoreHomeScreen.tsx` | The admin UI + registration. |
 
 ---
 

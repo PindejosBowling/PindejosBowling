@@ -20,7 +20,7 @@ import Toast from '../components/Toast'
 import { useRefresh } from '../hooks/useRefresh'
 import { useUiStore } from '../stores/uiStore'
 import { useAuthStore } from '../stores/authStore'
-import { seasons, leagueTools } from '../utils/supabase/db'
+import { seasons, archives } from '../utils/supabase/db'
 
 type Nav = NativeStackNavigationProp<MoreStackParamList>
 type Mode = 'soft' | 'hard'
@@ -62,7 +62,7 @@ const MODE_SUMMARY: { mode: Mode; name: string; scores: string; use: string }[] 
   },
 ]
 
-export default function LeagueToolsAdminScreen() {
+export default function ArchivesScreen() {
   const navigation = useNavigation<Nav>()
   const isAdmin = useAuthStore(s => s.role) === 'admin'
   const { showToast } = useUiStore()
@@ -84,7 +84,7 @@ export default function LeagueToolsAdminScreen() {
       setLoading(false)
       return
     }
-    const { data } = await leagueTools.listArchivedWeeks(season.id)
+    const { data } = await archives.listArchivedWeeks(season.id)
     setWeeks((data ?? []) as ArchivedWeek[])
     setLoading(false)
   }, [])
@@ -112,7 +112,7 @@ export default function LeagueToolsAdminScreen() {
     if (!pending) return
     setBusy(true)
     const { week, mode } = pending
-    const { error } = await leagueTools.unarchiveWeek(week.id, mode, forceArmed)
+    const { error } = await archives.unarchiveWeek(week.id, mode, forceArmed)
     setBusy(false)
 
     if (error) {
@@ -139,7 +139,7 @@ export default function LeagueToolsAdminScreen() {
   if (!isAdmin) {
     return (
       <SafeAreaView style={styles.safe} edges={['top']}>
-        <ScreenHeader title="League Tools" onBack={() => navigation.goBack()} />
+        <ScreenHeader title="Archives" onBack={() => navigation.goBack()} />
         <View style={styles.emptyCard}>
           <Text style={styles.emptyText}>Admins only</Text>
         </View>
@@ -155,7 +155,7 @@ export default function LeagueToolsAdminScreen() {
         contentContainerStyle={styles.content}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.muted} />}
       >
-        <ScreenHeader title="League Tools" onBack={() => navigation.goBack()} />
+        <ScreenHeader title="Archives" onBack={() => navigation.goBack()} />
 
         <Text style={styles.intro}>
           Unarchive a week to reverse its Pinsino settlement. Only the most recently

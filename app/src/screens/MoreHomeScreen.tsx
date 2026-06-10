@@ -39,7 +39,7 @@ export default function MoreHomeScreen() {
     { icon: '🖼️', label: 'Profile Pictures', onPress: () => navigation.navigate('ProfilePictures') },
     { icon: '🥇', label: 'End Season',     onPress: () => setShowEndSeason(true) },
     { icon: '🏁', label: 'Playoffs',       onPress: () => navigation.navigate('Playoffs') },
-    { icon: '🧰', label: 'League Tools',   onPress: () => navigation.navigate('LeagueToolsAdmin') },
+    { icon: '🗄️', label: 'Archives',       onPress: () => navigation.navigate('Archives') },
     { icon: '🎳', label: 'Lanetalk Import', onPress: () => navigation.navigate('LanetalkImportAdmin') },
   ]
 
