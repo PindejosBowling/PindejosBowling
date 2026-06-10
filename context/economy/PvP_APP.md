@@ -18,7 +18,7 @@ Handoff spec for the **app layer** (`app/src`) of the PvP Challenge Contracts fe
 
 **Prerequisite:** the database spec (`economy/PvP_DB.md`) is fully applied
 (`supabase db push`) **and** `app/src/utils/supabase/database.types.ts` has been
-regenerated — follow the type-regeneration step in `PAGE_CREATION.md`. These must exist
+regenerated — follow the type-regeneration step in [page-creation.md](../page-creation.md). These must exist
 in the generated types before starting:
 - Tables `pvp_challenges`, `pvp_challenge_offers`, `pvp_ledger`.
 - Column `pin_ledger.pvp_ledger_id` and the three new `pin_ledger.type` values
@@ -50,7 +50,7 @@ surfaces.
   RPC→toast→`onDone`→`onClose`); `AdminEndSeasonModal.tsx` (centered confirm card,
   disabled-while-saving).
 - Hub screen + tiles: `app/src/screens/PinsinoScreen.tsx`, `PinsinoAdminScreen.tsx`.
-- Admin list + cancel UX: `app/src/screens/PinsinoSportsbookScreen.tsx`.
+- Admin list + cancel UX: `app/src/screens/AdminSportsbookScreen.tsx`.
 - Opponent picker: `app/src/components/PlayerPickerModal.tsx`.
 - db.ts query objects + RPC wrappers: `app/src/utils/supabase/db.ts`.
 - Ledger row rendering: `app/src/components/LedgerRow.tsx`.
@@ -290,7 +290,7 @@ labels them. Optionally make a PvP pin row tappable → navigate to its
     `pvpChallenges.settle(id, winnerId|null, note)` (push/void map to the appropriate
     server outcome) → toast + reload.
   - **Cancel** (pre-settlement) → confirm → `pvpChallenges.cancel(id)` → toast + reload.
-    Mirror the cancel UX in `PinsinoSportsbookScreen`.
+    Mirror the cancel UX in `AdminSportsbookScreen`.
   - **Void** → confirm + note → `pvpChallenges.void(id, note)` → toast + reload.
 - Show escrow held and the offer history per contract (reuse the detail components).
 

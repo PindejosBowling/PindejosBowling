@@ -27,7 +27,7 @@ const VIEW_OPTIONS: { key: HouseView; label: string }[] = [
   { key: 'settled', label: 'Settled Bets' },
 ]
 
-export default function PinsinoSportsbookScreen() {
+export default function AdminSportsbookScreen() {
   const navigation = useNavigation<Nav>()
   const isAdmin = useAuthStore(s => s.role) === 'admin'
   const { showToast } = useUiStore()

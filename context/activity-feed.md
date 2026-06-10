@@ -198,7 +198,7 @@ PvP migration (`20260607180200_activity_feed_pvp.sql`) is the worked, copyable e
    authenticated`** for the new signature (it's a brand-new function object).
 3. **DB — publish** from the new feature's RPC (Recipe A step 2).
 4. **App — types.** Regenerate `app/src/utils/supabase/database.types.ts` (the
-   type-regeneration step in [PAGE_CREATION.md](../PAGE_CREATION.md)) so the new column +
+   type-regeneration step in [page-creation.md](page-creation.md)) so the new column +
    any RPC signature change are typed.
 5. **App — plumb the FK + render:**
    - `db.ts` `FEED_GRAPH` needs no change unless the new feature adds another `players` FK

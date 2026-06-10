@@ -128,7 +128,7 @@ export default function AdminGenerateTeamsModal({ visible, onClose }: Props) {
         setWeekRsvps(rsvps)
         // Default to two teams, sized to absorb the existing "In" RSVPs.
         const inCount = rsvps.filter((r: any) => r.status === 'in').length
-        const teamSize = Math.max(2, Math.min(6, Math.floor(inCount / 2)))
+        const teamSize = Math.max(1, Math.min(6, Math.ceil(inCount / 2)))
         set({ genNumTeams: 2, genTeamSize: teamSize, genAvgSource: 'current-season', genTeams: null })
       } else {
         setWeekId(null)
@@ -153,9 +153,13 @@ export default function AdminGenerateTeamsModal({ visible, onClose }: Props) {
     if (!weekId) { showToast('No active week', 'error'); return }
     setGenerating(true)
     try {
-      // Fetch scores for the selected avg source
-      const prevSeason = allSeasons.length >= 2 ? allSeasons[allSeasons.length - 2] : allSeasons[0]
-      const currentSeason = allSeasons[allSeasons.length - 1]
+      // Fetch scores for the selected avg source. "Current season" is the one
+      // that is active and out of registration — NOT the highest-numbered one,
+      // which may be a new season still in registration (with no scores yet).
+      const currentSeason = [...allSeasons].reverse().find((s: any) => s.is_active && !s.registration_open)
+      const prevSeason = currentSeason
+        ? [...allSeasons].reverse().find((s: any) => s.number < currentSeason.number)
+        : allSeasons[allSeasons.length - 1]
       let scoreRows: any[] = []
       if (genAvgSource === 'last-season' && prevSeason) {
         scoreRows = (await scores.listBySeason(prevSeason.id)).data ?? []
@@ -183,7 +187,23 @@ export default function AdminGenerateTeamsModal({ visible, onClose }: Props) {
         (acc, { pins, games }) => ({ pins: acc.pins + pins, games: acc.games + games }),
         { pins: 0, games: 0 },
       )
-      const leagueAvg = totals.games > 0 ? totals.pins / totals.games : 130
+      let leagueAvg: number
+      if (totals.games > 0) {
+        leagueAvg = totals.pins / totals.games
+      } else if (genAvgSource === 'current-season' && prevSeason) {
+        // Week 1: the current season has no archived scores yet, so anchor to
+        // the prior season's league average. A completed season always exists,
+        // so an empty result here means something is wrong — fail loudly.
+        const prevRows = (await scores.listBySeason(prevSeason.id)).data ?? []
+        const prevTotals = prevRows.reduce(
+          (acc, r: any) => ({ pins: acc.pins + (r.score ?? 0), games: acc.games + 1 }),
+          { pins: 0, games: 0 },
+        )
+        if (prevTotals.games === 0) throw new Error(`No archived scores found for prior season ${prevSeason.number}`)
+        leagueAvg = prevTotals.pins / prevTotals.games
+      } else {
+        throw new Error(`No archived scores found for avg source "${genAvgSource}"`)
+      }
 
       // Only "In" players are drafted. Empty slots needed to even out the teams
       // are left as null-player fills carrying the league average (Season 1 style).
@@ -221,8 +241,8 @@ export default function AdminGenerateTeamsModal({ visible, onClose }: Props) {
       })
 
       set({ genTeams: teamsArr, genSwapTarget: null })
-    } catch {
-      showToast('Failed to generate teams', 'error')
+    } catch (e: any) {
+      showToast(e?.message || 'Failed to generate teams', 'error')
     } finally {
       setGenerating(false)
     }
@@ -289,13 +309,12 @@ export default function AdminGenerateTeamsModal({ visible, onClose }: Props) {
       const { error: e5 } = await weeks.update(weekId, { is_confirmed: true })
       if (e5) throw e5
 
-      // O/U markets are owned by RSVP (games 1 & 2 already exist for every
-      // in-player) and reference weeks not teams, so the teams.removeByWeek wipe
-      // above leaves them intact. Team generation only needs to ADD markets for any
-      // schedule game number not yet present — in practice game 3 when numTeams ∈
-      // {3, 5}. Pass the schedule's distinct game numbers to the sync RPC, which
-      // creates the missing markets server-side (current-season avg → floor+0.5),
-      // idempotently.
+      // O/U line ownership: RSVP owns the lines until teams exist; the roster
+      // (team_slots) owns them once they do. The slot/game inserts above already
+      // fired the DB resync triggers (pruning lines for undrafted players and
+      // out-of-schedule game numbers, refunding their bets whole); these explicit
+      // syncs are belt-and-braces and create any still-missing markets
+      // (current-season avg → floor+0.5), idempotently.
       const scheduleGames = Array.from(new Set(buildSchedule(numTeams).map(s => s.game_number)))
       const { error: eSync } = await betMarkets.syncOUForWeek(weekId, scheduleGames)
       if (eSync) console.warn('Failed to sync O/U markets:', eSync.message)
@@ -304,6 +323,12 @@ export default function AdminGenerateTeamsModal({ visible, onClose }: Props) {
       // them now too (one even-money market per game). Idempotent.
       const { error: eMl } = await betMarkets.syncMoneylineForWeek(weekId)
       if (eMl) console.warn('Failed to sync moneyline markets:', eMl.message)
+
+      // Fresh matchups put the week back in a pre-game state: lines closed by
+      // Start Game before the regen must reopen (survivors keep their status
+      // through the syncs, which only create/prune).
+      const { error: eReopen } = await betMarkets.reopenOUForWeek(weekId)
+      if (eReopen) console.warn('Failed to reopen O/U markets:', eReopen.message)
 
       showToast('Teams saved', 'success')
       set({ genTeams: null, genSwapTarget: null })
@@ -346,7 +371,7 @@ export default function AdminGenerateTeamsModal({ visible, onClose }: Props) {
               <View style={styles.controlRow}>
                 <Text style={styles.controlLabel}>Players per Team</Text>
                 <ToggleGroup
-                  options={[2, 3, 4, 5, 6].map(n => ({ key: String(n) as any, label: String(n) }))}
+                  options={[1, 2, 3, 4, 5, 6].map(n => ({ key: String(n) as any, label: String(n) }))}
                   value={String(genTeamSize)}
                   onChange={v => set({ genTeamSize: parseInt(v), genTeams: null })}
                 />

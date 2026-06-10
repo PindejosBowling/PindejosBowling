@@ -12,6 +12,31 @@ export type Database = {
   __InternalSupabase: {
     PostgrestVersion: "14.5"
   }
+  graphql_public: {
+    Tables: {
+      [_ in never]: never
+    }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      graphql: {
+        Args: {
+          extensions?: Json
+          operationName?: string
+          query?: string
+          variables?: Json
+        }
+        Returns: Json
+      }
+    }
+    Enums: {
+      [_ in never]: never
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
+  }
   public: {
     Tables: {
       activity_feed_events: {
@@ -1924,6 +1949,111 @@ export type Database = {
           },
         ]
       }
+      week_archive_runs: {
+        Row: {
+          actor_id: string | null
+          archived_at: string
+          created_at: string
+          details: Json
+          id: string
+          reversed_at: string | null
+          reversed_mode: string | null
+          season_id: string
+          status: string
+          updated_at: string
+          week_id: string
+        }
+        Insert: {
+          actor_id?: string | null
+          archived_at?: string
+          created_at?: string
+          details?: Json
+          id?: string
+          reversed_at?: string | null
+          reversed_mode?: string | null
+          season_id: string
+          status?: string
+          updated_at?: string
+          week_id: string
+        }
+        Update: {
+          actor_id?: string | null
+          archived_at?: string
+          created_at?: string
+          details?: Json
+          id?: string
+          reversed_at?: string | null
+          reversed_mode?: string | null
+          season_id?: string
+          status?: string
+          updated_at?: string
+          week_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "week_archive_runs_actor_id_fkey"
+            columns: ["actor_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "week_archive_runs_season_id_fkey"
+            columns: ["season_id"]
+            isOneToOne: false
+            referencedRelation: "seasons"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "week_archive_runs_week_id_fkey"
+            columns: ["week_id"]
+            isOneToOne: false
+            referencedRelation: "weeks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      week_archive_snapshot: {
+        Row: {
+          created_at: string
+          id: string
+          kind: string
+          payload: Json | null
+          pk: string
+          run_id: string
+          table_name: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          kind: string
+          payload?: Json | null
+          pk: string
+          run_id: string
+          table_name: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          kind?: string
+          payload?: Json | null
+          pk?: string
+          run_id?: string
+          table_name?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "week_archive_snapshot_run_id_fkey"
+            columns: ["run_id"]
+            isOneToOne: false
+            referencedRelation: "week_archive_runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       weeks: {
         Row: {
           bowled_at: string | null
@@ -1973,6 +2103,10 @@ export type Database = {
       accept_pvp_challenge: {
         Args: { p_challenge_id: string }
         Returns: undefined
+      }
+      archive_week: {
+        Args: { p_force?: boolean; p_week_id: string }
+        Returns: string
       }
       cancel_bet: { Args: { p_bet_id: string }; Returns: undefined }
       cancel_bounty: { Args: { p_bounty_post_id: string }; Returns: undefined }
@@ -2108,8 +2242,12 @@ export type Database = {
         Args: { p_event_id: string }
         Returns: undefined
       }
+      resync_week_markets: {
+        Args: { p_moneyline?: boolean; p_week_id: string }
+        Returns: undefined
+      }
       settle_betting_for_week: {
-        Args: { p_week_id: string }
+        Args: { p_force?: boolean; p_week_id: string }
         Returns: undefined
       }
       settle_bounty: {
@@ -2163,6 +2301,10 @@ export type Database = {
         Returns: undefined
       }
       take_loan: { Args: { p_loan_product_id: string }; Returns: string }
+      unarchive_week: {
+        Args: { p_force?: boolean; p_week_id: string }
+        Returns: undefined
+      }
       void_pvp_challenge: {
         Args: { p_admin_note: string; p_challenge_id: string }
         Returns: undefined
@@ -2295,6 +2437,9 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
+  graphql_public: {
+    Enums: {},
+  },
   public: {
     Enums: {},
   },

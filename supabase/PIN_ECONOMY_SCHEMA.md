@@ -295,14 +295,14 @@ All `SECURITY DEFINER`, pinned `search_path`, identity from `auth.uid()`/`auth.j
 
 | RPC | Purpose |
 |---|---|
-| `sync_over_under_markets_for_week(week_id, extra_games default {})` | RSVP-driven create/refund of O/U markets + selections, derived from `rsvp` + `scores`. `extra_games` adds schedule games (team-gen game 3, or matchups admin "+ Add Game N"). Idempotent. `authenticated`. |
-| `remove_over_under_markets_for_game(week_id, game_number)` | **Admin.** Inverse of the sync's *create*: refund every bet on that week+game's O/U markets (delete the ledger pair[s] by `bet_id`, restoring balances — parlays touching the game refund whole) and drop the markets. Used when the matchups admin removes a schedule game (sync never prunes a removed game, since its target set only ever grows). |
+| `sync_over_under_markets_for_week(week_id, extra_games default {})` | Create/refund of O/U markets + selections. **Line eligibility ladder for (player, game N): week has games → the player has a non-fill participation row (`scores`, score nullable) for game N; teams but no games yet → non-fill slot; no teams → RSVP `'in'`.** **Target games: the `games` table is authoritative once a schedule exists** (∪ `extra_games`); before teams it's existing market numbers ∪ extras, default {1,2}. Prunes (market delete → trigger refund) any open/closed market with an ineligible subject **or an out-of-schedule game number**; never touches settled/void markets. Re-run automatically by the coupling triggers (below). Idempotent. `authenticated`. |
+| `remove_over_under_markets_for_game(week_id, game_number)` | **Admin.** Inverse of the sync's *create*: refund every bet on that week+game's O/U markets (delete the ledger pair[s] by `bet_id`, restoring balances — parlays touching the game refund whole) and drop the markets. Belt-and-braces alongside the games-delete trigger (the sync now prunes to the schedule). |
 | `place_house_bet(selection_ids[], stake)` | Atomic, balance-checked, anti-tank-checked house bet; writes `bets` + `bet_legs` + the `bet_stake` double-entry pair. Parlay-shaped (O/U passes one selection). Returns `bets.id`. `authenticated`. |
 | `sync_moneyline_markets_for_week(week_id)` | Schedule-driven create of even-money moneyline markets + team selections (one per `games` row). Wired to **team generation / add-game**, not RSVP. Idempotent (create-only). `authenticated`. |
 | `place_house_bet(selection_ids[], stake)` | (above — market-type-agnostic; moneyline needs no change). |
 | `settle_market(market_id, result_value)` | **Admin.** Settle one O/U market: set selection results, derive leg results (back/lay), finalize bets, post payout/refund pairs. Idempotent. |
 | `settle_moneyline_market(market_id)` | **Admin.** Settle one moneyline market from its game's scores — winner = higher combined team total, ties → push. No score input. Idempotent. |
-| `settle_betting_for_week(week_id)` | **Admin.** On archive: credit `score_credit` (once) + settle every open O/U market (vs. the subject's score) **and** every moneyline market (vs. team totals); scoreless markets are closed without a result. |
+| `settle_betting_for_week(week_id, force default false)` | **Admin.** On archive: credit `score_credit` (once) + settle every open O/U market (vs. the subject's score) **and** every moneyline market (vs. team totals); scoreless markets are closed without a result. **Backstop: refuses to finish (RAISE, naming the unsettleable markets) while any bet with a leg in the week is still `pending`; with `force`, voids those bets (`status='void'`, legs `void`) and refunds their stakes (`bet_refund` pair).** The weekly House P&L feed event sums `bet_stake`/`bet_payout`/`bet_refund` **via `bet_id` through the week's markets** (`bet_id` is the authoritative link; since `…191008_week_stamp_bet_settlement_ledger` the payout/refund pairs are also week-stamped so they group correctly in weekly ledger views). Called by `archive_week(week_id, force)`, which threads the flag. |
 | `cancel_bet(bet_id)` | **Admin.** Total undo: delete the bet's ledger pair(s) + the bet; re-open a settled market if it was its last bet. |
 | `settle_market_internal(market_id, result_value)` | Private engine (no grants); the **O/U** settlement body. |
 | `settle_moneyline_market_internal(market_id)` | Private engine (no grants); the **moneyline** settlement body (computes team totals, sets results). |
@@ -324,6 +324,31 @@ leaving its `bet_stake` ledger pair un-reversed (`pin_ledger.bet_id` is `ON DELE
 SET NULL`). Parlays touching the market refund whole (the bet delete cascades its
 legs on other games). Composes with the RPC (which deletes bets first → trigger
 is then a no-op); no recursion.
+
+**Roster→market coupling is server-side.** Statement-level AFTER triggers on
+`rsvp`, `team_slots`, `games`, and `scores` (`*_resync_markets_{ins,upd,del}` →
+`trg_resync_markets_*` → `resync_week_markets(week_id, moneyline?)`) re-run
+`sync_over_under_markets_for_week` — plus `sync_moneyline_markets_for_week` for
+`games` changes — after **any** mutation, so no client path can strand a market
+whose subject/game no longer exists (the hanging-pending-bet class of bug; see
+`SETTLEMENT_ACCEPTANCE.md` §C). The guard helper skips weeks that are archived
+(settled markets are immutable) or mid-cascade-delete (week row already gone),
+and cascaded slot/game deletes resolve to no week by design — the wipe side of a
+team regen is handled by FK cascades + the market-delete refund trigger, and the
+rebuild side by the slot/game INSERT triggers. Client-side sync calls remain as
+idempotent belt-and-braces.
+
+**Per-game participation drives O/U lines.** A `(team_slot, game)` `scores` row
+is the lineup marker (`score` nullable; null = present, not yet scored). Rows
+are seeded eagerly at matchup creation by `games_participation_seed_ins` (named
+to fire before the games resync trigger — alphabetical order) and backfilled for
+unarchived weeks at cutover, so row-absence unambiguously means "not in this
+game's lineup". The week editor adds/removes rows for per-game lineup changes —
+the `scores` INSERT/DELETE resync triggers then create/prune that player+game's
+line at edit time (prune refunds bets whole). Score-value changes are the
+upsert's conflict path (no INSERT transition rows, no UPDATE trigger installed)
+→ routine score entry costs nothing. The app's score pad clears a score by
+upserting null, never deleting the row.
 
 ### RPC / function conventions (REQUIRED for new functions)
 
@@ -472,6 +497,10 @@ bets shipped as a pure-UI addition on top of the existing model:
 | `migrations/20260608140200_moneyline_settlement.sql` | **Moneyline 3/3** — extract `finalize_bets_for_market`; `settle_moneyline_market[_internal]`; extend `settle_betting_for_week`. |
 | `migrations/20260608140300_moneyline_title_no_game_suffix.sql` | Moneyline title cleanup (drop the redundant "· Game N"). |
 | `migrations/20260610003542_refund_bets_before_market_delete.sql` | `refund_bets_before_market_delete` BEFORE DELETE trigger on `bet_markets` — makes any market delete (not just the RPC) refund + tear down its bets, fixing the orphaned-bet / un-reversed-ledger class of bug (see §5 "Deleting a market is self-cleaning"). |
+| `migrations/20260611120000_settlement_integrity.sql` | **Settlement integrity** — (1) `sync_over_under_markets_for_week` rework: slot-coupled line ownership + authoritative game set with pruning; (2) roster→market coupling triggers on `rsvp`/`team_slots`/`games`; (3) `settle_betting_for_week(week_id, force)` no-pending-bets backstop (+ `archive_week(week_id, force)` threading) and the bet-linked House P&L sum fix. |
+| `migrations/20260611130000_per_game_participation.sql` | **Per-game participation** — eager seeding of `(team_slot, game)` null-score lineup rows (`games_participation_seed_ins` trigger + unarchived-week backfill); `sync_over_under_markets_for_week` keys lines to participation rows when games exist; `scores` INSERT/DELETE resync triggers so per-game lineup edits prune/create lines (refunding bets) at edit time. |
+| `migrations/20260610191008_week_stamp_bet_settlement_ledger.sql` | **Week-stamp settlement ledger** (applied after the 20260611 pair; acceptance-test V3 finding) — `bet_payout`/`bet_refund` pairs now carry `week_id` at both insertion sites (`finalize_bets_for_market`, the backstop force-void) + backfill, so they group under the correct week in per-player Activity views instead of being dropped. |
+| `migrations/20260610193032_single_mode_unarchive.sql` | **Single-mode unarchive** (acceptance-test finding) — `unarchive_week(week_id, force)` replaces the soft/hard split: reversal always reopens the week (`is_archived → false`), so the week is back in play and MatchupsScreen's Archive & Advance is the re-archive path. The old soft state (reversed-but-locked, no current week anywhere) is gone; one-time data fix completed any week stranded in it. |
 | `app/src/utils/supabase/db.ts` | Typed query objects (`betMarkets` / `bets` / `pinLedger` + RPC wrappers). |
 | `app/src/hooks/useBettingData.ts` | Normalizes the market/bet graph into flat `LineView` / `BetView`. |
 | `supabase/AUTH.md` | Auth / JWT / RLS architecture. |
@@ -510,7 +539,10 @@ change to the betting RPCs, the ledger, or the settlement math.
    every open market exactly once; re-running is a no-op.
 5. **Cancel.** `cancel_bet` removes all ledger rows for the bet, restores the
    balance exactly, and re-opens a market if it was the market's last bet.
-6. **RSVP sync.** RSVP a player **out** → their markets + bets are gone and any
-   bets are refunded; RSVP **in** → markets recreated; fully idempotent.
+6. **RSVP / roster sync.** RSVP a player **out** (pre-teams) → their markets +
+   bets are gone and any bets are refunded; RSVP **in** → markets recreated;
+   fully idempotent. Once teams exist: removing a player's slot (week editor) or
+   regenerating into a smaller schedule prunes + refunds the same way — via the
+   `rsvp`/`team_slots`/`games` triggers, no client call needed.
 7. **Advisors.** `supabase db lint` is clean and every betting FK is indexed with a
    pinned `search_path` on all functions (§5–§6 conventions).

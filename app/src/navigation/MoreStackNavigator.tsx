@@ -17,11 +17,12 @@ import RegistrationAdminScreen from '../screens/RegistrationAdminScreen'
 import SeasonRegistrationScreen from '../screens/SeasonRegistrationScreen'
 import PinsinoAdminScreen from '../screens/PinsinoAdminScreen'
 import PinsinoAccountingScreen from '../screens/PinsinoAccountingScreen'
-import PinsinoSportsbookScreen from '../screens/PinsinoSportsbookScreen'
+import AdminSportsbookScreen from '../screens/AdminSportsbookScreen'
 import LoanSharkAdminScreen from '../screens/LoanSharkAdminScreen'
 import PvPAdminScreen from '../screens/PvPAdminScreen'
 import MarketMovesAdminScreen from '../screens/MarketMovesAdminScreen'
 import BountyAdminScreen from '../screens/BountyAdminScreen'
+import ArchivesScreen from '../screens/ArchivesScreen'
 import LanetalkImportAdminScreen from '../screens/LanetalkImportAdminScreen'
 
 const Stack = createNativeStackNavigator<MoreStackParamList>()
@@ -48,11 +49,12 @@ export default function MoreStackNavigator() {
       <Stack.Screen name="SeasonRegistration" component={SeasonRegistrationScreen} options={{ title: 'Season Registration' }} />
       <Stack.Screen name="PinsinoAdmin" component={PinsinoAdminScreen} options={{ title: 'Pinsino Admin' }} />
       <Stack.Screen name="PinsinoAccounting" component={PinsinoAccountingScreen} options={{ title: 'Accounting' }} />
-      <Stack.Screen name="PinsinoSportsbook" component={PinsinoSportsbookScreen} options={{ title: 'Sportsbook' }} />
+      <Stack.Screen name="AdminSportsbook" component={AdminSportsbookScreen} options={{ title: 'Sportsbook' }} />
       <Stack.Screen name="LoanSharkAdmin" component={LoanSharkAdminScreen} options={{ title: 'Loan Shark Admin' }} />
       <Stack.Screen name="PvPAdmin" component={PvPAdminScreen} options={{ title: 'PvP Admin' }} />
       <Stack.Screen name="MarketMovesAdmin" component={MarketMovesAdminScreen} options={{ title: 'Market Moves Admin' }} />
       <Stack.Screen name="BountyAdmin" component={BountyAdminScreen} options={{ title: 'Bounty Admin' }} />
+      <Stack.Screen name="Archives" component={ArchivesScreen} options={{ title: 'Archives' }} />
       <Stack.Screen name="LanetalkImportAdmin" component={LanetalkImportAdminScreen} options={{ title: 'Lanetalk Import' }} />
     </Stack.Navigator>
   )

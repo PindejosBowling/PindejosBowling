@@ -24,7 +24,7 @@ Persist frame-level game data in Supabase instead of the bundled JSON.
       to hold the parsed shape: session metadata, per-game scores, per-frame
       throws + cumulative score + flags + pin diagrams.
 - [ ] Write the migration via `supabase migration new` (never hand-name files);
-      regenerate TS types per [PAGE_CREATION.md](PAGE_CREATION.md).
+      regenerate TS types per [context/page-creation.md](context/page-creation.md).
 - [ ] Add query methods to `app/src/utils/supabase/db.ts` (no raw client calls).
 - [ ] Point `useFrameStatsData` at the DB source (it already returns the
       standard `{ loading, session, reload }` shape for a drop-in swap).

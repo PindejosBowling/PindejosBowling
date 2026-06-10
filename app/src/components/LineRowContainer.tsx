@@ -17,6 +17,10 @@ interface LineRowContainerProps {
   count: number             // number of lines inside — shown on the collapsed bar
   note?: string             // optional sub-note shown above the rows when expanded (in-progress copy)
   defaultCollapsed?: boolean
+  // Game in progress: the header can't be toggled and the section stays collapsed
+  // (pinned rows still show, inert). The in-progress warning renders at the game
+  // level on the board, not per-section.
+  disabled?: boolean
   rows: CollapsibleRow[]
 }
 
@@ -30,20 +34,23 @@ export default function LineRowContainer({
   count,
   note,
   defaultCollapsed = false,
+  disabled = false,
   rows,
 }: LineRowContainerProps) {
   const [collapsed, setCollapsed] = useState(defaultCollapsed)
+  const effectiveCollapsed = disabled || collapsed
 
   // Collapsed: only pinned rows remain. Expanded: everything.
-  const visible = collapsed ? rows.filter(r => r.pinned) : rows
+  const visible = effectiveCollapsed ? rows.filter(r => r.pinned) : rows
   const pinnedCount = rows.reduce((n, r) => n + (r.pinned ? 1 : 0), 0)
   const lineCount = `${count} ${count === 1 ? 'LINE' : 'LINES'}`
 
   return (
     <View>
       <TouchableOpacity
-        style={styles.header}
+        style={[styles.header, disabled && styles.headerDisabled]}
         onPress={() => setCollapsed(c => !c)}
+        disabled={disabled}
         activeOpacity={0.7}
       >
         <Text style={styles.title}>{title}</Text>
@@ -56,12 +63,12 @@ export default function LineRowContainer({
               </>
             ) : lineCount}
           </Text>
-          <Text style={styles.chevron}>{collapsed ? '▸' : '▾'}</Text>
+          <Text style={styles.chevron}>{effectiveCollapsed ? '▸' : '▾'}</Text>
         </View>
       </TouchableOpacity>
       {visible.length > 0 && (
         <>
-          {!collapsed && note && <Text style={styles.note}>{note}</Text>}
+          {!effectiveCollapsed && note && <Text style={styles.note}>{note}</Text>}
           <View style={styles.card}>
             {visible.map((r, idx) => (
               <Fragment key={r.key}>{r.render(idx === visible.length - 1)}</Fragment>
@@ -87,6 +94,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     marginBottom: 8,
   },
+  headerDisabled: { opacity: 0.5 },
   title: {
     fontFamily: fonts.barlowCondensed,
     fontSize: 15,

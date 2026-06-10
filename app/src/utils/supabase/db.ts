@@ -425,9 +425,23 @@ export const betMarkets = {
       .eq('market_type', 'moneyline')
       .eq('game_number', gameNumber)
       .eq('status', status === 'closed' ? 'open' : 'closed'),
-  // RSVP-driven create/refund of O/U markets (SECURITY DEFINER, server-side).
-  // extraGames adds schedule game numbers not yet present (team-gen game 3); RSVP
-  // passes none and the RPC defaults the target set to the established games / {1,2}.
+  // Reopen every closed O/U line for a week. Clear Matchups returns the week to a
+  // pre-game state, so Start Game's betting suspension must not survive the reset —
+  // surviving lines (both players still RSVP'd in) would otherwise be stranded
+  // unbettable with no games row left to expose the reopen toggle.
+  reopenOUForWeek: (weekId: string) =>
+    supabase
+      .from('bet_markets')
+      .update({ status: 'open' })
+      .eq('week_id', weekId)
+      .eq('market_type', 'over_under')
+      .eq('status', 'closed'),
+  // Create/refund of O/U markets (SECURITY DEFINER, server-side). Line ownership:
+  // RSVP owns the lines until the week has teams; the roster (team_slots) owns
+  // them after — ineligible subjects and game numbers outside the schedule are
+  // pruned (bets refunded whole). DB triggers on rsvp/team_slots/games re-run
+  // this sync after any mutation, so explicit calls here are belt-and-braces.
+  // extraGames adds schedule game numbers not yet present (team-gen game 3).
   syncOUForWeek: (weekId: string, extraGames: number[] = []) =>
     supabase.rpc('sync_over_under_markets_for_week', { p_week_id: weekId, p_extra_games: extraGames }),
   // Schedule-driven create of even-money moneyline markets (one per games row),
@@ -914,29 +928,74 @@ export const weeks = {
       .select('*')
       .eq('season_id', seasonId)
       .order('week_number'),
+  // The current playing week: latest unarchived week of the CURRENT season
+  // (season-scoped — an unscoped query would leak another season's weeks).
+  // maybeSingle: during the soft-unarchive window no unarchived week exists,
+  // which is a legitimate null, not an error.
   getCurrent: () =>
     supabase
       .from('weeks')
-      .select('*')
+      .select('*, seasons!inner(is_active, registration_open)')
+      .eq('seasons.is_active', true)
+      .eq('seasons.registration_open', false)
       .eq('is_archived', false)
       .order('week_number', { ascending: false })
       .limit(1)
-      .single(),
+      .maybeSingle(),
+  // The week "in play" for display (AppHeader): latest week of the current
+  // season regardless of archive state, so the label stays truthful during the
+  // soft-unarchive window (week N locked, week N+1 destroyed).
+  getLatestOfCurrentSeason: () =>
+    supabase
+      .from('weeks')
+      .select('*, seasons!inner(is_active, registration_open)')
+      .eq('seasons.is_active', true)
+      .eq('seasons.registration_open', false)
+      .order('week_number', { ascending: false })
+      .limit(1)
+      .maybeSingle(),
   getActive: () =>
     supabase
       .from('weeks')
-      .select('*')
+      .select('*, seasons!inner(is_active, registration_open)')
+      .eq('seasons.is_active', true)
+      .eq('seasons.registration_open', false)
       .eq('is_archived', false)
       .eq('is_confirmed', true)
       .order('week_number', { ascending: false })
       .limit(1)
-      .single(),
+      .maybeSingle(),
   getById: (id: string) =>
     supabase.from('weeks').select('*').eq('id', id).single(),
   insert: (data: TablesInsert<'weeks'>) =>
     supabase.from('weeks').insert(data),
   update: (id: string, data: TablesUpdate<'weeks'>) =>
     supabase.from('weeks').update(data).eq('id', id),
+}
+
+// Admin-only Archives: atomic weekly archive + reversible unarchive.
+// archive_week replaces the old multi-step client archive (lock → settle → next
+// week) with one transaction that also snapshots everything settlement touches.
+// unarchive_week restores the economy to the archive-time checkpoint, always
+// destroys week N+1, and (mode 'hard') unlocks the score lock. See ARCHIVE.md.
+export const archives = {
+  // force: void+refund any bet settlement would otherwise leave pending (the
+  // RPC raises and lists the unsettleable markets when force is off).
+  archiveWeek: (weekId: string, force = false) =>
+    supabase.rpc('archive_week', { p_week_id: weekId, p_force: force }),
+  // Reverses the week's settlement, destroys week N+1, and reopens the week
+  // (is_archived → false) so it is simply in play again; re-archive via
+  // MatchupsScreen's Archive & Advance. force: override the week-N+1
+  // downstream-activity guard.
+  unarchiveWeek: (weekId: string, force = false) =>
+    supabase.rpc('unarchive_week', { p_week_id: weekId, p_force: force }),
+  listArchivedWeeks: (seasonId: string) =>
+    supabase
+      .from('weeks')
+      .select('*')
+      .eq('season_id', seasonId)
+      .eq('is_archived', true)
+      .order('week_number', { ascending: false }),
 }
 
 // ── Lanetalk imports ────────────────────────────────────────────────────────

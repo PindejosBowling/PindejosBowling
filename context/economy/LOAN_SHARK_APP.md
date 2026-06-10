@@ -4,7 +4,7 @@ Handoff spec for the **app layer** (`app/src`) of the Loan Shark feature.
 
 **Prerequisite:** the database spec (`economy/LOAN_SHARK_DB.md`) is fully applied
 (`supabase db push`) **and** `app/src/utils/supabase/database.types.ts` has been
-regenerated — follow the type-regeneration step in `PAGE_CREATION.md`. The new
+regenerated — follow the type-regeneration step in [page-creation.md](../page-creation.md). The new
 tables (`loan_products`, `loans`, `loan_ledger`), the `pin_ledger.loan_ledger_id`
 column, and the RPCs (`take_loan`, `repay_loan`, `cancel_loan`,
 `settle_loans_for_season_close`) must exist in the generated types before starting.
@@ -18,7 +18,7 @@ every `<Modal>`, RPC-then-`reload`, admin gate via `useAuthStore(s => s.role) ==
 - Data hook: `app/src/hooks/usePinsinoData.ts`, `usePlayerPinsinoData.ts`.
 - Action modal: `app/src/components/SettleBetModal.tsx` (bottom sheet, `<Toast/>` inside, RPC→toast→`onSettled`→`onClose`); `AdminEndSeasonModal.tsx` (centered confirm card, disabled-while-saving).
 - Hub screen + tiles: `app/src/screens/PinsinoScreen.tsx`, `PinsinoAdminScreen.tsx`.
-- Admin list + cancel: `app/src/screens/PinsinoSportsbookScreen.tsx`.
+- Admin list + cancel: `app/src/screens/AdminSportsbookScreen.tsx`.
 - db.ts query objects + RPC wrappers: `app/src/utils/supabase/db.ts`.
 
 ---
@@ -176,7 +176,7 @@ Layout (design §8.2):
   `loans.listActiveDetailed` (or reuse `loans.listActiveBySeason` joined to players +
   summed `loan_ledger`) — add the query to `db.ts` as needed.
 - Each row has a destructive **Cancel** (✕) → confirm → `loans.cancel(loanId)` →
-  toast + reload. Mirror the cancel UX in `PinsinoSportsbookScreen`. `<Toast/>` inside
+  toast + reload. Mirror the cancel UX in `AdminSportsbookScreen`. `<Toast/>` inside
   any modal used.
 
 ### `app/src/screens/PinsinoAdminScreen.tsx`

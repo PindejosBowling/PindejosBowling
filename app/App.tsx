@@ -21,6 +21,7 @@ import Toast from './src/components/Toast'
 import { useAuthStore } from './src/stores/authStore'
 import { useAvatarStore } from './src/stores/avatarStore'
 import { useNotificationStore } from './src/stores/notificationStore'
+import { useWeekClock } from './src/hooks/useWeekClock'
 
 const BASE = 'PindejosBowling'
 
@@ -64,6 +65,9 @@ export default function App() {
 
   const role = useAuthStore(s => s.role)
   const isHydrated = useAuthStore(s => s.isHydrated)
+
+  // Live week clock: DB-driven refresh of week-derived UI on every device.
+  useWeekClock(!!role)
 
   useEffect(() => {
     useAuthStore.getState().hydrate()

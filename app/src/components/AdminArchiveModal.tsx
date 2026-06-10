@@ -7,8 +7,8 @@ import {
   StyleSheet,
 } from 'react-native'
 import { useUiStore } from '../stores/uiStore'
-import { weeks, betMarkets } from '../utils/supabase/db'
-import { colors, fonts } from '../theme'
+import { weeks, archives } from '../utils/supabase/db'
+import { colors, fonts, radius } from '../theme'
 import Toast from './Toast'
 import Button from './Button'
 
@@ -19,6 +19,10 @@ interface Props {
 
 export default function AdminArchiveModal({ visible, onClose }: Props) {
   const [saving, setSaving] = useState(false)
+  // Armed after the server's settlement backstop rejects the archive because
+  // bets would remain pending (unsettleable markets). Forcing voids + refunds them.
+  const [forceArmed, setForceArmed] = useState(false)
+  const [warning, setWarning] = useState<string | null>(null)
   const { showToast } = useUiStore()
 
   async function confirm() {
@@ -31,31 +35,26 @@ export default function AdminArchiveModal({ visible, onClose }: Props) {
         return
       }
 
-      const today = new Date().toISOString().slice(0, 10)
-      const { error: archiveErr } = await weeks.update(activeWeek.id, { is_archived: true, bowled_at: today })
+      // One atomic, audited transaction: snapshot → lock → settle (pins, bets,
+      // loans, PvP, feed) → create next week (archive_week RPC, admin-gated).
+      const { error: archiveErr } = await archives.archiveWeek(activeWeek.id, forceArmed)
       if (archiveErr) {
-        showToast('Failed to archive week', 'error')
+        // The backstop raises (rolling the whole archive back) when settlement
+        // would leave pending bets — surface it and arm a forced retry.
+        if (!forceArmed && /remain pending/i.test(archiveErr.message)) {
+          setWarning(archiveErr.message)
+          setForceArmed(true)
+          setSaving(false)
+          return
+        }
+        showToast(`Failed to archive week ${activeWeek.week_number}: ${archiveErr.message}`, 'error')
         setSaving(false)
         return
       }
 
-      // Credit pin balances and settle all open O/U markets for the archived
-      // week, server-side (settle_betting_for_week RPC, admin-gated, double-entry).
-      const { error: settleErr } = await betMarkets.settleForWeek(activeWeek.id)
-      if (settleErr) {
-        showToast(`Week ${activeWeek.week_number} archived — settlement failed: ${settleErr.message}`, 'error')
-      }
-
-      const { error: insertErr } = await weeks.insert({
-        season_id: activeWeek.season_id,
-        week_number: activeWeek.week_number + 1,
-      })
-      if (insertErr) {
-        showToast(`Week ${activeWeek.week_number} archived — failed to create next week`, 'error')
-      } else {
-        showToast(`Week ${activeWeek.week_number} archived`, 'success')
-      }
-
+      showToast(`Week ${activeWeek.week_number} archived`, 'success')
+      setForceArmed(false)
+      setWarning(null)
       onClose()
     } catch {
       showToast('Archive failed', 'error')
@@ -65,6 +64,8 @@ export default function AdminArchiveModal({ visible, onClose }: Props) {
 
   function handleClose() {
     if (saving) return
+    setForceArmed(false)
+    setWarning(null)
     onClose()
   }
 
@@ -76,10 +77,19 @@ export default function AdminArchiveModal({ visible, onClose }: Props) {
           <Text style={styles.subtitle}>
             Locks this week's scores into the standings and creates a new week for team generation.
           </Text>
+          {warning && (
+            <View style={styles.warnBox}>
+              <Text style={styles.warnText}>{warning}</Text>
+              <Text style={styles.warnSub}>
+                Forcing voids those bets and refunds their stakes before archiving.
+              </Text>
+            </View>
+          )}
           <View style={styles.btnRow}>
             <Button label="Cancel" variant="secondary" onPress={handleClose} fullWidth />
             <Button
-              label="Archive & Advance"
+              label={forceArmed ? 'Force Archive' : 'Archive & Advance'}
+              variant={forceArmed ? 'danger' : 'primary'}
               onPress={confirm}
               loading={saving}
               disabled={saving}
@@ -121,6 +131,26 @@ const styles = StyleSheet.create({
     color: colors.muted,
     lineHeight: 20,
     marginBottom: 20,
+  },
+  warnBox: {
+    backgroundColor: colors.bg,
+    borderRadius: radius.cardMd,
+    borderWidth: 1,
+    borderColor: colors.danger,
+    padding: 12,
+    marginBottom: 18,
+  },
+  warnText: {
+    fontFamily: fonts.barlow,
+    fontSize: 12,
+    color: colors.danger,
+    lineHeight: 17,
+  },
+  warnSub: {
+    fontFamily: fonts.barlow,
+    fontSize: 11,
+    color: colors.muted,
+    marginTop: 6,
   },
   btnRow: {
     flexDirection: 'row',

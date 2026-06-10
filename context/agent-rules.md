@@ -2,7 +2,7 @@
 
 ## Page Creation
 
-You must ALWAYS reference [PAGE_CREATION.md](../PAGE_CREATION.md) when working on new pages or editing existing pages.
+You must ALWAYS reference [page-creation.md](page-creation.md) when working on new pages or editing existing pages.
 
 It contains hook patterns, screen skeleton, navigation wiring, database migration workflow, and type regeneration. Follow it when adding any new screen or making schema changes.
 
