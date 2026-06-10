@@ -20,7 +20,7 @@
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { parseLanetalk } from './parseLanetalk.ts'
-import { classifyGames, matchPlayer, type SlotCandidate } from './match.ts'
+import { classifyGames, chooseSlot, matchPlayer, type SlotCandidate, type SlotOfficialScores } from './match.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -211,25 +211,44 @@ Deno.serve(async (req) => {
       candidateCount: candidates.length,
       matchedPlayer: matched?.name ?? null,
       matchedPlayerId: matched?.playerId ?? null,
+      matchedSlotCount: matched?.teamSlotIds.length ?? 0,
     })
 
-    // ── Official scores recorded for the matched player's slot this week ──────
-    let officialScores: number[] = []
+    // ── Official scores recorded for the matched player's slot(s) this week ───
+    // A player can be slotted on two teams in one week; load each slot's scores,
+    // then pick the slot this session belongs to by score overlap (chooseSlot).
+    let chosenSlot: SlotOfficialScores | null = null
     if (matched) {
       const { data: scoreRows, error: scoreErr } = await admin
         .from('scores')
-        .select('score, team_slots!inner(id, teams!inner(week_id))')
+        .select('score, team_slot_id, team_slots!inner(teams!inner(week_id))')
         .eq('team_slots.teams.week_id', weekId)
-        .eq('team_slot_id', matched.teamSlotId)
+        .in('team_slot_id', matched.teamSlotIds)
         .not('score', 'is', null)
-      if (scoreErr) return fail('score_lookup', `Score lookup failed: ${scoreErr.message}`, 500, { weekId, teamSlotId: matched.teamSlotId, error: scoreErr.message })
-      officialScores = (scoreRows ?? []).map((r: any) => r.score as number)
+      if (scoreErr) return fail('score_lookup', `Score lookup failed: ${scoreErr.message}`, 500, { weekId, teamSlotIds: matched.teamSlotIds, error: scoreErr.message })
+      const bySlot = new Map<string, number[]>(matched.teamSlotIds.map(id => [id, []]))
+      for (const r of (scoreRows ?? []) as any[]) {
+        bySlot.get(r.team_slot_id as string)?.push(r.score as number)
+      }
+      const slots: SlotOfficialScores[] = matched.teamSlotIds.map(id => ({
+        teamSlotId: id,
+        officialScores: bySlot.get(id) ?? [],
+      }))
+      chosenSlot = chooseSlot(session.games, slots)
+    }
+    const officialScores = chosenSlot?.officialScores ?? []
+    if (matched) {
+      log('slot_chosen', {
+        teamSlotId: chosenSlot?.teamSlotId ?? null,
+        candidateSlotCount: matched.teamSlotIds.length,
+        officialScores,
+      })
     }
 
     // ── Classify + build one row per game ─────────────────────────────────────
     const classified = classifyGames(session.games, officialScores)
     const rows = classified.map(({ game, classification }) => {
-      const teamSlotId = classification === 'official' && matched ? matched.teamSlotId : null
+      const teamSlotId = classification === 'official' && chosenSlot ? chosenSlot.teamSlotId : null
       return {
         source_url: url,
         game_number: game.game_number,

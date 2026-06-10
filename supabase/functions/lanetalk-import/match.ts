@@ -15,7 +15,12 @@ export interface SlotCandidate {
 
 export interface PlayerMatch {
   playerId: string
-  teamSlotId: string
+  /**
+   * Every non-fill slot the matched player holds that week. Usually one, but a
+   * player can be slotted on two teams in a single week — a given Lanetalk
+   * session then belongs to exactly one of these (disambiguated by `chooseSlot`).
+   */
+  teamSlotIds: string[]
   name: string
   similarity: number
 }
@@ -71,7 +76,13 @@ export function nameSimilarity(a: string, b: string): number {
   return Math.max(whole, tokenAvg)
 }
 
-/** Best non-fill-slot candidate at or above `threshold`, else null. */
+/**
+ * Best-matching league player (by name) at or above `threshold`, else null.
+ * Returns *all* of that player's non-fill slots for the week — a player slotted
+ * on two teams contributes two candidates that share one `playerId`; collapsing
+ * to a single slot here would misattribute the session that belongs to the other
+ * slot. `chooseSlot` later narrows to the one slot this session actually is.
+ */
 export function matchPlayer(
   bowlerName: string,
   candidates: SlotCandidate[],
@@ -79,11 +90,62 @@ export function matchPlayer(
 ): PlayerMatch | null {
   const target = normalizeBowlerName(bowlerName)
   if (!target) return null
-  let best: PlayerMatch | null = null
+  let best: { playerId: string; name: string; similarity: number } | null = null
   for (const c of candidates) {
     const sim = nameSimilarity(target, normalizeBowlerName(c.name))
     if (sim >= threshold && (!best || sim > best.similarity)) {
-      best = { playerId: c.playerId, teamSlotId: c.teamSlotId, name: c.name, similarity: sim }
+      best = { playerId: c.playerId, name: c.name, similarity: sim }
+    }
+  }
+  if (!best) return null
+  const teamSlotIds = candidates
+    .filter(c => c.playerId === best!.playerId)
+    .map(c => c.teamSlotId)
+  return { playerId: best.playerId, teamSlotIds, name: best.name, similarity: best.similarity }
+}
+
+/** How many of `b`'s values can be matched one-to-one against `a` (multiset overlap). */
+function multisetOverlap(a: number[], b: number[]): number {
+  const remaining = [...a]
+  let count = 0
+  for (const x of b) {
+    const idx = remaining.indexOf(x)
+    if (idx >= 0) {
+      remaining.splice(idx, 1)
+      count++
+    }
+  }
+  return count
+}
+
+export interface SlotOfficialScores {
+  teamSlotId: string
+  officialScores: number[]
+}
+
+/**
+ * Pick which of a matched player's slots a single Lanetalk session belongs to.
+ * One slot → that slot (unchanged behaviour). Multiple slots (player bowled on
+ * two teams) → the slot whose recorded official scores best overlap this
+ * session's game totals, since the session is one team's set of games. Ties or
+ * no signal fall back to the first slot (stable input order).
+ */
+export function chooseSlot(
+  games: LanetalkGame[],
+  slots: SlotOfficialScores[],
+): SlotOfficialScores | null {
+  if (slots.length === 0) return null
+  if (slots.length === 1) return slots[0]
+  const sessionScores = games
+    .map(g => g.score)
+    .filter((s): s is number => s != null)
+  let best = slots[0]
+  let bestOverlap = -1
+  for (const slot of slots) {
+    const overlap = multisetOverlap(sessionScores, slot.officialScores)
+    if (overlap > bestOverlap) {
+      bestOverlap = overlap
+      best = slot
     }
   }
   return best
