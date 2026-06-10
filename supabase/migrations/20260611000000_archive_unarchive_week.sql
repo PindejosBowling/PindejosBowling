@@ -10,9 +10,13 @@
 --
 --   * unarchive_week(week, mode, force) restores the economy to the exact instant
 --     before archive ran (delete the rows settlement INSERTed; restore the columns
---     settlement UPDATEd), always destroys week N+1, and — for 'full' — also unlocks
+--     settlement UPDATEd), always destroys week N+1, and — for 'hard' — also unlocks
 --     the score lock (is_archived=false). Re-running archive_week then re-derives on
 --     a clean slate.
+--
+--   * Mode vocabulary: 'soft' = reverse the economy, re-derive the SAME scores
+--     (week stays archived/locked); 'hard' = also reopen the scores for editing
+--     (is_archived → false). Both reverse the economy and destroy week N+1.
 --
 -- Reversal is snapshot-driven (not rule-based) so it cannot resurrect actions taken
 -- BEFORE the archive (e.g. a PvP challenge cancelled by "Start Game", a manually
@@ -39,9 +43,11 @@ CREATE TABLE IF NOT EXISTS public.week_archive_runs (
   actor_id      uuid        REFERENCES public.players(id)          ON DELETE SET NULL,
   archived_at   timestamptz NOT NULL DEFAULT now(),
   status        text        NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'reversed')),
-  reversed_mode text        CHECK (reversed_mode IN ('soft', 'full')),
+  reversed_mode text        CHECK (reversed_mode IN ('soft', 'hard')),
   reversed_at   timestamptz,
-  details       jsonb       NOT NULL DEFAULT '{}'::jsonb
+  details       jsonb       NOT NULL DEFAULT '{}'::jsonb,
+  created_at    timestamptz NOT NULL DEFAULT now(),  -- required by the project table convention
+  updated_at    timestamptz NOT NULL DEFAULT now()   -- (set_updated_at trigger auto-attached)
 );
 
 CREATE INDEX IF NOT EXISTS week_archive_runs_week_id_idx ON public.week_archive_runs (week_id, status);
@@ -53,7 +59,8 @@ CREATE TABLE IF NOT EXISTS public.week_archive_snapshot (
   table_name text        NOT NULL,
   pk         uuid        NOT NULL,
   payload    jsonb,
-  created_at timestamptz NOT NULL DEFAULT now()
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()   -- required by the project table convention
 );
 
 CREATE INDEX IF NOT EXISTS week_archive_snapshot_run_idx
@@ -96,7 +103,7 @@ BEGIN
   END IF;
 
   -- One active run per week. The soft-unarchive flow marks the run 'reversed', so a
-  -- re-archive after a soft/full unarchive is allowed; an accidental double-archive
+  -- re-archive after a soft/hard unarchive is allowed; an accidental double-archive
   -- (no unarchive between) is not.
   IF EXISTS (SELECT 1 FROM public.week_archive_runs WHERE week_id = p_week_id AND status = 'active') THEN
     RAISE EXCEPTION 'Week already has an active archive run — unarchive it first';
@@ -239,8 +246,8 @@ BEGIN
   IF ((SELECT auth.jwt()) -> 'app_metadata' ->> 'role') <> 'admin' THEN
     RAISE EXCEPTION 'Admin only';
   END IF;
-  IF p_mode NOT IN ('soft', 'full') THEN
-    RAISE EXCEPTION 'mode must be soft or full';
+  IF p_mode NOT IN ('soft', 'hard') THEN
+    RAISE EXCEPTION 'mode must be soft or hard';
   END IF;
 
   SELECT season_id, week_number INTO v_season_id, v_week_number
@@ -399,9 +406,10 @@ BEGIN
   END IF;
 
   -- --------------------------------------------------------------------------
-  -- 3d. Mode branch: full unlocks the score lock; soft leaves it archived.
+  -- 3d. Mode branch: hard reopens the score lock (scores become editable);
+  --     soft leaves the week archived (same scores re-derive on re-archive).
   -- --------------------------------------------------------------------------
-  IF p_mode = 'full' THEN
+  IF p_mode = 'hard' THEN
     UPDATE public.weeks SET is_archived = false, bowled_at = NULL WHERE id = p_week_id;
   END IF;
 

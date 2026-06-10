@@ -23,7 +23,7 @@ import { useAuthStore } from '../stores/authStore'
 import { seasons, leagueTools } from '../utils/supabase/db'
 
 type Nav = NativeStackNavigationProp<MoreStackParamList>
-type Mode = 'soft' | 'full'
+type Mode = 'soft' | 'hard'
 type ArchivedWeek = { id: string; week_number: number; bowled_at: string | null }
 
 const MODE_COPY: Record<Mode, { title: string; body: string }> = {
@@ -31,33 +31,34 @@ const MODE_COPY: Record<Mode, { title: string; body: string }> = {
     title: 'Soft Unarchive',
     body:
       'Reverses every Pinsino effect this week derived (pins, bet/PvP settlements, ' +
-      'loan garnishment, feed events) and deletes the next week — but keeps this week ' +
-      'archived and its scores locked. Use to fix a settlement bug, then re-run Archive ' +
-      '& Advance to re-derive on a clean slate.',
+      'loan garnishment, feed events) and deletes the next week — but keeps the week ' +
+      'archived, so the scores stay locked. Use when the scores are right but the ' +
+      'settlement was wrong: re-run Archive & Advance to re-derive the same scores cleanly.',
   },
-  full: {
+  hard: {
     title: 'Hard Unarchive',
     body:
-      'Everything Soft does, plus unlocks the week (is_archived → false) so scores ' +
-      'become editable again. Use to fix wrong input data, then re-run Archive & Advance.',
+      'Everything Soft does, plus reopens the week (is_archived → false) so the scores ' +
+      'become editable again. Use when the input scores themselves were wrong: fix them, ' +
+      'then re-run Archive & Advance.',
   },
 }
 
 // Side-by-side summary so an admin can tell the two modes apart at a glance.
-// Both reverse the Pinsino settlement and delete week N+1; they differ only in
-// whether this week's scores are unlocked for editing.
-const MODE_SUMMARY: { mode: Mode; name: string; keeps: string; use: string }[] = [
+// Both reverse the Pinsino settlement and delete week N+1; they differ ONLY in
+// whether this week's scores are reopened for editing.
+const MODE_SUMMARY: { mode: Mode; name: string; scores: string; use: string }[] = [
   {
     mode: 'soft',
     name: 'Soft Unarchive',
-    keeps: 'Scores stay locked (week stays archived).',
-    use: 'Settlement was wrong but the scores are right — re-run Archive & Advance to re-derive on a clean slate.',
+    scores: 'Scores stay locked — re-derives the same scores.',
+    use: 'The scores are right, the settlement was wrong.',
   },
   {
-    mode: 'full',
+    mode: 'hard',
     name: 'Hard Unarchive',
-    keeps: 'Scores unlock for editing (week un-archives).',
-    use: 'The input scores themselves were wrong — fix them, then re-run Archive & Advance.',
+    scores: 'Scores reopen for editing (week un-archives).',
+    use: 'The input scores themselves were wrong.',
   },
 ]
 
@@ -171,8 +172,8 @@ export default function LeagueToolsAdminScreen() {
           {MODE_SUMMARY.map(m => (
             <View key={m.mode} style={styles.summaryRow}>
               <Text style={styles.summaryName}>{m.name}</Text>
-              <Text style={styles.summaryKeeps}>{m.keeps}</Text>
-              <Text style={styles.summaryUse}>{m.use}</Text>
+              <Text style={styles.summaryScores}>{m.scores}</Text>
+              <Text style={styles.summaryUse}>Use when: {m.use}</Text>
             </View>
           ))}
         </View>
@@ -204,7 +205,7 @@ export default function LeagueToolsAdminScreen() {
                   label="Hard Unarchive"
                   variant="outline"
                   tone="danger"
-                  onPress={() => openConfirm(w, 'full')}
+                  onPress={() => openConfirm(w, 'hard')}
                   disabled={i !== 0}
                   fullWidth
                 />
@@ -301,7 +302,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.3,
     marginBottom: 3,
   },
-  summaryKeeps: {
+  summaryScores: {
     fontFamily: fonts.barlow,
     fontSize: 13,
     color: colors.text,

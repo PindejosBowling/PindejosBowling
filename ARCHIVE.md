@@ -57,12 +57,12 @@ Problems:
 - **Atomic archive.** One `archive_week` RPC owns the whole operation.
 - **Both unarchive modes destroy week N+1.** Re-running archive recreates a brand-new N+1 + fresh
   settlement entries. The reversal core is identical for both modes.
-- **Soft vs Full = whether the score lock is touched** (the only difference):
+- **Soft vs Hard = whether the score lock is touched** (the only difference):
   - **Soft** — reverse the derived economy + delete N+1, but leave `weeks[N].is_archived = true`
     (scores stay locked). Use case: a *settlement/derivation* bug — fix the logic, re-trigger archive to
-    re-derive in place.
-  - **Full** — everything Soft does, plus set `weeks[N].is_archived = false`, `bowled_at = NULL`
-    (unlock scores/standings). Use case: an *input-data* bug — unlock, correct the score, re-archive.
+    re-derive the same scores in place.
+  - **Hard** — everything Soft does, plus set `weeks[N].is_archived = false`, `bowled_at = NULL`
+    (reopen scores/standings for editing). Use case: an *input-data* bug — reopen, correct the score, re-archive.
 - **Downstream guard.** Unarchive only the most-recently-archived week (LIFO). If a later week holds
   player activity, **warn but allow override** via `p_force`.
 
@@ -145,7 +145,7 @@ week_archive_runs (
   actor_id     uuid references players(id) on delete set null,
   archived_at  timestamptz not null default now(),
   status       text not null default 'active' check (status in ('active','reversed')),
-  reversed_mode text check (reversed_mode in ('soft','full')),
+  reversed_mode text check (reversed_mode in ('soft','hard')),
   reversed_at  timestamptz,
   details      jsonb not null default '{}'::jsonb
 )
@@ -185,7 +185,7 @@ add an admin-only `SELECT` policy if the admin screen will show run history.
 
 ### 4c. `unarchive_week(p_week_id uuid, p_mode text, p_force boolean default false)`
 
-1. Admin guard. Validate `p_mode IN ('soft','full')`.
+1. Admin guard. Validate `p_mode IN ('soft','hard')`.
 2. **LIFO guard:** raise if any archived week in the season has `week_number > N`.
 3. Resolve the latest `status='active'` `week_archive_runs` row for week N (raise if none).
 4. **Downstream check:** compute N+1 (`week_number = N+1`, same season). If it exists and has any
@@ -231,7 +231,7 @@ event re-publishes; N+1 is recreated. A new `active` run + snapshot is written.
   `leagueTools.archiveWeek(activeWeek.id)`. Same UX, now atomic + audited.
 - **New screen `app/src/screens/LeagueToolsAdminScreen.tsx`** — gate with
   `const isAdmin = useAuthStore(s => s.role) === 'admin'` (same pattern as `PinsinoAdminScreen.tsx`).
-  List archived weeks; each row offers **Soft Unarchive** and **Full Unarchive**. On tap: a confirmation
+  List archived weeks; each row offers **Soft Unarchive** and **Hard Unarchive**. On tap: a confirmation
   sheet that (a) explains the chosen mode's exact effect, (b) lists any N+1 downstream activity, (c) on
   confirm calls `unarchiveWeek(weekId, mode, true)`. After success, surface "now re-run Archive & Advance
   to re-derive on a clean slate."
@@ -299,7 +299,7 @@ a test season.
    pre-settle values; **`bet_stake`/`pvp_stake`/`loan_issued` untouched**; week N+1 deleted;
    `weeks[N].is_archived` still **true**. Re-run Archive → fresh settlement + new N+1; conservation
    identity holds.
-4. **Full unarchive.** Same as Soft plus `weeks[N].is_archived=false`, `bowled_at=NULL`. Edit a score,
+4. **Hard unarchive.** Same as Soft plus `weeks[N].is_archived=false`, `bowled_at=NULL`. Edit a score,
    re-Archive, confirm the corrected outcome propagates (e.g. a bet that now wins, a flipped moneyline).
 5. **Downstream guard.** Place a bet / take a loan / add an RSVP in week N+1, attempt unarchive →
    confirm the RPC raises with the activity summary and the app shows the warning; confirm `force=true`
