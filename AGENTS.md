@@ -57,7 +57,7 @@ Product/design references and per-feature implementation specs for the pin econo
 ## Hard rules (full text in [context/agent-rules.md](context/agent-rules.md))
 
 1. All data comes from Supabase; all queries live in `db.ts`.
-2. **ALL database changes go through migration files** applied via `supabase db push` — never write to the DB directly. The Supabase CLI is for reading (`db query`) and pushing migrations only.
+2. **ALL database changes go through migration files** applied via `supabase db push` — never write to the DB directly. The Supabase CLI is for reading (`db query`) and pushing migrations only. **Migration files are append-only *history* and contain plenty of since-superseded DDL — never read or grep them to learn the *current* schema. For current-state DDL read [`supabase/schema.sql`](supabase/schema.sql) (a generated snapshot; regenerate with `./supabase/refresh-schema-snapshot.sh` as the last step of every push); for schema prose/invariants see [context/database-schema.md](context/database-schema.md) and [supabase/PIN_ECONOMY_SCHEMA.md](supabase/PIN_ECONOMY_SCHEMA.md). Only open a migration to understand history or when authoring a new one.**
 3. The Supabase CLI needs `SUPABASE_ACCESS_TOKEN` from `app/.env.local` + `--linked --workdir $(pwd)`.
 4. "Current season" = `is_active = true` AND `registration_open = false` (`seasons.getCurrent()`), **not** highest number.
 5. Compute functions are pure and uncached — always wrap them in `useMemo` at the screen level.
