@@ -30,9 +30,14 @@ export interface LanetalkFrame {
   pin_diagrams: PinDiagram[]
 }
 
+/** Whether a game's total matched a recorded official league score (vs. an
+ *  extra/warm-up game on the same Lanetalk session). */
+export type GameClassification = 'official' | 'recreational'
+
 export interface LanetalkGame {
   game_number: number
   score: number
+  classification: GameClassification
   /** Monday of the league night this game belongs to (YYYY-MM-DD). */
   date: string
   /** Human label for that Monday, e.g. "Jun 8, 2026". */

@@ -6,10 +6,15 @@ import {
   LanetalkFrame,
   SessionDate,
   PinDiagram,
+  GameClassification,
 } from '../data/lanetalk'
 
 /** Sentinel for the "all nights" filter option. */
 export const ALL_DATES = 'all'
+
+/** Classification filter: every game, or only one classification. */
+export type ClassificationFilter = 'all' | GameClassification
+export const ALL_CLASSIFICATIONS: ClassificationFilter = 'all'
 
 // Frame-level game stats for a player, sourced from `lanetalk_game_imports`
 // (one row per imported game; `payload` jsonb is a `LanetalkGame`). The rows are
@@ -26,7 +31,7 @@ export function useFrameStatsData(playerId: string | null) {
       if (!playerId) { setSession(null); return }
       const { data, error } = await lanetalkImports.listByPlayer(playerId)
       if (error) throw error
-      setSession(buildSession(data ?? []))
+      setSession(buildSession((data ?? []) as ImportRow[]))
     } catch (e) {
       console.error('useFrameStatsData error:', e)
       setSession(null)
@@ -67,6 +72,7 @@ type ImportRow = {
   score: number | null
   played_at: string | null
   source_url: string
+  classification: GameClassification
   payload: any
 }
 
@@ -89,6 +95,7 @@ function payloadToGame(row: ImportRow): LanetalkGame {
   return {
     game_number: row.game_number,
     score: row.score ?? p.score ?? 0,
+    classification: row.classification,
     date: p.date ?? '',
     date_label: p.date_label ?? '',
     played_at: row.played_at ?? p.played_at ?? null,
@@ -142,6 +149,27 @@ export function filterSessionByDate(
   if (!session) return null
   if (date === ALL_DATES) return session
   return { ...session, games: session.games.filter(g => g.date === date) }
+}
+
+/** A session view limited to one classification (official/recreational), or the
+ *  whole session for ALL_CLASSIFICATIONS. The league-night list is recomputed so
+ *  the date filter only offers nights that survive the classification cut. */
+export function filterSessionByClassification(
+  session: LanetalkSession | null,
+  classification: ClassificationFilter,
+): LanetalkSession | null {
+  if (!session) return null
+  if (classification === ALL_CLASSIFICATIONS) return session
+  const games = session.games.filter(g => g.classification === classification)
+  const seen = new Set<string>()
+  const dates: SessionDate[] = []
+  for (const g of games) {
+    if (g.date && !seen.has(g.date)) {
+      seen.add(g.date)
+      dates.push({ date: g.date, label: g.date_label || g.date })
+    }
+  }
+  return { ...session, games, dates }
 }
 
 // ----------------------------------------------------------------------------

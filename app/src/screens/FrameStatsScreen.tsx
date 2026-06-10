@@ -19,7 +19,10 @@ import {
   computeScorecard,
   computePinLeaves,
   filterSessionByDate,
+  filterSessionByClassification,
   ALL_DATES,
+  ALL_CLASSIFICATIONS,
+  ClassificationFilter,
   Scorecard,
   ScorecardFrame,
   PinLeave,
@@ -28,6 +31,13 @@ import { PinDiagram, PinState } from '../data/lanetalk'
 
 type Nav = NativeStackNavigationProp<StandingsStackParamList>
 type FrameStatsRoute = RouteProp<StandingsStackParamList, 'FrameStats'>
+
+// Labels for the classification filter pills.
+const CLASS_LABELS: Record<ClassificationFilter, string> = {
+  all: 'All',
+  official: 'Official',
+  recreational: 'Recreational',
+}
 
 // Pin rows for a mini deck, back row first (matches the parsed diagram).
 const PIN_ROWS = [[7, 8, 9, 10], [4, 5, 6], [2, 3], [1]]
@@ -47,11 +57,17 @@ export default function FrameStatsScreen() {
   const { loading, session, reload } = useFrameStatsData(playerId)
   const { refreshing, onRefresh } = useRefresh(reload)
 
+  const [selectedClass, setSelectedClass] = useState<ClassificationFilter>(ALL_CLASSIFICATIONS)
   const [selectedDate, setSelectedDate] = useState<string>(ALL_DATES)
 
+  // Classification cut first (it narrows which league nights remain), then date.
+  const byClass = useMemo(
+    () => filterSessionByClassification(session, selectedClass),
+    [session, selectedClass],
+  )
   const filtered = useMemo(
-    () => filterSessionByDate(session, selectedDate),
-    [session, selectedDate],
+    () => filterSessionByDate(byClass, selectedDate),
+    [byClass, selectedDate],
   )
   const stats = useMemo(() => computeSessionStats(filtered), [filtered])
   const scorecards = useMemo<Scorecard[]>(
@@ -70,7 +86,13 @@ export default function FrameStatsScreen() {
   ], [stats])
 
   // Show the date on each scorecard only when viewing across multiple nights.
-  const showCardDates = selectedDate === ALL_DATES && (session?.dates.length ?? 0) > 1
+  const showCardDates = selectedDate === ALL_DATES && (byClass?.dates.length ?? 0) > 1
+
+  // Switching classification can drop the currently-selected night — reset to all.
+  function changeClass(next: ClassificationFilter) {
+    setSelectedClass(next)
+    setSelectedDate(ALL_DATES)
+  }
 
   if (loading) return <LoadingView label="Loading games" />
 
@@ -86,77 +108,91 @@ export default function FrameStatsScreen() {
       >
         <ScreenHeader title={`${name} · Game Details`} subtitle={subtitle} onBack={() => navigation.goBack()} />
 
-        {!session || !stats ? (
+        {!session || !byClass ? (
           <Text style={styles.empty}>No frame-level game data for this player yet.</Text>
         ) : (
           <>
+            {/* Classification filter — all vs. official vs. recreational games */}
+            <PillFilter
+              items={[ALL_CLASSIFICATIONS, 'official', 'recreational']}
+              value={selectedClass}
+              onChange={(item) => changeClass(item as ClassificationFilter)}
+              renderLabel={(item) => CLASS_LABELS[item as ClassificationFilter] ?? item}
+            />
+
             {/* League-night filter */}
-            {session.dates.length > 0 ? (
+            {byClass.dates.length > 0 ? (
               <PillFilter
-                items={[ALL_DATES, ...session.dates.map(d => d.date)]}
+                items={[ALL_DATES, ...byClass.dates.map(d => d.date)]}
                 value={selectedDate}
                 onChange={setSelectedDate}
                 renderLabel={(item) =>
                   item === ALL_DATES
                     ? 'All-time'
-                    : session.dates.find(d => d.date === item)?.label ?? item}
+                    : byClass.dates.find(d => d.date === item)?.label ?? item}
               />
             ) : null}
 
-            {/* Session summary — only metrics not already shown on the radar/donuts */}
-            <View style={styles.statGrid}>
-              <StatTile label="Series" value={stats.total} />
-              <StatTile label="Games" value={stats.games} />
-              <StatTile label="High Game" value={stats.highGame} />
-              <StatTile label="Low Game" value={stats.lowGame} />
-              <StatTile label="Strikes / Spares" value={`${stats.strikes} / ${stats.spares}`} />
-              <StatTile
-                label="Splits Made"
-                value={stats.splits ? `${stats.splitsConverted}/${stats.splits}` : '0'}
-              />
-            </View>
-
-            {/* Radar chart */}
-            <Text style={styles.sectionHeader}>Radar</Text>
-            <View style={styles.radarCard}>
-              <View style={styles.radarHeader}>
-                <Text style={styles.radarHeaderLabel}>Average</Text>
-                <Text style={styles.radarHeaderValue}>{stats.average}</Text>
-              </View>
-              <View style={styles.radarBody}>
-                <StatRadarChart axes={radarAxes} size={140} />
-              </View>
-            </View>
-
-            {/* First-ball summary donuts */}
-            <Text style={styles.sectionHeader}>First Ball</Text>
-            <View style={styles.donutRow}>
-              <StatDonut value={stats.strikePct} valueText={pctFine(stats.strikePct)} label="Strikes" color={colors.accent} />
-              <StatDonut value={stats.leavePct} valueText={pctFine(stats.leavePct)} label="Leaves" color={colors.gold} />
-              <StatDonut value={stats.splitPct} valueText={pctFine(stats.splitPct)} label="Splits" color={colors.danger} />
-            </View>
-
-            {/* Per-game scorecards */}
-            <Text style={styles.sectionHeader}>Scorecards</Text>
-            {scorecards.map((card) => (
-              <ScorecardView
-                key={`${card.dateLabel}-${card.gameNumber}`}
-                card={card}
-                showDate={showCardDates}
-              />
-            ))}
-
-            {/* Pin-leave summary */}
-            {leaves.length ? (
+            {!stats ? (
+              <Text style={styles.empty}>No {CLASS_LABELS[selectedClass].toLowerCase()} games for this filter.</Text>
+            ) : (
               <>
-                <Text style={styles.sectionHeader}>Top Pin Leaves (after 1st ball)</Text>
-                <View style={styles.leaveCard}>
-                  {leaves.map((leave) => (
-                    <LeaveRow key={leave.pins.join(',')} leave={leave} />
-                  ))}
+                {/* Session summary — only metrics not already shown on the radar/donuts */}
+                <View style={styles.statGrid}>
+                  <StatTile label="Series" value={stats.total} />
+                  <StatTile label="Games" value={stats.games} />
+                  <StatTile label="High Game" value={stats.highGame} />
+                  <StatTile label="Low Game" value={stats.lowGame} />
+                  <StatTile label="Strikes / Spares" value={`${stats.strikes} / ${stats.spares}`} />
+                  <StatTile
+                    label="Splits Made"
+                    value={stats.splits ? `${stats.splitsConverted}/${stats.splits}` : '0'}
+                  />
                 </View>
+
+                {/* Radar chart */}
+                <Text style={styles.sectionHeader}>Radar</Text>
+                <View style={styles.radarCard}>
+                  <View style={styles.radarHeader}>
+                    <Text style={styles.radarHeaderLabel}>Average</Text>
+                    <Text style={styles.radarHeaderValue}>{stats.average}</Text>
+                  </View>
+                  <View style={styles.radarBody}>
+                    <StatRadarChart axes={radarAxes} size={140} />
+                  </View>
+                </View>
+
+                {/* First-ball summary donuts */}
+                <Text style={styles.sectionHeader}>First Ball</Text>
+                <View style={styles.donutRow}>
+                  <StatDonut value={stats.strikePct} valueText={pctFine(stats.strikePct)} label="Strikes" color={colors.accent} />
+                  <StatDonut value={stats.leavePct} valueText={pctFine(stats.leavePct)} label="Leaves" color={colors.gold} />
+                  <StatDonut value={stats.splitPct} valueText={pctFine(stats.splitPct)} label="Splits" color={colors.danger} />
+                </View>
+
+                {/* Per-game scorecards */}
+                <Text style={styles.sectionHeader}>Scorecards</Text>
+                {scorecards.map((card) => (
+                  <ScorecardView
+                    key={`${card.dateLabel}-${card.gameNumber}`}
+                    card={card}
+                    showDate={showCardDates}
+                  />
+                ))}
+
+                {/* Pin-leave summary */}
+                {leaves.length ? (
+                  <>
+                    <Text style={styles.sectionHeader}>Top Pin Leaves (after 1st ball)</Text>
+                    <View style={styles.leaveCard}>
+                      {leaves.map((leave) => (
+                        <LeaveRow key={leave.pins.join(',')} leave={leave} />
+                      ))}
+                    </View>
+                  </>
+                ) : null}
               </>
-            ) : null}
+            )}
           </>
         )}
       </ScrollView>
