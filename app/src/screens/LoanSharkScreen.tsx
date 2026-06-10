@@ -128,7 +128,7 @@ export default function LoanSharkScreen() {
               </Text>
               <Text style={styles.rateDivider}>·</Text>
               <Text style={styles.rateText}>
-                {Math.round(activeLoan.product.garnishment_rate * 100)}% garnishment
+                {Math.round(activeLoan.product.garnishment_rate * 100)}% cut of your weekly pincome
               </Text>
             </View>
 
@@ -205,7 +205,7 @@ export default function LoanSharkScreen() {
                     </Text>
                     <Text style={styles.rateDivider}>·</Text>
                     <Text style={styles.productRate}>
-                      {Math.round(p.garnishment_rate * 100)}% garnishment
+                      {Math.round(p.garnishment_rate * 100)}% cut of your weekly pincome
                     </Text>
                   </View>
                   <Text style={styles.productDesc}>{p.description}</Text>
