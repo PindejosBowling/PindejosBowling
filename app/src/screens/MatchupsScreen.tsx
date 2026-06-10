@@ -252,6 +252,25 @@ export default function MatchupsScreen() {
       })
 
       if (toUpsert.length) await scores.upsert(toUpsert)
+
+      // Entering a real score implies the game has started — if the admin forgot
+      // to hit "Start Game", do it for them: close the game's betting markets and
+      // open PvP challenges, same as setGameStarted. Clearing a score (empty)
+      // doesn't trigger this. The market/challenge calls are idempotent, so a
+      // stale inProgressGames closure is harmless.
+      if (weekId) {
+        const scoredGameNums = Array.from(new Set(
+          keys
+            .filter(k => pending[k] !== '')
+            .map(k => parseInt(k.split('|')[1]))
+        )).filter(num => !inProgressGames.includes(num))
+        for (const num of scoredGameNums) {
+          await betMarkets.setOUStatusByWeekGame(weekId, num, 'closed')
+          await betMarkets.setMoneylineStatusByWeekGame(weekId, num, 'closed')
+          await pvpChallenges.closeOpenForGame(weekId, num)
+        }
+      }
+
       // Clear only the keys we just persisted, preserving any edits the admin
       // made while the save was in flight (those will flush on their own blur).
       const after = usePendingStore.getState().pendingScores
