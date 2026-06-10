@@ -86,6 +86,16 @@ git show HEAD:app/src/utils/supabase/database.types.ts \
 
 The `supabase gen types` command requires the project's legacy API keys to be enabled. If it fails with "Legacy API keys are disabled", re-enable them in the Supabase dashboard, run the command, then disable them again.
 
+### Regenerate the schema snapshot after every schema change
+
+`supabase/schema.sql` is a generated, single-file snapshot of the current `public` schema (tables, constraints, indexes, RLS policies, functions, triggers). It is the source of truth for *current* DDL — agents read it instead of crawling the append-only `migrations/` log, which is full of since-superseded definitions. As the last step of every push, regenerate it (no Docker required):
+
+```bash
+./supabase/refresh-schema-snapshot.sh
+```
+
+Never hand-edit `supabase/schema.sql` — it is overwritten on every run.
+
 ---
 
 ## 2. Data Access Layer (`db.ts`)
@@ -289,6 +299,7 @@ Tiles go in either `leagueToolsTiles` (read-only views) or `adminTiles` (write o
 - [ ] Migration file created with `supabase migration new` (never manually named)
 - [ ] Migration pushed with `supabase db push --linked`
 - [ ] TypeScript types regenerated and written via temp file
+- [ ] Schema snapshot regenerated (`./supabase/refresh-schema-snapshot.sh`)
 - [ ] New query methods added to `db.ts` (no raw client calls in hooks/screens)
 - [ ] Hook created in `src/hooks/` returning `{ loading, rawXxx, reload }`
 - [ ] Screen uses `useMemo` for all derived data

@@ -60,6 +60,16 @@ It contains hook patterns, screen skeleton, navigation wiring, database migratio
 
   **Why:** Migration files are version-controlled and reversible. Direct writes bypass this safety net and make schema drift impossible to track or roll back.
 
+  **Migrations are history, not current state — read `supabase/schema.sql` instead.** The `supabase/migrations/` directory is an append-only log of *changes over time*. After 100+ migrations, a large fraction of them describe schema that was later renamed, dropped, or retyped (e.g. `players.name` → split into `first_name`/`last_name`, integer season ids → `uuid`, dropped `scores.game_number` and legacy team columns). **Reading or grepping individual migration files to answer "what does table X look like now?" is a known source of stale, wrong answers.** For the current schema:
+  - **[`supabase/schema.sql`](../supabase/schema.sql)** — a generated, single-file snapshot of the live `public` schema (tables, constraints, indexes, RLS policies, functions, triggers). This is the source of truth for *current* DDL. It is **machine-generated — never hand-edit it.** Regenerate it (no Docker required) as the last step of every `supabase db push`:
+    ```bash
+    ./supabase/refresh-schema-snapshot.sh
+    ```
+    (The generator query lives in `supabase/schema-snapshot.gen.sql`; the script reads the live DB via `supabase db query --linked` and writes `supabase/schema.sql`.)
+  - **[context/database-schema.md](database-schema.md)** and **[supabase/PIN_ECONOMY_SCHEMA.md](../supabase/PIN_ECONOMY_SCHEMA.md)** — the prose layer (invariants, distinctions, rationale) that the raw DDL doesn't capture.
+
+  Only open a migration file to understand *history* (when/why something changed) or when authoring a new one.
+
 13. **"Current season" ≠ highest `number`.** The current season is `is_active = true` AND `registration_open = false` — query it with `seasons.getCurrent()`. `seasons.getLatest()` (highest `number`) exists only to compute the *next* season number; using it for "current" mis-selects a season that is still in registration. Stats season lists exclude in-registration seasons (`!registration_open`). At most one season can be `is_active` (enforced by the `seasons_single_active` partial unique index).
 
 14. **All ids are `uuid` / TypeScript `string`.** No table uses integer/sequence keys. When adding season-related code, season ids and `season_id` are `string`.
