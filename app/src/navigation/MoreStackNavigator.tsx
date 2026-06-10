@@ -22,6 +22,7 @@ import LoanSharkAdminScreen from '../screens/LoanSharkAdminScreen'
 import PvPAdminScreen from '../screens/PvPAdminScreen'
 import MarketMovesAdminScreen from '../screens/MarketMovesAdminScreen'
 import BountyAdminScreen from '../screens/BountyAdminScreen'
+import LeagueToolsAdminScreen from '../screens/LeagueToolsAdminScreen'
 
 const Stack = createNativeStackNavigator<MoreStackParamList>()
 
@@ -52,6 +53,7 @@ export default function MoreStackNavigator() {
       <Stack.Screen name="PvPAdmin" component={PvPAdminScreen} options={{ title: 'PvP Admin' }} />
       <Stack.Screen name="MarketMovesAdmin" component={MarketMovesAdminScreen} options={{ title: 'Market Moves Admin' }} />
       <Stack.Screen name="BountyAdmin" component={BountyAdminScreen} options={{ title: 'Bounty Admin' }} />
+      <Stack.Screen name="LeagueToolsAdmin" component={LeagueToolsAdminScreen} options={{ title: 'League Tools' }} />
     </Stack.Navigator>
   )
 }

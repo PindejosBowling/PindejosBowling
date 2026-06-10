@@ -7,7 +7,7 @@ import {
   StyleSheet,
 } from 'react-native'
 import { useUiStore } from '../stores/uiStore'
-import { weeks, betMarkets } from '../utils/supabase/db'
+import { weeks, leagueTools } from '../utils/supabase/db'
 import { colors, fonts } from '../theme'
 import Toast from './Toast'
 import Button from './Button'
@@ -31,31 +31,16 @@ export default function AdminArchiveModal({ visible, onClose }: Props) {
         return
       }
 
-      const today = new Date().toISOString().slice(0, 10)
-      const { error: archiveErr } = await weeks.update(activeWeek.id, { is_archived: true, bowled_at: today })
+      // One atomic, audited transaction: snapshot → lock → settle (pins, bets,
+      // loans, PvP, feed) → create next week (archive_week RPC, admin-gated).
+      const { error: archiveErr } = await leagueTools.archiveWeek(activeWeek.id)
       if (archiveErr) {
-        showToast('Failed to archive week', 'error')
+        showToast(`Failed to archive week ${activeWeek.week_number}: ${archiveErr.message}`, 'error')
         setSaving(false)
         return
       }
 
-      // Credit pin balances and settle all open O/U markets for the archived
-      // week, server-side (settle_betting_for_week RPC, admin-gated, double-entry).
-      const { error: settleErr } = await betMarkets.settleForWeek(activeWeek.id)
-      if (settleErr) {
-        showToast(`Week ${activeWeek.week_number} archived — settlement failed: ${settleErr.message}`, 'error')
-      }
-
-      const { error: insertErr } = await weeks.insert({
-        season_id: activeWeek.season_id,
-        week_number: activeWeek.week_number + 1,
-      })
-      if (insertErr) {
-        showToast(`Week ${activeWeek.week_number} archived — failed to create next week`, 'error')
-      } else {
-        showToast(`Week ${activeWeek.week_number} archived`, 'success')
-      }
-
+      showToast(`Week ${activeWeek.week_number} archived`, 'success')
       onClose()
     } catch {
       showToast('Archive failed', 'error')

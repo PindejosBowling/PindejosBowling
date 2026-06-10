@@ -18,6 +18,7 @@ export type MoreStackParamList = {
   PvPAdmin: undefined
   MarketMovesAdmin: undefined
   BountyAdmin: undefined
+  LeagueToolsAdmin: undefined
 }
 
 export type StandingsStackParamList = {

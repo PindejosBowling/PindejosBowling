@@ -1932,6 +1932,10 @@ export type Database = {
         Args: { p_challenge_id: string }
         Returns: undefined
       }
+      archive_week: {
+        Args: { p_week_id: string }
+        Returns: string
+      }
       cancel_bet: { Args: { p_bet_id: string }; Returns: undefined }
       cancel_bounty: { Args: { p_bounty_post_id: string }; Returns: undefined }
       cancel_loan: { Args: { p_loan_id: string }; Returns: undefined }
@@ -2121,6 +2125,10 @@ export type Database = {
         Returns: undefined
       }
       take_loan: { Args: { p_loan_product_id: string }; Returns: string }
+      unarchive_week: {
+        Args: { p_force?: boolean; p_mode: string; p_week_id: string }
+        Returns: undefined
+      }
       void_pvp_challenge: {
         Args: { p_admin_note: string; p_challenge_id: string }
         Returns: undefined
