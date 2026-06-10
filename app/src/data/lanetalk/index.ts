@@ -35,16 +35,28 @@ export interface LanetalkFrame {
 export interface LanetalkGame {
   game_number: number
   score: number
+  /** Monday of the league night this game belongs to (YYYY-MM-DD). */
+  date: string
+  /** Human label for that Monday, e.g. "Jun 8, 2026". */
+  date_label: string
+  /** Original upload timestamp (ISO) — used only to order games by play time. */
+  played_at: string | null
+  /** The Lanetalk share link this game was parsed from. */
+  source_url: string | null
   frames: LanetalkFrame[]
 }
 
+export interface SessionDate {
+  /** YYYY-MM-DD (Monday of the week). */
+  date: string
+  label: string
+}
+
 export interface LanetalkSession {
-  source_url: string | null
-  title: string
   player: string
   bowling_center: { name: string; location: string }
-  datetime_text: string
-  datetime_iso: string | null
+  /** Distinct league nights present in `games`, chronological. */
+  dates: SessionDate[]
   summary: { games: number; total: number; average: number }
   games: LanetalkGame[]
 }

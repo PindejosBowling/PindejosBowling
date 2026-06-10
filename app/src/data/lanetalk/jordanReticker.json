@@ -1,21 +1,370 @@
 {
-  "source_url": null,
-  "title": "JORDAN-PBL bowled 303 at Lucky Strike Times Square",
   "player": "JORDAN-PBL",
   "bowling_center": {
     "name": "Lucky Strike Times Square",
     "location": "NY, New York, United States of America"
   },
-  "datetime_text": "1:28 AM on Tuesday, June 09, 2026",
-  "datetime_iso": "2026-06-09T01:28:00",
+  "dates": [
+    {
+      "date": "2026-06-08",
+      "label": "Jun 8, 2026"
+    }
+  ],
   "summary": {
-    "games": 3,
-    "total": 303,
-    "average": 101
+    "games": 4,
+    "total": 420,
+    "average": 105
   },
   "games": [
     {
       "game_number": 1,
+      "score": 117,
+      "frames": [
+        {
+          "frame": 1,
+          "throws": [
+            {
+              "display": "9",
+              "pins": 9,
+              "split": false
+            },
+            {
+              "display": "/",
+              "pins": 1,
+              "split": false
+            }
+          ],
+          "cumulative_score": 14,
+          "is_strike": false,
+          "is_spare": true,
+          "is_split": false,
+          "pin_diagrams": [
+            {
+              "7": "down_first",
+              "8": "down_first",
+              "9": "down_first",
+              "10": "down_first",
+              "4": "down_first",
+              "5": "down_second",
+              "6": "down_first",
+              "2": "down_first",
+              "3": "down_first",
+              "1": "down_first"
+            }
+          ]
+        },
+        {
+          "frame": 2,
+          "throws": [
+            {
+              "display": "4",
+              "pins": 4,
+              "split": false
+            },
+            {
+              "display": "/",
+              "pins": 6,
+              "split": false
+            }
+          ],
+          "cumulative_score": 31,
+          "is_strike": false,
+          "is_spare": true,
+          "is_split": false,
+          "pin_diagrams": [
+            {
+              "7": "down_first",
+              "8": "down_first",
+              "9": "down_first",
+              "10": "down_second",
+              "4": "down_first",
+              "5": "down_second",
+              "6": "down_second",
+              "2": "down_second",
+              "3": "down_second",
+              "1": "down_second"
+            }
+          ]
+        },
+        {
+          "frame": 3,
+          "throws": [
+            {
+              "display": "7",
+              "pins": 7,
+              "split": true
+            },
+            {
+              "display": "1",
+              "pins": 1,
+              "split": false
+            }
+          ],
+          "cumulative_score": 39,
+          "is_strike": false,
+          "is_spare": false,
+          "is_split": true,
+          "pin_diagrams": [
+            {
+              "7": "down_first",
+              "8": "down_first",
+              "9": "down_first",
+              "10": "down_first",
+              "4": "down_first",
+              "5": "standing",
+              "6": "down_first",
+              "2": "down_first",
+              "3": "down_second",
+              "1": "standing"
+            }
+          ]
+        },
+        {
+          "frame": 4,
+          "throws": [
+            {
+              "display": "X",
+              "pins": 10,
+              "split": false
+            }
+          ],
+          "cumulative_score": 59,
+          "is_strike": true,
+          "is_spare": false,
+          "is_split": false,
+          "pin_diagrams": [
+            {
+              "7": "down_first",
+              "8": "down_first",
+              "9": "down_first",
+              "10": "down_first",
+              "4": "down_first",
+              "5": "down_first",
+              "6": "down_first",
+              "2": "down_first",
+              "3": "down_first",
+              "1": "down_first"
+            }
+          ]
+        },
+        {
+          "frame": 5,
+          "throws": [
+            {
+              "display": "9",
+              "pins": 9,
+              "split": false
+            },
+            {
+              "display": "/",
+              "pins": 1,
+              "split": false
+            }
+          ],
+          "cumulative_score": 78,
+          "is_strike": false,
+          "is_spare": true,
+          "is_split": false,
+          "pin_diagrams": [
+            {
+              "7": "down_first",
+              "8": "down_first",
+              "9": "down_first",
+              "10": "down_first",
+              "4": "down_second",
+              "5": "down_first",
+              "6": "down_first",
+              "2": "down_first",
+              "3": "down_first",
+              "1": "down_first"
+            }
+          ]
+        },
+        {
+          "frame": 6,
+          "throws": [
+            {
+              "display": "9",
+              "pins": 9,
+              "split": false
+            },
+            {
+              "display": "-",
+              "pins": 0,
+              "split": false
+            }
+          ],
+          "cumulative_score": 87,
+          "is_strike": false,
+          "is_spare": false,
+          "is_split": false,
+          "pin_diagrams": [
+            {
+              "7": "down_first",
+              "8": "down_first",
+              "9": "down_first",
+              "10": "standing",
+              "4": "down_first",
+              "5": "down_first",
+              "6": "down_first",
+              "2": "down_first",
+              "3": "down_first",
+              "1": "down_first"
+            }
+          ]
+        },
+        {
+          "frame": 7,
+          "throws": [
+            {
+              "display": "1",
+              "pins": 1,
+              "split": true
+            },
+            {
+              "display": "5",
+              "pins": 5,
+              "split": false
+            }
+          ],
+          "cumulative_score": 93,
+          "is_strike": false,
+          "is_spare": false,
+          "is_split": true,
+          "pin_diagrams": [
+            {
+              "7": "standing",
+              "8": "down_second",
+              "9": "down_second",
+              "10": "down_first",
+              "4": "standing",
+              "5": "standing",
+              "6": "down_second",
+              "2": "down_second",
+              "3": "down_second",
+              "1": "standing"
+            }
+          ]
+        },
+        {
+          "frame": 8,
+          "throws": [
+            {
+              "display": "8",
+              "pins": 8,
+              "split": false
+            },
+            {
+              "display": "-",
+              "pins": 0,
+              "split": false
+            }
+          ],
+          "cumulative_score": 101,
+          "is_strike": false,
+          "is_spare": false,
+          "is_split": false,
+          "pin_diagrams": [
+            {
+              "7": "down_first",
+              "8": "down_first",
+              "9": "down_first",
+              "10": "down_second",
+              "4": "down_first",
+              "5": "down_first",
+              "6": "down_first",
+              "2": "down_first",
+              "3": "down_second",
+              "1": "down_first"
+            }
+          ]
+        },
+        {
+          "frame": 9,
+          "throws": [
+            {
+              "display": "9",
+              "pins": 9,
+              "split": false
+            },
+            {
+              "display": "-",
+              "pins": 0,
+              "split": false
+            }
+          ],
+          "cumulative_score": 110,
+          "is_strike": false,
+          "is_spare": false,
+          "is_split": false,
+          "pin_diagrams": [
+            {
+              "7": "down_first",
+              "8": "down_first",
+              "9": "down_first",
+              "10": "down_first",
+              "4": "standing",
+              "5": "down_first",
+              "6": "down_first",
+              "2": "down_first",
+              "3": "down_first",
+              "1": "down_first"
+            }
+          ]
+        },
+        {
+          "frame": 10,
+          "throws": [
+            {
+              "display": "7",
+              "pins": 7,
+              "split": false
+            },
+            {
+              "display": "-",
+              "pins": 0,
+              "split": false
+            }
+          ],
+          "cumulative_score": 117,
+          "is_strike": false,
+          "is_spare": false,
+          "is_split": false,
+          "pin_diagrams": [
+            {
+              "7": "down_first",
+              "8": "down_first",
+              "9": "standing",
+              "10": "down_first",
+              "4": "down_first",
+              "5": "down_first",
+              "6": "down_first",
+              "2": "standing",
+              "3": "down_first",
+              "1": "standing"
+            },
+            {
+              "7": "down_first",
+              "8": "down_first",
+              "9": "standing",
+              "10": "down_first",
+              "4": "down_first",
+              "5": "down_first",
+              "6": "down_first",
+              "2": "standing",
+              "3": "down_first",
+              "1": "standing"
+            }
+          ]
+        }
+      ],
+      "date": "2026-06-08",
+      "date_label": "Jun 8, 2026",
+      "played_at": "2026-06-08T23:58:00",
+      "source_url": "http://shared.lanetalk.com/5a401fe1658e086bc0d8cc7ae46bf3a9c47625ec"
+    },
+    {
+      "game_number": 2,
       "score": 105,
       "frames": [
         {
@@ -360,10 +709,14 @@
             }
           ]
         }
-      ]
+      ],
+      "date": "2026-06-08",
+      "date_label": "Jun 8, 2026",
+      "played_at": "2026-06-09T01:28:00",
+      "source_url": "http://shared.lanetalk.com/fdd40824dc6635475db40523a6b830781b406df5"
     },
     {
-      "game_number": 2,
+      "game_number": 3,
       "score": 118,
       "frames": [
         {
@@ -698,10 +1051,14 @@
             }
           ]
         }
-      ]
+      ],
+      "date": "2026-06-08",
+      "date_label": "Jun 8, 2026",
+      "played_at": "2026-06-09T01:28:00",
+      "source_url": "http://shared.lanetalk.com/fdd40824dc6635475db40523a6b830781b406df5"
     },
     {
-      "game_number": 3,
+      "game_number": 4,
       "score": 80,
       "frames": [
         {
@@ -1041,7 +1398,11 @@
             }
           ]
         }
-      ]
+      ],
+      "date": "2026-06-08",
+      "date_label": "Jun 8, 2026",
+      "played_at": "2026-06-09T01:28:00",
+      "source_url": "http://shared.lanetalk.com/fdd40824dc6635475db40523a6b830781b406df5"
     }
   ]
 }

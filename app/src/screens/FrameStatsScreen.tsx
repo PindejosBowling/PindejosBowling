@@ -1,6 +1,6 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import {
-  View, Text, ScrollView, StyleSheet, RefreshControl,
+  View, Text, ScrollView, StyleSheet, RefreshControl, TouchableOpacity,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { RouteProp, useRoute, useNavigation } from '@react-navigation/native'
@@ -9,22 +9,35 @@ import { colors, fonts, radius } from '../theme'
 import { StandingsStackParamList } from '../navigation/types'
 import ScreenHeader from '../components/ScreenHeader'
 import LoadingView from '../components/LoadingView'
+import PillFilter from '../components/PillFilter'
+import StatRadarChart from '../components/StatRadarChart'
+import StatDonut from '../components/StatDonut'
 import { useRefresh } from '../hooks/useRefresh'
 import {
   useFrameStatsData,
   computeSessionStats,
   computeScorecard,
   computePinLeaves,
+  filterSessionByDate,
+  ALL_DATES,
   Scorecard,
   ScorecardFrame,
   PinLeave,
 } from '../hooks/useFrameStatsData'
+import { PinDiagram, PinState } from '../data/lanetalk'
 
 type Nav = NativeStackNavigationProp<StandingsStackParamList>
 type FrameStatsRoute = RouteProp<StandingsStackParamList, 'FrameStats'>
 
 // Pin rows for a mini deck, back row first (matches the parsed diagram).
 const PIN_ROWS = [[7, 8, 9, 10], [4, 5, 6], [2, 3], [1]]
+
+// Colors for the three pin fates parsed from the diagram.
+const PIN_STATE_COLOR: Record<PinState, string> = {
+  down_first: colors.muted2,  // knocked down on the first ball
+  down_second: colors.gold,   // knocked down on the second ball
+  standing: colors.accent,    // left standing at end of frame
+}
 
 export default function FrameStatsScreen() {
   const route = useRoute<FrameStatsRoute>()
@@ -34,18 +47,34 @@ export default function FrameStatsScreen() {
   const { loading, session, reload } = useFrameStatsData(name)
   const { refreshing, onRefresh } = useRefresh(reload)
 
-  const stats = useMemo(() => computeSessionStats(session), [session])
-  const scorecards = useMemo<Scorecard[]>(
-    () => session ? session.games.map(computeScorecard) : [],
-    [session],
+  const [selectedDate, setSelectedDate] = useState<string>(ALL_DATES)
+
+  const filtered = useMemo(
+    () => filterSessionByDate(session, selectedDate),
+    [session, selectedDate],
   )
-  const leaves = useMemo(() => computePinLeaves(session), [session])
+  const stats = useMemo(() => computeSessionStats(filtered), [filtered])
+  const scorecards = useMemo<Scorecard[]>(
+    () => filtered ? filtered.games.map(computeScorecard) : [],
+    [filtered],
+  )
+  const leaves = useMemo(() => computePinLeaves(filtered), [filtered])
+
+  // Radar axes — only metrics we measure directly from pin fall. Percentages
+  // map straight to the 0..1 radius; first-ball average is scaled out of 10.
+  const radarAxes = useMemo(() => !stats ? [] : [
+    { label: 'Strike', valueText: pctFine(stats.strikePct), radial: stats.strikePct },
+    { label: 'Spare Conv.', valueText: pctFine(stats.sparePct), radial: stats.sparePct },
+    { label: 'Clean', valueText: pctFine(stats.cleanPct), radial: stats.cleanPct },
+    { label: 'First Ball', valueText: stats.firstBallAvg.toFixed(2), radial: stats.firstBallAvg / 10 },
+  ], [stats])
+
+  // Show the date on each scorecard only when viewing across multiple nights.
+  const showCardDates = selectedDate === ALL_DATES && (session?.dates.length ?? 0) > 1
 
   if (loading) return <LoadingView label="Loading games" />
 
-  const subtitle = session
-    ? `${session.bowling_center.name} · ${session.datetime_text}`
-    : undefined
+  const subtitle = session?.bowling_center.name
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
@@ -61,25 +90,60 @@ export default function FrameStatsScreen() {
           <Text style={styles.empty}>No frame-level game data for this player yet.</Text>
         ) : (
           <>
-            {/* Session summary */}
+            {/* League-night filter */}
+            {session.dates.length > 0 ? (
+              <PillFilter
+                items={[ALL_DATES, ...session.dates.map(d => d.date)]}
+                value={selectedDate}
+                onChange={setSelectedDate}
+                renderLabel={(item) =>
+                  item === ALL_DATES
+                    ? 'All-time'
+                    : session.dates.find(d => d.date === item)?.label ?? item}
+              />
+            ) : null}
+
+            {/* Session summary — only metrics not already shown on the radar/donuts */}
             <View style={styles.statGrid}>
               <StatTile label="Series" value={stats.total} />
-              <StatTile label="Average" value={stats.average} />
+              <StatTile label="Games" value={stats.games} />
               <StatTile label="High Game" value={stats.highGame} />
-              <StatTile label="1st-Ball Avg" value={stats.firstBallAvg.toFixed(1)} />
-              <StatTile label="Strikes" value={`${stats.strikes} · ${pct(stats.strikePct)}`} />
-              <StatTile label="Spare Conv." value={pct(stats.sparePct)} />
-              <StatTile label="Clean Frames" value={pct(stats.cleanPct)} />
+              <StatTile label="Low Game" value={stats.lowGame} />
+              <StatTile label="Strikes / Spares" value={`${stats.strikes} / ${stats.spares}`} />
               <StatTile
-                label="Splits"
+                label="Splits Made"
                 value={stats.splits ? `${stats.splitsConverted}/${stats.splits}` : '0'}
               />
+            </View>
+
+            {/* Radar chart */}
+            <Text style={styles.sectionHeader}>Radar</Text>
+            <View style={styles.radarCard}>
+              <View style={styles.radarHeader}>
+                <Text style={styles.radarHeaderLabel}>Average</Text>
+                <Text style={styles.radarHeaderValue}>{stats.average}</Text>
+              </View>
+              <View style={styles.radarBody}>
+                <StatRadarChart axes={radarAxes} size={140} />
+              </View>
+            </View>
+
+            {/* First-ball summary donuts */}
+            <Text style={styles.sectionHeader}>First Ball</Text>
+            <View style={styles.donutRow}>
+              <StatDonut value={stats.strikePct} valueText={pctFine(stats.strikePct)} label="Strikes" color={colors.accent} />
+              <StatDonut value={stats.leavePct} valueText={pctFine(stats.leavePct)} label="Leaves" color={colors.gold} />
+              <StatDonut value={stats.splitPct} valueText={pctFine(stats.splitPct)} label="Splits" color={colors.danger} />
             </View>
 
             {/* Per-game scorecards */}
             <Text style={styles.sectionHeader}>Scorecards</Text>
             {scorecards.map((card) => (
-              <ScorecardView key={card.gameNumber} card={card} />
+              <ScorecardView
+                key={`${card.dateLabel}-${card.gameNumber}`}
+                card={card}
+                showDate={showCardDates}
+              />
             ))}
 
             {/* Pin-leave summary */}
@@ -100,8 +164,11 @@ export default function FrameStatsScreen() {
   )
 }
 
-function pct(v: number): string {
-  return `${Math.round(v * 100)}%`
+// Percent with up to two decimals (whole numbers shown without decimals),
+// matching the Lanetalk style (e.g. "10%", "12.50%", "23.33%").
+function pctFine(v: number): string {
+  const p = Math.round(v * 10000) / 100
+  return p % 1 === 0 ? `${p}%` : `${p.toFixed(2)}%`
 }
 
 function StatTile({ label, value }: { label: string; value: string | number }) {
@@ -113,25 +180,47 @@ function StatTile({ label, value }: { label: string; value: string | number }) {
   )
 }
 
-function ScorecardView({ card }: { card: Scorecard }) {
+function ScorecardView({ card, showDate }: { card: Scorecard; showDate: boolean }) {
+  const [expanded, setExpanded] = useState<number | null>(null)
+  const expandedFrame = card.frames.find(f => f.frame === expanded) ?? null
+
   return (
     <View style={cardStyles.wrap}>
       <View style={cardStyles.titleRow}>
-        <Text style={cardStyles.gameLabel}>Game {card.gameNumber}</Text>
+        <Text style={cardStyles.gameLabel}>
+          Game {card.gameNumber}
+          {showDate ? <Text style={cardStyles.gameDate}>{`  ·  ${card.dateLabel}`}</Text> : null}
+        </Text>
         <Text style={cardStyles.gameScore}>{card.score}</Text>
       </View>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={cardStyles.strip}>
         {card.frames.map((f) => (
-          <FrameCell key={f.frame} frame={f} tenth={f.frame === 10} />
+          <FrameCell
+            key={f.frame}
+            frame={f}
+            tenth={f.frame === 10}
+            selected={expanded === f.frame}
+            onPress={() => setExpanded(expanded === f.frame ? null : f.frame)}
+          />
         ))}
       </ScrollView>
+
+      {expandedFrame ? <FrameDetail frame={expandedFrame} /> : (
+        <Text style={cardStyles.tapHint}>Tap a frame to see the pins</Text>
+      )}
     </View>
   )
 }
 
-function FrameCell({ frame, tenth }: { frame: ScorecardFrame; tenth: boolean }) {
+function FrameCell({ frame, tenth, selected, onPress }: {
+  frame: ScorecardFrame; tenth: boolean; selected: boolean; onPress: () => void
+}) {
   return (
-    <View style={[cardStyles.frame, tenth && cardStyles.frameTenth]}>
+    <TouchableOpacity
+      activeOpacity={0.7}
+      onPress={onPress}
+      style={[cardStyles.frame, tenth && cardStyles.frameTenth, selected && cardStyles.frameSelected]}
+    >
       <View style={cardStyles.throwsRow}>
         {frame.throws.map((t, i) => (
           <View key={i} style={[cardStyles.throwBox, t.split && cardStyles.throwSplit]}>
@@ -144,7 +233,55 @@ function FrameCell({ frame, tenth }: { frame: ScorecardFrame; tenth: boolean }) 
       <View style={cardStyles.scoreRow}>
         <Text style={cardStyles.cumulative}>{frame.cumulative}</Text>
       </View>
-      <Text style={cardStyles.frameNum}>{frame.frame}</Text>
+      <Text style={[cardStyles.frameNum, selected && cardStyles.frameNumSelected]}>{frame.frame}</Text>
+    </TouchableOpacity>
+  )
+}
+
+// Expanded panel: the pin diagram(s) for the tapped frame, plus a state key.
+function FrameDetail({ frame }: { frame: ScorecardFrame }) {
+  return (
+    <View style={detailStyles.panel}>
+      <View style={detailStyles.decks}>
+        {frame.diagrams.map((diagram, i) => (
+          <View key={i} style={detailStyles.deckBlock}>
+            <FrameDeck diagram={diagram} />
+            {frame.diagrams.length > 1 ? (
+              <Text style={detailStyles.ballLabel}>Ball {i + 1}</Text>
+            ) : null}
+          </View>
+        ))}
+      </View>
+      <View style={detailStyles.key}>
+        <KeyItem color={PIN_STATE_COLOR.down_first} label="1st ball" />
+        <KeyItem color={PIN_STATE_COLOR.down_second} label="2nd ball" />
+        <KeyItem color={PIN_STATE_COLOR.standing} label="Standing" />
+      </View>
+    </View>
+  )
+}
+
+function FrameDeck({ diagram }: { diagram: PinDiagram }) {
+  return (
+    <View style={detailStyles.deck}>
+      {PIN_ROWS.map((row, ri) => (
+        <View key={ri} style={detailStyles.deckRow}>
+          {row.map((pin) => {
+            const state = diagram[String(pin)]
+            const color = state ? PIN_STATE_COLOR[state] : colors.surface3
+            return <View key={pin} style={[detailStyles.deckPin, { backgroundColor: color }]} />
+          })}
+        </View>
+      ))}
+    </View>
+  )
+}
+
+function KeyItem({ color, label }: { color: string; label: string }) {
+  return (
+    <View style={detailStyles.keyItem}>
+      <View style={[detailStyles.keyDot, { backgroundColor: color }]} />
+      <Text style={detailStyles.keyLabel}>{label}</Text>
     </View>
   )
 }
@@ -209,6 +346,48 @@ const styles = StyleSheet.create({
     borderRadius: radius.cardMd,
     overflow: 'hidden',
   },
+  radarCard: {
+    marginHorizontal: 16,
+    marginBottom: 16,
+    backgroundColor: colors.surface,
+    borderRadius: radius.cardMd,
+    overflow: 'hidden',
+  },
+  radarHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  radarHeaderLabel: {
+    fontFamily: fonts.barlowCondensed,
+    fontSize: 13,
+    color: colors.muted,
+    textTransform: 'uppercase',
+    letterSpacing: 1.5,
+  },
+  radarHeaderValue: {
+    fontFamily: fonts.barlowCondensed,
+    fontSize: 30,
+    color: colors.text,
+  },
+  radarBody: {
+    alignItems: 'center',
+    paddingVertical: 8,
+  },
+  donutRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    marginHorizontal: 16,
+    marginBottom: 16,
+    backgroundColor: colors.surface,
+    borderRadius: radius.cardMd,
+    paddingVertical: 18,
+    paddingHorizontal: 8,
+  },
   empty: {
     fontFamily: fonts.barlow,
     fontSize: 14,
@@ -260,6 +439,12 @@ const cardStyles = StyleSheet.create({
     color: colors.accent,
     letterSpacing: 1,
   },
+  gameDate: {
+    fontFamily: fonts.barlowCondensed,
+    fontSize: 13,
+    color: colors.muted,
+    letterSpacing: 0.5,
+  },
   gameScore: {
     fontFamily: fonts.barlowCondensed,
     fontSize: 20,
@@ -275,6 +460,7 @@ const cardStyles = StyleSheet.create({
     overflow: 'hidden',
   },
   frameTenth: { width: 64 },
+  frameSelected: { borderColor: colors.accent },
   throwsRow: {
     flexDirection: 'row',
     justifyContent: 'center',
@@ -317,6 +503,60 @@ const cardStyles = StyleSheet.create({
     color: colors.muted2,
     textAlign: 'center',
     paddingVertical: 2,
+  },
+  frameNumSelected: { color: colors.accent },
+  tapHint: {
+    fontFamily: fonts.barlow,
+    fontSize: 11,
+    color: colors.muted2,
+    textAlign: 'center',
+    marginTop: 10,
+  },
+})
+
+const detailStyles = StyleSheet.create({
+  panel: {
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  decks: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 24,
+  },
+  deckBlock: { alignItems: 'center' },
+  ballLabel: {
+    fontFamily: fonts.barlowCondensed,
+    fontSize: 10,
+    color: colors.muted,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+    marginTop: 6,
+  },
+  deck: { alignItems: 'center', justifyContent: 'center' },
+  deckRow: { flexDirection: 'row', justifyContent: 'center', marginBottom: 4 },
+  deckPin: {
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    marginHorizontal: 3,
+  },
+  key: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    flexWrap: 'wrap',
+    gap: 16,
+    marginTop: 14,
+  },
+  keyItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  keyDot: { width: 10, height: 10, borderRadius: 5 },
+  keyLabel: {
+    fontFamily: fonts.barlowCondensed,
+    fontSize: 12,
+    color: colors.muted,
+    letterSpacing: 0.5,
   },
 })
 

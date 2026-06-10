@@ -4,7 +4,12 @@ import {
   LanetalkSession,
   LanetalkGame,
   LanetalkFrame,
+  SessionDate,
+  PinDiagram,
 } from '../data/lanetalk'
+
+/** Sentinel for the "all nights" filter option. */
+export const ALL_DATES = 'all'
 
 // Frame-level game stats for a player. The data is a bundled static asset, so
 // "loading" is trivial — the hook keeps the standard shape so the screen reads
@@ -25,6 +30,26 @@ export function useFrameStatsData(name: string) {
   useEffect(() => { load() }, [load])
 
   return { loading, session, reload: load }
+}
+
+// ----------------------------------------------------------------------------
+// Date filtering (league nights). Every game is stamped with the Monday of its
+// week; these helpers drive the date filter on the screen.
+// ----------------------------------------------------------------------------
+
+/** Filter options for the screen: "all" plus each distinct league night. */
+export function sessionDateOptions(session: LanetalkSession | null): SessionDate[] {
+  return session?.dates ?? []
+}
+
+/** A session view limited to one league night, or the whole session for ALL_DATES. */
+export function filterSessionByDate(
+  session: LanetalkSession | null,
+  date: string,
+): LanetalkSession | null {
+  if (!session) return null
+  if (date === ALL_DATES) return session
+  return { ...session, games: session.games.filter(g => g.date === date) }
 }
 
 // ----------------------------------------------------------------------------
@@ -50,7 +75,13 @@ export interface SessionStats {
   sparePct: number
   /** (strikes + spares) / totalFrames — frames with no open. */
   cleanPct: number
+  /** First balls that left at least one pin standing. */
+  leaves: number
+  /** leaves / totalFrames — first balls that weren't strikes. */
+  leavePct: number
   splits: number
+  /** splits / totalFrames. */
+  splitPct: number
   splitsConverted: number
 }
 
@@ -108,7 +139,10 @@ export function computeSessionStats(session: LanetalkSession | null): SessionSta
     strikePct: frameCount ? strikes / frameCount : 0,
     sparePct: spares + opens ? spares / (spares + opens) : 0,
     cleanPct: frameCount ? (strikes + spares) / frameCount : 0,
+    leaves: frameCount - strikes,
+    leavePct: frameCount ? (frameCount - strikes) / frameCount : 0,
     splits,
+    splitPct: frameCount ? splits / frameCount : 0,
     splitsConverted,
   }
 }
@@ -126,11 +160,14 @@ export interface ScorecardFrame {
   frame: number
   throws: ScorecardThrow[]
   cumulative: number
+  /** Pin state after each ball — one diagram for frames 1-9, one per ball in the 10th. */
+  diagrams: PinDiagram[]
 }
 
 export interface Scorecard {
   gameNumber: number
   score: number
+  dateLabel: string
   frames: ScorecardFrame[]
 }
 
@@ -144,9 +181,9 @@ export function computeScorecard(game: LanetalkGame): Scorecard {
     } else {
       boxes = f.throws.map(t => ({ display: t.display, split: t.split }))
     }
-    return { frame: f.frame, throws: boxes, cumulative: f.cumulative_score }
+    return { frame: f.frame, throws: boxes, cumulative: f.cumulative_score, diagrams: f.pin_diagrams }
   })
-  return { gameNumber: game.game_number, score: game.score, frames }
+  return { gameNumber: game.game_number, score: game.score, dateLabel: game.date_label, frames }
 }
 
 // ----------------------------------------------------------------------------

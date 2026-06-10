@@ -91,12 +91,21 @@ def parse_header(html: str) -> dict:
     total = _first(r'<span>Total</span>\s*<h2>(\d+)</h2>', html)
     average = _first(r'<span>Average</span>\s*<h2>(\d+)</h2>', html)
 
+    # The league bowls on Mondays. Sessions can spill past midnight into Tuesday
+    # (a 1:28 AM "Tuesday" upload is really Monday's night), so the *date* shown
+    # is normalized back to the Monday of its week. The full timestamp is kept
+    # only as `played_at` to sort games into the order they were actually rolled
+    # (a late-Monday single game precedes a past-midnight series).
+    dt = _parse_datetime(datetime_text)
+    monday = _to_monday(dt)
     return {
         "title": title,
         "player": player,
         "bowling_center": {"name": center, "location": place},
         "datetime_text": datetime_text,
-        "datetime_iso": _to_iso(datetime_text),
+        "played_at": dt.isoformat() if dt else None,
+        "date": monday.strftime("%Y-%m-%d") if monday else None,
+        "date_label": _date_label(monday),
         "summary": {
             "games": int(games) if games else None,
             "total": int(total) if total else None,
@@ -105,18 +114,34 @@ def parse_header(html: str) -> dict:
     }
 
 
-def _to_iso(text: str):
-    """'1:28 AM on Tuesday, June 09, 2026' -> '2026-06-09T01:28:00'."""
+def _parse_datetime(text: str):
+    """'1:28 AM on Tuesday, June 09, 2026' -> datetime, or None."""
     if not text:
         return None
     from datetime import datetime
     cleaned = re.sub(r"^(.*?) on \w+, (.*)$", r"\1 \2", text.strip())
     for fmt in ("%I:%M %p %B %d, %Y", "%I:%M %p %b %d, %Y"):
         try:
-            return datetime.strptime(cleaned, fmt).isoformat()
+            return datetime.strptime(cleaned, fmt)
         except ValueError:
             continue
     return None
+
+
+def _to_monday(dt):
+    """The Monday of the week a datetime belongs to (league night)."""
+    from datetime import timedelta
+    if not dt:
+        return None
+    d = dt.date()
+    return d - timedelta(days=d.weekday())  # weekday(): Monday == 0
+
+
+def _date_label(d) -> str:
+    """A short human date, e.g. 'Jun 8, 2026' (no zero-padded day)."""
+    if not d:
+        return None
+    return f"{d.strftime('%b')} {d.day}, {d.year}"
 
 
 def parse_pin_diagram(block: str) -> dict:
@@ -257,7 +282,14 @@ def parse(html: str, source_url: str = None) -> dict:
     games = []
     for i in range(1, len(parts), 2):
         game_number = int(parts[i])
-        games.append(parse_game(game_number, parts[i + 1]))
+        game = parse_game(game_number, parts[i + 1])
+        # Stamp the session date onto each game so games merged from multiple
+        # share links (same night, separate uploads) remain filterable by date.
+        game["date"] = result.get("date")
+        game["date_label"] = result.get("date_label")
+        game["played_at"] = result.get("played_at")
+        game["source_url"] = source_url
+        games.append(game)
     result["games"] = games
     return result
 
