@@ -36,12 +36,30 @@ const MODE_COPY: Record<Mode, { title: string; body: string }> = {
       '& Advance to re-derive on a clean slate.',
   },
   full: {
-    title: 'Full Unarchive',
+    title: 'Hard Unarchive',
     body:
       'Everything Soft does, plus unlocks the week (is_archived → false) so scores ' +
       'become editable again. Use to fix wrong input data, then re-run Archive & Advance.',
   },
 }
+
+// Side-by-side summary so an admin can tell the two modes apart at a glance.
+// Both reverse the Pinsino settlement and delete week N+1; they differ only in
+// whether this week's scores are unlocked for editing.
+const MODE_SUMMARY: { mode: Mode; name: string; keeps: string; use: string }[] = [
+  {
+    mode: 'soft',
+    name: 'Soft Unarchive',
+    keeps: 'Scores stay locked (week stays archived).',
+    use: 'Settlement was wrong but the scores are right — re-run Archive & Advance to re-derive on a clean slate.',
+  },
+  {
+    mode: 'full',
+    name: 'Hard Unarchive',
+    keeps: 'Scores unlock for editing (week un-archives).',
+    use: 'The input scores themselves were wrong — fix them, then re-run Archive & Advance.',
+  },
+]
 
 export default function LeagueToolsAdminScreen() {
   const navigation = useNavigation<Nav>()
@@ -144,6 +162,21 @@ export default function LeagueToolsAdminScreen() {
           re-run of Archive & Advance starts from a clean slate.
         </Text>
 
+        <View style={styles.summaryCard}>
+          <Text style={styles.summaryHeader}>
+            Both modes reverse this week's Pinsino settlement (pins, bet/PvP
+            settlements, loan garnishment, feed events) and delete week N+1. They
+            differ only in what happens to this week's scores:
+          </Text>
+          {MODE_SUMMARY.map(m => (
+            <View key={m.mode} style={styles.summaryRow}>
+              <Text style={styles.summaryName}>{m.name}</Text>
+              <Text style={styles.summaryKeeps}>{m.keeps}</Text>
+              <Text style={styles.summaryUse}>{m.use}</Text>
+            </View>
+          ))}
+        </View>
+
         <Text style={styles.sectionHeader}>ARCHIVED WEEKS</Text>
 
         {weeks.length === 0 ? (
@@ -168,7 +201,7 @@ export default function LeagueToolsAdminScreen() {
                   fullWidth
                 />
                 <Button
-                  label="Full Unarchive"
+                  label="Hard Unarchive"
                   variant="outline"
                   tone="danger"
                   onPress={() => openConfirm(w, 'full')}
@@ -237,6 +270,49 @@ const styles = StyleSheet.create({
     color: colors.muted,
     letterSpacing: 1.5,
     marginBottom: 10,
+  },
+
+  summaryCard: {
+    backgroundColor: colors.surface,
+    borderRadius: radius.cardMd,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: 16,
+    marginBottom: 24,
+  },
+  summaryHeader: {
+    fontFamily: fonts.barlow,
+    fontSize: 13,
+    color: colors.text,
+    lineHeight: 19,
+    marginBottom: 14,
+  },
+  summaryRow: {
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    paddingTop: 12,
+    marginTop: 2,
+  },
+  summaryName: {
+    fontFamily: fonts.barlowCondensed,
+    fontSize: 15,
+    color: colors.gold,
+    fontWeight: '700',
+    letterSpacing: 0.3,
+    marginBottom: 3,
+  },
+  summaryKeeps: {
+    fontFamily: fonts.barlow,
+    fontSize: 13,
+    color: colors.text,
+    lineHeight: 18,
+  },
+  summaryUse: {
+    fontFamily: fonts.barlow,
+    fontSize: 12,
+    color: colors.muted,
+    lineHeight: 17,
+    marginTop: 3,
   },
 
   card: {
