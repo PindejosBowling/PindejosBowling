@@ -1724,7 +1724,7 @@ END;
 $function$
 ;
 
-CREATE OR REPLACE FUNCTION public.archive_week(p_week_id uuid)
+CREATE OR REPLACE FUNCTION public.archive_week(p_week_id uuid, p_force boolean DEFAULT false)
  RETURNS uuid
  LANGUAGE plpgsql
  SECURITY DEFINER
@@ -1845,10 +1845,12 @@ BEGIN
 
   -- --------------------------------------------------------------------------
   -- 2c. Lock the week, run settlement, create the next week — all-or-nothing.
+  --     p_force: void+refund any bet settlement would otherwise leave pending
+  --     (see settle_betting_for_week's backstop).
   -- --------------------------------------------------------------------------
   UPDATE public.weeks SET is_archived = true, bowled_at = current_date WHERE id = p_week_id;
 
-  PERFORM public.settle_betting_for_week(p_week_id);
+  PERFORM public.settle_betting_for_week(p_week_id, p_force);
 
   INSERT INTO public.weeks (season_id, week_number)
     VALUES (v_season_id, v_week_number + 1)
@@ -3611,6 +3613,27 @@ END;
 $function$
 ;
 
+CREATE OR REPLACE FUNCTION public.resync_week_markets(p_week_id uuid, p_moneyline boolean DEFAULT false)
+ RETURNS void
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+BEGIN
+  IF p_week_id IS NULL THEN
+    RETURN;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM public.weeks w WHERE w.id = p_week_id AND w.is_archived = false) THEN
+    RETURN;
+  END IF;
+  PERFORM public.sync_over_under_markets_for_week(p_week_id);
+  IF p_moneyline THEN
+    PERFORM public.sync_moneyline_markets_for_week(p_week_id);
+  END IF;
+END;
+$function$
+;
+
 CREATE OR REPLACE FUNCTION public.scores_slot_in_game()
  RETURNS trigger
  LANGUAGE plpgsql
@@ -3641,7 +3664,7 @@ END;
 $function$
 ;
 
-CREATE OR REPLACE FUNCTION public.settle_betting_for_week(p_week_id uuid)
+CREATE OR REPLACE FUNCTION public.settle_betting_for_week(p_week_id uuid, p_force boolean DEFAULT false)
  RETURNS void
  LANGUAGE plpgsql
  SECURITY DEFINER
@@ -3653,6 +3676,9 @@ DECLARE
   v_mkt         record;
   v_score       integer;
   v_house_net   integer;
+  v_n_pending   integer;
+  v_titles      text;
+  v_bet         record;
 BEGIN
   IF ((SELECT auth.jwt()) -> 'app_metadata' ->> 'role') <> 'admin' THEN
     RAISE EXCEPTION 'Admin only';
@@ -3703,7 +3729,7 @@ BEGIN
     LIMIT 1;
 
     IF v_score IS NULL THEN
-      -- No score -> close without a result (bets stay pending for manual handling).
+      -- No score -> close without a result (bets caught by the backstop below).
       UPDATE public.bet_markets SET status = 'closed' WHERE id = v_mkt.id;
     ELSE
       PERFORM public.settle_market_internal(v_mkt.id, v_score);
@@ -3733,12 +3759,65 @@ BEGIN
   -- stale offers internally before settling), same transaction as score_credit mint.
   PERFORM public.settle_pvp_for_week(p_week_id);
 
+  -- --------------------------------------------------------------------------
+  -- Backstop: settlement must leave NO pending sportsbook bet, whatever market
+  -- type or roster disconnect produced it. Without force: abort (the whole
+  -- archive transaction rolls back) and name the unsettleable markets. With
+  -- force: void those bets and refund their stakes. The void is snapshot-
+  -- reversible — bets/bet_legs pre-images are captured by archive_week, and the
+  -- bet_refund rows are bet-linked so unarchive deletes them.
+  -- --------------------------------------------------------------------------
+  SELECT count(DISTINCT b.id) INTO v_n_pending
+  FROM public.bets b
+  JOIN public.bet_legs l       ON l.bet_id = b.id
+  JOIN public.bet_selections s ON s.id = l.selection_id
+  JOIN public.bet_markets m    ON m.id = s.market_id
+  WHERE m.week_id = p_week_id AND b.status = 'pending';
+
+  IF v_n_pending > 0 THEN
+    IF NOT p_force THEN
+      SELECT string_agg(DISTINCT m.title, ', ') INTO v_titles
+      FROM public.bets b
+      JOIN public.bet_legs l       ON l.bet_id = b.id
+      JOIN public.bet_selections s ON s.id = l.selection_id
+      JOIN public.bet_markets m    ON m.id = s.market_id
+      WHERE m.week_id = p_week_id AND b.status = 'pending' AND m.status <> 'settled';
+
+      RAISE EXCEPTION '% bet(s) would remain pending after settlement — unsettleable market(s): %. Re-run with force to void and refund them.',
+        v_n_pending, COALESCE(v_titles, 'unknown');
+    END IF;
+
+    FOR v_bet IN
+      SELECT DISTINCT b.id, b.player_id, b.season_id, b.stake
+      FROM public.bets b
+      JOIN public.bet_legs l       ON l.bet_id = b.id
+      JOIN public.bet_selections s ON s.id = l.selection_id
+      JOIN public.bet_markets m    ON m.id = s.market_id
+      WHERE m.week_id = p_week_id AND b.status = 'pending'
+    LOOP
+      UPDATE public.bet_legs SET result = 'void' WHERE bet_id = v_bet.id AND result IS NULL;
+      UPDATE public.bets SET status = 'void', settled_at = now() WHERE id = v_bet.id;
+      INSERT INTO public.pin_ledger (player_id, season_id, is_house, amount, type, description, bet_id) VALUES
+        (v_bet.player_id, v_bet.season_id, false,  v_bet.stake, 'bet_refund', 'Voided at archive — market never settled',         v_bet.id),
+        (NULL,            v_bet.season_id, true,  -v_bet.stake, 'bet_refund', 'Voided at archive — market never settled (house)', v_bet.id);
+    END LOOP;
+  END IF;
+
   -- Activity Feed: post the House's weekly sportsbook P&L (aggregate, no source FK).
   -- house_net > 0 = House won the week; < 0 = players beat the House (§10.3 copy).
-  SELECT COALESCE(SUM(amount), 0) INTO v_house_net
-    FROM public.pin_ledger
-    WHERE is_house = true AND week_id = p_week_id
-      AND type IN ('bet_stake','bet_payout','bet_refund');
+  -- Summed via bet_id through the week's markets: bet_payout/bet_refund rows are
+  -- not week-stamped, so a week_id predicate would only ever count the stakes.
+  SELECT COALESCE(SUM(pl.amount), 0) INTO v_house_net
+    FROM public.pin_ledger pl
+    WHERE pl.is_house = true
+      AND pl.type IN ('bet_stake','bet_payout','bet_refund')
+      AND pl.bet_id IN (
+        SELECT DISTINCT l.bet_id
+        FROM public.bet_legs l
+        JOIN public.bet_selections s ON s.id = l.selection_id
+        JOIN public.bet_markets m    ON m.id = s.market_id
+        WHERE m.week_id = p_week_id
+      );
 
   -- Idempotency: no source FK exists, so guard on (season, week, event_type).
   IF NOT EXISTS (
@@ -4479,6 +4558,8 @@ CREATE OR REPLACE FUNCTION public.sync_over_under_markets_for_week(p_week_id uui
 AS $function$
 DECLARE
   v_season_id    uuid;
+  v_has_teams    boolean;
+  v_has_games    boolean;
   v_target_games integer[];
   v_league_avg   numeric;
   v_avg          numeric;
@@ -4491,50 +4572,69 @@ BEGIN
     RAISE EXCEPTION 'Week not found';
   END IF;
 
-  -- Target games = distinct game_number of existing O/U markets ∪ p_extra_games,
-  -- defaulting to {1,2} when there are neither.
-  SELECT ARRAY(
-    SELECT DISTINCT g FROM (
-      SELECT game_number AS g FROM public.bet_markets
-        WHERE week_id = p_week_id AND market_type = 'over_under' AND game_number IS NOT NULL
-      UNION
-      SELECT UNNEST(COALESCE(p_extra_games, '{}'))
-    ) u
-  ) INTO v_target_games;
-  IF v_target_games IS NULL OR array_length(v_target_games, 1) IS NULL THEN
-    v_target_games := ARRAY[1, 2];
+  SELECT EXISTS (SELECT 1 FROM public.teams t WHERE t.week_id = p_week_id)
+    INTO v_has_teams;
+  SELECT EXISTS (
+    SELECT 1 FROM public.games g
+    JOIN public.teams t ON t.id = g.team_a_id
+    WHERE t.week_id = p_week_id
+  ) INTO v_has_games;
+
+  -- Target games: once a schedule exists the games table is authoritative
+  -- (∪ p_extra_games for a just-inserted game in the same client flow).
+  -- Before teams: existing market numbers ∪ extras, defaulting to {1, 2}.
+  IF v_has_games THEN
+    SELECT ARRAY(
+      SELECT DISTINCT x FROM (
+        SELECT g.game_number AS x FROM public.games g
+          JOIN public.teams t ON t.id = g.team_a_id
+         WHERE t.week_id = p_week_id
+        UNION
+        SELECT UNNEST(COALESCE(p_extra_games, '{}'))
+      ) u
+    ) INTO v_target_games;
+  ELSE
+    SELECT ARRAY(
+      SELECT DISTINCT x FROM (
+        SELECT game_number AS x FROM public.bet_markets
+          WHERE week_id = p_week_id AND market_type = 'over_under' AND game_number IS NOT NULL
+        UNION
+        SELECT UNNEST(COALESCE(p_extra_games, '{}'))
+      ) u
+    ) INTO v_target_games;
+    IF v_target_games IS NULL OR array_length(v_target_games, 1) IS NULL THEN
+      v_target_games := ARRAY[1, 2];
+    END IF;
   END IF;
 
-  -- --- Refund + remove markets for players no longer "in" --------------------
-  DELETE FROM public.pin_ledger
-    WHERE bet_id IN (
-      SELECT l.bet_id
-      FROM public.bet_legs l
-      JOIN public.bet_selections s ON s.id = l.selection_id
-      JOIN public.bet_markets    m ON m.id = s.market_id
-      WHERE m.week_id = p_week_id AND m.market_type = 'over_under'
-        AND m.subject_player_id NOT IN (
-          SELECT player_id FROM public.rsvp WHERE week_id = p_week_id AND status = 'in'
-        )
-    );
-
-  DELETE FROM public.bets
-    WHERE id IN (
-      SELECT l.bet_id
-      FROM public.bet_legs l
-      JOIN public.bet_selections s ON s.id = l.selection_id
-      JOIN public.bet_markets    m ON m.id = s.market_id
-      WHERE m.week_id = p_week_id AND m.market_type = 'over_under'
-        AND m.subject_player_id NOT IN (
-          SELECT player_id FROM public.rsvp WHERE week_id = p_week_id AND status = 'in'
-        )
-    );
-
+  -- --- Prune: refund + remove every O/U market whose subject is no longer ---
+  -- eligible (per the ladder above) or whose game number is no longer
+  -- scheduled. The BEFORE DELETE trigger (refund_bets_before_market_delete)
+  -- refunds every touched bet whole (ledger pair + bet row), including parlays
+  -- spanning other markets. Settled/void markets are immutable — never pruned.
   DELETE FROM public.bet_markets m
-    WHERE m.week_id = p_week_id AND m.market_type = 'over_under'
-      AND m.subject_player_id NOT IN (
-        SELECT player_id FROM public.rsvp WHERE week_id = p_week_id AND status = 'in'
-      );
+   WHERE m.week_id = p_week_id
+     AND m.market_type = 'over_under'
+     AND m.status IN ('open', 'closed')
+     AND (
+       m.game_number <> ALL (v_target_games)
+       OR (v_has_games AND NOT EXISTS (
+             SELECT 1 FROM public.scores s
+             JOIN public.team_slots ts ON ts.id = s.team_slot_id
+             JOIN public.teams t       ON t.id = ts.team_id
+             JOIN public.games g       ON g.id = s.game_id
+             WHERE t.week_id = p_week_id
+               AND ts.player_id = m.subject_player_id
+               AND g.game_number = m.game_number))
+       OR (NOT v_has_games AND v_has_teams AND NOT EXISTS (
+             SELECT 1 FROM public.team_slots ts
+             JOIN public.teams t ON t.id = ts.team_id
+             WHERE t.week_id = p_week_id AND ts.player_id = m.subject_player_id))
+       OR (NOT v_has_teams AND NOT EXISTS (
+             SELECT 1 FROM public.rsvp r
+             WHERE r.week_id = p_week_id AND r.status = 'in'
+               AND r.player_id = m.subject_player_id))
+     );
 
   -- --- League average (mean of per-player current-season archived averages) ---
   SELECT COALESCE(AVG(pa.avg_score), 130) INTO v_league_avg
@@ -4549,16 +4649,38 @@ BEGIN
     GROUP BY ts.player_id
   ) pa;
 
-  -- --- Create missing markets for "in" players --------------------------------
+  -- --- Create missing markets for eligible (player, game) pairs ---------------
   FOR v_rec IN
-    SELECT ip.player_id, g.game_number, p.name
-    FROM (SELECT player_id FROM public.rsvp WHERE week_id = p_week_id AND status = 'in') ip
-    CROSS JOIN UNNEST(v_target_games) AS g(game_number)
-    JOIN public.players p ON p.id = ip.player_id
+    SELECT ep.player_id, ep.game_number, p.name
+    FROM (
+      -- games exist → participation rows are the authority, per game
+      SELECT DISTINCT ts.player_id, g.game_number
+      FROM public.scores s
+      JOIN public.team_slots ts ON ts.id = s.team_slot_id
+      JOIN public.teams t       ON t.id = ts.team_id
+      JOIN public.games g       ON g.id = s.game_id
+      WHERE v_has_games AND t.week_id = p_week_id AND ts.player_id IS NOT NULL
+        AND g.game_number = ANY (v_target_games)
+      UNION
+      -- teams but no games yet (mid-team-gen) → slots × target
+      SELECT ts.player_id, gt.game_number
+      FROM public.team_slots ts
+      JOIN public.teams t ON t.id = ts.team_id
+      CROSS JOIN UNNEST(v_target_games) AS gt(game_number)
+      WHERE v_has_teams AND NOT v_has_games
+        AND t.week_id = p_week_id AND ts.player_id IS NOT NULL
+      UNION
+      -- no teams → RSVP × target
+      SELECT r.player_id, gt.game_number
+      FROM public.rsvp r
+      CROSS JOIN UNNEST(v_target_games) AS gt(game_number)
+      WHERE NOT v_has_teams AND r.week_id = p_week_id AND r.status = 'in'
+    ) ep
+    JOIN public.players p ON p.id = ep.player_id
     WHERE NOT EXISTS (
       SELECT 1 FROM public.bet_markets m
       WHERE m.week_id = p_week_id AND m.market_type = 'over_under'
-        AND m.game_number = g.game_number AND m.subject_player_id = ip.player_id
+        AND m.game_number = ep.game_number AND m.subject_player_id = ep.player_id
     )
   LOOP
     SELECT AVG(s.score) INTO v_avg
@@ -4679,6 +4801,151 @@ BEGIN
     NULL, now());
 
   RETURN v_loan_id;
+END;
+$function$
+;
+
+CREATE OR REPLACE FUNCTION public.trg_resync_markets_games()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+DECLARE v_week uuid;
+BEGIN
+  IF TG_OP = 'INSERT' THEN
+    FOR v_week IN
+      SELECT DISTINCT t.week_id FROM new_rows nr JOIN public.teams t ON t.id = nr.team_a_id
+    LOOP
+      PERFORM public.resync_week_markets(v_week, true);
+    END LOOP;
+  ELSIF TG_OP = 'UPDATE' THEN
+    FOR v_week IN
+      SELECT DISTINCT t.week_id FROM (
+        SELECT team_a_id FROM new_rows UNION SELECT team_a_id FROM old_rows
+      ) u JOIN public.teams t ON t.id = u.team_a_id
+    LOOP
+      PERFORM public.resync_week_markets(v_week, true);
+    END LOOP;
+  ELSE
+    FOR v_week IN
+      SELECT DISTINCT t.week_id FROM old_rows o JOIN public.teams t ON t.id = o.team_a_id
+    LOOP
+      PERFORM public.resync_week_markets(v_week, true);
+    END LOOP;
+  END IF;
+  RETURN NULL;
+END;
+$function$
+;
+
+CREATE OR REPLACE FUNCTION public.trg_resync_markets_rsvp()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+DECLARE v_week uuid;
+BEGIN
+  IF TG_OP = 'INSERT' THEN
+    FOR v_week IN SELECT DISTINCT week_id FROM new_rows LOOP
+      PERFORM public.resync_week_markets(v_week);
+    END LOOP;
+  ELSIF TG_OP = 'UPDATE' THEN
+    FOR v_week IN
+      SELECT DISTINCT week_id FROM (
+        SELECT week_id FROM new_rows UNION SELECT week_id FROM old_rows
+      ) u
+    LOOP
+      PERFORM public.resync_week_markets(v_week);
+    END LOOP;
+  ELSE
+    FOR v_week IN SELECT DISTINCT week_id FROM old_rows LOOP
+      PERFORM public.resync_week_markets(v_week);
+    END LOOP;
+  END IF;
+  RETURN NULL;
+END;
+$function$
+;
+
+CREATE OR REPLACE FUNCTION public.trg_resync_markets_scores()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+DECLARE v_week uuid;
+BEGIN
+  IF TG_OP = 'INSERT' THEN
+    FOR v_week IN
+      SELECT DISTINCT t.week_id FROM new_rows nr
+      JOIN public.team_slots ts ON ts.id = nr.team_slot_id
+      JOIN public.teams t       ON t.id = ts.team_id
+    LOOP
+      PERFORM public.resync_week_markets(v_week);
+    END LOOP;
+  ELSE
+    FOR v_week IN
+      SELECT DISTINCT t.week_id FROM old_rows o
+      JOIN public.team_slots ts ON ts.id = o.team_slot_id
+      JOIN public.teams t       ON t.id = ts.team_id
+    LOOP
+      PERFORM public.resync_week_markets(v_week);
+    END LOOP;
+  END IF;
+  RETURN NULL;
+END;
+$function$
+;
+
+CREATE OR REPLACE FUNCTION public.trg_resync_markets_team_slots()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+DECLARE v_week uuid;
+BEGIN
+  IF TG_OP = 'INSERT' THEN
+    FOR v_week IN
+      SELECT DISTINCT t.week_id FROM new_rows nr JOIN public.teams t ON t.id = nr.team_id
+    LOOP
+      PERFORM public.resync_week_markets(v_week);
+    END LOOP;
+  ELSIF TG_OP = 'UPDATE' THEN
+    FOR v_week IN
+      SELECT DISTINCT t.week_id FROM (
+        SELECT team_id FROM new_rows UNION SELECT team_id FROM old_rows
+      ) u JOIN public.teams t ON t.id = u.team_id
+    LOOP
+      PERFORM public.resync_week_markets(v_week);
+    END LOOP;
+  ELSE
+    FOR v_week IN
+      SELECT DISTINCT t.week_id FROM old_rows o JOIN public.teams t ON t.id = o.team_id
+    LOOP
+      PERFORM public.resync_week_markets(v_week);
+    END LOOP;
+  END IF;
+  RETURN NULL;
+END;
+$function$
+;
+
+CREATE OR REPLACE FUNCTION public.trg_seed_participation_games()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+BEGIN
+  INSERT INTO public.scores (team_slot_id, game_id, score)
+  SELECT ts.id, nr.id, NULL
+  FROM new_rows nr
+  JOIN public.team_slots ts ON ts.team_id IN (nr.team_a_id, nr.team_b_id)
+  ON CONFLICT (team_slot_id, game_id) DO NOTHING;
+  RETURN NULL;
 END;
 $function$
 ;
@@ -4993,6 +5260,14 @@ CREATE TRIGGER set_updated_at BEFORE UPDATE ON public.bounty_post FOR EACH ROW E
 
 CREATE TRIGGER set_updated_at BEFORE UPDATE ON public.bounty_settlements FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
+CREATE TRIGGER games_participation_seed_ins AFTER INSERT ON public.games REFERENCING NEW TABLE AS new_rows FOR EACH STATEMENT EXECUTE FUNCTION trg_seed_participation_games();
+
+CREATE TRIGGER games_resync_markets_del AFTER DELETE ON public.games REFERENCING OLD TABLE AS old_rows FOR EACH STATEMENT EXECUTE FUNCTION trg_resync_markets_games();
+
+CREATE TRIGGER games_resync_markets_ins AFTER INSERT ON public.games REFERENCING NEW TABLE AS new_rows FOR EACH STATEMENT EXECUTE FUNCTION trg_resync_markets_games();
+
+CREATE TRIGGER games_resync_markets_upd AFTER UPDATE ON public.games REFERENCING OLD TABLE AS old_rows NEW TABLE AS new_rows FOR EACH STATEMENT EXECUTE FUNCTION trg_resync_markets_games();
+
 CREATE TRIGGER games_same_week_check BEFORE INSERT OR UPDATE OF team_a_id, team_b_id ON public.games FOR EACH ROW EXECUTE FUNCTION games_same_week();
 
 CREATE TRIGGER set_updated_at BEFORE UPDATE ON public.games FOR EACH ROW EXECUTE FUNCTION set_updated_at();
@@ -5017,7 +5292,17 @@ CREATE TRIGGER set_updated_at BEFORE UPDATE ON public.pvp_challenges FOR EACH RO
 
 CREATE TRIGGER set_updated_at BEFORE UPDATE ON public.pvp_ledger FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
+CREATE TRIGGER rsvp_resync_markets_del AFTER DELETE ON public.rsvp REFERENCING OLD TABLE AS old_rows FOR EACH STATEMENT EXECUTE FUNCTION trg_resync_markets_rsvp();
+
+CREATE TRIGGER rsvp_resync_markets_ins AFTER INSERT ON public.rsvp REFERENCING NEW TABLE AS new_rows FOR EACH STATEMENT EXECUTE FUNCTION trg_resync_markets_rsvp();
+
+CREATE TRIGGER rsvp_resync_markets_upd AFTER UPDATE ON public.rsvp REFERENCING OLD TABLE AS old_rows NEW TABLE AS new_rows FOR EACH STATEMENT EXECUTE FUNCTION trg_resync_markets_rsvp();
+
 CREATE TRIGGER set_updated_at BEFORE UPDATE ON public.rsvp FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+CREATE TRIGGER scores_resync_markets_del AFTER DELETE ON public.scores REFERENCING OLD TABLE AS old_rows FOR EACH STATEMENT EXECUTE FUNCTION trg_resync_markets_scores();
+
+CREATE TRIGGER scores_resync_markets_ins AFTER INSERT ON public.scores REFERENCING NEW TABLE AS new_rows FOR EACH STATEMENT EXECUTE FUNCTION trg_resync_markets_scores();
 
 CREATE TRIGGER scores_slot_in_game_check BEFORE INSERT OR UPDATE OF team_slot_id, game_id ON public.scores FOR EACH ROW EXECUTE FUNCTION scores_slot_in_game();
 
@@ -5030,6 +5315,12 @@ CREATE TRIGGER prevent_non_open_season_delete BEFORE DELETE ON public.seasons FO
 CREATE TRIGGER set_updated_at BEFORE UPDATE ON public.seasons FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
 CREATE TRIGGER set_updated_at BEFORE UPDATE ON public.team_slots FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+CREATE TRIGGER team_slots_resync_markets_del AFTER DELETE ON public.team_slots REFERENCING OLD TABLE AS old_rows FOR EACH STATEMENT EXECUTE FUNCTION trg_resync_markets_team_slots();
+
+CREATE TRIGGER team_slots_resync_markets_ins AFTER INSERT ON public.team_slots REFERENCING NEW TABLE AS new_rows FOR EACH STATEMENT EXECUTE FUNCTION trg_resync_markets_team_slots();
+
+CREATE TRIGGER team_slots_resync_markets_upd AFTER UPDATE ON public.team_slots REFERENCING OLD TABLE AS old_rows NEW TABLE AS new_rows FOR EACH STATEMENT EXECUTE FUNCTION trg_resync_markets_team_slots();
 
 CREATE TRIGGER set_updated_at BEFORE UPDATE ON public.teams FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 

@@ -180,8 +180,9 @@ export function useWeekEditor(
         const meta: SlotMeta = { teamId: s.team_id, playerId: s.player_id ?? null, isFill: !s.player_id }
         slotMeta.set(s.id, meta)
         const name = s.player_id ? (s.players?.name ?? '') : ''
-        // Participation = games this slot has score rows for; if none yet (fresh
-        // week), default to all games its team is scheduled for.
+        // Participation = games this slot has score rows for. Rows are seeded at
+        // matchup creation (DB trigger), so the schedule fallback below only
+        // applies to pre-seeding history (archived weeks edited via History).
         const scored = scoredGamesBySlot.get(s.id)
         const gameNums = scored && scored.size > 0
           ? Array.from(scored)

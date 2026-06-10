@@ -289,13 +289,12 @@ export default function AdminGenerateTeamsModal({ visible, onClose }: Props) {
       const { error: e5 } = await weeks.update(weekId, { is_confirmed: true })
       if (e5) throw e5
 
-      // O/U markets are owned by RSVP (games 1 & 2 already exist for every
-      // in-player) and reference weeks not teams, so the teams.removeByWeek wipe
-      // above leaves them intact. Team generation only needs to ADD markets for any
-      // schedule game number not yet present — in practice game 3 when numTeams ∈
-      // {3, 5}. Pass the schedule's distinct game numbers to the sync RPC, which
-      // creates the missing markets server-side (current-season avg → floor+0.5),
-      // idempotently.
+      // O/U line ownership: RSVP owns the lines until teams exist; the roster
+      // (team_slots) owns them once they do. The slot/game inserts above already
+      // fired the DB resync triggers (pruning lines for undrafted players and
+      // out-of-schedule game numbers, refunding their bets whole); these explicit
+      // syncs are belt-and-braces and create any still-missing markets
+      // (current-season avg → floor+0.5), idempotently.
       const scheduleGames = Array.from(new Set(buildSchedule(numTeams).map(s => s.game_number)))
       const { error: eSync } = await betMarkets.syncOUForWeek(weekId, scheduleGames)
       if (eSync) console.warn('Failed to sync O/U markets:', eSync.message)

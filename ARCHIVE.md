@@ -164,7 +164,7 @@ week_archive_snapshot (
 Enable RLS on both. No client policies needed (only the SECURITY DEFINER RPCs touch them); optionally
 add an admin-only `SELECT` policy if the admin screen will show run history.
 
-### 4b. `archive_week(p_week_id uuid)` — replaces the 3 client steps
+### 4b. `archive_week(p_week_id uuid, p_force boolean default false)` — replaces the 3 client steps
 
 1. Admin guard. `SELECT season_id, week_number INTO v_season_id, v_week_number FROM weeks WHERE id=p_week_id;`
    raise if not found.
@@ -177,8 +177,12 @@ add an admin-only `SELECT` policy if the admin screen will show run history.
    - Helper: a single CTE for `<week-N bets>` / week-N markets reused across captures.
 5. `UPDATE weeks SET is_archived=true, bowled_at=current_date WHERE id=p_week_id;` (idempotent — also
    fine when already true in the Soft re-archive case).
-6. `PERFORM settle_betting_for_week(p_week_id);` (reuse unchanged; its `NOT EXISTS` guards re-mint
-   cleanly after an unarchive wipe).
+6. `PERFORM settle_betting_for_week(p_week_id, p_force);` (its `NOT EXISTS` guards re-mint
+   cleanly after an unarchive wipe). Settlement's **no-pending-bets backstop** raises (rolling the
+   whole archive back) if any bet with a leg in the week would remain `pending` — naming the
+   unsettleable markets; `p_force = true` instead voids those bets and refunds their stakes
+   (snapshot-reversible: the void is a `bets`/`bet_legs` UPDATE with captured pre-images, and the
+   `bet_refund` rows are bet-linked so unarchive deletes them).
 7. `INSERT INTO weeks(season_id, week_number) VALUES (v_season_id, v_week_number + 1)` **if not exists**
    (`ON CONFLICT (season_id, week_number) DO NOTHING`).
 8. One transaction → all-or-nothing.
@@ -222,7 +226,9 @@ event re-publishes; N+1 is recreated. A new `active` run + snapshot is written.
 
 - **`app/src/utils/supabase/db.ts`** — add an `archives` object (mirror the `betMarkets`/`weeks`
   patterns):
-  - `archiveWeek(weekId)` → `supabase.rpc('archive_week', { p_week_id: weekId })`
+  - `archiveWeek(weekId, force)` → `supabase.rpc('archive_week', { p_week_id: weekId, p_force: force })`
+    (force voids + refunds bets the settlement backstop would otherwise leave pending; the modal arms
+    a "Force Archive" retry after the server rejects, mirroring the unarchive force flow)
   - `unarchiveWeek(weekId, mode, force)` → `supabase.rpc('unarchive_week', { p_week_id: weekId, p_mode: mode, p_force: force })`
   - `getArchivedWeeks()` → archived weeks for the current season, most recent first.
   - A downstream-activity summary query for the confirmation sheet (counts of N+1 scores/bets/loans/pvp/rsvp).

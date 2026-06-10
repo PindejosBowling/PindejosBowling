@@ -125,9 +125,14 @@ export default function MatchupsScreen() {
   function confirmClearMatchups() {
     const doClear = async () => {
       if (!weekId) return
-      // Deleting the week's teams cascades to its slots, games, and scores.
+      // Deleting the week's teams cascades to its slots, games, and scores
+      // (moneyline markets cascade too, refunding their bets via trigger).
       await teamsDb.removeByWeek(weekId)
       await weeks.update(weekId, { is_confirmed: false })
+      // With teams gone, O/U line ownership reverts to RSVP — recreate lines for
+      // in-players that were pruned while undrafted. (The roster-change DB
+      // triggers can't fire here: the cascade deletes resolve to no week.)
+      await betMarkets.syncOUForWeek(weekId)
       await reload()
     }
     if (Platform.OS === 'web') {
@@ -154,8 +159,9 @@ export default function MatchupsScreen() {
       )
       await Promise.all(slotIds.map(slotId => scores.remove(slotId, gameIdByNumber[maxGameNum])))
       await games.removeByWeekAndGame(weekId, maxGameNum)
-      // Inverse of addNextGame's market sync: refund + drop this game's O/U lines
-      // (sync never prunes a removed game, so this is the explicit teardown).
+      // Inverse of addNextGame's market sync: refund + drop this game's O/U lines.
+      // The games-delete trigger now prunes to the schedule too; this explicit
+      // call is belt-and-braces.
       await betMarkets.removeOUForGame(weekId, maxGameNum)
       await reload()
     } finally {
@@ -230,19 +236,22 @@ export default function MatchupsScreen() {
     flushingRef.current = true
     setSaving(true)
     try {
-      const toUpsert = keys
-        .filter(k => pending[k] !== '')
-        .map(k => {
-          const [teamSlotId, gameNum] = k.split('|')
-          const gameNumber = parseInt(gameNum)
-          return { team_slot_id: teamSlotId, game_id: gameIdByNumber[gameNumber], score: parseInt(pending[k]) }
-        })
-      const toDelete = keys
-        .filter(k => pending[k] === '')
-        .map(k => { const [teamSlotId, gameNum] = k.split('|'); return { teamSlotId, gameId: gameIdByNumber[parseInt(gameNum)] } })
+      // Clearing a score upserts NULL rather than deleting the row: a scores row
+      // is the per-game participation marker (null = present, not yet scored).
+      // Deleting it means "out of this game's lineup" — which prunes the player's
+      // bet line and refunds its bets. That's the week editor's job, not the
+      // score pad's.
+      const toUpsert = keys.map(k => {
+        const [teamSlotId, gameNum] = k.split('|')
+        const gameNumber = parseInt(gameNum)
+        return {
+          team_slot_id: teamSlotId,
+          game_id: gameIdByNumber[gameNumber],
+          score: pending[k] === '' ? null : parseInt(pending[k]),
+        }
+      })
 
       if (toUpsert.length) await scores.upsert(toUpsert)
-      await Promise.all(toDelete.map(({ teamSlotId, gameId }) => scores.remove(teamSlotId, gameId)))
       // Clear only the keys we just persisted, preserving any edits the admin
       // made while the save was in flight (those will flush on their own blur).
       const after = usePendingStore.getState().pendingScores

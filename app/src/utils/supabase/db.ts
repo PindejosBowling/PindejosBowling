@@ -425,9 +425,12 @@ export const betMarkets = {
       .eq('market_type', 'moneyline')
       .eq('game_number', gameNumber)
       .eq('status', status === 'closed' ? 'open' : 'closed'),
-  // RSVP-driven create/refund of O/U markets (SECURITY DEFINER, server-side).
-  // extraGames adds schedule game numbers not yet present (team-gen game 3); RSVP
-  // passes none and the RPC defaults the target set to the established games / {1,2}.
+  // Create/refund of O/U markets (SECURITY DEFINER, server-side). Line ownership:
+  // RSVP owns the lines until the week has teams; the roster (team_slots) owns
+  // them after — ineligible subjects and game numbers outside the schedule are
+  // pruned (bets refunded whole). DB triggers on rsvp/team_slots/games re-run
+  // this sync after any mutation, so explicit calls here are belt-and-braces.
+  // extraGames adds schedule game numbers not yet present (team-gen game 3).
   syncOUForWeek: (weekId: string, extraGames: number[] = []) =>
     supabase.rpc('sync_over_under_markets_for_week', { p_week_id: weekId, p_extra_games: extraGames }),
   // Schedule-driven create of even-money moneyline markets (one per games row),
@@ -945,8 +948,10 @@ export const weeks = {
 // unarchive_week restores the economy to the archive-time checkpoint, always
 // destroys week N+1, and (mode 'hard') unlocks the score lock. See ARCHIVE.md.
 export const archives = {
-  archiveWeek: (weekId: string) =>
-    supabase.rpc('archive_week', { p_week_id: weekId }),
+  // force: void+refund any bet settlement would otherwise leave pending (the
+  // RPC raises and lists the unsettleable markets when force is off).
+  archiveWeek: (weekId: string, force = false) =>
+    supabase.rpc('archive_week', { p_week_id: weekId, p_force: force }),
   // mode: 'soft' keeps is_archived (re-derive same scores); 'hard' reopens scores.
   // force: override the week-N+1 downstream-activity guard.
   unarchiveWeek: (weekId: string, mode: 'soft' | 'hard', force = false) =>
