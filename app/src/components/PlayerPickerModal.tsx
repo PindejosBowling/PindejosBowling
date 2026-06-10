@@ -7,24 +7,33 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { colors, fonts, radius } from '../theme'
 import { initials } from '../utils/helpers'
 
+export interface PlayerPickerItem { id: string; name: string }
+
 interface Props {
   visible: boolean
-  players: string[]
-  onSelect: (name: string) => void
+  // Name-only mode (back-compat): pass `players` + `onSelect`.
+  players?: string[]
+  onSelect?: (name: string) => void
+  // Id-aware mode: pass `items` + `onSelectItem` to get the chosen player's id.
+  items?: PlayerPickerItem[]
+  onSelectItem?: (item: PlayerPickerItem) => void
   onClose: () => void
   title?: string
 }
 
-export default function PlayerPickerModal({ visible, players, onSelect, onClose, title = 'Select Player' }: Props) {
+export default function PlayerPickerModal({ visible, players, onSelect, items, onSelectItem, onClose, title = 'Select Player' }: Props) {
   const [search, setSearch] = useState('')
 
-  const filtered = players.filter((name) =>
-    name.toLowerCase().includes(search.toLowerCase())
+  // Normalize both modes to a single id/name list. Name-only items get the name as id.
+  const allItems: PlayerPickerItem[] = items ?? (players ?? []).map((name) => ({ id: name, name }))
+  const filtered = allItems.filter((it) =>
+    it.name.toLowerCase().includes(search.toLowerCase())
   )
 
-  function handleSelect(name: string) {
+  function handleSelect(item: PlayerPickerItem) {
     setSearch('')
-    onSelect(name)
+    if (onSelectItem) onSelectItem(item)
+    else onSelect?.(item.name)
   }
 
   function handleClose() {
@@ -56,7 +65,7 @@ export default function PlayerPickerModal({ visible, players, onSelect, onClose,
 
           <FlatList
             data={filtered}
-            keyExtractor={(item) => item}
+            keyExtractor={(item) => item.id}
             keyboardShouldPersistTaps="handled"
             renderItem={({ item }) => (
               <TouchableOpacity
@@ -65,9 +74,9 @@ export default function PlayerPickerModal({ visible, players, onSelect, onClose,
                 activeOpacity={0.7}
               >
                 <View style={styles.avatar}>
-                  <Text style={styles.avatarText}>{initials(item)}</Text>
+                  <Text style={styles.avatarText}>{initials(item.name)}</Text>
                 </View>
-                <Text style={styles.playerName}>{item}</Text>
+                <Text style={styles.playerName}>{item.name}</Text>
               </TouchableOpacity>
             )}
             ListEmptyComponent={
