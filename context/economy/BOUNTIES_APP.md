@@ -24,7 +24,7 @@ new Pinsino tile **"Bounties"**.
 
 **Prerequisite:** the database spec (`economy/BOUNTIES_DB.md`) is fully applied
 (`supabase db push`) **and** `app/src/utils/supabase/database.types.ts` has been regenerated
-— follow the type-regeneration step in `PAGE_CREATION.md`. These must exist in the generated
+— follow the type-regeneration step in [page-creation.md](../page-creation.md). These must exist in the generated
 types before starting:
 - Tables `bounty_post`, `bounty_hunter_stakes`, `bounty_settlements`, `bounty_payouts`.
 - Column `pin_ledger.bounty_post_id` and the three new `pin_ledger.type` values

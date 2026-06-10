@@ -5,7 +5,7 @@ a new Pinsino tile **"Market Moves"**.
 
 **Prerequisite:** the database spec (`economy/ACTIVITY_FEED_DB.md`) is fully applied
 (`supabase db push`) **and** `app/src/utils/supabase/database.types.ts` has been
-regenerated — follow the type-regeneration step in `PAGE_CREATION.md`. These must exist
+regenerated — follow the type-regeneration step in [page-creation.md](../page-creation.md). These must exist
 in the generated types before starting:
 - Table `activity_feed_events`.
 - RPCs `suppress_activity_event`, `restore_activity_event`,

@@ -4,7 +4,7 @@ Handoff spec for the **app layer** (`app/src`) of the Loan Shark feature.
 
 **Prerequisite:** the database spec (`economy/LOAN_SHARK_DB.md`) is fully applied
 (`supabase db push`) **and** `app/src/utils/supabase/database.types.ts` has been
-regenerated — follow the type-regeneration step in `PAGE_CREATION.md`. The new
+regenerated — follow the type-regeneration step in [page-creation.md](../page-creation.md). The new
 tables (`loan_products`, `loans`, `loan_ledger`), the `pin_ledger.loan_ledger_id`
 column, and the RPCs (`take_loan`, `repay_loan`, `cancel_loan`,
 `settle_loans_for_season_close`) must exist in the generated types before starting.

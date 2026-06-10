@@ -18,7 +18,7 @@ Handoff spec for the **app layer** (`app/src`) of the PvP Challenge Contracts fe
 
 **Prerequisite:** the database spec (`economy/PvP_DB.md`) is fully applied
 (`supabase db push`) **and** `app/src/utils/supabase/database.types.ts` has been
-regenerated — follow the type-regeneration step in `PAGE_CREATION.md`. These must exist
+regenerated — follow the type-regeneration step in [page-creation.md](../page-creation.md). These must exist
 in the generated types before starting:
 - Tables `pvp_challenges`, `pvp_challenge_offers`, `pvp_ledger`.
 - Column `pin_ledger.pvp_ledger_id` and the three new `pin_ledger.type` values

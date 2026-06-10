@@ -17,6 +17,7 @@ This file is an **index**. The detailed reference is split across [context/](con
 | [context/patterns.md](context/patterns.md) | Key patterns (useMemo, pull-to-refresh, toasts-in-modals, optimistic edits, admin flows) and the theme system (colors / fonts / radius) |
 | [context/file-map.md](context/file-map.md) | The full `app/` source tree with a one-line note per file |
 | [context/agent-rules.md](context/agent-rules.md) | Page-creation workflow + the numbered hard rules for agents (migrations-only DB changes, Supabase CLI usage, "current season", uuid ids, etc.) |
+| [context/page-creation.md](context/page-creation.md) | The page-creation blueprint — the four-layer stack (migration → `db.ts` → hook → screen → navigation), type/schema-snapshot regeneration commands, screen skeleton + theme tokens, and the end-to-end checklist. Always reference when adding/editing a screen or making schema changes. |
 
 ## Cross-cutting systems ([context/](context/))
 
@@ -52,7 +53,6 @@ Product/design references and per-feature implementation specs for the pin econo
 
 - **Betting / pin economy schema:** [supabase/PIN_ECONOMY_SCHEMA.md](supabase/PIN_ECONOMY_SCHEMA.md) — authoritative for `pin_ledger`, the canonical betting tables, accounting/lifecycle, every RPC, RLS, and how to add a bet type. Read before touching any `bet_*` / `pin_ledger` code.
 - **Auth:** [supabase/AUTH.md](supabase/AUTH.md) — JWT hook, trigger, RLS patterns, role management.
-- **Page creation:** [PAGE_CREATION.md](PAGE_CREATION.md) — always reference when adding/editing a screen or making schema changes.
 
 ## Hard rules (full text in [context/agent-rules.md](context/agent-rules.md))
 
