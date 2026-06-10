@@ -1,11 +1,9 @@
-// Lanetalk frame-level game data (bundled static reference).
+// Lanetalk frame-level game model (shapes only).
 //
-// This is test/demo data parsed from a Lanetalk "shared session" page
-// (see app/src/scripts/parse_lanetalk.py). It is bundled as a static asset
-// rather than stored in Supabase — there is currently a single session for a
-// single player. Keyed here by the in-app player display name.
-
-import jordanReticker from './jordanReticker.json'
+// These types describe the per-game payload parsed from a Lanetalk "shared
+// session" page and stored in the `lanetalk_game_imports` table (one row per
+// game; `payload` jsonb mirrors a `LanetalkGame`). The data is fetched from
+// Supabase by `useFrameStatsData`; this module holds only the shared shapes.
 
 export type PinState = 'down_first' | 'down_second' | 'standing'
 
@@ -54,28 +52,10 @@ export interface SessionDate {
 
 export interface LanetalkSession {
   player: string
-  bowling_center: { name: string; location: string }
+  /** Not stored per-game in the import table; absent for Supabase-sourced data. */
+  bowling_center?: { name: string; location: string }
   /** Distinct league nights present in `games`, chronological. */
   dates: SessionDate[]
   summary: { games: number; total: number; average: number }
   games: LanetalkGame[]
-}
-
-// Registry of player display name (lower-cased) -> bundled session.
-// "Assume these stats belong to Jordan Reticker." Aliases cover the likely
-// in-app display names for that player.
-const SESSIONS_BY_PLAYER: Record<string, LanetalkSession> = {}
-for (const alias of ['jordan reticker', 'jordan']) {
-  SESSIONS_BY_PLAYER[alias] = jordanReticker as LanetalkSession
-}
-
-/** Return the bundled Lanetalk session for a player name, or null if none. */
-export function getLanetalkSession(name: string | null | undefined): LanetalkSession | null {
-  if (!name) return null
-  return SESSIONS_BY_PLAYER[name.trim().toLowerCase()] ?? null
-}
-
-/** Whether bundled frame-level data exists for the given player name. */
-export function hasLanetalkSession(name: string | null | undefined): boolean {
-  return getLanetalkSession(name) !== null
 }

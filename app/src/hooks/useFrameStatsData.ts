@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect } from 'react'
+import { lanetalkImports } from '../utils/supabase/db'
 import {
-  getLanetalkSession,
   LanetalkSession,
   LanetalkGame,
   LanetalkFrame,
@@ -11,25 +11,117 @@ import {
 /** Sentinel for the "all nights" filter option. */
 export const ALL_DATES = 'all'
 
-// Frame-level game stats for a player. The data is a bundled static asset, so
-// "loading" is trivial — the hook keeps the standard shape so the screen reads
-// like every other one, and so a future Supabase-backed source can drop in.
-export function useFrameStatsData(name: string) {
+// Frame-level game stats for a player, sourced from `lanetalk_game_imports`
+// (one row per imported game; `payload` jsonb is a `LanetalkGame`). The rows are
+// folded back into a single `LanetalkSession` so the rest of the screen — the
+// compute functions and the scorecards — reads exactly as it did off the old
+// bundled asset.
+export function useFrameStatsData(playerId: string | null) {
   const [loading, setLoading] = useState(true)
   const [session, setSession] = useState<LanetalkSession | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      setSession(getLanetalkSession(name))
+      if (!playerId) { setSession(null); return }
+      const { data, error } = await lanetalkImports.listByPlayer(playerId)
+      if (error) throw error
+      setSession(buildSession(data ?? []))
+    } catch (e) {
+      console.error('useFrameStatsData error:', e)
+      setSession(null)
     } finally {
       setLoading(false)
     }
-  }, [name])
+  }, [playerId])
 
   useEffect(() => { load() }, [load])
 
   return { loading, session, reload: load }
+}
+
+/** Lightweight existence check that gates the PlayerDetail entry point. */
+export function useHasFrameStats(playerId: string | null) {
+  const [hasFrameStats, setHasFrameStats] = useState(false)
+
+  useEffect(() => {
+    let cancelled = false
+    if (!playerId) { setHasFrameStats(false); return }
+    lanetalkImports.countByPlayer(playerId).then(({ count }) => {
+      if (!cancelled) setHasFrameStats((count ?? 0) > 0)
+    })
+    return () => { cancelled = true }
+  }, [playerId])
+
+  return hasFrameStats
+}
+
+// ----------------------------------------------------------------------------
+// Session assembly — fold the per-game import rows into one session.
+// ----------------------------------------------------------------------------
+
+/** The stored `payload` jsonb mirrors a parsed game (with a few nullable fields
+ *  for partial games); the import row also carries denormalized scalars. */
+type ImportRow = {
+  game_number: number
+  score: number | null
+  played_at: string | null
+  source_url: string
+  payload: any
+}
+
+/** Coerce a stored game payload into the screen's non-null `LanetalkGame`. */
+function payloadToGame(row: ImportRow): LanetalkGame {
+  const p = row.payload ?? {}
+  const frames: LanetalkFrame[] = (p.frames ?? []).map((f: any): LanetalkFrame => ({
+    frame: f.frame,
+    throws: (f.throws ?? []).map((t: any) => ({
+      display: t.display ?? '',
+      pins: t.pins ?? 0,
+      split: !!t.split,
+    })),
+    cumulative_score: f.cumulative_score ?? 0,
+    is_strike: !!f.is_strike,
+    is_spare: !!f.is_spare,
+    is_split: !!f.is_split,
+    pin_diagrams: (f.pin_diagrams ?? []) as PinDiagram[],
+  }))
+  return {
+    game_number: row.game_number,
+    score: row.score ?? p.score ?? 0,
+    date: p.date ?? '',
+    date_label: p.date_label ?? '',
+    played_at: row.played_at ?? p.played_at ?? null,
+    source_url: row.source_url ?? p.source_url ?? null,
+    frames,
+  }
+}
+
+function buildSession(rows: ImportRow[]): LanetalkSession | null {
+  if (!rows.length) return null
+  const games = rows.map(payloadToGame)
+
+  // Distinct league nights, chronological (rows already arrive oldest-first).
+  const seen = new Set<string>()
+  const dates: SessionDate[] = []
+  for (const g of games) {
+    if (g.date && !seen.has(g.date)) {
+      seen.add(g.date)
+      dates.push({ date: g.date, label: g.date_label || g.date })
+    }
+  }
+
+  const total = games.reduce((a, g) => a + g.score, 0)
+  return {
+    player: '',
+    dates,
+    summary: {
+      games: games.length,
+      total,
+      average: games.length ? Math.round(total / games.length) : 0,
+    },
+    games,
+  }
 }
 
 // ----------------------------------------------------------------------------

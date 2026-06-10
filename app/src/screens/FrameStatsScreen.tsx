@@ -42,9 +42,9 @@ const PIN_STATE_COLOR: Record<PinState, string> = {
 export default function FrameStatsScreen() {
   const route = useRoute<FrameStatsRoute>()
   const navigation = useNavigation<Nav>()
-  const name = route.params.name
+  const { name, playerId } = route.params
 
-  const { loading, session, reload } = useFrameStatsData(name)
+  const { loading, session, reload } = useFrameStatsData(playerId)
   const { refreshing, onRefresh } = useRefresh(reload)
 
   const [selectedDate, setSelectedDate] = useState<string>(ALL_DATES)
@@ -74,7 +74,7 @@ export default function FrameStatsScreen() {
 
   if (loading) return <LoadingView label="Loading games" />
 
-  const subtitle = session?.bowling_center.name
+  const subtitle = session?.bowling_center?.name
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>

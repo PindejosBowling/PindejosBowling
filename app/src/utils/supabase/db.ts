@@ -1005,4 +1005,20 @@ export const lanetalkImports = {
       .select('*, players(name)')
       .eq('source_url', url)
       .order('game_number'),
+  // Every imported game for one player, oldest first — frame-level game details.
+  // Note: lanetalk_game_imports RLS is admin-read-only, so non-admins get zero
+  // rows (which also hides the "Game Details" entry point on PlayerDetail).
+  listByPlayer: (playerId: string) =>
+    supabase
+      .from('lanetalk_game_imports')
+      .select('game_number, score, played_at, source_url, classification, payload')
+      .eq('player_id', playerId)
+      .order('played_at', { ascending: true, nullsFirst: true })
+      .order('game_number', { ascending: true }),
+  // Whether a player has any imported games — drives the PlayerDetail entry point.
+  countByPlayer: (playerId: string) =>
+    supabase
+      .from('lanetalk_game_imports')
+      .select('id', { count: 'exact', head: true })
+      .eq('player_id', playerId),
 }

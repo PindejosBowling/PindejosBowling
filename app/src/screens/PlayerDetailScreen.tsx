@@ -20,7 +20,7 @@ import {
   computeExpandedMatchups,
 } from '../hooks/usePlayerDetailData'
 import { initials } from '../utils/helpers'
-import { hasLanetalkSession } from '../data/lanetalk'
+import { useHasFrameStats } from '../hooks/useFrameStatsData'
 import LoadingView from '../components/LoadingView'
 import PillFilter from '../components/PillFilter'
 import ScreenHeader from '../components/ScreenHeader'
@@ -94,7 +94,7 @@ export default function PlayerDetailScreen() {
     return { points, avg, chartWidth }
   }, [playerId, allScores, activeSeasonId, profile, screenWidth])
 
-  const hasFrameStats = useMemo(() => hasLanetalkSession(name), [name])
+  const hasFrameStats = useHasFrameStats(playerId)
 
   function toggleWeek(key: string) {
     set({ expandedWeek: expandedWeek === key ? null : key })
@@ -143,7 +143,7 @@ export default function PlayerDetailScreen() {
           <TouchableOpacity
             style={styles.frameStatsBtn}
             activeOpacity={0.7}
-            onPress={() => (navigation as any).navigate('FrameStats', { name })}
+            onPress={() => (navigation as any).navigate('FrameStats', { name, playerId })}
           >
             <View style={styles.frameStatsIcon}>
               <Text style={{ fontSize: 18 }}>🎳</Text>
