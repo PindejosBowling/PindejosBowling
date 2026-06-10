@@ -336,19 +336,31 @@ export default function SportsbookScreen() {
         {lineGroups.length > 0 ? (
           <>
             <Text style={[styles.sectionHeader, { marginTop: 24 }]}>THIS WEEK'S LINES</Text>
-            {lineGroups.map(({ group, categories }) => (
+            {lineGroups.map(({ group, categories }) => {
+              // Starting a game closes every one of its markets at once, so the
+              // in-progress warning is promoted to the game level: one note under
+              // the game label, and every section below it rendered inert. Season
+              // (non-game) markets close individually, so they keep the
+              // per-section note instead.
+              const gameInProgress =
+                group.key !== 'season' &&
+                categories.some(({ lines }) => lines.some(l => l.inProgress))
+              return (
               <View key={group.key}>
                 <Text style={styles.gameLabel}>{group.label}</Text>
+                {gameInProgress && (
+                  <Text style={styles.inProgressNote}>
+                    {closedBettingNote(categories[0].lines[0])}
+                  </Text>
+                )}
                 {categories.map(({ category, lines }) => {
-                  // Closing is all-or-nothing per game, so a category is in
-                  // progress once any of its lines is closed.
-                  const groupInProgress = lines.some(l => l.inProgress)
+                  const groupInProgress = gameInProgress || lines.some(l => l.inProgress)
                   // Moneylines: headerless. The "Your Team" row is self-explanatory
                   // (one per game), so it renders inline with no collapsible header.
                   if (category.key === 'moneyline') {
                     return (
                       <View key={category.key}>
-                        {groupInProgress && (
+                        {groupInProgress && !gameInProgress && (
                           <Text style={styles.adminHint}>{closedBettingNote(lines[0])}</Text>
                         )}
                         <View style={styles.card}>
@@ -366,8 +378,9 @@ export default function SportsbookScreen() {
                       key={category.key}
                       title={category.label}
                       count={lines.length}
-                      note={groupInProgress ? closedBettingNote(lines[0]) : undefined}
+                      note={groupInProgress && !gameInProgress ? closedBettingNote(lines[0]) : undefined}
                       defaultCollapsed
+                      disabled={gameInProgress}
                       rows={lines.map(line => {
                         const slipLeg = parlayLegs.find(l => l.marketId === line.marketId)
                         return {
@@ -382,7 +395,8 @@ export default function SportsbookScreen() {
                   )
                 })}
               </View>
-            ))}
+              )
+            })}
           </>
         ) : (
           <View style={styles.emptyCard}>
@@ -577,6 +591,15 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
     color: colors.accent,
     marginTop: 8,
+    marginBottom: 8,
+  },
+  // Game-level in-progress warning — same styling as LineRowContainer's note,
+  // promoted above the game's sections when the whole game is closed.
+  inProgressNote: {
+    fontFamily: fonts.barlow,
+    fontSize: 12,
+    fontStyle: 'italic',
+    color: colors.gold,
     marginBottom: 8,
   },
 
