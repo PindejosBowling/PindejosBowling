@@ -9,7 +9,7 @@ app/
 │   ├── hooks/
 │   │   ├── usePinsinoData.ts    # Balance + open lines + bets for PinsinoScreen/PinsinoLeaderboardScreen/SportsbookScreen (+ normalizeBet, BetView, LeaderboardEntry with debt/netWorth)
 │   │   ├── usePlayerPinsinoData.ts  # One player's balance/ledger/bets (+ shared LedgerEntry type)
-│   │   ├── useHousePinsinoData.ts  # House-side ledger + summary/P&L/stats for PinsinoAccountingScreen + PinsinoSportsbookScreen
+│   │   ├── useHousePinsinoData.ts  # House-side ledger + summary/P&L/stats for PinsinoAccountingScreen + AdminSportsbookScreen
 │   │   ├── useLoanSharkData.ts  # Borrower hook: balance, available products, active loan + payment history
 │   │   ├── useChemistryData.ts  # Chemistry data + computeChemistryFromSupabase
 │   │   ├── useH2HData.ts        # H2H data + computeH2HFromSupabase
@@ -26,7 +26,7 @@ app/
 │   │   ├── RootNavigator.tsx    # Bottom tab navigator
 │   │   ├── StandingsStackNavigator.tsx  # Stack: StandingsList → PlayerDetail
 │   │   ├── PinsinoStackNavigator.tsx    # Stack: PinsinoHome → PinsinoLeaderboard / Sportsbook / PlayerPinsino
-│   │   ├── MoreStackNavigator.tsx       # Stack: MoreHome + tools (incl. PinsinoAdmin → PinsinoAccounting / PinsinoSportsbook)
+│   │   ├── MoreStackNavigator.tsx       # Stack: MoreHome + tools (incl. PinsinoAdmin → PinsinoAccounting / AdminSportsbook)
 │   │   └── types.ts             # MoreStackParamList, StandingsStackParamList, PinsinoStackParamList
 │   ├── stores/
 │   │   ├── pendingStore.ts      # Optimistic edit buffer (scores, RSVPs, team gen state)
@@ -88,7 +88,7 @@ app/
 │       ├── PlayerPinsinoScreen.tsx  # One player's betting record: Activity / Open / Settled
 │       ├── PinsinoAdminScreen.tsx   # Admin hub: tile menu (Accounting + Sportsbook + Loan Shark)
 │       ├── PinsinoAccountingScreen.tsx  # Admin: House Balance + Activity / Weekly P&L toggle
-│       ├── PinsinoSportsbookScreen.tsx  # Admin: Active Bets / Settled Bets toggle (settle + cancel actions)
+│       ├── AdminSportsbookScreen.tsx  # Admin: Active Bets / Settled Bets toggle (settle + cancel actions)
 │       ├── LoanSharkScreen.tsx      # Borrower: active loan panel or product list + borrow confirmation modal
 │       ├── LoanSharkAdminScreen.tsx # Admin: active loans list + cancel action
 │       ├── TrashBoardScreen.tsx     # Fun message board

@@ -50,7 +50,7 @@ surfaces.
   RPC→toast→`onDone`→`onClose`); `AdminEndSeasonModal.tsx` (centered confirm card,
   disabled-while-saving).
 - Hub screen + tiles: `app/src/screens/PinsinoScreen.tsx`, `PinsinoAdminScreen.tsx`.
-- Admin list + cancel UX: `app/src/screens/PinsinoSportsbookScreen.tsx`.
+- Admin list + cancel UX: `app/src/screens/AdminSportsbookScreen.tsx`.
 - Opponent picker: `app/src/components/PlayerPickerModal.tsx`.
 - db.ts query objects + RPC wrappers: `app/src/utils/supabase/db.ts`.
 - Ledger row rendering: `app/src/components/LedgerRow.tsx`.
@@ -290,7 +290,7 @@ labels them. Optionally make a PvP pin row tappable → navigate to its
     `pvpChallenges.settle(id, winnerId|null, note)` (push/void map to the appropriate
     server outcome) → toast + reload.
   - **Cancel** (pre-settlement) → confirm → `pvpChallenges.cancel(id)` → toast + reload.
-    Mirror the cancel UX in `PinsinoSportsbookScreen`.
+    Mirror the cancel UX in `AdminSportsbookScreen`.
   - **Void** → confirm + note → `pvpChallenges.void(id, note)` → toast + reload.
 - Show escrow held and the offer history per contract (reuse the detail components).
 

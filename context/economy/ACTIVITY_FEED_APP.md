@@ -35,7 +35,7 @@ recap cards, notification badge, or `sportsbook_bad_beat` (design §17, §21).
 - List + pull-to-refresh + grouping: `app/src/screens/PlayerPinsinoScreen.tsx`,
   `PastGamesScreen.tsx`.
 - Hub screen + tiles: `app/src/screens/PinsinoScreen.tsx`, `PinsinoAdminScreen.tsx`.
-- Admin list + action modal (`<Toast/>` inside): `app/src/screens/PinsinoSportsbookScreen.tsx`,
+- Admin list + action modal (`<Toast/>` inside): `app/src/screens/AdminSportsbookScreen.tsx`,
   `app/src/components/SettleBetModal.tsx`.
 - Reusable display: `app/src/components/PlayerAvatar.tsx`, `LedgerRow.tsx`,
   `ScreenHeader.tsx`; relative time via `timeAgo` in `app/src/utils/helpers.ts`.
@@ -214,7 +214,7 @@ pagination (design §15.4). Theme via `colors/fonts/radius`.
 
 ### Tap targets (design §16.3) — privacy-aware
 - **Sportsbook events** (`sportsbook_bet_id` present): tap → the existing bet / Sportsbook
-  detail surface (reuse whatever `PinsinoSportsbookScreen` / bet detail already exposes).
+  detail surface (reuse whatever `AdminSportsbookScreen` / bet detail already exposes).
 - **Loan events**: **no public tap-through.** Only if `actor_player_id === current
   player` (the borrower viewing their own row) may it deep-link to `LoanShark`; for any
   other viewer the card is **non-tappable** (a different player must never reach someone

@@ -13,7 +13,7 @@ export type MoreStackParamList = {
   SeasonRegistration: undefined
   PinsinoAdmin: undefined
   PinsinoAccounting: undefined
-  PinsinoSportsbook: undefined
+  AdminSportsbook: undefined
   LoanSharkAdmin: undefined
   PvPAdmin: undefined
   MarketMovesAdmin: undefined

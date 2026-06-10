@@ -62,7 +62,7 @@ enter, or partial refunds (design §6).
   `app/src/components/SettleBetModal.tsx`, `PvpAcceptModal.tsx`.
 - Hub screen + tiles: `app/src/screens/PinsinoScreen.tsx`, `PinsinoAdminScreen.tsx`.
 - Admin list + cancel/settle UX: `app/src/screens/PvPAdminScreen.tsx`,
-  `PinsinoSportsbookScreen.tsx`.
+  `AdminSportsbookScreen.tsx`.
 - Ledger row rendering: `app/src/components/LedgerRow.tsx`.
 - db.ts query objects + RPC wrappers: `app/src/utils/supabase/db.ts`.
 - Feed render + feature meta: `app/src/utils/activityFeedTemplates.ts`,
@@ -345,7 +345,7 @@ tappable → `BountyDetail` via its `bounty_post_id`; not required for v1.
   - **Cancel** (destructive, **any** state incl. `settled`) → confirm with a clear "this
     erases the bounty economically and publicly" warning → `bountyPosts.cancel(id)` → toast +
     reload. Post-settlement this claws back the distributed payouts (the copy adapts for the
-    `settled` case). Mirror the cancel UX in `PvPAdminScreen` / `PinsinoSportsbookScreen`.
+    `settled` case). Mirror the cancel UX in `PvPAdminScreen` / `AdminSportsbookScreen`.
 - Show escrow held + hunter list per bounty (reuse the detail components).
 
 ---

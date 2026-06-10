@@ -18,7 +18,7 @@ every `<Modal>`, RPC-then-`reload`, admin gate via `useAuthStore(s => s.role) ==
 - Data hook: `app/src/hooks/usePinsinoData.ts`, `usePlayerPinsinoData.ts`.
 - Action modal: `app/src/components/SettleBetModal.tsx` (bottom sheet, `<Toast/>` inside, RPC→toast→`onSettled`→`onClose`); `AdminEndSeasonModal.tsx` (centered confirm card, disabled-while-saving).
 - Hub screen + tiles: `app/src/screens/PinsinoScreen.tsx`, `PinsinoAdminScreen.tsx`.
-- Admin list + cancel: `app/src/screens/PinsinoSportsbookScreen.tsx`.
+- Admin list + cancel: `app/src/screens/AdminSportsbookScreen.tsx`.
 - db.ts query objects + RPC wrappers: `app/src/utils/supabase/db.ts`.
 
 ---
@@ -176,7 +176,7 @@ Layout (design §8.2):
   `loans.listActiveDetailed` (or reuse `loans.listActiveBySeason` joined to players +
   summed `loan_ledger`) — add the query to `db.ts` as needed.
 - Each row has a destructive **Cancel** (✕) → confirm → `loans.cancel(loanId)` →
-  toast + reload. Mirror the cancel UX in `PinsinoSportsbookScreen`. `<Toast/>` inside
+  toast + reload. Mirror the cancel UX in `AdminSportsbookScreen`. `<Toast/>` inside
   any modal used.
 
 ### `app/src/screens/PinsinoAdminScreen.tsx`
