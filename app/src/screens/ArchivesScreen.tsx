@@ -23,44 +23,13 @@ import { useAuthStore } from '../stores/authStore'
 import { seasons, archives } from '../utils/supabase/db'
 
 type Nav = NativeStackNavigationProp<MoreStackParamList>
-type Mode = 'soft' | 'hard'
 type ArchivedWeek = { id: string; week_number: number; bowled_at: string | null }
 
-const MODE_COPY: Record<Mode, { title: string; body: string }> = {
-  soft: {
-    title: 'Soft Unarchive',
-    body:
-      'Reverses every Pinsino effect this week derived (pins, bet/PvP settlements, ' +
-      'loan garnishment, feed events) and deletes the next week — but keeps the week ' +
-      'archived, so the scores stay locked. Use when the scores are right but the ' +
-      'settlement was wrong: re-run Archive & Advance to re-derive the same scores cleanly.',
-  },
-  hard: {
-    title: 'Hard Unarchive',
-    body:
-      'Everything Soft does, plus reopens the week (is_archived → false) so the scores ' +
-      'become editable again. Use when the input scores themselves were wrong: fix them, ' +
-      'then re-run Archive & Advance.',
-  },
-}
-
-// Side-by-side summary so an admin can tell the two modes apart at a glance.
-// Both reverse the Pinsino settlement and delete week N+1; they differ ONLY in
-// whether this week's scores are reopened for editing.
-const MODE_SUMMARY: { mode: Mode; name: string; scores: string; use: string }[] = [
-  {
-    mode: 'soft',
-    name: 'Soft Unarchive',
-    scores: 'Scores stay locked — re-derives the same scores.',
-    use: 'The scores are right, the settlement was wrong.',
-  },
-  {
-    mode: 'hard',
-    name: 'Hard Unarchive',
-    scores: 'Scores reopen for editing (week un-archives).',
-    use: 'The input scores themselves were wrong.',
-  },
-]
+const CONFIRM_BODY =
+  'Reverses every Pinsino effect this week derived (pins, bet/PvP settlements, loan ' +
+  'garnishment, feed events), deletes the next week, and reopens this week — scores ' +
+  'become editable and the week is in play again. Fix whatever needs fixing (or ' +
+  'nothing), then re-run Archive & Advance from Matchups to settle it again.'
 
 export default function ArchivesScreen() {
   const navigation = useNavigation<Nav>()
@@ -72,7 +41,7 @@ export default function ArchivesScreen() {
 
   // Confirmation flow state. `forceArmed` is set after the server rejects an
   // unforced unarchive because week N+1 holds downstream activity.
-  const [pending, setPending] = useState<{ week: ArchivedWeek; mode: Mode } | null>(null)
+  const [pending, setPending] = useState<{ week: ArchivedWeek } | null>(null)
   const [busy, setBusy] = useState(false)
   const [forceArmed, setForceArmed] = useState(false)
   const [warning, setWarning] = useState<string | null>(null)
@@ -95,8 +64,8 @@ export default function ArchivesScreen() {
 
   const { refreshing, onRefresh } = useRefresh(load)
 
-  function openConfirm(week: ArchivedWeek, mode: Mode) {
-    setPending({ week, mode })
+  function openConfirm(week: ArchivedWeek) {
+    setPending({ week })
     setForceArmed(false)
     setWarning(null)
   }
@@ -111,8 +80,8 @@ export default function ArchivesScreen() {
   async function runUnarchive() {
     if (!pending) return
     setBusy(true)
-    const { week, mode } = pending
-    const { error } = await archives.unarchiveWeek(week.id, mode, forceArmed)
+    const { week } = pending
+    const { error } = await archives.unarchiveWeek(week.id, forceArmed)
     setBusy(false)
 
     if (error) {
@@ -127,7 +96,7 @@ export default function ArchivesScreen() {
       return
     }
 
-    showToast(`Week ${week.week_number} unarchived (${mode})`, 'success')
+    showToast(`Week ${week.week_number} unarchived — back in play`, 'success')
     setPending(null)
     setForceArmed(false)
     setWarning(null)
@@ -147,8 +116,6 @@ export default function ArchivesScreen() {
     )
   }
 
-  const modeCopy = pending ? MODE_COPY[pending.mode] : null
-
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <ScrollView
@@ -158,25 +125,12 @@ export default function ArchivesScreen() {
         <ScreenHeader title="Archives" onBack={() => navigation.goBack()} />
 
         <Text style={styles.intro}>
-          Unarchive a week to reverse its Pinsino settlement. Only the most recently
-          archived week can be unarchived; both modes delete the next week so a
-          re-run of Archive & Advance starts from a clean slate.
+          Unarchiving a week reverses its Pinsino settlement (pins, bet/PvP
+          settlements, loan garnishment, feed events), deletes the next week, and
+          puts the week back in play with its teams and scores intact. Re-archive
+          it from Matchups with Archive & Advance. Only the most recently archived
+          week can be unarchived.
         </Text>
-
-        <View style={styles.summaryCard}>
-          <Text style={styles.summaryHeader}>
-            Both modes reverse this week's Pinsino settlement (pins, bet/PvP
-            settlements, loan garnishment, feed events) and delete week N+1. They
-            differ only in what happens to this week's scores:
-          </Text>
-          {MODE_SUMMARY.map(m => (
-            <View key={m.mode} style={styles.summaryRow}>
-              <Text style={styles.summaryName}>{m.name}</Text>
-              <Text style={styles.summaryScores}>{m.scores}</Text>
-              <Text style={styles.summaryUse}>Use when: {m.use}</Text>
-            </View>
-          ))}
-        </View>
 
         <Text style={styles.sectionHeader}>ARCHIVED WEEKS</Text>
 
@@ -195,17 +149,10 @@ export default function ArchivesScreen() {
               {/* LIFO: only the most-recent archived week is reversible. */}
               <View style={styles.btnRow}>
                 <Button
-                  label="Soft Unarchive"
-                  variant="outline"
-                  onPress={() => openConfirm(w, 'soft')}
-                  disabled={i !== 0}
-                  fullWidth
-                />
-                <Button
-                  label="Hard Unarchive"
+                  label="Unarchive"
                   variant="outline"
                   tone="danger"
-                  onPress={() => openConfirm(w, 'hard')}
+                  onPress={() => openConfirm(w)}
                   disabled={i !== 0}
                   fullWidth
                 />
@@ -218,12 +165,12 @@ export default function ArchivesScreen() {
       <Modal visible={!!pending} transparent animationType="fade" onRequestClose={closeConfirm}>
         <TouchableOpacity style={styles.backdrop} activeOpacity={1} onPress={closeConfirm}>
           <TouchableOpacity style={styles.sheet} activeOpacity={1} onPress={() => {}}>
-            {modeCopy && pending && (
+            {pending && (
               <>
                 <Text style={styles.sheetTitle}>
-                  {modeCopy.title} — Week {pending.week.week_number}?
+                  Unarchive Week {pending.week.week_number}?
                 </Text>
-                <Text style={styles.sheetBody}>{modeCopy.body}</Text>
+                <Text style={styles.sheetBody}>{CONFIRM_BODY}</Text>
                 {warning && (
                   <View style={styles.warnBox}>
                     <Text style={styles.warnText}>{warning}</Text>

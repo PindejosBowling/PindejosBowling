@@ -871,7 +871,7 @@ ALTER TABLE week_archive_runs ADD CONSTRAINT week_archive_runs_actor_id_fkey FOR
 
 ALTER TABLE week_archive_runs ADD CONSTRAINT week_archive_runs_pkey PRIMARY KEY (id);
 
-ALTER TABLE week_archive_runs ADD CONSTRAINT week_archive_runs_reversed_mode_check CHECK ((reversed_mode = ANY (ARRAY['soft'::text, 'hard'::text])));
+ALTER TABLE week_archive_runs ADD CONSTRAINT week_archive_runs_reversed_mode_check CHECK ((reversed_mode = ANY (ARRAY['soft'::text, 'hard'::text, 'unarchive'::text])));
 
 ALTER TABLE week_archive_runs ADD CONSTRAINT week_archive_runs_season_id_fkey FOREIGN KEY (season_id) REFERENCES seasons(id) ON DELETE CASCADE;
 
@@ -2857,11 +2857,14 @@ CREATE OR REPLACE FUNCTION public.finalize_bets_for_market(p_market_id uuid)
  SET search_path TO ''
 AS $function$
 DECLARE
-  v_bet    record;
-  v_leg    record;
-  v_odds   numeric;
-  v_payout integer;
+  v_bet     record;
+  v_leg     record;
+  v_odds    numeric;
+  v_payout  integer;
+  v_week_id uuid;
 BEGIN
+  SELECT week_id INTO v_week_id FROM public.bet_markets WHERE id = p_market_id;
+
   FOR v_bet IN
     SELECT DISTINCT b.id, b.player_id, b.season_id, b.stake
     FROM public.bets b
@@ -2893,9 +2896,9 @@ BEGIN
     ) THEN
       -- All legs push/void → refund the stake (double-entry).
       UPDATE public.bets SET status = 'push', settled_at = now() WHERE id = v_bet.id;
-      INSERT INTO public.pin_ledger (player_id, season_id, is_house, amount, type, description, bet_id) VALUES
-        (v_bet.player_id, v_bet.season_id, false,  v_bet.stake, 'bet_refund', 'Push refund',         v_bet.id),
-        (NULL,            v_bet.season_id, true,  -v_bet.stake, 'bet_refund', 'Push refund (house)', v_bet.id);
+      INSERT INTO public.pin_ledger (player_id, season_id, week_id, is_house, amount, type, description, bet_id) VALUES
+        (v_bet.player_id, v_bet.season_id, v_week_id, false,  v_bet.stake, 'bet_refund', 'Push refund',         v_bet.id),
+        (NULL,            v_bet.season_id, v_week_id, true,  -v_bet.stake, 'bet_refund', 'Push refund (house)', v_bet.id);
 
     ELSE
       -- Won: payout = floor(stake × product(won-leg odds)). Push/void legs drop out.
@@ -2910,9 +2913,9 @@ BEGIN
       UPDATE public.bets
         SET status = 'won', potential_payout = v_payout, settled_at = now()
         WHERE id = v_bet.id;
-      INSERT INTO public.pin_ledger (player_id, season_id, is_house, amount, type, description, bet_id) VALUES
-        (v_bet.player_id, v_bet.season_id, false,  v_payout, 'bet_payout', 'Bet won',         v_bet.id),
-        (NULL,            v_bet.season_id, true,  -v_payout, 'bet_payout', 'Bet won (house)', v_bet.id);
+      INSERT INTO public.pin_ledger (player_id, season_id, week_id, is_house, amount, type, description, bet_id) VALUES
+        (v_bet.player_id, v_bet.season_id, v_week_id, false,  v_payout, 'bet_payout', 'Bet won',         v_bet.id),
+        (NULL,            v_bet.season_id, v_week_id, true,  -v_payout, 'bet_payout', 'Bet won (house)', v_bet.id);
     END IF;
   END LOOP;
 END;
@@ -3765,7 +3768,7 @@ BEGIN
   -- archive transaction rolls back) and name the unsettleable markets. With
   -- force: void those bets and refund their stakes. The void is snapshot-
   -- reversible — bets/bet_legs pre-images are captured by archive_week, and the
-  -- bet_refund rows are bet-linked so unarchive deletes them.
+  -- bet_refund rows are bet-linked (and week-stamped) so unarchive deletes them.
   -- --------------------------------------------------------------------------
   SELECT count(DISTINCT b.id) INTO v_n_pending
   FROM public.bets b
@@ -3797,16 +3800,16 @@ BEGIN
     LOOP
       UPDATE public.bet_legs SET result = 'void' WHERE bet_id = v_bet.id AND result IS NULL;
       UPDATE public.bets SET status = 'void', settled_at = now() WHERE id = v_bet.id;
-      INSERT INTO public.pin_ledger (player_id, season_id, is_house, amount, type, description, bet_id) VALUES
-        (v_bet.player_id, v_bet.season_id, false,  v_bet.stake, 'bet_refund', 'Voided at archive — market never settled',         v_bet.id),
-        (NULL,            v_bet.season_id, true,  -v_bet.stake, 'bet_refund', 'Voided at archive — market never settled (house)', v_bet.id);
+      INSERT INTO public.pin_ledger (player_id, season_id, week_id, is_house, amount, type, description, bet_id) VALUES
+        (v_bet.player_id, v_bet.season_id, p_week_id, false,  v_bet.stake, 'bet_refund', 'Voided at archive — market never settled',         v_bet.id),
+        (NULL,            v_bet.season_id, p_week_id, true,  -v_bet.stake, 'bet_refund', 'Voided at archive — market never settled (house)', v_bet.id);
     END LOOP;
   END IF;
 
   -- Activity Feed: post the House's weekly sportsbook P&L (aggregate, no source FK).
   -- house_net > 0 = House won the week; < 0 = players beat the House (§10.3 copy).
-  -- Summed via bet_id through the week's markets: bet_payout/bet_refund rows are
-  -- not week-stamped, so a week_id predicate would only ever count the stakes.
+  -- Summed via bet_id through the week's markets: payout/refund rows are now also
+  -- week-stamped, but bet_id remains the authoritative link for bet money.
   SELECT COALESCE(SUM(pl.amount), 0) INTO v_house_net
     FROM public.pin_ledger pl
     WHERE pl.is_house = true
@@ -4950,7 +4953,7 @@ END;
 $function$
 ;
 
-CREATE OR REPLACE FUNCTION public.unarchive_week(p_week_id uuid, p_mode text, p_force boolean DEFAULT false)
+CREATE OR REPLACE FUNCTION public.unarchive_week(p_week_id uuid, p_force boolean DEFAULT false)
  RETURNS void
  LANGUAGE plpgsql
  SECURITY DEFINER
@@ -4970,9 +4973,6 @@ DECLARE
 BEGIN
   IF ((SELECT auth.jwt()) -> 'app_metadata' ->> 'role') <> 'admin' THEN
     RAISE EXCEPTION 'Admin only';
-  END IF;
-  IF p_mode NOT IN ('soft', 'hard') THEN
-    RAISE EXCEPTION 'mode must be soft or hard';
   END IF;
 
   SELECT season_id, week_number INTO v_season_id, v_week_number
@@ -5121,7 +5121,7 @@ BEGIN
      AND sn.table_name = 'loans' AND sn.pk = ln.id;
 
   -- --------------------------------------------------------------------------
-  -- 3c. Destroy week N+1 (both modes). rsvp.week_id has no cascade → delete first.
+  -- 3c. Destroy week N+1. rsvp.week_id has no cascade → delete first.
   --     Teams/games/markets/pvp cascade; the refund_bets_before_market_delete
   --     trigger refunds any bets placed on N+1.
   -- --------------------------------------------------------------------------
@@ -5131,15 +5131,13 @@ BEGIN
   END IF;
 
   -- --------------------------------------------------------------------------
-  -- 3d. Mode branch: hard reopens the score lock (scores become editable);
-  --     soft leaves the week archived (same scores re-derive on re-archive).
+  -- 3d. Reopen the week: it is simply in play again (scores editable,
+  --     MatchupsScreen's Archive & Advance is the re-archive path).
   -- --------------------------------------------------------------------------
-  IF p_mode = 'hard' THEN
-    UPDATE public.weeks SET is_archived = false, bowled_at = NULL WHERE id = p_week_id;
-  END IF;
+  UPDATE public.weeks SET is_archived = false, bowled_at = NULL WHERE id = p_week_id;
 
   UPDATE public.week_archive_runs
-     SET status = 'reversed', reversed_mode = p_mode, reversed_at = now()
+     SET status = 'reversed', reversed_mode = 'unarchive', reversed_at = now()
    WHERE id = v_run_id;
 END;
 $function$

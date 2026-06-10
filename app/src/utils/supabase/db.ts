@@ -928,23 +928,43 @@ export const weeks = {
       .select('*')
       .eq('season_id', seasonId)
       .order('week_number'),
+  // The current playing week: latest unarchived week of the CURRENT season
+  // (season-scoped — an unscoped query would leak another season's weeks).
+  // maybeSingle: during the soft-unarchive window no unarchived week exists,
+  // which is a legitimate null, not an error.
   getCurrent: () =>
     supabase
       .from('weeks')
-      .select('*')
+      .select('*, seasons!inner(is_active, registration_open)')
+      .eq('seasons.is_active', true)
+      .eq('seasons.registration_open', false)
       .eq('is_archived', false)
       .order('week_number', { ascending: false })
       .limit(1)
-      .single(),
+      .maybeSingle(),
+  // The week "in play" for display (AppHeader): latest week of the current
+  // season regardless of archive state, so the label stays truthful during the
+  // soft-unarchive window (week N locked, week N+1 destroyed).
+  getLatestOfCurrentSeason: () =>
+    supabase
+      .from('weeks')
+      .select('*, seasons!inner(is_active, registration_open)')
+      .eq('seasons.is_active', true)
+      .eq('seasons.registration_open', false)
+      .order('week_number', { ascending: false })
+      .limit(1)
+      .maybeSingle(),
   getActive: () =>
     supabase
       .from('weeks')
-      .select('*')
+      .select('*, seasons!inner(is_active, registration_open)')
+      .eq('seasons.is_active', true)
+      .eq('seasons.registration_open', false)
       .eq('is_archived', false)
       .eq('is_confirmed', true)
       .order('week_number', { ascending: false })
       .limit(1)
-      .single(),
+      .maybeSingle(),
   getById: (id: string) =>
     supabase.from('weeks').select('*').eq('id', id).single(),
   insert: (data: TablesInsert<'weeks'>) =>
@@ -963,10 +983,12 @@ export const archives = {
   // RPC raises and lists the unsettleable markets when force is off).
   archiveWeek: (weekId: string, force = false) =>
     supabase.rpc('archive_week', { p_week_id: weekId, p_force: force }),
-  // mode: 'soft' keeps is_archived (re-derive same scores); 'hard' reopens scores.
-  // force: override the week-N+1 downstream-activity guard.
-  unarchiveWeek: (weekId: string, mode: 'soft' | 'hard', force = false) =>
-    supabase.rpc('unarchive_week', { p_week_id: weekId, p_mode: mode, p_force: force }),
+  // Reverses the week's settlement, destroys week N+1, and reopens the week
+  // (is_archived → false) so it is simply in play again; re-archive via
+  // MatchupsScreen's Archive & Advance. force: override the week-N+1
+  // downstream-activity guard.
+  unarchiveWeek: (weekId: string, force = false) =>
+    supabase.rpc('unarchive_week', { p_week_id: weekId, p_force: force }),
   listArchivedWeeks: (seasonId: string) =>
     supabase
       .from('weeks')

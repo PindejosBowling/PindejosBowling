@@ -37,7 +37,7 @@ participation-keyed lines).
                          │  1. guard: admin, week exists,              │
   roster/market coupling │     no active run for this week             │
   triggers keep every    │  2. snapshot pre-image  ──► week_archive_*  │   unarchive_week
-  market settleable:     │  3. lock week (is_archived = true)          │   (mode, force)
+  market settleable:     │  3. lock week (is_archived = true)          │   (force)
   bets can only exist on │  4. settle_betting_for_week(week, force)    │   restores the
   (player, game) pairs   │       a. score-credit mint                  │   §2 snapshot +
   that will really bowl  │       b. O/U markets settle                 │   destroys week
@@ -56,7 +56,7 @@ Three load-bearing properties:
    transaction. Any RAISE anywhere (including the backstop) rolls the entire
    archive back — week unlocked, nothing settled, no run row.
 2. **Idempotent derivation.** Every settlement step has its own re-run guard
-   (§3 table), so `archive → soft unarchive → archive` re-derives the identical
+   (§3 table), so `archive → unarchive → archive` (untouched scores) re-derives the identical
    economy from the same scores.
 3. **Snapshot reversibility.** Settlement only ever **INSERTs append rows** or
    **UPDATEs a known column set** — both captured in the pre-image snapshot, so
@@ -75,15 +75,15 @@ Admin-only `SECURITY DEFINER` RPC. Called from `AdminArchiveModal`
 - JWT `app_metadata.role = 'admin'`.
 - Week exists.
 - **One active run per week**: a `week_archive_runs` row with
-  `status='active'` blocks re-archive ("unarchive it first"). Soft/hard
-  unarchive marks the run `reversed`, which re-allows archiving.
+  `status='active'` blocks re-archive ("unarchive it first"). Unarchive marks
+  the run `reversed`, which re-allows archiving.
 
 **Snapshot capture** — two kinds of rows in `week_archive_snapshot`, anchored to
 the new `week_archive_runs` row:
 
 | Kind | Table | Predicate (what's captured) |
 |---|---|---|
-| `preexisting_id` | `pin_ledger` | `week_id = N` **OR** `bet_id ∈ week-N bets` (payout/refund rows are bet-linked, not week-stamped) |
+| `preexisting_id` | `pin_ledger` | `week_id = N` **OR** `bet_id ∈ week-N bets` (payout/refund rows are bet-linked **and**, since migration `…191008_week_stamp_bet_settlement_ledger`, also week-stamped; the OR keeps the predicate belt-and-braces) |
 | `preexisting_id` | `loan_ledger`, `pvp_ledger`, `activity_feed_events` | `week_id = N` |
 | `preimage_row` | `bet_markets` | week-N markets: `status, result_value, settled_at` |
 | `preimage_row` | `bet_selections`, `bet_legs` | week-N markets' rows: `result` |
@@ -119,11 +119,11 @@ idempotency guard:
 | d | **Loans** (`process_weekly_loans`) | Per active loan: **garnish** = min(week pincome × rate, outstanding) → then **interest** = ceil(remaining × rate) on still-active loans; outstanding ≤ 0 → `status='paid_off'` | garnish: `pin_ledger` pair (`loan_weekly_garnishment`) + `loan_ledger weekly_garnishment`; interest: `loan_ledger weekly_interest` **only** (debt grows, no pin movement) | per-(loan, week) guard on `loan_ledger` types |
 | e | **PvP** (`settle_pvp_for_week`) | Close still-open offers/challenges (pending/countered → `cancelled`, nothing was escrowed) then auto-settle every `locked` contract: decisive → winner takes pot; tie → push (refund); missing data (incl. a deleted prop market — FK is SET NULL) → **void** (refund). Publishes `pvp_challenge_settled` feed events | win: `pvp_payout` pair; push/void: `pvp_refund` pairs | challenge `status` checks; settled/pushed/voided return early |
 | f | **BACKSTOP** | Count bets with a leg in this week still `pending`. **>0 and not force → RAISE** (whole archive rolls back) naming the unsettleable markets. **Force →** each such bet: legs `result='void'`, bet `status='void'`, stake refunded | force: `bet_refund` pair ("Voided at archive — market never settled") | n/a (state-driven) |
-| g | **House weekly P&L feed event** | `sportsbook_weekly_house_result` with `house_net` = SUM of house `bet_stake/bet_payout/bet_refund` **via `bet_id` through the week's markets** (payout/refund rows are not week-stamped — a `week_id` sum would count only stakes) | none (feed row) | `(season, week, event_type)` existence check |
+| g | **House weekly P&L feed event** | `sportsbook_weekly_house_result` with `house_net` = SUM of house `bet_stake/bet_payout/bet_refund` **via `bet_id` through the week's markets** (`bet_id` is the authoritative link for bet money; payout/refund rows are also week-stamped since `…191008_week_stamp_bet_settlement_ledger`) | none (feed row) | `(season, week, event_type)` existence check |
 
 **Backstop reversibility:** the force-void is an UPDATE on `bets`/`bet_legs`
 (pre-images captured in §2) plus bet-linked `bet_refund` INSERTs (caught by
-unarchive's `bet_id` branch) — a forced archive soft-unarchives back to the
+unarchive's `bet_id` branch) — a forced archive unarchives back to the
 exact pre-archive state, voided bets returning to `pending`.
 
 **App force flow:** `AdminArchiveModal` arms a red **Force Archive** retry when
@@ -136,16 +136,25 @@ tools (`cancel_bet`, PvP settle/void, `cancel_loan`, feed suppress).
 
 ---
 
-## 4. `unarchive_week(p_week_id uuid, p_mode text, p_force boolean default false)`
+## 4. `unarchive_week(p_week_id uuid, p_force boolean default false)`
 
 Admin-only. Exposed on **ArchivesScreen** (More → Archives) via
-`archives.unarchiveWeek(weekId, mode, force)`.
+`archives.unarchiveWeek(weekId, force)`.
 
-**Guards:** admin; mode `soft|hard`; **LIFO** (a later archived week blocks —
-only the most recent is reversible); an `active` run must exist; and the
-**downstream guard**: unless forced, RAISE if week N+1 holds any scores, bets,
-PvP, RSVPs, or ledger rows (the app surfaces the message and arms **Force
-Unarchive**).
+There is deliberately **one mode** (migration `…193032_single_mode_unarchive`,
+replacing the original soft/hard split): unarchive reverses the settlement
+**and reopens the week**, so afterwards week N is simply *in play again* —
+MatchupsScreen shows it, scores are editable, and its **Archive & Advance bar
+is the re-archive path**. The removed "soft" mode (settlement reversed but week
+still locked) created the only state in the lifecycle with no current week,
+which every screen had to special-case and no UI path could re-archive.
+Re-deriving identical settlement from untouched scores is guaranteed by the §3
+idempotency guards, not by a score lock.
+
+**Guards:** admin; **LIFO** (a later archived week blocks — only the most
+recent is reversible); an `active` run must exist; and the **downstream
+guard**: unless forced, RAISE if week N+1 holds any scores, bets, PvP, RSVPs,
+or ledger rows (the app surfaces the message and arms **Force Unarchive**).
 
 **Reversal, in order:**
 1. **Delete what settlement inserted** — `activity_feed_events`, `pin_ledger`
@@ -154,16 +163,11 @@ Unarchive**).
 2. **Restore what settlement updated** — `bet_markets`, `bet_selections`,
    `bets`, `bet_legs`, `pvp_challenges`, `pvp_challenge_offers`, `loans` from
    the `preimage_row` payloads.
-3. **Destroy week N+1** (both modes): delete its `rsvp` rows (no cascade FK),
-   then the week — teams/games/markets cascade and the market-delete refund
-   trigger refunds any N+1 bets.
-4. **Mode branch:** `hard` also sets `is_archived = false, bowled_at = NULL`
-   (scores editable again); `soft` leaves the week locked so a re-archive
-   re-derives the same scores.
+3. **Destroy week N+1**: delete its `rsvp` rows (no cascade FK), then the week
+   — teams/games/markets cascade and the market-delete refund trigger refunds
+   any N+1 bets.
+4. **Reopen week N** — `is_archived = false, bowled_at = NULL`.
 5. Mark the run `reversed` (re-archive allowed).
-
-**Mode vocabulary:** *soft* = the settlement was wrong, the scores are right;
-*hard* = the input scores themselves were wrong.
 
 **Known sharp edges (by design, verify in acceptance vectors U6/I13):**
 - Unarchive cannot resurrect anything **erased before** the archive (bets
@@ -266,7 +270,7 @@ is admin `cancel_bet`.)
    `settle_betting_for_week` (order matters — e.g., loans need the pincome mint
    first; prop-derived things need markets settled first).
 2. Give it an **idempotency guard** (existence check or status early-return) so
-   re-archive after soft unarchive cannot double-apply.
+   re-archive after unarchive cannot double-apply.
 3. Keep it **snapshot-compatible**: only append-rows INSERTs into a table the
    snapshot captures, and/or UPDATEs to columns the pre-image stores. If you
    touch a *new* table or *new* columns, extend **both** `archive_week`'s
@@ -282,9 +286,9 @@ is admin `cancel_bet`.)
 
 ### Debugging a settlement discrepancy
 
-1. Reproduce via the Archives screen: **soft unarchive** the week (economy
-   reversed, scores locked), inspect, re-run Archive & Advance. Use **hard**
-   only if the input scores were wrong.
+1. Reproduce via the Archives screen: **unarchive** the week (economy
+   reversed, week back in play), inspect — and if the input scores were wrong,
+   fix them — then re-run Archive & Advance from MatchupsScreen.
 2. Read state, never migrations: function bodies in `supabase/schema.sql`; the
    run + snapshot via `week_archive_runs` / `week_archive_snapshot`
    (`supabase db query`, read-only).
@@ -294,7 +298,7 @@ is admin `cancel_bet`.)
 4. A bet "missing" after a roster change is usually 5c **erasure** (working as
    designed), not a settlement bug — check the placement feed card is gone too.
 5. If archive RAISEs on the backstop: that's the engine telling you a market
-   has no gradable outcome. Fix the lineup/scores (hard unarchive if already
+   has no gradable outcome. Fix the lineup/scores (unarchive first if already
    archived), or force-void deliberately.
 
 ---
@@ -306,4 +310,4 @@ is admin `cancel_bet`.)
 | DB engine | `archive_week`, `unarchive_week`, `settle_betting_for_week`, `settle_market_internal`, `settle_moneyline_market_internal`, `finalize_bets_for_market`, `process_weekly_loans`, `settle_pvp_for_week`, `settle_pvp_challenge`, `void_pvp_challenge`, `close_open_pvp_challenges`, `publish_activity_event` |
 | DB integrity | `sync_over_under_markets_for_week`, `sync_moneyline_markets_for_week`, `resync_week_markets`, `remove_over_under_markets_for_game`, `refund_bets_before_market_delete`, `trg_resync_markets_{rsvp,team_slots,games,scores}`, `trg_seed_participation_games` |
 | DB state | `weeks.is_archived/bowled_at`, `week_archive_runs`, `week_archive_snapshot`, `scores` (participation rows) |
-| App | `db.ts → archives` (archiveWeek/unarchiveWeek/listArchivedWeeks), `AdminArchiveModal` (archive + force flow), `ArchivesScreen` (soft/hard unarchive + force flow), `MatchupsScreen` (archive bar, flushScores null-clear, game add/remove), `AdminGenerateTeamsModal`, `useWeekEditor` (per-game lineup edits) |
+| App | `db.ts → archives` (archiveWeek/unarchiveWeek/listArchivedWeeks), `AdminArchiveModal` (archive + force flow), `ArchivesScreen` (unarchive + force flow), `MatchupsScreen` (archive bar, flushScores null-clear, game add/remove), `AdminGenerateTeamsModal`, `useWeekEditor` (per-game lineup edits) |

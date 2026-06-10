@@ -16,15 +16,15 @@ export default function AppHeader() {
   const weekVersion = useUiStore(s => s.weekVersion)
 
   useEffect(() => {
-    Promise.all([weeks.getCurrent(), seasons.getCurrent()]).then(([weekRes, seasonRes]) => {
+    Promise.all([weeks.getLatestOfCurrentSeason(), seasons.getCurrent()]).then(([weekRes, seasonRes]) => {
       setWeekNumber(weekRes.data?.week_number ?? null)
       setSeasonNumber(seasonRes.data?.number ?? null)
     })
   }, [weekVersion])
 
-  const weekLabel = weekNumber != null ? `Week ${weekNumber}` : 'Week 1'
+  const weekLabel = weekNumber != null ? `Week ${weekNumber}` : ''
   const seasonLabel = seasonNumber != null ? `Season ${seasonNumber}` : ''
-  const subline = seasonLabel ? `${seasonLabel}  ·  ${weekLabel}` : weekLabel
+  const subline = [seasonLabel, weekLabel].filter(Boolean).join('  ·  ')
 
   return (
     <View style={styles.row}>

@@ -43,13 +43,21 @@ double-mint, double-pay, or double-garnish).
 
 ### A2. Over/Under bet settlement (`bet_payout` / `bet_refund`)
 
-- [ ] **V3** O/U **win** → bet status `won`, "WINNING PAYOUT" ledger row (+potential_payout),
+- [x] **V3** O/U **win** → bet status `won`, "WINNING PAYOUT" ledger row (+potential_payout),
   house −payout. Observe: SportsbookScreen → Settled Bets (WIN badge), PlayerPinsinoScreen
   ledger, PinsinoAccountingScreen.
-- [ ] **V4** O/U **loss** → status `lost`, **no** new ledger row (stake was kept at placement),
+  *Accepted 2026-06-10 (S2W6): 100 @ 2.0 → `won`, payout pair +200/−200 exactly
+  potential_payout. Found+fixed: payout/refund rows lacked `week_id` and vanished from the
+  week-grouped Activity view (`…191008_week_stamp_bet_settlement_ledger` + backfill).*
+- [x] **V4** O/U **loss** → status `lost`, **no** new ledger row (stake was kept at placement),
   balance unchanged.
-- [ ] **V5** O/U **push** (score exactly on the line) → `bet_refund` ("PUSH · REFUND"),
-  stake returned.
+  *Accepted 2026-06-10 (S2W6): 150 → `lost`, zero settlement ledger rows, verified across
+  archive → unarchive → re-archive.*
+- [x] **V5** O/U **push** (score exactly on the line) → `bet_refund` ("PUSH · REFUND"),
+  stake returned. *N/A by design (2026-06-10): lines are always set on the .5
+  (sync formula floor(avg)+0.5 and league convention), so an exact-on-the-line O/U
+  push is unreachable. Push mechanics get covered by the moneyline tie (V9); note
+  the same reasoning makes V7(c)'s push-leg unreachable for O/U-only parlays.*
 - [ ] **V6** O/U on a subject with **no score** → market goes `closed` (= no longer taking
   action, but ungraded — distinct from `settled`), bet stays **pending**, zero ledger rows.
   Not a dead end: the settlement loop retries any market `<> 'settled'`, so hard-unarchive →
@@ -101,24 +109,48 @@ double-mint, double-pay, or double-garnish).
 
 ### A7. Week advance
 
-- [ ] **V21** Week N+1 created: MatchupsScreen resets for team gen, RSVP opens,
+- [x] **V21** Week N+1 created: MatchupsScreen resets for team gen, RSVP opens,
   SportsbookScreen Active Bets empty, week number increments.
+  *Accepted 2026-06-10 (S2W6→W7): all four surfaces confirmed — header Week 7 (live via
+  the realtime week clock), fresh team gen, blank RSVPs, empty Active Bets. Week N+1
+  creation/destruction also exercised repeatedly across the U1–U3 cycles.*
 
 ---
 
 ## B. Unarchive (reversal) vectors — More → Archives (ArchivesScreen)
 
-- [ ] **U1** **Soft unarchive** after a full A1–A7 run: every settlement-created row deleted
+*2026-06-10 design change (mid-acceptance): the soft/hard split collapsed into a single
+`unarchive_week(week_id, force)` = the old hard mode (migration
+`…193032_single_mode_unarchive`). Unarchive always reopens the week — it is simply in
+play again, and MatchupsScreen's Archive & Advance is the re-archive path. The soft
+state (settlement reversed, week still locked, no current week anywhere) no longer
+exists; it had no UI re-archive path and every screen had to special-case it.*
+
+- [x] **U1** **Unarchive** after a full A1–A7 run: every settlement-created row deleted
   (score credits, payouts/refunds, garnishments, interest, pvp rows, feed events incl.
-  house P&L), bets back to pending, markets reopened, PvP back to `locked`, paid-off loans
-  back to `active`, week N+1 (+RSVPs) deleted, balances exactly pre-archive (stakes still
-  debited), **scores still locked**.
-- [ ] **U2** **Re-archive after soft** → identical settlement re-derives; verify idempotency
-  guards (no double pincome mint, single house P&L event, no duplicate garnishment).
-- [ ] **U3** **Hard unarchive** → everything in U1 **plus** scores editable on
-  MatchupsScreen; change a score, re-archive, confirm a bet flips outcome (e.g., V3 win →
-  loss) and pincome reflects the new score.
-- [ ] **U4** **LIFO guard**: with 2+ archived weeks, Soft/Hard buttons disabled for all but
+  house P&L), bets back to pending, markets restored to pre-archive status, PvP back to
+  `locked`, paid-off loans back to `active`, week N+1 (+RSVPs) deleted, balances exactly
+  pre-archive (stakes still debited), **week back in play**: teams/games/scores intact
+  and editable, header shows week N, archive bar available.
+  *Settlement-reversal half verified 2026-06-10 (S2W6, pre-collapse soft mode): all
+  deletions/restores/balances exact, incl. the week-stamped payout rows. Reopen half
+  verified same day under the single-mode flow (week visible/editable on MatchupsScreen,
+  re-archived from its archive bar).*
+- [x] **U2** **Re-archive with untouched scores** (Archive & Advance) → identical
+  settlement re-derives; verify idempotency guards (no double pincome mint, single house
+  P&L event, no duplicate garnishment).
+  *Accepted 2026-06-10 (S2W6): unarchive → re-archive produced a byte-identical economy —
+  9 ledger rows / single payout pair / credits once each / one P&L event (+50) / same bet
+  statuses and balances. (Loan-garnishment idempotency still to observe in the A4 cycle.)*
+- [x] **U3** **Re-archive with changed score**: after unarchive, change a score on
+  MatchupsScreen, re-archive, confirm a bet flips outcome (e.g., V3 win → loss) and
+  pincome reflects the new score.
+  *Accepted 2026-06-10 (S2W6): G1 200→10 flipped the V3 bet won→lost; payout pair cleanly
+  gone (0 rows), credit re-minted once at 10, house P&L re-derived 50→250, balances exact.
+  Also caught+fixed en route: `reversed_mode` check constraint rejected the new
+  single-mode value (`…194424_reversed_mode_allow_unarchive`) — the failed unarchive
+  rolled back whole, incidentally demonstrating reversal atomicity.*
+- [ ] **U4** **LIFO guard**: with 2+ archived weeks, Unarchive button disabled for all but
   the most recent.
 - [ ] **U5** **Downstream-activity guard**: after archiving N, add activity in N+1 (a score
   / bet / RSVP), attempt unarchive → server warning surfaces in modal, button arms to
@@ -193,7 +225,7 @@ triggers on `rsvp`/`team_slots`/`games`, and a no-pending-bets backstop in
 - [ ] **I12** Forced: retry with Force Archive → those bets become `void`, stakes
   refunded (`bet_refund` pair, "Voided at archive — market never settled"), archive
   completes, **zero pending bets remain**. Verify ledger + Settled Bets show VOID.
-- [ ] **I13** Reversibility: soft-unarchive after a forced archive → the voided bets
+- [ ] **I13** Reversibility: unarchive after a forced archive → the voided bets
   return to `pending` (pre-images restored) and the void refunds are deleted.
 - [ ] **I9** Moneyline on a team with zero recorded scores (all unscored fills) →
   market closes; the bet is caught by the backstop (I11/I12) instead of hanging.
@@ -229,9 +261,12 @@ matchup creation and O/U lines are keyed to them, so per-game edits act on lines
   lineup edit resolves at edit time.
 
 **Note on V20:** the weekly House P&L event previously summed only week-stamped
-rows (`bet_payout`/`bet_refund` are not week-stamped → stakes only, always ≥ 0);
+rows (`bet_payout`/`bet_refund` were not week-stamped → stakes only, always ≥ 0);
 it now follows `bet_id` through the week's markets, so verify it reflects true
-net (negative when players beat the House).
+net (negative when players beat the House). *2026-06-10 (V3 finding): payout/refund
+rows are now ALSO week-stamped (`…191008_week_stamp_bet_settlement_ledger`, with
+backfill) — they previously vanished from the week-grouped player Activity view
+entirely. Verify payouts/refunds appear under the correct week per-player.*
 
 ---
 
