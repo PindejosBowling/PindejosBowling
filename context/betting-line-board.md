@@ -95,7 +95,7 @@ The **"under" side of player O/U lines is intentionally not bettable** from the 
 The board needs **no new render code**:
 
 1. **Schema / RPCs** — add the market type per [supabase/PIN_ECONOMY_SCHEMA.md](../supabase/PIN_ECONOMY_SCHEMA.md) §7 (`market_type`, selections, placement/settlement).
-2. **Fetch** — add a `db.ts` query (or extend one) returning the new markets with the `MARKET_GRAPH` embed, and surface them in `usePinsinoData` so they land in `openLines`. *Today only `betMarkets.listActiveOUByWeek` feeds the board — season-long markets need a season-scoped fetch, and the empty-state copy is still week-shaped (revisit when that fetch lands).*
+2. **Fetch** — add a `db.ts` query (or extend one) returning the new markets with the `MARKET_GRAPH` embed, and surface them in `usePinsinoData` so they land in `openLines`. The *placed-bet* queries (`bets.listByWeek`, `listByPlayer`, `listSettledBySeason`) are deliberately market-type-agnostic — never add a `market_type` filter to them (an inner-join type filter both drops bets with no qualifying leg and prunes legs from mixed parlays' embeds). *Today only `betMarkets.listActiveOUByWeek` feeds the board — season-long markets need a season-scoped fetch, and the empty-state copy is still week-shaped (revisit when that fetch lands).*
 3. **`normalizeMarket`** — already generic; just confirm your selections carry `key` / `label` / `line` / `odds` / `sort_order`.
 4. **Helpers** — add a `case` to `lineCategory` (section name) and, if a side bets against the subject, to `selectionBetsAgainstSubject`. Touch `lineGroup` only if the scope isn't per-game/season.
 5. Done — `LineRow` / `LineRowContainer` / the grouping render it as-is.
