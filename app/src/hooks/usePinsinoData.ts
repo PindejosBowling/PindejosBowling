@@ -261,13 +261,16 @@ function toYourTeamMoneyline(line: LineView, myTeamId: string | null): LineView 
 
 // One leg spec as stored in custom_lines.legs jsonb. A moneyline leg means
 // "the team containing player_id wins game_number" — anchored by player because
-// team ids don't persist across weeks. player_id null = THE BETTOR (a
-// self-referential leg): the subject is whoever takes the bet, so the line
-// resolves per-viewer ("you beat your over", "your team wins the game").
+// team ids don't persist across weeks. Two fields are relative-by-null:
+//  • player_id null = THE BETTOR (self-referential): the subject is whoever
+//    takes the bet, so the line resolves per-viewer ("you beat your over").
+//  • game_number null = EVERY GAME: the line materializes once per game that
+//    week, each instance binding its null-game legs to that game ("the bettor
+//    bowls their over in this game" → one offering in each game's group).
 export interface CustomLegSpec {
   kind: 'over_under' | 'moneyline'
   player_id: string | null
-  game_number: number
+  game_number: number | null
   pick: 'over' | 'under' | 'win'
 }
 
@@ -329,6 +332,9 @@ function resolveCustomLine(
   rawLines: LineView[],
   slotByPlayer: Map<string, { teamId: string; playerName: string }>,
   takerPlayerId: string | null,
+  // The game this instance binds null-game ("every game") legs to. Null for
+  // lines whose legs all carry fixed game numbers.
+  instanceGame: number | null,
 ): CustomLineView | null {
   const specs: CustomLegSpec[] = Array.isArray(raw.legs) ? raw.legs : []
   if (specs.length === 0) return null
@@ -338,12 +344,14 @@ function resolveCustomLine(
   for (const spec of specs) {
     const subjectId = spec.player_id ?? takerPlayerId
     if (!subjectId) return null
+    const legGame = spec.game_number ?? instanceGame
+    if (legGame == null) return null
     let line: LineView | undefined
     let sel: SelectionView | undefined
     let subjectName = ''
     if (spec.kind === 'over_under') {
       line = rawLines.find(
-        l => l.marketType === 'over_under' && l.subjectPlayerId === subjectId && l.gameNumber === spec.game_number
+        l => l.marketType === 'over_under' && l.subjectPlayerId === subjectId && l.gameNumber === legGame
       )
       sel = line?.selections.find(s => s.key === spec.pick)
       subjectName = spec.player_id == null ? 'You' : (line?.subjectName ?? '')
@@ -351,7 +359,7 @@ function resolveCustomLine(
       const slot = slotByPlayer.get(subjectId)
       if (!slot) return null
       line = rawLines.find(
-        l => l.marketType === 'moneyline' && l.gameNumber === spec.game_number && l.selections.some(s => s.key === slot.teamId)
+        l => l.marketType === 'moneyline' && l.gameNumber === legGame && l.selections.some(s => s.key === slot.teamId)
       )
       sel = line?.selections.find(s => s.key === slot.teamId)
       subjectName = spec.player_id == null ? 'Your Team' : `${slot.playerName}'s Team`
@@ -376,7 +384,8 @@ function resolveCustomLine(
 
   const firstGame = legs[0].gameNumber
   return {
-    id: raw.id,
+    // Per-game instances of one row need distinct ids (React keys, modal state).
+    id: instanceGame == null ? raw.id : `${raw.id}:g${instanceGame}`,
     title: raw.title,
     description: raw.description ?? '',
     category: raw.category === 'special' ? 'special' : 'default',
@@ -532,21 +541,32 @@ export function usePinsinoData(playerId: string | null) {
       const applicableCustom = customLinesData.filter(
         cl => cl.week_ids == null || (weekId != null && cl.week_ids.includes(weekId))
       )
-      // The viewer's board: self-referential legs resolve with the viewer as taker.
-      const resolvedCustom: CustomLineView[] = applicableCustom
-        .map(cl => resolveCustomLine(cl, rawLineViews, slotByPlayer, playerId))
-        .filter((v): v is CustomLineView => v != null)
+      // Resolve a row into board instances for one taker: lines with a null-game
+      // ("every game") leg materialize once per game on this week's schedule;
+      // fixed-game lines resolve once. Self-referential legs bind to the taker.
+      const weekGameNumbers = [...new Set(
+        rawLineViews.map(l => l.gameNumber).filter((g): g is number => g != null)
+      )].sort((a, b) => a - b)
+      const resolveInstances = (cl: any, taker: string | null): CustomLineView[] => {
+        const perGame = Array.isArray(cl.legs) && cl.legs.some((l: any) => l?.game_number == null)
+        const instances = perGame
+          ? weekGameNumbers.map(g => resolveCustomLine(cl, rawLineViews, slotByPlayer, taker, g))
+          : [resolveCustomLine(cl, rawLineViews, slotByPlayer, taker, null)]
+        return instances.filter((v): v is CustomLineView => v != null)
+      }
+      // The viewer's board.
+      const resolvedCustom: CustomLineView[] = applicableCustom.flatMap(cl => resolveInstances(cl, playerId))
 
       // Best-effort special branding on bets: a bet whose selections exactly
       // match a resolved line's bundle gets the custom title. Past-week bets
       // (whose markets aren't in this week's resolution) render as plain parlays.
       const brandBySelections = new Map<string, { title: string; category: string }>()
-      const addBrand = (cl: CustomLineView | null) => {
-        if (cl) brandBySelections.set([...cl.selectionIds].sort().join('|'), { title: cl.title, category: cl.category })
+      const addBrand = (cl: CustomLineView) => {
+        brandBySelections.set([...cl.selectionIds].sort().join('|'), { title: cl.title, category: cl.category })
       }
       resolvedCustom.forEach(addBrand)
       // Self-referential lines resolve to different selections per taker, so the
-      // viewer-resolved entry only matches the viewer's own bets. Re-resolve those
+      // viewer-resolved entries only match the viewer's own bets. Re-resolve those
       // lines for every bettor in view so their bets brand correctly too.
       const selfLines = applicableCustom.filter(
         cl => Array.isArray(cl.legs) && cl.legs.some((l: any) => l?.player_id == null)
@@ -557,7 +577,7 @@ export function usePinsinoData(playerId: string | null) {
           if (b.player_id && b.player_id !== playerId) bettorIds.add(b.player_id)
         }
         for (const cl of selfLines) {
-          for (const pid of bettorIds) addBrand(resolveCustomLine(cl, rawLineViews, slotByPlayer, pid))
+          for (const pid of bettorIds) resolveInstances(cl, pid).forEach(addBrand)
         }
       }
       const brandBet = (b: BetView): BetView => {
