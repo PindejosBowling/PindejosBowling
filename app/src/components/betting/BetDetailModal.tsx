@@ -1,6 +1,6 @@
 import { Modal, View, Text, TouchableOpacity, StyleSheet } from 'react-native'
 import { colors, fonts, radius } from '../../theme'
-import type { BetView } from '../../hooks/usePinsinoData'
+import { betLineSuffix, type BetView } from '../../hooks/usePinsinoData'
 import { resultBadge, betPayout, betReturn, betReturnDisplay } from '../../utils/bets'
 
 interface BetDetailModalProps {
@@ -65,7 +65,7 @@ export default function BetDetailModal({ bet, onClose }: BetDetailModalProps) {
             {bet.legs.map((leg, i) => (
               <Text key={i} style={[styles.value, { marginTop: i === 0 ? 0 : 4 }]}>
                 {leg.subjectName} · {leg.pick?.toUpperCase()}
-                {leg.marketType === 'over_under' ? ` ${leg.line.toFixed(1)}` : ''}
+                {betLineSuffix(leg.marketType, leg.line, leg.statKey)}
                 {leg.gameNumber != null ? ` · G${leg.gameNumber}` : ''}
                 {leg.actualScore != null && (
                   <>

@@ -1,6 +1,6 @@
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native'
 import { colors, fonts } from '../../theme'
-import type { BetView } from '../../hooks/usePinsinoData'
+import { betLineSuffix, type BetView } from '../../hooks/usePinsinoData'
 
 interface BetRowProps {
   bet: BetView
@@ -41,7 +41,7 @@ export default function BetRow({
             {bet.legs.map((leg, i) => (
               <Text key={i} style={styles.betSubject}>
                 {leg.subjectName} · {leg.pick?.toUpperCase()}
-                {leg.marketType === 'over_under' ? ` ${leg.line.toFixed(1)}` : ''}
+                {betLineSuffix(leg.marketType, leg.line, leg.statKey)}
                 {leg.gameNumber != null ? ` (G${leg.gameNumber})` : ''}
                 {leg.result ? ` — ${leg.result.toUpperCase()}` : ''}
               </Text>
@@ -54,7 +54,7 @@ export default function BetRow({
           <>
             <Text style={styles.betSubject}>
               {bet.subjectName} · {bet.pick?.toUpperCase()}
-              {bet.marketType === 'over_under' ? ` ${bet.line.toFixed(1)}` : ''}
+              {betLineSuffix(bet.marketType, bet.line, bet.statKey)}
               {bet.gameNumber != null ? ` · G${bet.gameNumber}` : ''}
             </Text>
             <Text style={styles.betDetails}>

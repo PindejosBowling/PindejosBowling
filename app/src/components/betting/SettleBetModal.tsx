@@ -5,7 +5,7 @@ import BottomSheet from '../ui/BottomSheet'
 import Button from '../ui/Button'
 import { useUiStore } from '../../stores/uiStore'
 import { betMarkets } from '../../utils/supabase/db'
-import type { BetView } from '../../hooks/usePinsinoData'
+import { betLineSuffix, STAT_LABELS, type BetView } from '../../hooks/usePinsinoData'
 
 interface SettleBetModalProps {
   // The bet to settle. Each leg has its own market (over_under is one market per
@@ -18,10 +18,11 @@ interface SettleBetModalProps {
   onSettled: () => void
 }
 
-// over/under result from an actual score vs. the line.
+// over/under result from an actual value vs. the line (decimals allowed —
+// stat props settle on values like 62.5 clean% / 7.8 first-ball avg).
 function previewResult(value: string, line: number): string | null {
   if (value === '') return null
-  const a = parseInt(value, 10)
+  const a = parseFloat(value)
   if (isNaN(a)) return null
   return a > line ? 'OVER' : a < line ? 'UNDER' : 'PUSH'
 }
@@ -39,16 +40,18 @@ export default function SettleBetModal({ bet, onClose, onSettled }: SettleBetMod
   const isParlay = bet.legCount > 1
 
   async function settle() {
-    // Collect the unresolved legs. O/U legs need an entered score; moneyline legs
-    // settle from the game's scores server-side (no input).
+    // Collect the unresolved legs. O/U and stat-prop legs need an entered value
+    // (this is the admin escape hatch — systematic prop settlement is the
+    // "Confirm LaneTalk Data" RPC); moneyline legs settle from the game's
+    // scores server-side (no input).
     const toSettle: { marketId: string; marketType: string; value?: number }[] = []
     for (let i = 0; i < bet.legs.length; i++) {
       const leg = bet.legs[i]
       if (leg.result != null) continue // already resolved — locked
-      if (leg.marketType === 'over_under') {
-        const a = parseInt(scores[i] ?? '', 10)
+      if (leg.marketType === 'over_under' || leg.marketType === 'prop') {
+        const a = leg.marketType === 'prop' ? parseFloat(scores[i] ?? '') : parseInt(scores[i] ?? '', 10)
         if (isNaN(a) || a < 0 || a > 300) {
-          showToast(`Enter a valid score (0–300) for ${leg.subjectName}`, 'error')
+          showToast(`Enter a valid value (0–300) for ${leg.subjectName}`, 'error')
           return
         }
         toSettle.push({ marketId: leg.marketId, marketType: leg.marketType, value: a })
@@ -69,8 +72,8 @@ export default function SettleBetModal({ bet, onClose, onSettled }: SettleBetMod
       // automatically as its last leg lands. Moneyline derives its winner from the
       // game scores (errors if none recorded yet).
       for (const item of toSettle) {
-        const { error } = item.marketType === 'over_under'
-          ? await betMarkets.settle(item.marketId, item.value!)
+        const { error } = item.value != null
+          ? await betMarkets.settle(item.marketId, item.value)
           : await betMarkets.settleMoneyline(item.marketId)
         if (error) { showToast(error.message, 'error'); return }
       }
@@ -86,13 +89,17 @@ export default function SettleBetModal({ bet, onClose, onSettled }: SettleBetMod
 
   return (
     <BottomSheet
-      title={isParlay ? `Settle ${bet.legCount}-Leg Parlay` : `Settle — ${bet.subjectName} Game ${bet.gameNumber}`}
+      title={isParlay
+        ? `Settle ${bet.legCount}-Leg Parlay`
+        : `Settle — ${bet.subjectName}${bet.gameNumber != null ? ` Game ${bet.gameNumber}` : ''}`}
       subtitle={
         isParlay
           ? `${bet.bettorName} · enter each leg's actual score`
           : bet.marketType === 'over_under'
             ? `LINE: ${bet.line.toFixed(1)}`
-            : 'Settles from game scores'
+            : bet.marketType === 'prop'
+              ? `${bet.statKey ? `${(STAT_LABELS[bet.statKey] ?? bet.statKey).toUpperCase()} · ` : ''}LINE: ${bet.line.toFixed(1)}`
+              : 'Settles from game scores'
       }
       onClose={onClose}
       busy={settling}
@@ -112,13 +119,18 @@ export default function SettleBetModal({ bet, onClose, onSettled }: SettleBetMod
       {bet.legs.map((leg, i) => {
         const settled = leg.result != null
         const isOU = leg.marketType === 'over_under'
+        const isProp = leg.marketType === 'prop'
+        // Both O/U and stat props take a manually entered value; props allow
+        // decimals (clean% / first-ball avg) and name the stat in the hint.
+        const needsValue = isOU || isProp
+        const statLabel = isProp && leg.statKey ? STAT_LABELS[leg.statKey] ?? leg.statKey : null
         const value = scores[i] ?? ''
-        const preview = isOU ? previewResult(value, leg.line) : null
+        const preview = needsValue ? previewResult(value, leg.line) : null
         return (
           <View key={i} style={[styles.legBlock, i > 0 && styles.legBlockBorder]}>
             <Text style={styles.legSubject}>
               {leg.subjectName} · {leg.pick?.toUpperCase()}
-              {isOU ? ` ${leg.line.toFixed(1)}` : ''}
+              {betLineSuffix(leg.marketType, leg.line, leg.statKey)}
               {leg.gameNumber != null ? ` · G${leg.gameNumber}` : ''}
             </Text>
             {settled ? (
@@ -127,21 +139,27 @@ export default function SettleBetModal({ bet, onClose, onSettled }: SettleBetMod
                 {leg.actualScore != null ? ` · actual ${leg.actualScore}` : ''}
                 {leg.result ? ` (${leg.result.toUpperCase()})` : ''}
               </Text>
-            ) : isOU ? (
+            ) : needsValue ? (
               <>
                 <TextInput
                   style={styles.wagerInput}
                   value={value}
-                  onChangeText={v => setScores(s => ({ ...s, [i]: v.replace(/[^0-9]/g, '') }))}
-                  keyboardType="number-pad"
+                  onChangeText={v => setScores(s => ({
+                    ...s,
+                    // Props accept one decimal point; O/U stays integer-only.
+                    [i]: isProp
+                      ? v.replace(/[^0-9.]/g, '').replace(/(\..*)\./g, '$1')
+                      : v.replace(/[^0-9]/g, ''),
+                  }))}
+                  keyboardType={isProp ? 'decimal-pad' : 'number-pad'}
                   placeholder="0 – 300"
                   placeholderTextColor={colors.muted2}
-                  maxLength={3}
+                  maxLength={isProp ? 5 : 3}
                 />
                 <Text style={styles.wagerHint}>
                   {preview
                     ? `Result: ${preview} — resolves all bets on this line`
-                    : `${leg.subjectName}'s actual score${leg.gameNumber != null ? ` for game ${leg.gameNumber}` : ''}`}
+                    : `${leg.subjectName}'s actual ${statLabel ? statLabel.toLowerCase() : 'score'}${leg.gameNumber != null ? ` for game ${leg.gameNumber}` : isProp ? ' for the night' : ''}`}
                 </Text>
               </>
             ) : (

@@ -403,6 +403,48 @@ export const betMarkets = {
       .eq('market_type', 'moneyline')
       .in('status', ['open', 'closed'])
       .order('game_number'),
+  // Active (open + closed-for-betting) prop markets for a week — the LaneTalk
+  // stat lines (strikes/spares per game, clean%/first-ball avg per night).
+  // Night markets carry game_number null and group under WEEKLY on the board.
+  listActivePropByWeek: (weekId: string) =>
+    supabase
+      .from('bet_markets')
+      .select(MARKET_GRAPH)
+      .eq('week_id', weekId)
+      .eq('market_type', 'prop')
+      .in('status', ['open', 'closed'])
+      .order('game_number', { nullsFirst: false })
+      .order('subject_player_id'),
+  // Every LaneTalk prop market for a week, any status — drives idempotent line
+  // generation (skip existing, prune ineligible).
+  listLanetalkPropsByWeek: (weekId: string) =>
+    supabase
+      .from('bet_markets')
+      .select('id, game_number, subject_player_id, params, status, title')
+      .eq('week_id', weekId)
+      .eq('market_type', 'prop')
+      .eq('params->>source', 'lanetalk'),
+  // Unsettled LaneTalk prop markets across ALL weeks — the import screen groups
+  // these by week to surface its "Confirm LaneTalk Data" button. These ride a
+  // separate settlement clock from archive (data lands the next day).
+  listUnsettledLanetalkProps: () =>
+    supabase
+      .from('bet_markets')
+      .select('id, week_id, game_number, subject_player_id, params, status, title')
+      .eq('market_type', 'prop')
+      .eq('params->>source', 'lanetalk')
+      .in('status', ['open', 'closed']),
+  // Admin create of stat-prop markets (direct table writes through RLS, same
+  // pattern as custom-lines CRUD). Chains .select() so the caller can attach
+  // the over/under selections to the new ids.
+  insertPropMarkets: (rows: TablesInsert<'bet_markets'>[]) =>
+    supabase.from('bet_markets').insert(rows).select('id, subject_player_id, game_number, params'),
+  insertSelections: (rows: TablesInsert<'bet_selections'>[]) =>
+    supabase.from('bet_selections').insert(rows),
+  // Admin prune of stale prop markets. The refund_bets_before_market_delete
+  // trigger refunds every touched bet whole (incl. parlays spanning others).
+  removeMarkets: (ids: string[]) =>
+    supabase.from('bet_markets').delete().in('id', ids),
   // Start/reopen a game's betting: flip every O/U market for a week+game between
   // 'open' and 'closed' in one admin write. Closing blocks new bets (place_house_bet
   // rejects non-open selections) but leaves settlement intact (settle_betting_for_week
@@ -425,16 +467,40 @@ export const betMarkets = {
       .eq('market_type', 'moneyline')
       .eq('game_number', gameNumber)
       .eq('status', status === 'closed' ? 'open' : 'closed'),
+  // Same open/close toggle for a week+game's stat-prop markets (run alongside the
+  // O/U + moneyline toggles when a game starts/reopens). Night-scoped props
+  // (game_number null) ride game 1's toggle — once the night's bowling starts,
+  // night-stat betting closes too.
+  setPropStatusByWeekGame: async (weekId: string, gameNumber: number, status: 'open' | 'closed') => {
+    const from = status === 'closed' ? 'open' : 'closed'
+    const res = await supabase
+      .from('bet_markets')
+      .update({ status })
+      .eq('week_id', weekId)
+      .eq('market_type', 'prop')
+      .eq('game_number', gameNumber)
+      .eq('status', from)
+    if (res.error || gameNumber !== 1) return res
+    return supabase
+      .from('bet_markets')
+      .update({ status })
+      .eq('week_id', weekId)
+      .eq('market_type', 'prop')
+      .is('game_number', null)
+      .eq('status', from)
+  },
   // Reopen every closed O/U line for a week. Clear Matchups returns the week to a
   // pre-game state, so Start Game's betting suspension must not survive the reset —
   // surviving lines (both players still RSVP'd in) would otherwise be stranded
   // unbettable with no games row left to expose the reopen toggle.
+  // Covers stat props too — they suspend with the games, so the reset must
+  // reopen them alongside the O/U lines.
   reopenOUForWeek: (weekId: string) =>
     supabase
       .from('bet_markets')
       .update({ status: 'open' })
       .eq('week_id', weekId)
-      .eq('market_type', 'over_under')
+      .in('market_type', ['over_under', 'prop'])
       .eq('status', 'closed'),
   // Create/refund of O/U markets (SECURITY DEFINER, server-side). Line ownership:
   // RSVP owns the lines until the week has teams; the roster (team_slots) owns
@@ -462,6 +528,14 @@ export const betMarkets = {
   // Admin: credit scores + settle all open markets for an archived week.
   settleForWeek: (weekId: string) =>
     supabase.rpc('settle_betting_for_week', { p_week_id: weekId }),
+  // Admin: settle the week's LaneTalk stat props from imported official games —
+  // the "Confirm LaneTalk Data" clock, separate from archive. Actuals are
+  // derived server-side from lanetalk_game_imports.payload (the client never
+  // supplies a result value). voidMissing deletes markets with no data (the
+  // delete-refund rail); otherwise they stay pending for a later re-run.
+  // Returns one summary row { settled, voided, left_pending } for the toast.
+  settleLanetalkProps: (weekId: string, voidMissing = false) =>
+    supabase.rpc('settle_lanetalk_props_for_week', { p_week_id: weekId, p_void_missing: voidMissing }),
 }
 
 export const bets = {
@@ -1108,6 +1182,21 @@ export const lanetalkImports = {
       .from('lanetalk_game_imports')
       .select('id', { count: 'exact', head: true })
       .eq('player_id', playerId),
+  // Official imports across all weeks — LaneTalk stat-line seeding (player
+  // history + league average). Display/pricing only, never settlement.
+  listOfficial: () =>
+    supabase
+      .from('lanetalk_game_imports')
+      .select('player_id, week_id, game_number, payload')
+      .eq('classification', 'official'),
+  // One week's official imports — the Confirm modal's data-coverage preview
+  // (informational; the settlement RPC recomputes authoritatively server-side).
+  listOfficialByWeek: (weekId: string) =>
+    supabase
+      .from('lanetalk_game_imports')
+      .select('player_id, game_number, payload')
+      .eq('week_id', weekId)
+      .eq('classification', 'official'),
   // Admin re-classification of a single imported game (Official ⇄ Recreational).
   setClassification: (id: string, classification: 'official' | 'recreational') =>
     supabase

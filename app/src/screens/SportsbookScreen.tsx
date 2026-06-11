@@ -35,6 +35,7 @@ import {
   lineGroup,
   lineCategory,
   closedBettingNote,
+  betLineSuffix,
   type BetView,
   type LineView,
   type LineGroup,
@@ -66,6 +67,7 @@ interface ParlayLeg {
   marketType: string
   gameNumber: number | null
   line: number | null
+  statKey: string | null
 }
 
 const VIEW_OPTIONS: { key: View2; label: string }[] = [
@@ -87,7 +89,7 @@ interface BetModalState {
 // place/settlement RPCs (`place_house_bet`, etc.) handle `under` unchanged, so
 // the mechanic can be restored by removing this filter. See AGENTS.md.
 function isSelectionHiddenInUI(line: LineView, sel: SelectionView): boolean {
-  return line.marketType === 'over_under' && sel.key === 'under'
+  return (line.marketType === 'over_under' || line.marketType === 'prop') && sel.key === 'under'
 }
 
 // Drop UI-hidden selections from a line, returning the same object when nothing
@@ -273,6 +275,7 @@ export default function SportsbookScreen() {
         marketType: line.marketType,
         gameNumber: line.gameNumber,
         line: sel.line ?? line.line,
+        statKey: line.statKey,
       }]
     })
   }
@@ -541,9 +544,12 @@ export default function SportsbookScreen() {
                 {modal.line.subjectName}
                 {modal.line.gameNumber != null ? ` — Game ${modal.line.gameNumber}` : ''}
               </Text>
-              {modal.line.line != null && (
+              {/* Stat props carry the stat name in their subtitle ("STRIKES · LINE 4.5"). */}
+              {modal.line.subtitle != null ? (
+                <Text style={styles.modalLine}>{modal.line.subtitle}</Text>
+              ) : modal.line.line != null ? (
                 <Text style={styles.modalLine}>LINE: {modal.line.line.toFixed(1)}</Text>
-              )}
+              ) : null}
 
               <View style={styles.pickToggle}>
                 {modal.line.selections.map(sel => {
@@ -614,7 +620,7 @@ export default function SportsbookScreen() {
                   <View key={leg.marketId} style={styles.parlayLegRow}>
                     <Text style={styles.parlayLegText} numberOfLines={1}>
                       {leg.subjectName} · {leg.selectionLabel.toUpperCase()}
-                      {leg.line != null ? ` ${leg.line.toFixed(1)}` : ''}
+                      {betLineSuffix(leg.marketType, leg.line, leg.statKey)}
                       {leg.gameNumber != null ? ` · G${leg.gameNumber}` : ''}
                     </Text>
                     <TouchableOpacity onPress={() => removeParlayLeg(leg.marketId)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
