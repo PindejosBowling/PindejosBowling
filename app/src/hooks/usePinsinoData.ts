@@ -125,10 +125,13 @@ export interface BetView {
   seasonNumber: number | null
   legs: LegView[]
   legCount: number
-  // Set when this bet's selections exactly match an admin custom line ("special")
-  // resolved for the current week — best-effort display branding, derived
-  // client-side (the DB row is an ordinary bet). Null = plain single/parlay.
+  // Special branding. Primary source: the bets row's snapshot columns, stamped
+  // by place_house_bet at placement (durable — survives line edits/deletion and
+  // renders in historical surfaces like the ledger). Fallback for legacy
+  // untagged bets: client-side selection matching against the current week's
+  // resolved specials. Null = plain single/parlay.
   customLineTitle: string | null
+  customLineDescription: string | null
   customLineCategory: string | null
 }
 
@@ -195,8 +198,9 @@ export function normalizeBet(b: any): BetView {
     seasonNumber: firstMkt?.weeks?.seasons?.number ?? null,
     legs,
     legCount: legs.length,
-    customLineTitle: null,
-    customLineCategory: null,
+    customLineTitle: b.custom_line_title ?? null,
+    customLineDescription: b.custom_line_description ?? null,
+    customLineCategory: b.custom_line_category ?? null,
   }
 }
 
@@ -295,7 +299,8 @@ export interface CustomLegView {
 // SPECIALS section). inProgress mirrors the O/U board policy: shown but inert
 // when any leg's market is closed for betting.
 export interface CustomLineView {
-  id: string
+  id: string        // unique per board instance (per-game instances: `<rowId>:g<N>`)
+  lineId: string    // the raw custom_lines row id — what bets.place is tagged with
   title: string
   description: string
   category: 'default' | 'special'
@@ -386,6 +391,7 @@ function resolveCustomLine(
   return {
     // Per-game instances of one row need distinct ids (React keys, modal state).
     id: instanceGame == null ? raw.id : `${raw.id}:g${instanceGame}`,
+    lineId: raw.id,
     title: raw.title,
     description: raw.description ?? '',
     category: raw.category === 'special' ? 'special' : 'default',
@@ -581,7 +587,9 @@ export function usePinsinoData(playerId: string | null) {
         }
       }
       const brandBet = (b: BetView): BetView => {
-        if (b.legCount === 0) return b
+        // The DB snapshot (stamped at placement) wins; matching is the legacy
+        // fallback for bets placed before tagging existed.
+        if (b.customLineTitle != null || b.legCount === 0) return b
         const brand = brandBySelections.get(b.legs.map(l => l.selectionId).sort().join('|'))
         return brand ? { ...b, customLineTitle: brand.title, customLineCategory: brand.category } : b
       }

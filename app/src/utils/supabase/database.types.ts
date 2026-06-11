@@ -487,6 +487,10 @@ export type Database = {
         Row: {
           counterparty: string
           created_at: string
+          custom_line_category: string | null
+          custom_line_description: string | null
+          custom_line_id: string | null
+          custom_line_title: string | null
           id: string
           placed_at: string
           player_id: string
@@ -500,6 +504,10 @@ export type Database = {
         Insert: {
           counterparty: string
           created_at?: string
+          custom_line_category?: string | null
+          custom_line_description?: string | null
+          custom_line_id?: string | null
+          custom_line_title?: string | null
           id?: string
           placed_at?: string
           player_id: string
@@ -513,6 +521,10 @@ export type Database = {
         Update: {
           counterparty?: string
           created_at?: string
+          custom_line_category?: string | null
+          custom_line_description?: string | null
+          custom_line_id?: string | null
+          custom_line_title?: string | null
           id?: string
           placed_at?: string
           player_id?: string
@@ -524,6 +536,13 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "bets_custom_line_id_fkey"
+            columns: ["custom_line_id"]
+            isOneToOne: false
+            referencedRelation: "custom_lines"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "bets_player_id_fkey"
             columns: ["player_id"]
@@ -2223,7 +2242,11 @@ export type Database = {
       }
       is_registered_player: { Args: { phone: string }; Returns: boolean }
       place_house_bet: {
-        Args: { p_selection_ids: string[]; p_stake: number }
+        Args: {
+          p_custom_line_id?: string
+          p_selection_ids: string[]
+          p_stake: number
+        }
         Returns: string
       }
       process_weekly_loans: { Args: { p_week_id: string }; Returns: undefined }

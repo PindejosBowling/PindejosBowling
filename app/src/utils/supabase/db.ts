@@ -500,8 +500,11 @@ export const bets = {
       .eq('id', betId)
       .single(),
   // Place a house bet atomically (SECURITY DEFINER); O/U passes one selection id.
-  place: (selectionIds: string[], stake: number) =>
-    supabase.rpc('place_house_bet', { p_selection_ids: selectionIds, p_stake: stake }),
+  // customLineId tags the bet with a special's identity (title/description/
+  // category snapshotted server-side, so branding survives line edits/deletion).
+  place: (selectionIds: string[], stake: number, customLineId?: string) =>
+    // undefined is dropped from the RPC payload → the param's NULL default applies.
+    supabase.rpc('place_house_bet', { p_selection_ids: selectionIds, p_stake: stake, p_custom_line_id: customLineId }),
   // Admin: total undo of a placed bet (removes ledger rows + bet, re-opens market).
   cancel: (betId: string) =>
     supabase.rpc('cancel_bet', { p_bet_id: betId }),
