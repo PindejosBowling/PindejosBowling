@@ -18,6 +18,9 @@ interface LineRowProps {
   // (moneyline) are just the one-element case.
   lines: LineView[]
   isLast: boolean
+  // The viewer's relationship to the subject ('with' = teammate this week,
+  // 'against' = matchup opponent) — a subtle background tint, nothing more.
+  relation?: 'with' | 'against' | null
   // Whole row closed for betting: dim it and make every side inert.
   inProgress?: boolean
   // Per-selection cosmetic state; defaults to all-enabled when omitted.
@@ -30,7 +33,7 @@ interface LineRowProps {
 // market_type — new line kinds render through this same component; only the
 // caller's `selectionState` / `onSelect` change (mirrors BetRow's design).
 // Each button carries its own (line, selection), so a row can span markets.
-export default function LineRow({ lines, isLast, inProgress, selectionState, onSelect }: LineRowProps) {
+export default function LineRow({ lines, isLast, relation, inProgress, selectionState, onSelect }: LineRowProps) {
   const pressable = !inProgress && !!onSelect
   const first = lines[0]
   // Player rows (overs + stat props) stack: name centered on its own row, the
@@ -42,6 +45,8 @@ export default function LineRow({ lines, isLast, inProgress, selectionState, onS
     <View
       style={[
         stacked ? styles.lineRowStacked : styles.lineRow,
+        relation === 'with' && styles.lineRowWith,
+        relation === 'against' && styles.lineRowAgainst,
         !isLast && styles.lineRowBorder,
         inProgress && styles.lineRowInProgress,
       ]}
@@ -100,6 +105,10 @@ const styles = StyleSheet.create({
     borderBottomColor: colors.border,
   },
   lineRowInProgress: { opacity: 0.5 },
+  // Subtle with/against tints — teammates green-cast, matchup opponents
+  // red-cast, everyone else on the plain surface (minimal clutter).
+  lineRowWith: { backgroundColor: 'rgba(74,222,128,0.05)' },
+  lineRowAgainst: { backgroundColor: 'rgba(239,68,68,0.05)' },
   lineInfo: { flex: 1 },
   lineInfoStacked: { alignItems: 'center' },
   centered: { textAlign: 'center' },

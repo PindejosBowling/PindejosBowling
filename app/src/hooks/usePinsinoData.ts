@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect } from 'react'
-import { weeks, seasons, betMarkets, bets, pinLedger, loanLedger, loans, pvpChallenges, bountyPosts, teamSlots, customLines } from '../utils/supabase/db'
+import { weeks, seasons, betMarkets, bets, pinLedger, loanLedger, loans, pvpChallenges, bountyPosts, teamSlots, customLines, games } from '../utils/supabase/db'
 
 // One bettable side of a market (a single `bet_selections` row, flattened).
 // Generic over market_type — over/under is the first consumer, but the shape
@@ -141,6 +141,33 @@ export function lineCategory(line: LineView): LineCategory {
 export function closedBettingNote(line: LineView): string {
   if (line.gameNumber != null) return 'The Pinsino does not take action on games in progress'
   return 'The Pinsino does not take action while this market is in progress'
+}
+
+// This week's team topology, for the board's with/against presentation.
+export interface WeekTeams {
+  myTeamId: string | null
+  // player id → their team id this week (from team_slots).
+  teamByPlayer: Record<string, string>
+  // game number → the team the VIEWER's team plays in that game.
+  opponentTeamByGame: Record<number, string>
+}
+export const EMPTY_WEEK_TEAMS: WeekTeams = { myTeamId: null, teamByPlayer: {}, opponentTeamByGame: {} }
+
+// The viewer's relationship to a line's subject — drives the subtle row tint
+// on the board. 'with' = the subject is on the viewer's team this week;
+// 'against' = the subject's team is the viewer's matchup opponent (in that
+// game for per-game lines; in any game for night lines); null = neutral.
+export function subjectRelation(
+  teams: WeekTeams,
+  subjectPlayerId: string | null,
+  gameNumber: number | null,
+): 'with' | 'against' | null {
+  if (!subjectPlayerId || !teams.myTeamId) return null
+  const team = teams.teamByPlayer[subjectPlayerId]
+  if (!team) return null
+  if (team === teams.myTeamId) return 'with'
+  if (gameNumber != null) return teams.opponentTeamByGame[gameNumber] === team ? 'against' : null
+  return Object.values(teams.opponentTeamByGame).includes(team) ? 'against' : null
 }
 
 // One resolved leg of a bet (a single backed selection).
@@ -491,6 +518,10 @@ export function usePinsinoData(playerId: string | null) {
   // balance at placement, so this recovers the at-risk portion for the net calc.
   const [openAction, setOpenAction] = useState(0)
   const [activeLoan, setActiveLoan] = useState<ActiveLoanSummary | null>(null)
+  // This week's team topology, for the board's with/against presentation:
+  // every player's team, the viewer's team, and per game the team the
+  // viewer's team is matched up against.
+  const [weekTeams, setWeekTeams] = useState<WeekTeams>(EMPTY_WEEK_TEAMS)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -522,11 +553,16 @@ export function usePinsinoData(playerId: string | null) {
         )
       }
       // Active custom lines + the week's full roster (player → team mapping for
-      // resolving moneyline anchor legs of any player, not just the caller).
+      // resolving moneyline anchor legs of any player, not just the caller) +
+      // the schedule (matchups → the board's with/against tinting).
       let customLinesData: any[] = []
       let weekSlotsData: any[] = []
+      let weekGamesData: any[] = []
       if (weekId) {
         fetches.push(
+          games.listByWeek(weekId).then(({ data }) => {
+            weekGamesData = data ?? []
+          }),
           betMarkets.listActiveOUByWeek(weekId).then(({ data }) => {
             marketsData = data ?? []
           }),
@@ -610,6 +646,17 @@ export function usePinsinoData(playerId: string | null) {
       const slotByPlayer = new Map<string, { teamId: string; playerName: string }>()
       for (const s of weekSlotsData) {
         if (s.player_id) slotByPlayer.set(s.player_id, { teamId: s.team_id, playerName: s.players?.name ?? '—' })
+      }
+
+      // Week team topology for the board's with/against tinting.
+      const teamByPlayer: Record<string, string> = {}
+      for (const [pid, slot] of slotByPlayer) teamByPlayer[pid] = slot.teamId
+      const opponentTeamByGame: Record<number, string> = {}
+      if (myTeamId) {
+        for (const g of weekGamesData) {
+          if (g.team_a_id === myTeamId) opponentTeamByGame[g.game_number] = g.team_b_id
+          else if (g.team_b_id === myTeamId) opponentTeamByGame[g.game_number] = g.team_a_id
+        }
       }
       const applicableCustom = customLinesData.filter(
         cl => cl.week_ids == null || (weekId != null && cl.week_ids.includes(weekId))
@@ -795,6 +842,7 @@ export function usePinsinoData(playerId: string | null) {
         }
       }
       setOpenLines(openLinesResolved)
+      setWeekTeams({ myTeamId, teamByPlayer, opponentTeamByGame })
       setCustomLineViews(resolvedCustom)
       setWeekBets(weekBetViews)
       setSettledBets(settledBetsData.map(normalizeBet).map(brandBet))
@@ -811,5 +859,5 @@ export function usePinsinoData(playerId: string | null) {
 
   useEffect(() => { load() }, [load])
 
-  return { loading, balance, debt, openAction, netWorth: balance + openAction - debt, activeLoan, openLines, customLines: customLineViews, myBets, weekBets, settledBets, leaderboard, myBetMarketIds, currentWeekId, currentSeasonId, reload: load }
+  return { loading, balance, debt, openAction, netWorth: balance + openAction - debt, activeLoan, openLines, weekTeams, customLines: customLineViews, myBets, weekBets, settledBets, leaderboard, myBetMarketIds, currentWeekId, currentSeasonId, reload: load }
 }

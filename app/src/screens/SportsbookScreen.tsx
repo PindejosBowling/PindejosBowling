@@ -37,6 +37,7 @@ import {
   closedBettingNote,
   betLineSuffix,
   selectionButtonLabel,
+  subjectRelation,
   type BetView,
   type LineView,
   type LineGroup,
@@ -105,7 +106,7 @@ export default function SportsbookScreen() {
   const { showToast } = useUiStore()
   const navigation = useNavigation<PinsinoNav>()
 
-  const { loading, balance, openLines, customLines, myBets, weekBets, settledBets, reload } = usePinsinoData(playerId)
+  const { loading, balance, openLines, weekTeams, customLines, myBets, weekBets, settledBets, reload } = usePinsinoData(playerId)
   const { refreshing, onRefresh } = useRefresh(reload)
 
   const [view, setView] = useState<View2>('place')
@@ -133,6 +134,8 @@ export default function SportsbookScreen() {
   // sharing a subjectPlayerId render as a unified button set on that player
   // ("142.5+ PINS · 4.5+ STRIKES · 2.5+ SPARES"), ordered score line first
   // then stat props. Subject-less lines (moneyline) stay one row per market.
+  // Player rows then group by their week team — the viewer's team first, the
+  // remaining teams in first-appearance order — so teammates sit together.
   const lineGroups = useMemo(() => {
     const kindOrder = (l: LineView) =>
       l.marketType === 'over_under' ? 0
@@ -166,16 +169,27 @@ export default function SportsbookScreen() {
         group: g.group,
         categories: Array.from(g.categories.values())
           .sort((a, b) => a.category.sortOrder - b.category.sortOrder)
-          .map(({ category, rowMap, count }) => ({
-            category,
-            count,
-            rows: Array.from(rowMap.entries()).map(([key, lines]) => ({
+          .map(({ category, rowMap, count }) => {
+            const rows = Array.from(rowMap.entries()).map(([key, lines]) => ({
               key,
               lines: lines.slice().sort((a, b) => kindOrder(a) - kindOrder(b)),
-            })),
-          })),
+            }))
+            // Group player rows by week team: viewer's team rank 0, the rest by
+            // first appearance; teamless subjects (moneyline rows) keep place.
+            const teamRank = new Map<string, number>()
+            const rankOf = (row: { key: string }) => {
+              const team = weekTeams.teamByPlayer[row.key]
+              if (!team) return Number.MAX_SAFE_INTEGER
+              if (team === weekTeams.myTeamId) return 0
+              if (!teamRank.has(team)) teamRank.set(team, 1 + teamRank.size)
+              return teamRank.get(team)!
+            }
+            const ranked = rows.map((row, idx) => ({ row, rank: rankOf(row), idx }))
+            ranked.sort((a, b) => a.rank - b.rank || a.idx - b.idx)
+            return { category, count, rows: ranked.map(r => r.row) }
+          }),
       }))
-  }, [openLines])
+  }, [openLines, weekTeams])
 
   // Custom lines ("specials") bucketed for the board: single-game lines render
   // inside that game's group; mixed-game lines — plus per-game lines whose game
@@ -342,6 +356,7 @@ export default function SportsbookScreen() {
       <LineRow
         lines={lines}
         isLast={isLast}
+        relation={subjectRelation(weekTeams, lines[0].subjectPlayerId, lines[0].gameNumber)}
         inProgress={groupInProgress}
         onSelect={(line, sel) =>
           placeMode === 'parlay' ? toggleParlayLeg(line, sel) : onSingleSelect(line, sel)
