@@ -17,6 +17,7 @@ import CustomLineCreateModal from '../components/betting/CustomLineCreateModal'
 import CustomLineAdminActionModal from '../components/betting/CustomLineAdminActionModal'
 import { useRefresh } from '../hooks/useRefresh'
 import { useHousePinsinoData } from '../hooks/useHousePinsinoData'
+import { useLanetalkLineAdmin } from '../hooks/useLanetalkLineAdmin'
 import { useAuthStore } from '../stores/authStore'
 import { useUiStore } from '../stores/uiStore'
 import { betLineSuffix, type BetView } from '../hooks/usePinsinoData'
@@ -59,6 +60,20 @@ export default function AdminSportsbookScreen() {
 
   // Active = this week's still-pending bets (settled ones live in Settled Bets).
   const activeBets = useMemo(() => weekBets.filter(b => b.status === 'pending'), [weekBets])
+
+  // LaneTalk stat lines (strikes/spares per game, clean%/first-ball per night) —
+  // idempotent client-side generation against the week's eligibility ladder.
+  const { generating, generateStatLines } = useLanetalkLineAdmin()
+  async function onGenerateStatLines() {
+    if (!currentWeekId) { showToast('No current week', 'error'); return }
+    const { result, error } = await generateStatLines(currentWeekId)
+    if (error) { showToast(error, 'error'); return }
+    showToast(
+      `Stat lines: ${result!.created} created · ${result!.skipped} kept · ${result!.pruned} pruned`,
+      'success',
+    )
+    await reload()
+  }
 
   // Total undo, server-side (cancel_bet RPC): removes the bet's ledger pair(s) and
   // the bet, and re-opens the market if it was the last bet on a settled one.
@@ -106,14 +121,29 @@ export default function AdminSportsbookScreen() {
 
         {/* ── Active Bets (admin: tap to settle a line, ✕ to cancel) ── */}
         {view === 'active' && (
-          <ActiveBetsView
-            bets={activeBets}
-            perspective="house"
-            hint="Tap a bet to settle its line(s) · ✕ to cancel a bet"
-            onBetPress={setSettleBet}
-            onParlayPress={setSettleBet}
-            onCancelBet={confirmCancelBet}
-          />
+          <>
+            <Button
+              label="Generate Stat Lines"
+              variant="secondary"
+              onPress={onGenerateStatLines}
+              loading={generating}
+              disabled={generating}
+              style={styles.statLinesBtn}
+            />
+            <Text style={styles.statLinesHint}>
+              Creates this week's LaneTalk stat props (strikes/spares per game, clean% +
+              first-ball avg per night). Re-run after roster changes — strays are pruned
+              with their bets refunded.
+            </Text>
+            <ActiveBetsView
+              bets={activeBets}
+              perspective="house"
+              hint="Tap a bet to settle its line(s) · ✕ to cancel a bet"
+              onBetPress={setSettleBet}
+              onParlayPress={setSettleBet}
+              onCancelBet={confirmCancelBet}
+            />
+          </>
         )}
 
         {/* ── Settled Bets (admin: ✕ to cancel) ─────────────── */}
@@ -215,6 +245,16 @@ const styles = StyleSheet.create({
   content: { paddingHorizontal: 16, paddingBottom: 40 },
 
   viewToggle: { marginBottom: 20 },
+
+  // LaneTalk stat-line generation
+  statLinesBtn: { marginBottom: 8 },
+  statLinesHint: {
+    fontFamily: fonts.barlow,
+    fontSize: 12,
+    color: colors.muted,
+    fontStyle: 'italic',
+    marginBottom: 14,
+  },
 
   // Specials manager
   specialsHint: {
