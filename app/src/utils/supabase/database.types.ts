@@ -2275,6 +2275,15 @@ export type Database = {
           strikes: number
         }[]
       }
+      lanetalk_seed_lines: {
+        Args: { p_player_id: string }
+        Returns: {
+          clean_pct_line: number
+          first_ball_avg_line: number
+          spares_line: number
+          strikes_line: number
+        }[]
+      }
       place_house_bet: {
         Args: {
           p_custom_line_id?: string
@@ -2377,6 +2386,10 @@ export type Database = {
       settle_pvp_for_week: { Args: { p_week_id: string }; Returns: undefined }
       suppress_activity_event: {
         Args: { p_event_id: string; p_reason: string }
+        Returns: undefined
+      }
+      sync_lanetalk_prop_markets_for_week: {
+        Args: { p_week_id: string }
         Returns: undefined
       }
       sync_moneyline_markets_for_week: {
