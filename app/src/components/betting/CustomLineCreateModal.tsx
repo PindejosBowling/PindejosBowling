@@ -13,7 +13,9 @@ import type { Json } from '../../utils/supabase/database.types'
 
 const MAX_TITLE_LEN = 80
 const MAX_LEGS = 6
-const GAME_NUMBERS = [1, 2, 3]
+// The two official games per night. (Resolution follows the actual schedule,
+// so an extra game would still resolve — the builder just doesn't offer it.)
+const GAME_NUMBERS = [1, 2]
 
 type Scope = 'this_week' | 'pick_weeks' | 'permanent'
 type LegKind = CustomLegSpec['kind']
@@ -55,9 +57,12 @@ export default function CustomLineCreateModal({ currentWeekId, seasonId, initial
   const [legKind, setLegKind] = useState<LegKind>('over_under')
   const [legWho, setLegWho] = useState<'player' | 'bettor'>('player')
   const [legPlayer, setLegPlayer] = useState<PlayerPickerItem | null>(null)
-  // null = every game: the special materializes once per game that week, each
-  // instance binding this leg to that game ("…in this game").
-  const [legGame, setLegGame] = useState<number | null>(1)
+  // A specific game, or two relative modes:
+  //  • 'both' — builder sugar: stages one leg per official game, all in ONE
+  //    bet ("you beat your over in both games" — a week-level cross-game bundle).
+  //  • 'each' (stored as game_number null) — the special materializes once per
+  //    game that week, each instance binding this leg to that game.
+  const [legGame, setLegGame] = useState<number | 'both' | 'each'>(1)
   const [legPick, setLegPick] = useState<'over' | 'under'>('over')
   const [pickerOpen, setPickerOpen] = useState(false)
 
@@ -86,7 +91,7 @@ export default function CustomLineCreateModal({ currentWeekId, seasonId, initial
 
   function legSummary(leg: CustomLegSpec): string {
     const name = leg.player_id == null ? 'The Bettor' : (nameById.get(leg.player_id) ?? '—')
-    const game = leg.game_number == null ? 'EVERY GAME' : `G${leg.game_number}`
+    const game = leg.game_number == null ? 'EACH GAME' : `G${leg.game_number}`
     return leg.kind === 'over_under'
       ? `${name} · ${leg.pick.toUpperCase()} · ${game}`
       : `${name}'s Team · WIN · ${game}`
@@ -94,25 +99,34 @@ export default function CustomLineCreateModal({ currentWeekId, seasonId, initial
 
   function addLeg() {
     if (legWho === 'player' && !legPlayer) { showToast('Pick a player for the leg', 'error'); return }
-    const leg: CustomLegSpec = {
+    // BOTH stages one leg per official game (a cross-game bundle in one bet);
+    // EACH stores null (per-game offering); a number is just that game.
+    const games: (number | null)[] =
+      legGame === 'both' ? GAME_NUMBERS : legGame === 'each' ? [null] : [legGame]
+    const newLegs: CustomLegSpec[] = games.map(g => ({
       kind: legKind,
       // null = the bettor (self-referential) — resolved per-taker on the board.
       player_id: legWho === 'bettor' ? null : legPlayer!.id,
-      game_number: legGame,
+      game_number: g,
       // A self 'under' would bet against the taker's own performance — always
       // blocked by anti-tank, so self O/U legs are over-only.
       pick: legKind === 'moneyline' ? 'win' : legWho === 'bettor' ? 'over' : legPick,
+    }))
+    if (legs.length + newLegs.length > MAX_LEGS) {
+      showToast(`Max ${MAX_LEGS} legs`, 'error')
+      return
     }
-    // Same subject + kind collides on the same game — and an ALL-games leg
+    // Same subject + kind collides on the same game — and an EACH-games leg
     // collides with any game for that subject (its instances would double up).
-    if (legs.some(l =>
+    const overlaps = newLegs.some(leg => legs.some(l =>
       l.kind === leg.kind && l.player_id === leg.player_id &&
       (l.game_number === leg.game_number || l.game_number == null || leg.game_number == null)
-    )) {
+    ))
+    if (overlaps) {
       showToast('That leg overlaps one already on the line', 'error')
       return
     }
-    setLegs(prev => [...prev, leg])
+    setLegs(prev => [...prev, ...newLegs])
     setLegPlayer(null)
   }
 
@@ -272,8 +286,11 @@ export default function CustomLineCreateModal({ currentWeekId, seasonId, initial
                 <Text style={[styles.chipText, legGame === g && styles.chipTextOn]}>G{g}</Text>
               </TouchableOpacity>
             ))}
-            <TouchableOpacity style={[styles.chip, legGame == null && styles.chipOn]} onPress={() => setLegGame(null)} activeOpacity={0.7}>
-              <Text style={[styles.chipText, legGame == null && styles.chipTextOn]}>ALL</Text>
+            <TouchableOpacity style={[styles.chip, legGame === 'both' && styles.chipOn]} onPress={() => setLegGame('both')} activeOpacity={0.7}>
+              <Text style={[styles.chipText, legGame === 'both' && styles.chipTextOn]}>BOTH</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.chip, legGame === 'each' && styles.chipOn]} onPress={() => setLegGame('each')} activeOpacity={0.7}>
+              <Text style={[styles.chipText, legGame === 'each' && styles.chipTextOn]}>EACH</Text>
             </TouchableOpacity>
           </View>
           {legKind === 'over_under' && legWho === 'player' && (
@@ -286,9 +303,14 @@ export default function CustomLineCreateModal({ currentWeekId, seasonId, initial
             </View>
           )}
         </View>
-        {legGame == null && (
+        {legGame === 'both' && (
           <Text style={styles.hint}>
-            All games: the special is offered once per game that week — this leg binds to each game in turn ("…in this game").
+            Both games: adds a leg for Game 1 and Game 2 in ONE bet — every leg must hit ("…in both games"). A week-level bundle.
+          </Text>
+        )}
+        {legGame === 'each' && (
+          <Text style={styles.hint}>
+            Each game: the special is offered once per game that week — this leg binds to each game in turn ("…in this game").
           </Text>
         )}
         <Button variant="outline" label="Add Leg" onPress={addLeg} disabled={legs.length >= MAX_LEGS} />
