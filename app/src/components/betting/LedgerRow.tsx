@@ -64,14 +64,14 @@ export default function LedgerRow({ entry, perspective, isLast }: LedgerRowProps
   const content = (
     <>
       <View style={styles.info}>
-        {/* Special branding: the custom line's title headlines its legs. */}
-        {bet?.customLineTitle != null && (
-          <Text style={[styles.customTitle, bet.customLineCategory === 'special' && styles.customTitleSpecial]}>
-            {bet.customLineTitle}
-          </Text>
-        )}
         {bet ? (
-          bet.legCount > 1 ? (
+          // A special's bet shows ONLY its title here — the legs live in the
+          // detail overlay, in the same format every other bet uses.
+          bet.customLineTitle != null ? (
+            <Text style={[styles.customTitle, bet.customLineCategory === 'special' && styles.customTitleSpecial]}>
+              {bet.customLineTitle}
+            </Text>
+          ) : bet.legCount > 1 ? (
             bet.legs.map((leg, i) => (
               <Text key={i} style={styles.primary}>
                 {leg.subjectName} · {leg.pick?.toUpperCase()} {leg.line.toFixed(1)}
@@ -132,7 +132,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: colors.accent,
     letterSpacing: 0.4,
-    marginBottom: 1,
   },
   customTitleSpecial: { color: colors.gold },
   primary: {
