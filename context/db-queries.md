@@ -112,6 +112,14 @@ All database queries MUST be implemented in `db.ts`. Queries like `scores.listFo
 | `place(selectionIds, stake)` | RPC `place_house_bet` — atomic, balance/anti-tank-checked; O/U passes one selection id |
 | `cancel(betId)` | RPC `cancel_bet` (admin) — total undo: removes ledger pair(s) + bet, re-opens a settled market if it was the last bet |
 
+### `customLines` (admin "Specials" — see [betting-line-board.md](betting-line-board.md))
+Presentation templates bundling existing `bet_selections`; taking one places an ordinary bet via `bets.place`. All writes are direct table ops through admin RLS (no money moves).
+| Method | Description |
+|---|---|
+| `listActive()` | Active lines, newest first (Place Bets board; week applicability filtered client-side in `usePinsinoData`) |
+| `listAll()` | Every line incl. disabled (the admin Specials manager) |
+| `create(data)` / `update(id, data)` / `remove(id)` | Direct CRUD; edits replace `legs` jsonb wholesale and never affect placed bets |
+
 ### `pinLedger`
 | Method | Description |
 |---|---|

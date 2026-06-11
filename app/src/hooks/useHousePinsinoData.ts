@@ -42,6 +42,10 @@ export function useHousePinsinoData() {
   const [exposure, setExposure] = useState(0)
   const [stats, setStats] = useState<HouseStats>(EMPTY_STATS)
   const [seasonNumber, setSeasonNumber] = useState<number | null>(null)
+  // Current season/week ids, exposed for admin surfaces that scope writes
+  // (e.g. the Specials manager's week pickers).
+  const [currentSeasonId, setCurrentSeasonId] = useState<string | null>(null)
+  const [currentWeekId, setCurrentWeekId] = useState<string | null>(null)
   // All of this week's bets + this season's settled bets, so the admin screen can
   // reuse the same Active/Settled surfaces the public Pinsino tab renders.
   const [weekBets, setWeekBets] = useState<BetView[]>([])
@@ -53,6 +57,7 @@ export function useHousePinsinoData() {
       const seasonRes = await seasons.getCurrent()
       const seasonId = seasonRes.data?.id ?? null
       setSeasonNumber(seasonRes.data?.number ?? null)
+      setCurrentSeasonId(seasonId)
 
       if (!seasonId) {
         setBalance(0); setLedger([]); setSummary(EMPTY_SUMMARY); setWeekPnl([])
@@ -73,6 +78,7 @@ export function useHousePinsinoData() {
       let weekBetsData: any[] = []
       const weekRes = await weeks.getCurrent()
       const weekId = weekRes.data?.id ?? null
+      setCurrentWeekId(weekId)
       if (weekId) {
         fetches.push(
           bets.listByWeek(weekId).then(({ data }) => { weekBetsData = data ?? [] })
@@ -164,5 +170,5 @@ export function useHousePinsinoData() {
 
   useEffect(() => { load() }, [load])
 
-  return { loading, balance, ledger, summary, weekPnl, exposure, stats, seasonNumber, weekBets, settledBets, reload: load }
+  return { loading, balance, ledger, summary, weekPnl, exposure, stats, seasonNumber, currentSeasonId, currentWeekId, weekBets, settledBets, reload: load }
 }

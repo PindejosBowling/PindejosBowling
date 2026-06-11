@@ -186,6 +186,19 @@ CREATE TABLE bounty_settlements (
   updated_at timestamp with time zone NOT NULL DEFAULT now()
 );
 
+CREATE TABLE custom_lines (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  title text NOT NULL,
+  description text NOT NULL DEFAULT ''::text,
+  category text NOT NULL DEFAULT 'default'::text,
+  legs jsonb NOT NULL DEFAULT '[]'::jsonb,
+  week_ids uuid[],
+  is_active boolean NOT NULL DEFAULT true,
+  created_by_player_id uuid,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now()
+);
+
 CREATE TABLE games (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   game_number integer NOT NULL,
@@ -657,6 +670,14 @@ ALTER TABLE bounty_settlements ADD CONSTRAINT bounty_settlements_settlement_outc
 
 ALTER TABLE bounty_settlements ADD CONSTRAINT bounty_settlements_settlement_source_check CHECK ((settlement_source = 'admin'::text));
 
+ALTER TABLE custom_lines ADD CONSTRAINT custom_lines_category_check CHECK ((category = ANY (ARRAY['default'::text, 'special'::text])));
+
+ALTER TABLE custom_lines ADD CONSTRAINT custom_lines_created_by_player_id_fkey FOREIGN KEY (created_by_player_id) REFERENCES players(id);
+
+ALTER TABLE custom_lines ADD CONSTRAINT custom_lines_pkey PRIMARY KEY (id);
+
+ALTER TABLE custom_lines ADD CONSTRAINT custom_lines_title_check CHECK (((length(title) >= 1) AND (length(title) <= 80)));
+
 ALTER TABLE games ADD CONSTRAINT game_schedule_pkey PRIMARY KEY (id);
 
 ALTER TABLE games ADD CONSTRAINT games_distinct_teams_check CHECK ((team_a_id IS DISTINCT FROM team_b_id));
@@ -947,6 +968,8 @@ CREATE INDEX bounty_post_week_id_idx ON public.bounty_post USING btree (week_id)
 CREATE INDEX bounty_settlements_admin_idx ON public.bounty_settlements USING btree (settled_by_admin_id);
 
 CREATE UNIQUE INDEX bounty_settlements_one_per_post ON public.bounty_settlements USING btree (bounty_post_id);
+
+CREATE INDEX custom_lines_created_by_idx ON public.custom_lines USING btree (created_by_player_id);
 
 CREATE INDEX games_team_a_id_idx ON public.games USING btree (team_a_id);
 
@@ -1295,6 +1318,24 @@ CREATE POLICY "anon can read" ON bounty_settlements AS PERMISSIVE FOR SELECT TO 
   USING (true);
 
 CREATE POLICY "authenticated can read" ON bounty_settlements AS PERMISSIVE FOR SELECT TO authenticated
+  USING (true);
+
+ALTER TABLE custom_lines ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "admin can delete" ON custom_lines AS PERMISSIVE FOR DELETE TO authenticated
+  USING ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
+
+CREATE POLICY "admin can insert" ON custom_lines AS PERMISSIVE FOR INSERT TO authenticated
+  WITH CHECK ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
+
+CREATE POLICY "admin can update" ON custom_lines AS PERMISSIVE FOR UPDATE TO authenticated
+  USING ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text))
+  WITH CHECK ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
+
+CREATE POLICY "anon can read" ON custom_lines AS PERMISSIVE FOR SELECT TO anon
+  USING (true);
+
+CREATE POLICY "authenticated can read" ON custom_lines AS PERMISSIVE FOR SELECT TO authenticated
   USING (true);
 
 ALTER TABLE games ENABLE ROW LEVEL SECURITY;
@@ -5257,6 +5298,8 @@ CREATE TRIGGER set_updated_at BEFORE UPDATE ON public.bounty_payouts FOR EACH RO
 CREATE TRIGGER set_updated_at BEFORE UPDATE ON public.bounty_post FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
 CREATE TRIGGER set_updated_at BEFORE UPDATE ON public.bounty_settlements FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+CREATE TRIGGER set_updated_at BEFORE UPDATE ON public.custom_lines FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
 CREATE TRIGGER games_participation_seed_ins AFTER INSERT ON public.games REFERENCING NEW TABLE AS new_rows FOR EACH STATEMENT EXECUTE FUNCTION trg_seed_participation_games();
 

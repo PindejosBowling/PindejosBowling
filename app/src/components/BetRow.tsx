@@ -30,6 +30,12 @@ export default function BetRow({
   const content = (
     <>
       <View style={{ flex: 1 }}>
+        {/* Custom-line branding: the special's title headlines its legs. */}
+        {bet.customLineTitle != null && (
+          <Text style={[styles.betTitle, bet.customLineCategory === 'special' && styles.betTitleSpecial]}>
+            {bet.customLineTitle}
+          </Text>
+        )}
         {isParlay ? (
           <>
             {bet.legs.map((leg, i) => (
@@ -41,7 +47,7 @@ export default function BetRow({
               </Text>
             ))}
             <Text style={styles.betDetails}>
-              {bet.bettorName} · PARLAY ({bet.legCount} legs)
+              {bet.bettorName} · {bet.customLineTitle != null ? 'SPECIAL' : 'PARLAY'} ({bet.legCount} legs)
             </Text>
           </>
         ) : (
@@ -52,7 +58,7 @@ export default function BetRow({
               {bet.gameNumber != null ? ` · G${bet.gameNumber}` : ''}
             </Text>
             <Text style={styles.betDetails}>
-              {bet.bettorName}
+              {bet.bettorName}{bet.customLineTitle != null ? ' · SPECIAL' : ''}
             </Text>
           </>
         )}
@@ -113,6 +119,14 @@ const styles = StyleSheet.create({
     color: colors.text,
     letterSpacing: 0.3,
   },
+  betTitle: {
+    fontFamily: fonts.barlowCondensed,
+    fontSize: 14,
+    color: colors.accent,
+    letterSpacing: 0.4,
+    marginBottom: 1,
+  },
+  betTitleSpecial: { color: colors.gold },
   betDetails: {
     fontFamily: fonts.barlowCondensed,
     fontSize: 12,

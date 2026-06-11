@@ -83,6 +83,16 @@ export default function BetDetailModal({ bet, onClose }: BetDetailModalProps) {
             <Text style={styles.value}>{bet.bettorName}</Text>
           </View>
 
+          {/* Custom-line branding (client-matched; the row is an ordinary bet). */}
+          {bet.customLineTitle != null && (
+            <View style={styles.row}>
+              <Text style={styles.label}>SPECIAL</Text>
+              <Text style={[styles.value, bet.customLineCategory === 'special' && { color: colors.gold }]}>
+                {bet.customLineTitle}
+              </Text>
+            </View>
+          )}
+
           {bet.seasonNumber != null && (
             <View style={styles.row}>
               <Text style={styles.label}>SEASON</Text>

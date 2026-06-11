@@ -52,6 +52,9 @@ app/
 │   │   ├── OddsBlock.tsx
 │   │   ├── LineRow.tsx           # One market row; data-driven selection buttons (see Betting Line Board)
 │   │   ├── LineRowContainer.tsx  # Collapsible per-category section; pinned rows stay visible collapsed (see Betting Line Board)
+│   │   ├── CustomLineRow.tsx     # One admin custom line ("special"): title/desc/legs + single TAKE button (see Betting Line Board)
+│   │   ├── CustomLineCreateModal.tsx       # Admin create/edit sheet for custom lines (leg builder + week-scope picker)
+│   │   ├── CustomLineAdminActionModal.tsx  # Admin per-line actions: edit / enable-disable / delete
 │   │   ├── BetRow.tsx            # One bet/parlay row in betting lists (see Betting display components)
 │   │   ├── ActiveBetsView.tsx    # Shared Active Bets surface (read-only on Pinsino, actionable on PinsinoAdmin)
 │   │   ├── SettledBetsView.tsx   # Shared Settled Bets surface (read-only on Pinsino, cancellable on PinsinoAdmin)

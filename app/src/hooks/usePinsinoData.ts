@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect } from 'react'
-import { weeks, seasons, betMarkets, bets, pinLedger, loanLedger, loans, pvpChallenges, bountyPosts, teamSlots } from '../utils/supabase/db'
+import { weeks, seasons, betMarkets, bets, pinLedger, loanLedger, loans, pvpChallenges, bountyPosts, teamSlots, customLines } from '../utils/supabase/db'
 
 // One bettable side of a market (a single `bet_selections` row, flattened).
 // Generic over market_type — over/under is the first consumer, but the shape
@@ -91,6 +91,7 @@ export function closedBettingNote(line: LineView): string {
 
 // One resolved leg of a bet (a single backed selection).
 export interface LegView {
+  selectionId: string       // the backed bet_selections row (custom-line matching key)
   marketId: string          // the leg's market — settled independently (admin settle)
   marketType: string        // 'over_under' | 'moneyline' | … (gates line display)
   subjectName: string
@@ -124,6 +125,11 @@ export interface BetView {
   seasonNumber: number | null
   legs: LegView[]
   legCount: number
+  // Set when this bet's selections exactly match an admin custom line ("special")
+  // resolved for the current week — best-effort display branding, derived
+  // client-side (the DB row is an ordinary bet). Null = plain single/parlay.
+  customLineTitle: string | null
+  customLineCategory: string | null
 }
 
 // One row in the season pin-balance scoreboard (Titans of Pindustry).
@@ -152,6 +158,7 @@ export function normalizeBet(b: any): BetView {
     const sel = leg?.bet_selections
     const mkt = sel?.bet_markets
     return {
+      selectionId: sel?.id ?? '',
       marketId: mkt?.id ?? '',
       marketType: mkt?.market_type ?? '',
       subjectName: mkt?.subject?.name ?? mkt?.title ?? '—',
@@ -188,6 +195,8 @@ export function normalizeBet(b: any): BetView {
     seasonNumber: firstMkt?.weeks?.seasons?.number ?? null,
     legs,
     legCount: legs.length,
+    customLineTitle: null,
+    customLineCategory: null,
   }
 }
 
@@ -244,6 +253,132 @@ function toYourTeamMoneyline(line: LineView, myTeamId: string | null): LineView 
   }
 }
 
+// ── Custom lines ("Specials") ────────────────────────────────────────────────
+// Admin-authored templates bundling existing selections under a custom title
+// (custom_lines table). Legs are abstract specs re-resolved against each week's
+// auto-generated markets; taking a special places an ordinary single/parlay via
+// bets.place. See context/betting-line-board.md.
+
+// One leg spec as stored in custom_lines.legs jsonb. A moneyline leg means
+// "the team containing player_id wins game_number" — anchored by player because
+// team ids don't persist across weeks.
+export interface CustomLegSpec {
+  kind: 'over_under' | 'moneyline'
+  player_id: string
+  game_number: number
+  pick: 'over' | 'under' | 'win'
+}
+
+// A leg spec resolved against this week's markets — carries everything the
+// board, the take sheet, and the anti-tank check need.
+export interface CustomLegView {
+  selectionId: string
+  marketId: string
+  marketType: string
+  subjectName: string          // O/U player name, or "<anchor>'s Team" for moneylines
+  subjectPlayerId: string | null
+  pick: string                 // display label: 'Over' / 'Under' / 'Win'
+  selectionKey: string         // raw side key ('over' / 'under' / a team uuid)
+  line: number | null
+  gameNumber: number | null
+  odds: number
+  inProgress: boolean          // this leg's market is closed for betting
+}
+
+// A custom line resolved + available this week. gameNumber is derived: all legs
+// in one game → that game's board group; mixed games → null (the week-wide
+// SPECIALS section). inProgress mirrors the O/U board policy: shown but inert
+// when any leg's market is closed for betting.
+export interface CustomLineView {
+  id: string
+  title: string
+  description: string
+  category: 'default' | 'special'
+  legs: CustomLegView[]
+  selectionIds: string[]
+  combinedOdds: number         // Π leg odds — what bets.place will pay (parlay math)
+  gameNumber: number | null
+  inProgress: boolean
+}
+
+// Anti-tanking mirror for specials: a player can't take a line containing a leg
+// that bets against their own performance (an 'under' on their own O/U market).
+// Display-layer guard only — place_house_bet enforces it server-side regardless.
+export function customLineSelfTank(line: CustomLineView, playerId: string | null): boolean {
+  if (!playerId) return false
+  return line.legs.some(
+    l => l.subjectPlayerId === playerId && selectionBetsAgainstSubject(l.marketType, l.selectionKey)
+  )
+}
+
+// Resolve one custom_lines row against this week's markets. Returns null when
+// the line is unavailable this week ("hidden" policy): any leg unresolvable
+// (subject has no O/U market, anchor player not slotted, no such game) or two
+// legs landing on the same market (a guaranteed-loser parlay place_house_bet
+// would reject anyway). Resolution uses the RAW normalized markets — before the
+// "Your Team" moneyline reshaping and the hide-the-under policy — because a
+// special's legs may reference selections the viewer's own board hides.
+function resolveCustomLine(
+  raw: any,
+  rawLines: LineView[],
+  slotByPlayer: Map<string, { teamId: string; playerName: string }>,
+): CustomLineView | null {
+  const specs: CustomLegSpec[] = Array.isArray(raw.legs) ? raw.legs : []
+  if (specs.length === 0) return null
+
+  const legs: CustomLegView[] = []
+  const seenMarkets = new Set<string>()
+  for (const spec of specs) {
+    let line: LineView | undefined
+    let sel: SelectionView | undefined
+    let subjectName = ''
+    if (spec.kind === 'over_under') {
+      line = rawLines.find(
+        l => l.marketType === 'over_under' && l.subjectPlayerId === spec.player_id && l.gameNumber === spec.game_number
+      )
+      sel = line?.selections.find(s => s.key === spec.pick)
+      subjectName = line?.subjectName ?? ''
+    } else {
+      const slot = slotByPlayer.get(spec.player_id)
+      if (!slot) return null
+      line = rawLines.find(
+        l => l.marketType === 'moneyline' && l.gameNumber === spec.game_number && l.selections.some(s => s.key === slot.teamId)
+      )
+      sel = line?.selections.find(s => s.key === slot.teamId)
+      subjectName = `${slot.playerName}'s Team`
+    }
+    if (!line || !sel) return null
+    if (seenMarkets.has(line.marketId)) return null
+    seenMarkets.add(line.marketId)
+    legs.push({
+      selectionId: sel.selectionId,
+      marketId: line.marketId,
+      marketType: line.marketType,
+      subjectName,
+      subjectPlayerId: line.subjectPlayerId,
+      pick: spec.kind === 'moneyline' ? 'Win' : sel.label,
+      selectionKey: sel.key,
+      line: sel.line,
+      gameNumber: line.gameNumber,
+      odds: sel.odds,
+      inProgress: line.inProgress,
+    })
+  }
+
+  const firstGame = legs[0].gameNumber
+  return {
+    id: raw.id,
+    title: raw.title,
+    description: raw.description ?? '',
+    category: raw.category === 'special' ? 'special' : 'default',
+    legs,
+    selectionIds: legs.map(l => l.selectionId),
+    combinedOdds: legs.reduce((p, l) => p * l.odds, 1),
+    gameNumber: legs.every(l => l.gameNumber === firstGame) ? firstGame : null,
+    inProgress: legs.some(l => l.inProgress),
+  }
+}
+
 export function usePinsinoData(playerId: string | null) {
   const [loading, setLoading] = useState(true)
   const [balance, setBalance] = useState(0)
@@ -260,6 +395,8 @@ export function usePinsinoData(playerId: string | null) {
   const [currentSeasonId, setCurrentSeasonId] = useState<string | null>(null)
   // Set of market ids the current player has already placed a bet on
   const [myBetMarketIds, setMyBetMarketIds] = useState<Set<string>>(new Set())
+  // Admin custom lines ("Specials") resolved + available this week.
+  const [customLineViews, setCustomLineViews] = useState<CustomLineView[]>([])
   // Caller's own loan figures (net-worth context near the balance card)
   const [debt, setDebt] = useState(0)
   // Caller's own at-risk pins escrowed across the Pinsino — pending sportsbook
@@ -296,6 +433,10 @@ export function usePinsinoData(playerId: string | null) {
           })
         )
       }
+      // Active custom lines + the week's full roster (player → team mapping for
+      // resolving moneyline anchor legs of any player, not just the caller).
+      let customLinesData: any[] = []
+      let weekSlotsData: any[] = []
       if (weekId) {
         fetches.push(
           betMarkets.listActiveOUByWeek(weekId).then(({ data }) => {
@@ -306,6 +447,12 @@ export function usePinsinoData(playerId: string | null) {
           }),
           bets.listByWeek(weekId).then(({ data }) => {
             weekBetsData = data ?? []
+          }),
+          customLines.listActive().then(({ data }) => {
+            customLinesData = data ?? []
+          }),
+          teamSlots.listByWeek(weekId).then(({ data }) => {
+            weekSlotsData = data ?? []
           })
         )
       }
@@ -365,8 +512,37 @@ export function usePinsinoData(playerId: string | null) {
 
       await Promise.all(fetches)
 
-      const weekBetViews = weekBetsData.map(normalizeBet)
-      const myBetViews = myBetsData.map(normalizeBet)
+      // Resolve custom lines against the RAW market views (pre-policy: before
+      // "Your Team" reshaping / under-hiding) — specials may bundle selections
+      // the viewer's own board hides.
+      const rawLineViews = [...marketsData, ...moneylineData].map(normalizeMarket)
+      const slotByPlayer = new Map<string, { teamId: string; playerName: string }>()
+      for (const s of weekSlotsData) {
+        if (s.player_id) slotByPlayer.set(s.player_id, { teamId: s.team_id, playerName: s.players?.name ?? '—' })
+      }
+      const resolvedCustom: CustomLineView[] = customLinesData
+        .filter(cl => cl.week_ids == null || (weekId != null && cl.week_ids.includes(weekId)))
+        .map(cl => resolveCustomLine(cl, rawLineViews, slotByPlayer))
+        .filter((v): v is CustomLineView => v != null)
+
+      // Best-effort special branding on bets: a bet whose selections exactly
+      // match a resolved line's bundle gets the custom title. Past-week bets
+      // (whose markets aren't in this week's resolution) render as plain parlays.
+      const brandBySelections = new Map<string, { title: string; category: string }>()
+      for (const cl of resolvedCustom) {
+        brandBySelections.set(
+          [...cl.selectionIds].sort().join('|'),
+          { title: cl.title, category: cl.category }
+        )
+      }
+      const brandBet = (b: BetView): BetView => {
+        if (b.legCount === 0) return b
+        const brand = brandBySelections.get(b.legs.map(l => l.selectionId).sort().join('|'))
+        return brand ? { ...b, customLineTitle: brand.title, customLineCategory: brand.category } : b
+      }
+
+      const weekBetViews = weekBetsData.map(normalizeBet).map(brandBet)
+      const myBetViews = myBetsData.map(normalizeBet).map(brandBet)
 
       // Cutoff for "last week's results": the most recent settlement (score_credit)
       // timestamp in the season ledger. priorBalance sums only rows strictly before
@@ -490,7 +666,7 @@ export function usePinsinoData(playerId: string | null) {
       // Build the board: O/U lines pass through; moneylines are reduced to the
       // player's own team ("Your Team"), dropping matchups they're not in.
       const openLinesResolved: LineView[] = []
-      for (const line of [...marketsData, ...moneylineData].map(normalizeMarket)) {
+      for (const line of rawLineViews) {
         if (line.marketType === 'moneyline') {
           const ml = toYourTeamMoneyline(line, myTeamId)
           if (ml) openLinesResolved.push(ml)
@@ -499,8 +675,9 @@ export function usePinsinoData(playerId: string | null) {
         }
       }
       setOpenLines(openLinesResolved)
+      setCustomLineViews(resolvedCustom)
       setWeekBets(weekBetViews)
-      setSettledBets(settledBetsData.map(normalizeBet))
+      setSettledBets(settledBetsData.map(normalizeBet).map(brandBet))
       setLeaderboard(board)
       setMyBets(myBetViews)
       setBalance(ledgerData.reduce((sum, e) => sum + e.amount, 0))
@@ -514,5 +691,5 @@ export function usePinsinoData(playerId: string | null) {
 
   useEffect(() => { load() }, [load])
 
-  return { loading, balance, debt, openAction, netWorth: balance + openAction - debt, activeLoan, openLines, myBets, weekBets, settledBets, leaderboard, myBetMarketIds, currentWeekId, currentSeasonId, reload: load }
+  return { loading, balance, debt, openAction, netWorth: balance + openAction - debt, activeLoan, openLines, customLines: customLineViews, myBets, weekBets, settledBets, leaderboard, myBetMarketIds, currentWeekId, currentSeasonId, reload: load }
 }

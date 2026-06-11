@@ -25,10 +25,12 @@ import SettledBetsView from '../components/SettledBetsView'
 import BetDetailModal, { resultBadge, betReturnText } from '../components/BetDetailModal'
 import LineRow from '../components/LineRow'
 import LineRowContainer from '../components/LineRowContainer'
+import CustomLineRow from '../components/CustomLineRow'
 import Button from '../components/Button'
 import {
   usePinsinoData,
   selectionBetsAgainstSubject,
+  customLineSelfTank,
   lineGroup,
   lineCategory,
   closedBettingNote,
@@ -37,6 +39,7 @@ import {
   type LineGroup,
   type LineCategory,
   type SelectionView,
+  type CustomLineView,
 } from '../hooks/usePinsinoData'
 import { useRefresh } from '../hooks/useRefresh'
 import { useAuthStore } from '../stores/authStore'
@@ -97,7 +100,7 @@ export default function SportsbookScreen() {
   const { showToast } = useUiStore()
   const navigation = useNavigation<PinsinoNav>()
 
-  const { loading, balance, openLines, myBets, weekBets, settledBets, reload } = usePinsinoData(playerId)
+  const { loading, balance, openLines, customLines, myBets, weekBets, settledBets, reload } = usePinsinoData(playerId)
   const { refreshing, onRefresh } = useRefresh(reload)
 
   const [view, setView] = useState<View2>('place')
@@ -108,6 +111,8 @@ export default function SportsbookScreen() {
   const [modal, setModal] = useState<BetModalState | null>(null)
   const [placing, setPlacing] = useState(false)
   const [detailModal, setDetailModal] = useState<BetView | null>(null)
+  // Wager sheet for taking a custom line ("special") — the whole bundle at once.
+  const [takeModal, setTakeModal] = useState<{ line: CustomLineView; wager: string } | null>(null)
 
   // Active = this week's still-pending bets (settled ones move to Settled Bets).
   // The public tab is read-only: Active/Settled rows just open the details overlay
@@ -144,6 +149,28 @@ export default function SportsbookScreen() {
       }))
   }, [openLines])
 
+  // Custom lines ("specials") bucketed for the board: single-game lines render
+  // inside that game's group; mixed-game lines — plus per-game lines whose game
+  // group isn't on this viewer's board (e.g. all its legs are other matchups'
+  // moneylines) — collect in the top-level SPECIALS section.
+  const { customByGame, topSpecials } = useMemo(() => {
+    const byGame = new Map<number, CustomLineView[]>()
+    const top: CustomLineView[] = []
+    const renderedGames = new Set(
+      lineGroups.filter(g => g.group.key !== 'season').map(g => g.group.sortOrder)
+    )
+    for (const cl of customLines) {
+      if (cl.gameNumber != null && renderedGames.has(cl.gameNumber)) {
+        const arr = byGame.get(cl.gameNumber)
+        if (arr) arr.push(cl)
+        else byGame.set(cl.gameNumber, [cl])
+      } else {
+        top.push(cl)
+      }
+    }
+    return { customByGame: byGame, topSpecials: top }
+  }, [customLines, lineGroups])
+
   // Anti-tanking, market-type-aware: backing the side that bets against your own
   // performance (the `under` on your own line) is blocked.
   function isSelfTank(line: LineView, sel: SelectionView): boolean {
@@ -178,6 +205,38 @@ export default function SportsbookScreen() {
 
       showToast('Bet placed!', 'success')
       setModal(null)
+      await reload()
+    } catch {
+      showToast('Failed to place bet', 'error')
+    } finally {
+      setPlacing(false)
+    }
+  }
+
+  // ── Custom lines ("specials") ───────────────────────────────────────────
+  // Taking a special wagers on the whole bundle at once — it never enters the
+  // parlay slip (it already *is* a parlay when multi-leg), so the TAKE button
+  // behaves identically in Single and Parlay modes.
+  function onTakeCustom(line: CustomLineView) {
+    if (customLineSelfTank(line, playerId)) { showToast("Believe in yourself man", 'error'); return }
+    if (balance < 10) return
+    setTakeModal({ line, wager: '' })
+  }
+
+  async function placeCustom() {
+    if (!takeModal || !playerId) return
+    const wagerNum = parseInt(takeModal.wager, 10)
+    if (isNaN(wagerNum) || wagerNum < 10) { showToast('Minimum wager is 10 pins', 'error'); return }
+    if (wagerNum > balance) { showToast('Wager exceeds your balance', 'error'); return }
+
+    setPlacing(true)
+    try {
+      // Same atomic RPC as singles/parlays — the special is just its bundle of
+      // selections; payout falls out of the legs' combined odds server-side.
+      const { error } = await bets.place(takeModal.line.selectionIds, wagerNum)
+      if (error) { showToast(error.message, 'error'); return }
+      showToast('Bet placed!', 'success')
+      setTakeModal(null)
       await reload()
     } catch {
       showToast('Failed to place bet', 'error')
@@ -263,6 +322,28 @@ export default function SportsbookScreen() {
             : { disabled: balance < 10 || isSelfTank(line, sel) }
         }
       />
+    )
+  }
+
+  // One card of custom-line rows, shared by the per-game slot and the top-level
+  // SPECIALS section. Disabled (dim, still pressable → toast) mirrors LineRow.
+  function renderSpecialsCard(lines: CustomLineView[], gameInProgress: boolean) {
+    return (
+      <View>
+        <Text style={styles.sectionHeader}>SPECIALS</Text>
+        <View style={styles.card}>
+          {lines.map((cl, idx) => (
+            <CustomLineRow
+              key={cl.id}
+              line={cl}
+              isLast={idx === lines.length - 1}
+              inProgress={gameInProgress || cl.inProgress}
+              disabled={balance < 10 || customLineSelfTank(cl, playerId)}
+              onTake={() => onTakeCustom(cl)}
+            />
+          ))}
+        </View>
+      </View>
     )
   }
 
@@ -394,13 +475,23 @@ export default function SportsbookScreen() {
                     />
                   )
                 })}
+                {/* This game's custom lines, under its standard sections. */}
+                {group.key !== 'season' && customByGame.has(group.sortOrder) &&
+                  renderSpecialsCard(customByGame.get(group.sortOrder)!, gameInProgress)}
               </View>
               )
             })}
           </>
-        ) : (
+        ) : topSpecials.length === 0 ? (
           <View style={styles.emptyCard}>
             <Text style={styles.emptyText}>No open lines this week</Text>
+          </View>
+        ) : null}
+
+        {/* Week-wide specials (legs across games) — own top-level section. */}
+        {topSpecials.length > 0 && (
+          <View style={{ marginTop: lineGroups.length > 0 ? 14 : 0 }}>
+            {renderSpecialsCard(topSpecials, false)}
           </View>
         )}
         </>}
@@ -552,6 +643,65 @@ export default function SportsbookScreen() {
               <Text style={styles.modalWarning}>⚠ Bets can't be canceled once placed.</Text>
 
               <Button label="Place Parlay" size="lg" onPress={placeParlay} loading={placing} disabled={placing} />
+            </View>
+          </KeyboardAvoidingView>
+          <Toast />
+        </Modal>
+      )}
+
+      {/* Custom line ("special") take modal */}
+      {takeModal && (
+        <Modal visible transparent animationType="slide" onRequestClose={() => !placing && setTakeModal(null)}>
+          <KeyboardAvoidingView
+            style={styles.modalBackdrop}
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          >
+            <TouchableOpacity
+              style={StyleSheet.absoluteFill}
+              activeOpacity={1}
+              onPress={() => !placing && setTakeModal(null)}
+            />
+            <View style={styles.modalSheet}>
+              <Text style={[styles.modalTitle, takeModal.line.category === 'special' && { color: colors.gold }]}>
+                {takeModal.line.title}
+              </Text>
+              <Text style={styles.modalLine}>
+                {takeModal.line.legs.length > 1 ? 'ALL LEGS MUST WIN · ' : ''}
+                PAYS ×{takeModal.line.combinedOdds.toFixed(takeModal.line.combinedOdds % 1 === 0 ? 0 : 2)}
+              </Text>
+
+              <View style={styles.parlayLegList}>
+                {takeModal.line.legs.map(leg => (
+                  <View key={leg.selectionId} style={styles.parlayLegRow}>
+                    <Text style={styles.parlayLegText} numberOfLines={1}>
+                      {leg.subjectName} · {leg.pick.toUpperCase()}
+                      {leg.marketType === 'over_under' && leg.line != null ? ` ${leg.line.toFixed(1)}` : ''}
+                      {leg.gameNumber != null ? ` · G${leg.gameNumber}` : ''}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+
+              <Text style={styles.wagerLabel}>WAGER (pins)</Text>
+              <TextInput
+                style={styles.wagerInput}
+                value={takeModal.wager}
+                onChangeText={v => setTakeModal(m => m ? { ...m, wager: v.replace(/[^0-9]/g, '') } : m)}
+                keyboardType="number-pad"
+                placeholder={`10 – ${maxWager}`}
+                placeholderTextColor={colors.muted2}
+                maxLength={6}
+              />
+              <Text style={styles.wagerHint}>
+                Balance: {balance} pins  ·  Min: 10
+                {takeModal.wager !== '' && !isNaN(parseInt(takeModal.wager, 10))
+                  ? `  ·  To win: ${(Math.floor(parseInt(takeModal.wager, 10) * takeModal.line.combinedOdds)).toLocaleString()}`
+                  : ''}
+              </Text>
+
+              <Text style={styles.modalWarning}>⚠ Bets can't be canceled once placed.</Text>
+
+              <Button label="Take It" size="lg" onPress={placeCustom} loading={placing} disabled={placing} />
             </View>
           </KeyboardAvoidingView>
           <Toast />
