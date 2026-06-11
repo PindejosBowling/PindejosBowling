@@ -16,6 +16,7 @@ import { resultBadge, betReturnText } from '../utils/bets'
 import { useRefresh } from '../hooks/useRefresh'
 import { usePlayerPinsinoData, LedgerEntry } from '../hooks/usePlayerPinsinoData'
 import { BetView } from '../hooks/usePinsinoData'
+import EmptyCard from '../components/ui/EmptyCard'
 
 type PlayerPinsinoRoute = RouteProp<
   { PlayerPinsino: { playerId: string; name: string } },
@@ -218,9 +219,7 @@ export default function PlayerPinsinoScreen() {
               })}
             </>
           ) : (
-            <View style={styles.emptyCard}>
-              <Text style={styles.emptyText}>No activity yet</Text>
-            </View>
+            <EmptyCard text="No activity yet" />
           )
         )}
 
@@ -249,9 +248,7 @@ export default function PlayerPinsinoScreen() {
               ))}
             </>
           ) : (
-            <View style={styles.emptyCard}>
-              <Text style={styles.emptyText}>No open bets</Text>
-            </View>
+            <EmptyCard text="No open bets" />
           )
         )}
 
@@ -298,9 +295,7 @@ export default function PlayerPinsinoScreen() {
               })}
             </>
           ) : (
-            <View style={styles.emptyCard}>
-              <Text style={styles.emptyText}>No settled bets this season</Text>
-            </View>
+            <EmptyCard text="No settled bets this season" />
           )
         )}
       </ScrollView>
@@ -405,20 +400,5 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: colors.muted,
     letterSpacing: 0.5,
-  },
-
-  emptyCard: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.cardMd,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 20,
-    alignItems: 'center',
-  },
-  emptyText: {
-    fontFamily: fonts.barlowCondensed,
-    fontSize: 14,
-    color: colors.muted,
-    letterSpacing: 0.3,
   },
 })

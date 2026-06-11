@@ -15,6 +15,7 @@ import { useAuthStore } from '../stores/authStore'
 import { seasons, pvpChallenges } from '../utils/supabase/db'
 import { normalizeChallenge, PvpChallengeView } from '../hooks/usePvpData'
 import { CONTRACT_TYPE_LABEL, STATUS_LABEL } from '../utils/pvp'
+import EmptyCard from '../components/ui/EmptyCard'
 
 type Nav = NativeStackNavigationProp<MoreStackParamList>
 
@@ -58,7 +59,7 @@ export default function PvPAdminScreen() {
     return (
       <SafeAreaView style={styles.safe} edges={['top']}>
         <ScreenHeader title="PvP Admin" onBack={() => navigation.goBack()} />
-        <View style={styles.emptyCard}><Text style={styles.emptyText}>Admins only</Text></View>
+        <EmptyCard text="Admins only" style={{ margin: 16 }} />
       </SafeAreaView>
     )
   }
@@ -79,7 +80,7 @@ export default function PvPAdminScreen() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.muted} />}
       >
         {rows.length === 0 ? (
-          <View style={styles.emptyCard}><Text style={styles.emptyText}>No open, active, or settled contracts.</Text></View>
+          <EmptyCard text="No open, active, or settled contracts." style={{ margin: 16 }} />
         ) : (
           rows.map(c => (
             <PvpChallengeRow
@@ -103,14 +104,4 @@ export default function PvPAdminScreen() {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.bg },
   content: { paddingHorizontal: 16, paddingBottom: 40 },
-  emptyCard: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.cardMd,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 20,
-    alignItems: 'center',
-    margin: 16,
-  },
-  emptyText: { fontFamily: fonts.barlowCondensed, fontSize: 14, color: colors.muted, letterSpacing: 0.3 },
 })

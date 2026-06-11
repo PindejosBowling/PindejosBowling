@@ -4,6 +4,7 @@ import { colors, fonts, radius } from '../../theme'
 import BetRow from './BetRow'
 import { resultBadge, betReturnText } from '../../utils/bets'
 import type { BetView } from '../../hooks/usePinsinoData'
+import EmptyCard from '../ui/EmptyCard'
 
 interface SettledBetsViewProps {
   // All settled (won/lost/push) bets this season.
@@ -38,9 +39,7 @@ export default function SettledBetsView({ bets, perspective = 'player', onBetPre
 
   if (weekNumbers.length === 0) {
     return (
-      <View style={styles.emptyCard}>
-        <Text style={styles.emptyText}>No settled bets yet</Text>
-      </View>
+      <EmptyCard text="No settled bets yet" />
     )
   }
 
@@ -84,19 +83,5 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     marginBottom: 10,
     overflow: 'hidden',
-  },
-  emptyCard: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.cardMd,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 20,
-    alignItems: 'center',
-  },
-  emptyText: {
-    fontFamily: fonts.barlowCondensed,
-    fontSize: 14,
-    color: colors.muted,
-    letterSpacing: 0.3,
   },
 })

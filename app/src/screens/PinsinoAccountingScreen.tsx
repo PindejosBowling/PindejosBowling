@@ -14,6 +14,7 @@ import { useHousePinsinoData } from '../hooks/useHousePinsinoData'
 import { useAuthStore } from '../stores/authStore'
 import { LedgerEntry } from '../hooks/usePlayerPinsinoData'
 import { signed } from '../utils/bets'
+import EmptyCard from '../components/ui/EmptyCard'
 
 type Nav = NativeStackNavigationProp<MoreStackParamList>
 type AccountingView = 'activity' | 'pnl'
@@ -58,9 +59,7 @@ export default function PinsinoAccountingScreen() {
     return (
       <SafeAreaView style={styles.safe} edges={['top']}>
         <ScreenHeader title="Accounting" onBack={() => navigation.goBack()} />
-        <View style={styles.emptyCard}>
-          <Text style={styles.emptyText}>Admins only</Text>
-        </View>
+        <EmptyCard text="Admins only" />
       </SafeAreaView>
     )
   }
@@ -187,9 +186,7 @@ export default function PinsinoAccountingScreen() {
               })}
             </>
           ) : (
-            <View style={styles.emptyCard}>
-              <Text style={styles.emptyText}>No house activity yet</Text>
-            </View>
+            <EmptyCard text="No house activity yet" />
           )
         )}
 
@@ -207,9 +204,7 @@ export default function PinsinoAccountingScreen() {
               ))}
             </View>
           ) : (
-            <View style={styles.emptyCard}>
-              <Text style={styles.emptyText}>No weekly results yet</Text>
-            </View>
+            <EmptyCard text="No weekly results yet" />
           )
         )}
       </ScrollView>
@@ -316,20 +311,5 @@ const styles = StyleSheet.create({
     color: colors.accent,
     marginBottom: 6,
     marginTop: 4,
-  },
-
-  emptyCard: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.cardMd,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 20,
-    alignItems: 'center',
-  },
-  emptyText: {
-    fontFamily: fonts.barlowCondensed,
-    fontSize: 14,
-    color: colors.muted,
-    letterSpacing: 0.3,
   },
 })

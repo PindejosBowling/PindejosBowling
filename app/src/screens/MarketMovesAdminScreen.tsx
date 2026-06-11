@@ -25,6 +25,7 @@ import { useUiStore } from '../stores/uiStore'
 import { seasons, activityFeed } from '../utils/supabase/db'
 import { normalizeFeedRow } from '../hooks/useMarketMovesData'
 import { renderFeedEvent, FeedEventView } from '../utils/activityFeedTemplates'
+import EmptyCard from '../components/ui/EmptyCard'
 
 // Client-side admin filters (design §18). Reuse the string-keyed pill component.
 const FEATURE_FILTERS = ['all', 'sportsbook', 'loan_shark', 'pvp', 'system', 'admin']
@@ -104,9 +105,7 @@ export default function MarketMovesAdminScreen() {
     return (
       <SafeAreaView style={styles.safe} edges={['top']}>
         <ScreenHeader title="Market Moves Admin" onBack={() => navigation.goBack()} />
-        <View style={styles.emptyCard}>
-          <Text style={styles.emptyText}>Admins only</Text>
-        </View>
+        <EmptyCard text="Admins only" style={{ marginHorizontal: 16 }} />
       </SafeAreaView>
     )
   }
@@ -126,9 +125,7 @@ export default function MarketMovesAdminScreen() {
         <Button variant="outline" label="+ Post system event" onPress={() => setPostOpen(true)} style={styles.postBtn} />
 
         {filtered.length === 0 ? (
-          <View style={styles.emptyCard}>
-            <Text style={styles.emptyText}>No events match these filters</Text>
-          </View>
+          <EmptyCard text="No events match these filters" style={{ marginHorizontal: 16 }} />
         ) : (
           filtered.map(e => {
             const parts = renderFeedEvent(e)
@@ -382,15 +379,4 @@ const styles = StyleSheet.create({
   fieldLabel: { fontFamily: fonts.barlowCondensed, fontSize: 11, letterSpacing: 1.5, color: colors.muted, marginTop: 14 },
   modalBtns: { flexDirection: 'row', gap: 10, marginTop: 18 },
   modalCancel: { borderWidth: 0, paddingVertical: 12 },
-
-  emptyCard: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.cardMd,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 20,
-    alignItems: 'center',
-    marginHorizontal: 16,
-  },
-  emptyText: { fontFamily: fonts.barlowCondensed, fontSize: 14, color: colors.muted, letterSpacing: 0.3 },
 })

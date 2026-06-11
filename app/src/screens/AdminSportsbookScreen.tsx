@@ -18,6 +18,7 @@ import { useAuthStore } from '../stores/authStore'
 import { useUiStore } from '../stores/uiStore'
 import { type BetView } from '../hooks/usePinsinoData'
 import { bets } from '../utils/supabase/db'
+import EmptyCard from '../components/ui/EmptyCard'
 
 type Nav = NativeStackNavigationProp<MoreStackParamList>
 type HouseView = 'active' | 'settled'
@@ -68,9 +69,7 @@ export default function AdminSportsbookScreen() {
     return (
       <SafeAreaView style={styles.safe} edges={['top']}>
         <ScreenHeader title="Sportsbook" onBack={() => navigation.goBack()} />
-        <View style={styles.emptyCard}>
-          <Text style={styles.emptyText}>Admins only</Text>
-        </View>
+        <EmptyCard text="Admins only" />
       </SafeAreaView>
     )
   }
@@ -131,19 +130,4 @@ const styles = StyleSheet.create({
   content: { paddingHorizontal: 16, paddingBottom: 40 },
 
   viewToggle: { marginBottom: 20 },
-
-  emptyCard: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.cardMd,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 20,
-    alignItems: 'center',
-  },
-  emptyText: {
-    fontFamily: fonts.barlowCondensed,
-    fontSize: 14,
-    color: colors.muted,
-    letterSpacing: 0.3,
-  },
 })

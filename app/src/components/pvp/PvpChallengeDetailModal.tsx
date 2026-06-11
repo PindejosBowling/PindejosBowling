@@ -16,6 +16,7 @@ import { useUiStore } from '../../stores/uiStore'
 import { seasons, pinLedger, pvpChallenges } from '../../utils/supabase/db'
 import { CONTRACT_TYPE_LABEL, CONTRACT_TYPE_RULE, STATUS_LABEL, statusKind, formatStakes, isAsymmetricStakes, formatHandicap } from '../../utils/pvp'
 import { PinsinoStackParamList } from '../../navigation/types'
+import EmptyCard from '../ui/EmptyCard'
 
 type Nav = NativeStackNavigationProp<PinsinoStackParamList>
 
@@ -159,7 +160,7 @@ export default function PvpChallengeDetailModal({ challengeId, onClose, onChange
           {loading ? (
             <View style={styles.stateBox}><LoadingView label="Loading…" /></View>
           ) : !c ? (
-            <View style={styles.emptyCard}><Text style={styles.emptyText}>Challenge not found</Text></View>
+            <EmptyCard text="Challenge not found" style={{ margin: 16 }} />
           ) : (
             <ScrollView
               style={styles.scroll}
@@ -460,7 +461,4 @@ const styles = StyleSheet.create({
   actionStack: { marginTop: 18, gap: 8 },
   actionRow: { flexDirection: 'row', gap: 8 },
   outlineSurface: { backgroundColor: colors.surface },
-
-  emptyCard: { backgroundColor: colors.surface, borderRadius: radius.cardMd, borderWidth: 1, borderColor: colors.border, padding: 20, alignItems: 'center', margin: 16 },
-  emptyText: { fontFamily: fonts.barlowCondensed, fontSize: 14, color: colors.muted },
 })

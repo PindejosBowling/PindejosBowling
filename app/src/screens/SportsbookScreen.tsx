@@ -44,6 +44,7 @@ import { useAuthStore } from '../stores/authStore'
 import { useUiStore } from '../stores/uiStore'
 import { bets } from '../utils/supabase/db'
 import { PinsinoStackParamList } from '../navigation/types'
+import EmptyCard from '../components/ui/EmptyCard'
 
 type PinsinoNav = NativeStackNavigationProp<PinsinoStackParamList>
 
@@ -400,9 +401,7 @@ export default function SportsbookScreen() {
             })}
           </>
         ) : (
-          <View style={styles.emptyCard}>
-            <Text style={styles.emptyText}>No open lines this week</Text>
-          </View>
+          <EmptyCard text="No open lines this week" />
         )}
         </>}
 
@@ -660,20 +659,6 @@ const styles = StyleSheet.create({
     fontFamily: fonts.barlowCondensed,
     fontSize: 15,
     color: colors.danger,
-  },
-  emptyCard: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.cardMd,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 20,
-    alignItems: 'center',
-  },
-  emptyText: {
-    fontFamily: fonts.barlowCondensed,
-    fontSize: 14,
-    color: colors.muted,
-    letterSpacing: 0.3,
   },
 
   adminHint: {

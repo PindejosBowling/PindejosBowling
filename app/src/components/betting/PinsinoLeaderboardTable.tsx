@@ -1,6 +1,7 @@
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native'
 import { colors, fonts, radius } from '../../theme'
 import { LeaderboardEntry } from '../../hooks/usePinsinoData'
+import EmptyCard from '../ui/EmptyCard'
 
 type Props = {
   leaderboard: LeaderboardEntry[]
@@ -24,9 +25,7 @@ export default function PinsinoLeaderboardTable({
 }: Props) {
   if (leaderboard.length === 0) {
     return (
-      <View style={styles.emptyCard}>
-        <Text style={styles.emptyText}>No pin balances yet</Text>
-      </View>
+      <EmptyCard text="No pin balances yet" />
     )
   }
 
@@ -174,20 +173,4 @@ const styles = StyleSheet.create({
   },
   moveUp: { fontSize: 11, color: colors.success },
   moveDown: { fontSize: 11, color: colors.danger },
-
-  emptyCard: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.cardMd,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 20,
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  emptyText: {
-    fontFamily: fonts.barlowCondensed,
-    fontSize: 14,
-    color: colors.muted,
-    letterSpacing: 0.3,
-  },
 })

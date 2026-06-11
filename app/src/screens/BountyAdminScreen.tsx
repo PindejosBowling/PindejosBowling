@@ -16,6 +16,7 @@ import { useRefresh } from '../hooks/useRefresh'
 import { useAuthStore } from '../stores/authStore'
 import { seasons, weeks, bountyPosts } from '../utils/supabase/db'
 import { normalizeBounty, BountyView } from '../hooks/useBountyBoardData'
+import EmptyCard from '../components/ui/EmptyCard'
 
 type Nav = NativeStackNavigationProp<MoreStackParamList>
 
@@ -62,7 +63,7 @@ export default function BountyAdminScreen() {
     return (
       <SafeAreaView style={styles.safe} edges={['top']}>
         <ScreenHeader title="Bounty Admin" onBack={() => navigation.goBack()} />
-        <View style={styles.emptyCard}><Text style={styles.emptyText}>Admins only</Text></View>
+        <EmptyCard text="Admins only" style={{ margin: 16 }} />
       </SafeAreaView>
     )
   }
@@ -80,7 +81,7 @@ export default function BountyAdminScreen() {
         <Button label="+ Create House Bounty" onPress={() => setCreateOpen(true)} style={styles.createBtn} />
 
         {rows.length === 0 ? (
-          <View style={styles.emptyCard}><Text style={styles.emptyText}>No bounties for this filter.</Text></View>
+          <EmptyCard text="No bounties for this filter." style={{ margin: 16 }} />
         ) : (
           rows.map(b => (
             <BountyCard key={b.id} bounty={b} onPress={() => setTarget(b)} manageHint />
@@ -102,9 +103,4 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.bg },
   content: { paddingHorizontal: 16, paddingBottom: 40 },
   createBtn: { marginTop: 4, marginBottom: 16 },
-  emptyCard: {
-    backgroundColor: colors.surface, borderRadius: radius.cardMd, borderWidth: 1, borderColor: colors.border,
-    padding: 20, alignItems: 'center', margin: 16,
-  },
-  emptyText: { fontFamily: fonts.barlowCondensed, fontSize: 14, color: colors.muted, letterSpacing: 0.3 },
 })

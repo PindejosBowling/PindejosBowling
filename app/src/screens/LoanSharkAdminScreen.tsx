@@ -10,6 +10,7 @@ import { useRefresh } from '../hooks/useRefresh'
 import { useAuthStore } from '../stores/authStore'
 import { useUiStore } from '../stores/uiStore'
 import { seasons, loans, loanLedger } from '../utils/supabase/db'
+import EmptyCard from '../components/ui/EmptyCard'
 
 interface AdminLoanRow {
   loanId: string
@@ -94,9 +95,7 @@ export default function LoanSharkAdminScreen() {
     return (
       <SafeAreaView style={styles.safe} edges={['top']}>
         <ScreenHeader title="Loan Shark Admin" onBack={() => navigation.goBack()} />
-        <View style={styles.emptyCard}>
-          <Text style={styles.emptyText}>Admins only</Text>
-        </View>
+        <EmptyCard text="Admins only" style={{ marginHorizontal: 16 }} />
       </SafeAreaView>
     )
   }
@@ -109,9 +108,7 @@ export default function LoanSharkAdminScreen() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.muted} />}
       >
         {rows.length === 0 ? (
-          <View style={styles.emptyCard}>
-            <Text style={styles.emptyText}>No active or paid-off loans</Text>
-          </View>
+          <EmptyCard text="No active or paid-off loans" style={{ marginHorizontal: 16 }} />
         ) : (
           <View style={styles.card}>
             {rows.map((r, i) => (
@@ -191,14 +188,4 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   cancelBtnText: { color: colors.danger, fontSize: 16, fontWeight: '700' },
-  emptyCard: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.cardMd,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 20,
-    alignItems: 'center',
-    marginHorizontal: 16,
-  },
-  emptyText: { fontFamily: fonts.barlowCondensed, fontSize: 14, color: colors.muted, letterSpacing: 0.3 },
 })

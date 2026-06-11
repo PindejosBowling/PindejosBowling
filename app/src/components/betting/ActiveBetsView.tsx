@@ -4,6 +4,7 @@ import { colors, fonts, radius } from '../../theme'
 import BetRow from './BetRow'
 import { resultBadge, betReturnText } from '../../utils/bets'
 import type { BetView } from '../../hooks/usePinsinoData'
+import EmptyCard from '../ui/EmptyCard'
 
 interface ActiveBetsViewProps {
   // This week's still-pending bets (settled ones belong in SettledBetsView).
@@ -55,9 +56,7 @@ export default function ActiveBetsView({
 
   if (gameNumbers.length === 0 && parlays.length === 0) {
     return (
-      <View style={styles.emptyCard}>
-        <Text style={styles.emptyText}>No bets placed yet this week</Text>
-      </View>
+      <EmptyCard text="No bets placed yet this week" />
     )
   }
 
@@ -173,19 +172,5 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     marginBottom: 10,
     overflow: 'hidden',
-  },
-  emptyCard: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.cardMd,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 20,
-    alignItems: 'center',
-  },
-  emptyText: {
-    fontFamily: fonts.barlowCondensed,
-    fontSize: 14,
-    color: colors.muted,
-    letterSpacing: 0.3,
   },
 })
