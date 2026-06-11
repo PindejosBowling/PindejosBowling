@@ -614,10 +614,10 @@ const styles = StyleSheet.create({
   helpText: { fontFamily: fonts.barlow, fontSize: 12, color: colors.muted, marginTop: 6 },
 
   warnCard: {
-    backgroundColor: 'rgba(251,191,36,0.10)',
+    backgroundColor: 'rgba(244,208,63,0.10)',
     borderRadius: radius.cardSm,
     borderWidth: 1,
-    borderColor: 'rgba(251,191,36,0.4)',
+    borderColor: 'rgba(244,208,63,0.4)',
     paddingHorizontal: 14,
     paddingVertical: 11,
     marginTop: 12,

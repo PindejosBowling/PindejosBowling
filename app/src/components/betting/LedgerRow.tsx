@@ -100,20 +100,23 @@ export default function LedgerRow({ entry, perspective, isLast }: LedgerRowProps
     </>
   )
 
+  // Special-branded bets carry the gold wash through the ledger too.
+  const rowStyle = [
+    styles.row,
+    bet?.customLineCategory === 'special' && styles.rowSpecial,
+    !isLast && styles.rowBorder,
+  ]
+
   // Bet-backed rows open the shared Bet Details overlay; mints (score/bonus) don't.
   return bet ? (
     <>
-      <TouchableOpacity
-        style={[styles.row, !isLast && styles.rowBorder]}
-        activeOpacity={0.7}
-        onPress={() => setDetailOpen(true)}
-      >
+      <TouchableOpacity style={rowStyle} activeOpacity={0.7} onPress={() => setDetailOpen(true)}>
         {content}
       </TouchableOpacity>
       <BetDetailModal bet={detailOpen ? bet : null} onClose={() => setDetailOpen(false)} />
     </>
   ) : (
-    <View style={[styles.row, !isLast && styles.rowBorder]}>{content}</View>
+    <View style={rowStyle}>{content}</View>
   )
 }
 
@@ -129,6 +132,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
   },
+  rowSpecial: { backgroundColor: colors.goldTint },
   info: { flex: 1 },
   customTitle: {
     fontFamily: fonts.barlowCondensed,

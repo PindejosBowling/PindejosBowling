@@ -75,7 +75,13 @@ export default function BetRow({
   )
 
   return (
-    <View style={[styles.betRow, !isLast && styles.lineRowBorder]}>
+    <View
+      style={[
+        styles.betRow,
+        bet.customLineCategory === 'special' && styles.betRowSpecial,
+        !isLast && styles.lineRowBorder,
+      ]}
+    >
       {isPressable ? (
         <TouchableOpacity
           style={styles.betPressable}
@@ -113,6 +119,8 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
   },
+  // Special-branded bets carry the gold wash through their placed-bet rows.
+  betRowSpecial: { backgroundColor: colors.goldTint },
   betSubject: {
     fontFamily: fonts.barlowCondensed,
     fontSize: 14,

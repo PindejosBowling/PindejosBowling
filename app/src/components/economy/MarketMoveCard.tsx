@@ -88,7 +88,7 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     paddingBottom: 8,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(251,191,36,0.25)',
+    borderBottomColor: 'rgba(244,208,63,0.25)',
   },
   winnerTrophy: { fontSize: 14 },
   winnerLabel: {
