@@ -7,6 +7,8 @@ import Toast from './Toast'
 
 interface BottomSheetProps {
   title: string
+  // Optional title accent (e.g. gold for "special" custom lines).
+  titleColor?: string
   subtitle?: string
   // Wired to both the backdrop tap and the hardware back (onRequestClose).
   onClose: () => void
@@ -29,6 +31,7 @@ interface BottomSheetProps {
 // resets between opens.
 export default function BottomSheet({
   title,
+  titleColor,
   subtitle,
   onClose,
   busy,
@@ -45,7 +48,7 @@ export default function BottomSheet({
     <>
       <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={dismiss} />
       <View style={styles.sheet}>
-        <Text style={styles.title}>{title}</Text>
+        <Text style={[styles.title, titleColor != null && { color: titleColor }]}>{title}</Text>
         {subtitle != null && <Text style={styles.subtitle}>{subtitle}</Text>}
         {bodyMaxHeight != null ? (
           <ScrollView style={{ maxHeight: bodyMaxHeight }} keyboardShouldPersistTaps="handled">

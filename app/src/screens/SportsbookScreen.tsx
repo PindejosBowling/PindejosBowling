@@ -4,12 +4,8 @@ import {
   Text,
   ScrollView,
   TouchableOpacity,
-  TextInput,
-  Modal,
   StyleSheet,
   RefreshControl,
-  KeyboardAvoidingView,
-  Platform,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useNavigation } from '@react-navigation/native'
@@ -18,11 +14,11 @@ import { colors, fonts, radius } from '../theme'
 import ScreenHeader from '../components/ui/ScreenHeader'
 import LoadingView from '../components/ui/LoadingView'
 import ToggleGroup from '../components/ui/ToggleGroup'
-import Toast from '../components/ui/Toast'
 import BetRow from '../components/betting/BetRow'
 import ActiveBetsView from '../components/betting/ActiveBetsView'
 import SettledBetsView from '../components/betting/SettledBetsView'
 import BetDetailModal from '../components/betting/BetDetailModal'
+import WagerSheet from '../components/betting/WagerSheet'
 import { resultBadge, betReturnText } from '../utils/bets'
 import LineRow from '../components/betting/LineRow'
 import LineRowContainer from '../components/betting/LineRowContainer'
@@ -345,8 +341,6 @@ export default function SportsbookScreen() {
     }
   }
 
-  const maxWager = balance
-
   // One subject row (≥1 markets → one button set), shared by the collapsible
   // (O/U) and headerless (moneyline) section layouts. Single mode opens the
   // wager sheet; parlay mode toggles the slip; an in-progress game makes every
@@ -581,192 +575,113 @@ export default function SportsbookScreen() {
         </View>
       )}
 
-      {/* Bet placement modal */}
+      {/* Bet placement sheet (single) — pick toggle + live payout (WagerSheet). */}
       {modal && (
-        <Modal visible transparent animationType="slide" onRequestClose={() => !placing && setModal(null)}>
-          <KeyboardAvoidingView
-            style={styles.modalBackdrop}
-            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          >
-            <TouchableOpacity
-              style={StyleSheet.absoluteFill}
-              activeOpacity={1}
-              onPress={() => !placing && setModal(null)}
-            />
-            <View style={styles.modalSheet}>
-              <Text style={styles.modalTitle}>
-                {modal.line.subjectName}
-                {modal.line.gameNumber != null ? ` — Game ${modal.line.gameNumber}` : ''}
-              </Text>
-              {/* Stat props carry the stat name in their subtitle ("STRIKES · LINE 4.5"). */}
-              {modal.line.subtitle != null ? (
-                <Text style={styles.modalLine}>{modal.line.subtitle}</Text>
-              ) : modal.line.line != null ? (
-                <Text style={styles.modalLine}>LINE: {modal.line.line.toFixed(1)}</Text>
-              ) : null}
-
-              <View style={styles.pickToggle}>
-                {modal.line.selections.map(sel => {
-                  // Anti-tanking: can't back the side against your own performance.
-                  const blocked = isSelfTank(modal.line, sel)
-                  const active = modal.selectedId === sel.selectionId
-                  return (
-                    <TouchableOpacity
-                      key={sel.selectionId}
-                      style={[
-                        styles.pickToggleBtn,
-                        active && styles.pickToggleBtnActive,
-                        blocked && styles.pickToggleBtnDisabled,
-                      ]}
-                      onPress={() => {
-                        if (blocked) { showToast("Believe in yourself man", 'error'); return }
-                        setModal(m => m ? { ...m, selectedId: sel.selectionId } : m)
-                      }}
-                      activeOpacity={0.7}
-                    >
-                      <Text style={[styles.pickToggleBtnText, active && styles.pickToggleBtnTextActive]}>
-                        {selectionButtonLabel(modal.line, sel)}
-                      </Text>
-                    </TouchableOpacity>
-                  )
-                })}
-              </View>
-
-              <Text style={styles.wagerLabel}>WAGER (pins)</Text>
-              <TextInput
-                style={styles.wagerInput}
-                value={modal.wager}
-                onChangeText={v => setModal(m => m ? { ...m, wager: v.replace(/[^0-9]/g, '') } : m)}
-                keyboardType="number-pad"
-                placeholder={`10 – ${maxWager}`}
-                placeholderTextColor={colors.muted2}
-                maxLength={6}
-              />
-              <Text style={styles.wagerHint}>Balance: {balance} pins  ·  Min: 10</Text>
-
-              <Text style={styles.modalWarning}>⚠ Bets can't be canceled once placed.</Text>
-
-              <Button label="Place Bet" size="lg" onPress={placeBet} loading={placing} disabled={placing} />
-            </View>
-          </KeyboardAvoidingView>
-          <Toast />
-        </Modal>
+        <WagerSheet
+          title={`${modal.line.subjectName}${modal.line.gameNumber != null ? ` — Game ${modal.line.gameNumber}` : ''}`}
+          oddsPrefix={
+            modal.line.subtitle != null
+              ? `${modal.line.subtitle} · `
+              : modal.line.line != null
+                ? `LINE: ${modal.line.line.toFixed(1)} · `
+                : ''
+          }
+          odds={modal.line.selections.find(s => s.selectionId === modal.selectedId)?.odds ?? 2}
+          wager={modal.wager}
+          onChangeWager={wager => setModal(m => m ? { ...m, wager } : m)}
+          balance={balance}
+          ctaLabel="Place Bet"
+          onSubmit={placeBet}
+          busy={placing}
+          onClose={() => setModal(null)}
+        >
+          <View style={styles.pickToggle}>
+            {modal.line.selections.map(sel => {
+              // Anti-tanking: can't back the side against your own performance.
+              const blocked = isSelfTank(modal.line, sel)
+              const active = modal.selectedId === sel.selectionId
+              return (
+                <TouchableOpacity
+                  key={sel.selectionId}
+                  style={[
+                    styles.pickToggleBtn,
+                    active && styles.pickToggleBtnActive,
+                    blocked && styles.pickToggleBtnDisabled,
+                  ]}
+                  onPress={() => {
+                    if (blocked) { showToast("Believe in yourself man", 'error'); return }
+                    setModal(m => m ? { ...m, selectedId: sel.selectionId } : m)
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[styles.pickToggleBtnText, active && styles.pickToggleBtnTextActive]}>
+                    {selectionButtonLabel(modal.line, sel)}
+                  </Text>
+                </TouchableOpacity>
+              )
+            })}
+          </View>
+        </WagerSheet>
       )}
 
-      {/* Parlay confirm modal */}
+      {/* Parlay confirm sheet — removable leg list + live payout. */}
       {parlayModalOpen && (
-        <Modal visible transparent animationType="slide" onRequestClose={() => !placing && setParlayModalOpen(false)}>
-          <KeyboardAvoidingView
-            style={styles.modalBackdrop}
-            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          >
-            <TouchableOpacity
-              style={StyleSheet.absoluteFill}
-              activeOpacity={1}
-              onPress={() => !placing && setParlayModalOpen(false)}
-            />
-            <View style={styles.modalSheet}>
-              <Text style={styles.modalTitle}>{parlayLegs.length}-Leg Parlay</Text>
-              <Text style={styles.modalLine}>ALL LEGS MUST WIN · PAYS ×{parlayOdds}</Text>
-
-              <View style={styles.parlayLegList}>
-                {parlayLegs.map(leg => (
-                  <View key={leg.marketId} style={styles.parlayLegRow}>
-                    <Text style={styles.parlayLegText} numberOfLines={1}>
-                      {leg.subjectName} · {leg.selectionLabel.toUpperCase()}
-                      {betLineSuffix(leg.marketType, leg.line, leg.statKey)}
-                      {leg.gameNumber != null ? ` · G${leg.gameNumber}` : ''}
-                    </Text>
-                    <TouchableOpacity onPress={() => removeParlayLeg(leg.marketId)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                      <Text style={styles.parlayLegRemove}>✕</Text>
-                    </TouchableOpacity>
-                  </View>
-                ))}
+        <WagerSheet
+          title={`${parlayLegs.length}-Leg Parlay`}
+          oddsPrefix="ALL LEGS MUST WIN · "
+          odds={parlayOdds}
+          wager={parlayWager}
+          onChangeWager={setParlayWager}
+          balance={balance}
+          ctaLabel="Place Parlay"
+          onSubmit={placeParlay}
+          busy={placing}
+          onClose={() => setParlayModalOpen(false)}
+        >
+          <View style={styles.parlayLegList}>
+            {parlayLegs.map(leg => (
+              <View key={leg.marketId} style={styles.parlayLegRow}>
+                <Text style={styles.parlayLegText} numberOfLines={1}>
+                  {leg.subjectName} · {leg.selectionLabel.toUpperCase()}
+                  {betLineSuffix(leg.marketType, leg.line, leg.statKey)}
+                  {leg.gameNumber != null ? ` · G${leg.gameNumber}` : ''}
+                </Text>
+                <TouchableOpacity onPress={() => removeParlayLeg(leg.marketId)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                  <Text style={styles.parlayLegRemove}>✕</Text>
+                </TouchableOpacity>
               </View>
-
-              <Text style={styles.wagerLabel}>WAGER (pins)</Text>
-              <TextInput
-                style={styles.wagerInput}
-                value={parlayWager}
-                onChangeText={v => setParlayWager(v.replace(/[^0-9]/g, ''))}
-                keyboardType="number-pad"
-                placeholder={`10 – ${maxWager}`}
-                placeholderTextColor={colors.muted2}
-                maxLength={6}
-              />
-              <Text style={styles.wagerHint}>
-                Balance: {balance} pins  ·  Min: 10
-                {parlayWager !== '' && !isNaN(parseInt(parlayWager, 10))
-                  ? `  ·  To win: ${(Math.floor(parseInt(parlayWager, 10) * parlayOdds)).toLocaleString()}`
-                  : ''}
-              </Text>
-
-              <Text style={styles.modalWarning}>⚠ Bets can't be canceled once placed.</Text>
-
-              <Button label="Place Parlay" size="lg" onPress={placeParlay} loading={placing} disabled={placing} />
-            </View>
-          </KeyboardAvoidingView>
-          <Toast />
-        </Modal>
+            ))}
+          </View>
+        </WagerSheet>
       )}
 
-      {/* Custom line ("special") take modal */}
+      {/* Custom line ("special") take sheet — read-only leg list + live payout. */}
       {takeModal && (
-        <Modal visible transparent animationType="slide" onRequestClose={() => !placing && setTakeModal(null)}>
-          <KeyboardAvoidingView
-            style={styles.modalBackdrop}
-            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          >
-            <TouchableOpacity
-              style={StyleSheet.absoluteFill}
-              activeOpacity={1}
-              onPress={() => !placing && setTakeModal(null)}
-            />
-            <View style={styles.modalSheet}>
-              <Text style={[styles.modalTitle, takeModal.line.category === 'special' && { color: colors.gold }]}>
-                {takeModal.line.title}
-              </Text>
-              <Text style={styles.modalLine}>
-                {takeModal.line.legs.length > 1 ? 'ALL LEGS MUST WIN · ' : ''}
-                PAYS ×{takeModal.line.combinedOdds.toFixed(takeModal.line.combinedOdds % 1 === 0 ? 0 : 2)}
-              </Text>
-
-              <View style={styles.parlayLegList}>
-                {takeModal.line.legs.map(leg => (
-                  <View key={leg.selectionId} style={styles.parlayLegRow}>
-                    <Text style={styles.parlayLegText} numberOfLines={1}>
-                      {leg.subjectName} · {leg.pick.toUpperCase()}
-                      {leg.marketType === 'over_under' && leg.line != null ? ` ${leg.line.toFixed(1)}` : ''}
-                      {leg.gameNumber != null ? ` · G${leg.gameNumber}` : ''}
-                    </Text>
-                  </View>
-                ))}
+        <WagerSheet
+          title={takeModal.line.title}
+          titleColor={takeModal.line.category === 'special' ? colors.gold : undefined}
+          oddsPrefix={takeModal.line.legs.length > 1 ? 'ALL LEGS MUST WIN · ' : ''}
+          odds={takeModal.line.combinedOdds}
+          wager={takeModal.wager}
+          onChangeWager={wager => setTakeModal(m => m ? { ...m, wager } : m)}
+          balance={balance}
+          ctaLabel="Take It"
+          onSubmit={placeCustom}
+          busy={placing}
+          onClose={() => setTakeModal(null)}
+        >
+          <View style={styles.parlayLegList}>
+            {takeModal.line.legs.map(leg => (
+              <View key={leg.selectionId} style={styles.parlayLegRow}>
+                <Text style={styles.parlayLegText} numberOfLines={1}>
+                  {leg.subjectName} · {leg.pick.toUpperCase()}
+                  {leg.marketType === 'over_under' && leg.line != null ? ` ${leg.line.toFixed(1)}` : ''}
+                  {leg.gameNumber != null ? ` · G${leg.gameNumber}` : ''}
+                </Text>
               </View>
-
-              <Text style={styles.wagerLabel}>WAGER (pins)</Text>
-              <TextInput
-                style={styles.wagerInput}
-                value={takeModal.wager}
-                onChangeText={v => setTakeModal(m => m ? { ...m, wager: v.replace(/[^0-9]/g, '') } : m)}
-                keyboardType="number-pad"
-                placeholder={`10 – ${maxWager}`}
-                placeholderTextColor={colors.muted2}
-                maxLength={6}
-              />
-              <Text style={styles.wagerHint}>
-                Balance: {balance} pins  ·  Min: 10
-                {takeModal.wager !== '' && !isNaN(parseInt(takeModal.wager, 10))
-                  ? `  ·  To win: ${(Math.floor(parseInt(takeModal.wager, 10) * takeModal.line.combinedOdds)).toLocaleString()}`
-                  : ''}
-              </Text>
-
-              <Text style={styles.modalWarning}>⚠ Bets can't be canceled once placed.</Text>
-
-              <Button label="Take It" size="lg" onPress={placeCustom} loading={placing} disabled={placing} />
-            </View>
-          </KeyboardAvoidingView>
-          <Toast />
-        </Modal>
+            ))}
+          </View>
+        </WagerSheet>
       )}
 
       {/* Bet details modal */}
@@ -883,35 +798,7 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
 
-  // Bet modal
-  modalBackdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.7)',
-    justifyContent: 'flex-end',
-  },
-  modalSheet: {
-    backgroundColor: colors.surface,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 24,
-    paddingBottom: Platform.OS === 'ios' ? 40 : 24,
-  },
-  modalTitle: {
-    fontFamily: fonts.barlowCondensed,
-    fontSize: 20,
-    color: colors.text,
-    fontWeight: '700',
-    marginBottom: 4,
-  },
-  modalLine: {
-    fontFamily: fonts.barlowCondensed,
-    fontSize: 14,
-    color: colors.muted,
-    letterSpacing: 1,
-    marginBottom: 20,
-  },
+  // Bet sheet pick toggle (body passed into WagerSheet)
   pickToggle: {
     flexDirection: 'row',
     gap: 10,
@@ -937,36 +824,4 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
   },
   pickToggleBtnTextActive: { color: colors.accent },
-  wagerLabel: {
-    fontFamily: fonts.barlowCondensed,
-    fontSize: 11,
-    letterSpacing: 1.5,
-    color: colors.muted,
-    marginBottom: 6,
-  },
-  wagerInput: {
-    backgroundColor: colors.surface2,
-    borderRadius: radius.cardSm,
-    borderWidth: 1,
-    borderColor: colors.border2,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontFamily: fonts.barlowCondensed,
-    fontSize: 20,
-    color: colors.text,
-    letterSpacing: 1,
-  },
-  wagerHint: {
-    fontFamily: fonts.barlow,
-    fontSize: 12,
-    color: colors.muted,
-    marginTop: 6,
-    marginBottom: 20,
-  },
-  modalWarning: {
-    fontFamily: fonts.barlow,
-    fontSize: 12,
-    color: colors.danger,
-    marginBottom: 16,
-  },
 })
