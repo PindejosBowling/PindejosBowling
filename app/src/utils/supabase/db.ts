@@ -415,16 +415,6 @@ export const betMarkets = {
       .in('status', ['open', 'closed'])
       .order('game_number', { nullsFirst: false })
       .order('subject_player_id'),
-  // Every LaneTalk prop market for a week, any status — drives idempotent line
-  // generation (skip existing, prune ineligible, reprice unbet lines). The
-  // selections embed carries each side's line + whether any bet leg holds it.
-  listLanetalkPropsByWeek: (weekId: string) =>
-    supabase
-      .from('bet_markets')
-      .select('id, game_number, subject_player_id, params, status, title, bet_selections(id, line, bet_legs(id))')
-      .eq('week_id', weekId)
-      .eq('market_type', 'prop')
-      .eq('params->>source', 'lanetalk'),
   // Unsettled LaneTalk prop markets across ALL weeks — the import screen groups
   // these by week to surface its "Confirm LaneTalk Data" button. These ride a
   // separate settlement clock from archive (data lands the next day).
@@ -435,22 +425,6 @@ export const betMarkets = {
       .eq('market_type', 'prop')
       .eq('params->>source', 'lanetalk')
       .in('status', ['open', 'closed']),
-  // Admin create of stat-prop markets (direct table writes through RLS, same
-  // pattern as custom-lines CRUD). Chains .select() so the caller can attach
-  // the over/under selections to the new ids.
-  insertPropMarkets: (rows: TablesInsert<'bet_markets'>[]) =>
-    supabase.from('bet_markets').insert(rows).select('id, subject_player_id, game_number, params'),
-  insertSelections: (rows: TablesInsert<'bet_selections'>[]) =>
-    supabase.from('bet_selections').insert(rows),
-  // Reprice both sides of an (unbet) market — line-generation re-runs move a
-  // stale line to the subject's current seeded value. Callers must ensure no
-  // bet legs hold the market's selections (never reprice under a placed bet).
-  setSelectionLineByMarket: (marketId: string, line: number) =>
-    supabase.from('bet_selections').update({ line }).eq('market_id', marketId),
-  // Admin prune of stale prop markets. The refund_bets_before_market_delete
-  // trigger refunds every touched bet whole (incl. parlays spanning others).
-  removeMarkets: (ids: string[]) =>
-    supabase.from('bet_markets').delete().in('id', ids),
   // Start/reopen a game's betting: flip every O/U market for a week+game between
   // 'open' and 'closed' in one admin write. Closing blocks new bets (place_house_bet
   // rejects non-open selections) but leaves settlement intact (settle_betting_for_week
@@ -516,6 +490,12 @@ export const betMarkets = {
   // extraGames adds schedule game numbers not yet present (team-gen game 3).
   syncOUForWeek: (weekId: string, extraGames: number[] = []) =>
     supabase.rpc('sync_over_under_markets_for_week', { p_week_id: weekId, p_extra_games: extraGames }),
+  // Server-side create/prune/reprice of LaneTalk stat-prop markets — same
+  // coupling model as the O/U sync (run by the rsvp/team_slots/games/scores
+  // resync triggers; explicit calls here are belt-and-braces). Lines are
+  // seeded from each player's official imports; no imports → no lines.
+  syncLanetalkPropsForWeek: (weekId: string) =>
+    supabase.rpc('sync_lanetalk_prop_markets_for_week', { p_week_id: weekId }),
   // Schedule-driven create of even-money moneyline markets (one per games row),
   // SECURITY DEFINER. Run on team generation / when a game is added, not on RSVP.
   syncMoneylineForWeek: (weekId: string) =>
@@ -1192,13 +1172,6 @@ export const lanetalkImports = {
       .from('lanetalk_game_imports')
       .select('id', { count: 'exact', head: true })
       .eq('player_id', playerId),
-  // Official imports across all weeks — LaneTalk stat-line seeding (player
-  // history + league average). Display/pricing only, never settlement.
-  listOfficial: () =>
-    supabase
-      .from('lanetalk_game_imports')
-      .select('player_id, week_id, game_number, payload')
-      .eq('classification', 'official'),
   // One week's official imports — the Confirm modal's data-coverage preview
   // (informational; the settlement RPC recomputes authoritatively server-side).
   listOfficialByWeek: (weekId: string) =>

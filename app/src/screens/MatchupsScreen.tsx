@@ -133,6 +133,7 @@ export default function MatchupsScreen() {
       // in-players that were pruned while undrafted. (The roster-change DB
       // triggers can't fire here: the cascade deletes resolve to no week.)
       await betMarkets.syncOUForWeek(weekId)
+      await betMarkets.syncLanetalkPropsForWeek(weekId)
       // The reset puts the week back in a pre-game state: lines closed by Start
       // Game must reopen rather than stay stranded unbettable.
       await betMarkets.reopenOUForWeek(weekId)
@@ -214,6 +215,7 @@ export default function MatchupsScreen() {
       // schedule game now exists so it creates its RSVP-driven O/U lines (same call
       // team-gen makes for game 3). Idempotent.
       await betMarkets.syncOUForWeek(weekId, [nextGameNum])
+      await betMarkets.syncLanetalkPropsForWeek(weekId)
       // Moneylines do derive from the new games rows — sync them too. Idempotent.
       await betMarkets.syncMoneylineForWeek(weekId)
       await reload()

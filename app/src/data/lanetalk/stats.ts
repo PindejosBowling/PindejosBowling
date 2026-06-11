@@ -1,4 +1,5 @@
-// LaneTalk frame-stat helpers — DISPLAY + LINE SEEDING ONLY, never settlement.
+// LaneTalk frame-stat helpers — DISPLAY/PREVIEW ONLY, never money. Line
+// seeding lives server-side too now (lanetalk_seed_lines, the prop sync).
 //
 // Money settlement derives these same four stats server-side via the SQL
 // function `lanetalk_game_stats(payload)` (migration

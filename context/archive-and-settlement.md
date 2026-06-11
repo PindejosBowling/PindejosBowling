@@ -243,7 +243,9 @@ void = "the bet was valid but ungradeable".
 ### 5d. The coupling triggers (no client path can forget)
 
 Statement-level AFTER triggers, all funnelling into
-`resync_week_markets(week_id, moneyline?)` → the syncs. The helper skips weeks
+`resync_week_markets(week_id, moneyline?)` → the syncs (O/U **and the LaneTalk
+stat-prop sync**, plus moneyline when flagged — see
+[lanetalk-stat-bets.md](lanetalk-stat-bets.md)). The helper skips weeks
 that are archived (settled markets immutable) or already deleted (mid-cascade).
 
 | Table | Triggers | Week resolution | Notes |

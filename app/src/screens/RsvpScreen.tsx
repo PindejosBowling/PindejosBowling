@@ -79,6 +79,7 @@ export default function RsvpScreen() {
     // write access — the tables are admin-only at the RLS layer; the SECURITY
     // DEFINER RPC does the privileged work (incl. refunding others' bets). Idempotent.
     const { error } = await dbBetMarkets.syncOUForWeek(wid)
+    await dbBetMarkets.syncLanetalkPropsForWeek(wid)
     if (error) {
       Alert.alert('Bet line sync failed', error.message ?? 'Could not update bet lines for the RSVP change.')
     }

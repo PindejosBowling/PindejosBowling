@@ -80,26 +80,28 @@ post-archive settlement only UPDATEs captured columns and INSERTs bet-linked,
 week-stamped `pin_ledger` rows — exactly what `unarchive_week` reverses.
 Confirm-before-archive composes too.
 
-## Line generation (admin client-side writes, no sync function)
+## Line generation — server-side sync, RSVP-coupled (no manual step)
 
-**"Generate Stat Lines"** on `AdminSportsbookScreen` →
-[`useLanetalkLineAdmin`](../app/src/hooks/useLanetalkLineAdmin.ts). Idempotent
-+ re-runnable: existing markets (any status) are skipped; open/closed markets
-whose subject/game fell off the ladder are DELETEd (bets refunded whole).
+`sync_lanetalk_prop_markets_for_week(week_id)` (migration
+`…170000_lanetalk_prop_sync`) mirrors `sync_over_under_markets_for_week` and is
+called from **`resync_week_markets`**, so the statement-level coupling triggers
+on `rsvp` / `team_slots` / `games` / `scores` keep stat lines in lockstep with
+the roster — RSVP in → lines appear, RSVP out → lines pruned (bets refunded by
+the market-delete trigger). Client calls (`betMarkets.syncLanetalkPropsForWeek`)
+sit alongside the `syncOUForWeek` belt-and-braces call sites. Idempotent.
 
 - **Eligibility** = the O/U sync's ladder (participation `scores` rows when
-  games exist, else team slots, else RSVP `'in'` × games 1–2) **∩ players with
-  ≥1 official import**. No league-average or default fallback — a player with
-  no imported official games has no stat lines (leftovers prune on re-run).
-- **Seeding**: the player's own official-import history, frame-weighted (one
-  game is sufficient). Re-runs **reprice unbet markets** whose seeded line
-  drifted after new imports; a line never moves under a placed bet.
+  games exist, else team slots, else RSVP `'in'` × target games) **∩ players
+  with ≥1 official import**. No league-average or default fallback — a player
+  with no imported official games has no stat lines (`lanetalk_seed_lines`
+  returns zero rows; their leftovers prune on the next sync).
+- **Seeding** (`lanetalk_seed_lines(player_id)`): the player's own
+  official-import history, frame-weighted (one game is sufficient). Syncs
+  **reprice unbet open/closed markets** whose seeded line drifted after new
+  imports; a line never moves under a placed bet.
 - **Rounding:** counts → `floor(avg)+0.5` clamped [0.5, 9.5] (no pushes);
   clean% → `floor(avg/5)*5+2.5` (20-frame night results are multiples of 5 →
   no pushes); first-ball avg → `round(avg,1)` (a rare push refunds normally).
-- **Caveat — no server-side roster coupling.** The `resync_week_markets`
-  triggers only sync O/U + moneyline. Roster changes after generation need an
-  admin re-tap (or the Confirm flow voids strays).
 
 ## Board & bet surfaces
 
