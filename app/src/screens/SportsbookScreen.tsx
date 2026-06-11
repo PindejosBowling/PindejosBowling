@@ -414,10 +414,10 @@ export default function SportsbookScreen() {
           </>
         )}
 
-        {/* Open lines */}
+        {/* Open lines — the board starts straight at its WEEKLY/GAME labels
+            (no "this week" section header; that's implicit in the Sportsbook). */}
         {lineGroups.length > 0 || topSpecials.length > 0 ? (
-          <>
-            <Text style={[styles.sectionHeader, { marginTop: 24 }]}>THIS WEEK'S LINES</Text>
+          <View style={styles.board}>
             {/* Week-level specials (legs across games) lead the board under a
                 WEEKLY header styled like the game labels. */}
             {topSpecials.length > 0 && (
@@ -490,7 +490,7 @@ export default function SportsbookScreen() {
               </View>
               )
             })}
-          </>
+          </View>
         ) : (
           <EmptyCard text="No open lines this week" />
         )}
@@ -735,6 +735,9 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     overflow: 'hidden',
   },
+  // Separates the board from MY BETS now that it has no section header of its
+  // own — the WEEKLY/GAME labels lead directly.
+  board: { marginTop: 16 },
   gameLabel: {
     fontFamily: fonts.barlowCondensed,
     fontSize: 13,
