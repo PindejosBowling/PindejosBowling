@@ -10,9 +10,9 @@ import { colors, fonts, radius } from '../theme'
 import { useUiStore } from '../stores/uiStore'
 import { useChemistryData, computeChemistryFromSupabase } from '../hooks/useChemistryData'
 import { MoreStackParamList } from '../navigation/types'
-import LoadingView from '../components/LoadingView'
-import ScreenHeader from '../components/ScreenHeader'
-import ToggleGroup from '../components/ToggleGroup'
+import LoadingView from '../components/ui/LoadingView'
+import ScreenHeader from '../components/ui/ScreenHeader'
+import ToggleGroup from '../components/ui/ToggleGroup'
 
 type Nav = NativeStackNavigationProp<MoreStackParamList>
 

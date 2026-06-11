@@ -13,14 +13,15 @@ import { useNavigation } from '@react-navigation/native'
 import { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { colors, fonts, radius } from '../theme'
 import { MoreStackParamList } from '../navigation/types'
-import ScreenHeader from '../components/ScreenHeader'
-import LoadingView from '../components/LoadingView'
-import Button from '../components/Button'
-import Toast from '../components/Toast'
+import ScreenHeader from '../components/ui/ScreenHeader'
+import LoadingView from '../components/ui/LoadingView'
+import Button from '../components/ui/Button'
+import Toast from '../components/ui/Toast'
 import { useRefresh } from '../hooks/useRefresh'
 import { useUiStore } from '../stores/uiStore'
 import { useAuthStore } from '../stores/authStore'
 import { seasons, archives } from '../utils/supabase/db'
+import EmptyCard from '../components/ui/EmptyCard'
 
 type Nav = NativeStackNavigationProp<MoreStackParamList>
 type ArchivedWeek = { id: string; week_number: number; bowled_at: string | null }
@@ -109,9 +110,7 @@ export default function ArchivesScreen() {
     return (
       <SafeAreaView style={styles.safe} edges={['top']}>
         <ScreenHeader title="Archives" onBack={() => navigation.goBack()} />
-        <View style={styles.emptyCard}>
-          <Text style={styles.emptyText}>Admins only</Text>
-        </View>
+        <EmptyCard text="Admins only" />
       </SafeAreaView>
     )
   }
@@ -135,9 +134,7 @@ export default function ArchivesScreen() {
         <Text style={styles.sectionHeader}>ARCHIVED WEEKS</Text>
 
         {weeks.length === 0 ? (
-          <View style={styles.emptyCard}>
-            <Text style={styles.emptyText}>No archived weeks this season</Text>
-          </View>
+          <EmptyCard text="No archived weeks this season" />
         ) : (
           weeks.map((w, i) => (
             <View key={w.id} style={styles.card}>
@@ -292,21 +289,6 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
   btnRow: { flexDirection: 'row', gap: 10, marginTop: 6 },
-
-  emptyCard: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.cardMd,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 20,
-    alignItems: 'center',
-  },
-  emptyText: {
-    fontFamily: fonts.barlowCondensed,
-    fontSize: 14,
-    color: colors.muted,
-    letterSpacing: 0.3,
-  },
 
   backdrop: {
     flex: 1,

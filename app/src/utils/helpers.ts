@@ -13,6 +13,28 @@ export function timeAgo(date: string | Date): string {
   return d.toLocaleDateString()
 }
 
+export function toISO(date: Date): string {
+  const y = date.getFullYear()
+  const m = String(date.getMonth() + 1).padStart(2, '0')
+  const d = String(date.getDate()).padStart(2, '0')
+  return `${y}-${m}-${d}`
+}
+
+// Parse a YYYY-MM-DD string as a local date (avoids UTC off-by-one).
+export function fromISO(s: string | null): Date | null {
+  if (!s) return null
+  const [y, m, d] = s.split('-').map(Number)
+  return new Date(y, m - 1, d)
+}
+
+export function formatDateLong(date: Date): string {
+  return date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })
+}
+
+export function formatDateShort(date: string | Date): string {
+  return new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+}
+
 export function combinations<T>(arr: T[], k: number): T[][] {
   if (k > arr.length) return []
   if (k === 1) return arr.map(x => [x])

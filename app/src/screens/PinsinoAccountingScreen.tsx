@@ -5,14 +5,16 @@ import { useNavigation } from '@react-navigation/native'
 import { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { colors, fonts, radius } from '../theme'
 import { MoreStackParamList } from '../navigation/types'
-import ScreenHeader from '../components/ScreenHeader'
-import LoadingView from '../components/LoadingView'
-import ToggleGroup from '../components/ToggleGroup'
-import LedgerRow from '../components/LedgerRow'
+import ScreenHeader from '../components/ui/ScreenHeader'
+import LoadingView from '../components/ui/LoadingView'
+import ToggleGroup from '../components/ui/ToggleGroup'
+import LedgerRow from '../components/betting/LedgerRow'
 import { useRefresh } from '../hooks/useRefresh'
 import { useHousePinsinoData } from '../hooks/useHousePinsinoData'
 import { useAuthStore } from '../stores/authStore'
 import { LedgerEntry } from '../hooks/usePlayerPinsinoData'
+import { signed } from '../utils/bets'
+import EmptyCard from '../components/ui/EmptyCard'
 
 type Nav = NativeStackNavigationProp<MoreStackParamList>
 type AccountingView = 'activity' | 'pnl'
@@ -21,10 +23,6 @@ const VIEW_OPTIONS: { key: AccountingView; label: string }[] = [
   { key: 'activity', label: 'Activity' },
   { key: 'pnl', label: 'Weekly P&L' },
 ]
-
-function signed(n: number): string {
-  return `${n > 0 ? '+' : ''}${n.toLocaleString()}`
-}
 
 export default function PinsinoAccountingScreen() {
   const navigation = useNavigation<Nav>()
@@ -61,9 +59,7 @@ export default function PinsinoAccountingScreen() {
     return (
       <SafeAreaView style={styles.safe} edges={['top']}>
         <ScreenHeader title="Accounting" onBack={() => navigation.goBack()} />
-        <View style={styles.emptyCard}>
-          <Text style={styles.emptyText}>Admins only</Text>
-        </View>
+        <EmptyCard text="Admins only" />
       </SafeAreaView>
     )
   }
@@ -190,9 +186,7 @@ export default function PinsinoAccountingScreen() {
               })}
             </>
           ) : (
-            <View style={styles.emptyCard}>
-              <Text style={styles.emptyText}>No house activity yet</Text>
-            </View>
+            <EmptyCard text="No house activity yet" />
           )
         )}
 
@@ -210,9 +204,7 @@ export default function PinsinoAccountingScreen() {
               ))}
             </View>
           ) : (
-            <View style={styles.emptyCard}>
-              <Text style={styles.emptyText}>No weekly results yet</Text>
-            </View>
+            <EmptyCard text="No weekly results yet" />
           )
         )}
       </ScrollView>
@@ -319,20 +311,5 @@ const styles = StyleSheet.create({
     color: colors.accent,
     marginBottom: 6,
     marginTop: 4,
-  },
-
-  emptyCard: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.cardMd,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 20,
-    alignItems: 'center',
-  },
-  emptyText: {
-    fontFamily: fonts.barlowCondensed,
-    fontSize: 14,
-    color: colors.muted,
-    letterSpacing: 0.3,
   },
 })

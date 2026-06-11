@@ -8,9 +8,9 @@ import { colors, fonts, radius } from '../theme'
 import { useUiStore } from '../stores/uiStore'
 import { useH2HData, computeH2HFromSupabase } from '../hooks/useH2HData'
 import { MoreStackParamList } from '../navigation/types'
-import LoadingView from '../components/LoadingView'
-import PlayerPickerModal from '../components/PlayerPickerModal'
-import ScreenHeader from '../components/ScreenHeader'
+import LoadingView from '../components/ui/LoadingView'
+import PlayerPickerModal from '../components/ui/PlayerPickerModal'
+import ScreenHeader from '../components/ui/ScreenHeader'
 
 type Nav = NativeStackNavigationProp<MoreStackParamList>
 

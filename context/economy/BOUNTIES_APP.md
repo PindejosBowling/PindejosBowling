@@ -59,11 +59,11 @@ enter, or partial refunds (design §6).
 - Hub + board + detail + create screens: `app/src/screens/PvPScreen.tsx`,
   `PvPBoardScreen.tsx`, `PvPChallengeDetailScreen.tsx`, `PvPCreateScreen.tsx`.
 - Action/confirm modal (`<Toast/>` inside, RPC→toast→`onDone`→`onClose`):
-  `app/src/components/SettleBetModal.tsx`, `PvpAcceptModal.tsx`.
+  `app/src/components/betting/SettleBetModal.tsx`, `app/src/components/pvp/PvpAcceptModal.tsx`.
 - Hub screen + tiles: `app/src/screens/PinsinoScreen.tsx`, `PinsinoAdminScreen.tsx`.
 - Admin list + cancel/settle UX: `app/src/screens/PvPAdminScreen.tsx`,
   `AdminSportsbookScreen.tsx`.
-- Ledger row rendering: `app/src/components/LedgerRow.tsx`.
+- Ledger row rendering: `app/src/components/betting/LedgerRow.tsx`.
 - db.ts query objects + RPC wrappers: `app/src/utils/supabase/db.ts`.
 - Feed render + feature meta: `app/src/utils/activityFeedTemplates.ts`,
   `app/src/hooks/useMarketMovesData.ts`, `app/src/screens/MarketMovesScreen.tsx`.
@@ -268,7 +268,7 @@ Client validation mirrors the RPC: title ≤80 / description ≤1000 chars; `S �
 `S ≤ balance`; `closes_at > now`. Submit → `bountyPosts.createSponsor` → toast + navigate to
 the new `BountyDetail`.
 
-### `app/src/components/BountyEntryModal.tsx` (new) — hunter confirm (design §16, §29.3)
+### `app/src/components/bounty/BountyEntryModal.tsx` (new) — hunter confirm (design §16, §29.3)
 
 Modeled on `SettleBetModal` / `PvpAcceptModal` (bottom sheet, `<Toast/>` inside, mounted
 conditionally so it resets between opens, disabled-while-saving). Before entry, show the
@@ -310,7 +310,7 @@ estimate until the server assigns it.
   (title "Bounty Admin").
 
 ### Ledger rendering — bounty-aware rows
-`app/src/components/LedgerRow.tsx`: add action labels for the three new `pin_ledger` types,
+`app/src/components/betting/LedgerRow.tsx`: add action labels for the three new `pin_ledger` types,
 for both perspectives (player vs house). These are transfers with no bet graph — render as
 **static rows** (like `score_credit` / loan / PvP rows), not tappable bet rows:
 - `bounty_sponsor_stake` → player "BOUNTY POSTED", house "BOUNTY ESCROW"

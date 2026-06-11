@@ -21,6 +21,7 @@ app/
 │   │   ├── usePlayerManagementData.ts  # Raw player list for PlayerManagementScreen
 │   │   ├── useRegistrationData.ts  # Registrations + seasons + roster for RegistrationScreen
 │   │   ├── useRefresh.ts        # useRefresh(fn) — RefreshControl helper
+│   │   ├── useAdminAction.ts    # useAdminAction(onDone, onClose) — admin sheet run/confirm machinery
 │   │   └── useStandingsData.ts  # Standings data + computeStandingsFromSupabase
 │   ├── navigation/
 │   │   ├── RootNavigator.tsx    # Bottom tab navigator
@@ -33,40 +34,75 @@ app/
 │   │   ├── uiStore.ts           # Ephemeral UI state + toast queue
 │   │   └── avatarStore.ts       # Signed-URL cache for player profile pictures
 │   ├── utils/
+│   │   ├── activityFeedTemplates.ts # Activity Feed copy — renders feed rows from template_key + payload (no stored text)
 │   │   ├── badges.ts            # BADGE_RULES + badgesForPlayer — status→emoji rule list (see Player Badges)
-│   │   ├── helpers.ts           # initials, timeAgo, combinations, spreadAndML
+│   │   ├── bets.ts              # Bet display helpers: resultBadge, betPayout, betReturn, betReturnDisplay, betReturnText, signed
+│   │   ├── bounty.ts            # Bounty pure helpers — mirrors the DB's All Comers settlement math for UI previews
+│   │   ├── helpers.ts           # initials, timeAgo, combinations, spreadAndML, date helpers (toISO/fromISO/formatDateLong/formatDateShort)
+│   │   ├── notifications.ts     # Pinsino pending-action notification sources (per-tile + tab-bar badge counts)
+│   │   ├── pvp.ts               # PvP display helpers — contract-type/status vocabulary, stake bounds
 │   │   └── supabase/
 │   │       ├── client.ts        # Supabase client (env-var configured)
 │   │       ├── database.types.ts # Auto-generated Postgres types
 │   │       └── db.ts            # Typed query objects per table
-│   ├── components/
-│   │   ├── AppHeader.tsx
-│   │   ├── PlayerAvatar.tsx
-│   │   ├── PlayerBadges.tsx
-│   │   ├── ScreenHeader.tsx
-│   │   ├── Toast.tsx
-│   │   ├── ConfirmBar.tsx
-│   │   ├── PillFilter.tsx
-│   │   ├── ToggleGroup.tsx
-│   │   ├── PlayerScoreRow.tsx
-│   │   ├── OddsBlock.tsx
-│   │   ├── LineRow.tsx           # One market row; data-driven selection buttons (see Betting Line Board)
-│   │   ├── LineRowContainer.tsx  # Collapsible per-category section; pinned rows stay visible collapsed (see Betting Line Board)
-│   │   ├── BetRow.tsx            # One bet/parlay row in betting lists (see Betting display components)
-│   │   ├── ActiveBetsView.tsx    # Shared Active Bets surface (read-only on Pinsino, actionable on PinsinoAdmin)
-│   │   ├── SettledBetsView.tsx   # Shared Settled Bets surface (read-only on Pinsino, cancellable on PinsinoAdmin)
-│   │   ├── SettleBetModal.tsx    # Admin single-market settlement overlay (settle_market RPC)
-│   │   ├── LedgerRow.tsx         # One pin_ledger activity row, shared by both ledger screens
-│   │   ├── BetDetailModal.tsx    # Shared "Bet Details" overlay + resultBadge/betReturnText helpers
-│   │   ├── PinsinoLeaderboardTable.tsx  # Shared leaderboard table (rank, name, balance, debt, net worth, upside); limit prop for preview
-│   │   ├── LoadingView.tsx
-│   │   ├── HistoricalTeamBlock.tsx
-│   │   ├── ProfileMenuModal.tsx
-│   │   ├── PlayerPickerModal.tsx
-│   │   ├── AdminArchiveModal.tsx
-│   │   ├── AdminEndSeasonModal.tsx
-│   │   ├── AdminOpenRegistrationModal.tsx
-│   │   └── AdminGenerateTeamsModal.tsx
+│   ├── components/              # Domain subfolders — full per-component reference in COMPONENTS_INDEX.md
+│   │   ├── ui/                  # Generic primitives, controls, pickers
+│   │   │   ├── Button.tsx
+│   │   │   ├── BottomSheet.tsx  # Canonical bottom-sheet scaffold (backdrop, busy-guarded dismiss, Toast inside)
+│   │   │   ├── ConfirmActionSheet.tsx # Confirm-flow sheet on BottomSheet (saving flag, RPC, toasts, onDone→onClose)
+│   │   │   ├── EmptyCard.tsx    # Canonical empty-state card (surface card + centered muted message)
+│   │   │   ├── Toast.tsx
+│   │   │   ├── LoadingView.tsx
+│   │   │   ├── ScreenHeader.tsx
+│   │   │   ├── ConfirmBar.tsx
+│   │   │   ├── ToggleGroup.tsx
+│   │   │   ├── PillFilter.tsx
+│   │   │   ├── Dropdown.tsx
+│   │   │   ├── GamePicker.tsx
+│   │   │   ├── PlayerPickerModal.tsx
+│   │   │   ├── PlayerAvatar.tsx
+│   │   │   └── PlayerBadges.tsx
+│   │   ├── charts/              # react-native-svg chart pieces
+│   │   │   ├── StatDonut.tsx
+│   │   │   └── StatRadarChart.tsx
+│   │   ├── league/              # League / matchup display + app chrome
+│   │   │   ├── PlayerScoreRow.tsx
+│   │   │   ├── EditableWeek.tsx
+│   │   │   ├── HistoricalTeamBlock.tsx
+│   │   │   ├── OddsBlock.tsx
+│   │   │   ├── AppHeader.tsx
+│   │   │   └── ProfileMenuModal.tsx
+│   │   ├── admin/               # Season/week admin modals
+│   │   │   ├── AdminArchiveModal.tsx
+│   │   │   ├── AdminEditSeasonModal.tsx
+│   │   │   ├── AdminEndSeasonModal.tsx
+│   │   │   ├── AdminGenerateTeamsModal.tsx
+│   │   │   └── AdminOpenRegistrationModal.tsx
+│   │   ├── betting/             # Sportsbook + ledger
+│   │   │   ├── ActiveBetsView.tsx    # Shared Active Bets surface (read-only on Pinsino, actionable on PinsinoAdmin)
+│   │   │   ├── SettledBetsView.tsx   # Shared Settled Bets surface (read-only on Pinsino, cancellable on PinsinoAdmin)
+│   │   │   ├── BetRow.tsx            # One bet/parlay row in betting lists (see Betting display components)
+│   │   │   ├── BetDetailModal.tsx    # Shared "Bet Details" overlay + resultBadge/betReturnText helpers
+│   │   │   ├── SettleBetModal.tsx    # Admin single-market settlement overlay (settle_market RPC)
+│   │   │   ├── LineRow.tsx           # One market row; data-driven selection buttons (see Betting Line Board)
+│   │   │   ├── LineRowContainer.tsx  # Collapsible per-category section; pinned rows stay visible collapsed (see Betting Line Board)
+│   │   │   ├── LedgerRow.tsx         # One pin_ledger activity row, shared by both ledger screens
+│   │   │   └── PinsinoLeaderboardTable.tsx  # Shared leaderboard table (rank, name, balance, debt, net worth, upside); limit prop for preview
+│   │   ├── pvp/                 # PvP Challenge Contracts
+│   │   │   ├── PvpChallengeRow.tsx
+│   │   │   ├── PvpChallengeDetailModal.tsx
+│   │   │   ├── PvpAcceptModal.tsx
+│   │   │   ├── PvpCounterModal.tsx
+│   │   │   ├── PvpAdminActionModal.tsx
+│   │   │   └── LineDuelLines.tsx
+│   │   ├── bounty/              # Bounty Board
+│   │   │   ├── BountyCard.tsx
+│   │   │   ├── BountyEntryModal.tsx
+│   │   │   ├── BountyHouseCreateModal.tsx
+│   │   │   └── BountyAdminActionModal.tsx
+│   │   └── economy/             # Single-component economy features (Loan Shark, Activity Feed)
+│   │       ├── BorrowConfirmModal.tsx
+│   │       └── MarketMoveCard.tsx
 │   └── screens/
 │       ├── LoginScreen.tsx          # Phone OTP login flow
 │       ├── MatchupsScreen.tsx       # Live scoreboard + score entry

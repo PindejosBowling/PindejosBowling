@@ -11,16 +11,17 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useNavigation } from '@react-navigation/native'
 import { colors, fonts, radius } from '../theme'
-import ScreenHeader from '../components/ScreenHeader'
-import LoadingView from '../components/LoadingView'
-import Toast from '../components/Toast'
-import BorrowConfirmModal from '../components/BorrowConfirmModal'
-import Button from '../components/Button'
+import ScreenHeader from '../components/ui/ScreenHeader'
+import LoadingView from '../components/ui/LoadingView'
+import Toast from '../components/ui/Toast'
+import BorrowConfirmModal from '../components/economy/BorrowConfirmModal'
+import Button from '../components/ui/Button'
 import { useLoanSharkData, LoanProductView, DebtLedgerEntry } from '../hooks/useLoanSharkData'
 import { useRefresh } from '../hooks/useRefresh'
 import { useAuthStore } from '../stores/authStore'
 import { useUiStore } from '../stores/uiStore'
 import { loans } from '../utils/supabase/db'
+import EmptyCard from '../components/ui/EmptyCard'
 
 // loan_ledger type → display label for the payment history.
 const DEBT_TYPE_LABEL: Record<string, string> = {
@@ -186,9 +187,7 @@ export default function LoanSharkScreen() {
           <>
             <Text style={styles.sectionLabel}>AVAILABLE LOANS</Text>
             {availableProducts.length === 0 ? (
-              <View style={styles.emptyCard}>
-                <Text style={styles.emptyText}>The Shark has nothing for you right now</Text>
-              </View>
+              <EmptyCard text="The Shark has nothing for you right now" />
             ) : (
               availableProducts.map(p => (
                 <View key={p.id} style={styles.productCard}>
@@ -389,14 +388,4 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   borrowBtn: { marginTop: 14 },
-
-  emptyCard: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.cardMd,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 20,
-    alignItems: 'center',
-  },
-  emptyText: { fontFamily: fonts.barlowCondensed, fontSize: 14, color: colors.muted, letterSpacing: 0.3 },
 })

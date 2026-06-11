@@ -2,7 +2,7 @@
 
 ## Player Badges
 
-**File:** [src/utils/badges.ts](../app/src/utils/badges.ts) + [src/components/PlayerBadges.tsx](../app/src/components/PlayerBadges.tsx)
+**File:** [src/utils/badges.ts](../app/src/utils/badges.ts) + [src/components/ui/PlayerBadges.tsx](../app/src/components/ui/PlayerBadges.tsx)
 
 Status emojis shown next to a player's name (e.g. 👑 next to the reigning champion in Standings). The system is a declarative **rule list**, not scattered inline conditions.
 
@@ -121,6 +121,8 @@ Central signed-URL cache for player profile pictures. `load()` fetches `players.
 ---
 
 ## Component Inventory
+
+> The complete per-component index (props, mount patterns, shared conventions, all 46 components grouped by domain) lives in [COMPONENTS_INDEX.md](COMPONENTS_INDEX.md). The tables below keep the narrative detail for the core + betting components.
 
 | Component | Purpose |
 |---|---|
