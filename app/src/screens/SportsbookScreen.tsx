@@ -128,10 +128,20 @@ export default function SportsbookScreen() {
   // category (Player Over/Unders, …). Each category renders one collapsible
   // LineRowContainer, so a single game can carry several independently-collapsed
   // line types. Both levels are market-type-aware, so the screen stays agnostic.
+  //
+  // Within a category, a subject's markets consolidate into ONE row: lines
+  // sharing a subjectPlayerId render as a unified button set on that player
+  // ("142.5+ PINS · 4.5+ STRIKES · 2.5+ SPARES"), ordered score line first
+  // then stat props. Subject-less lines (moneyline) stay one row per market.
   const lineGroups = useMemo(() => {
+    const kindOrder = (l: LineView) =>
+      l.marketType === 'over_under' ? 0
+        : l.marketType === 'prop'
+          ? 1 + ['strikes', 'spares', 'clean_pct', 'first_ball_avg'].indexOf(l.statKey ?? '')
+          : 9
     const games = new Map<string, {
       group: LineGroup
-      categories: Map<string, { category: LineCategory; lines: LineView[] }>
+      categories: Map<string, { category: LineCategory; rowMap: Map<string, LineView[]>; count: number }>
     }>()
     for (const rawLine of openLines) {
       // Strip UI-hidden selections (e.g. the "under" side) before the line ever
@@ -143,14 +153,27 @@ export default function SportsbookScreen() {
       if (!g) { g = { group, categories: new Map() }; games.set(group.key, g) }
       const category = lineCategory(line)
       let c = g.categories.get(category.key)
-      if (!c) { c = { category, lines: [] }; g.categories.set(category.key, c) }
-      c.lines.push(line)
+      if (!c) { c = { category, rowMap: new Map(), count: 0 }; g.categories.set(category.key, c) }
+      const rowKey = line.subjectPlayerId ?? line.marketId
+      const row = c.rowMap.get(rowKey)
+      if (row) row.push(line)
+      else c.rowMap.set(rowKey, [line])
+      c.count += 1
     }
     return Array.from(games.values())
       .sort((a, b) => a.group.sortOrder - b.group.sortOrder)
       .map(g => ({
         group: g.group,
-        categories: Array.from(g.categories.values()).sort((a, b) => a.category.sortOrder - b.category.sortOrder),
+        categories: Array.from(g.categories.values())
+          .sort((a, b) => a.category.sortOrder - b.category.sortOrder)
+          .map(({ category, rowMap, count }) => ({
+            category,
+            count,
+            rows: Array.from(rowMap.entries()).map(([key, lines]) => ({
+              key,
+              lines: lines.slice().sort((a, b) => kindOrder(a) - kindOrder(b)),
+            })),
+          })),
       }))
   }, [openLines])
 
@@ -310,22 +333,25 @@ export default function SportsbookScreen() {
 
   const maxWager = balance
 
-  // One market row, shared by the collapsible (O/U) and headerless (moneyline)
-  // section layouts. Single mode opens the wager sheet; parlay mode toggles the
-  // slip; an in-progress game makes every side inert.
-  function renderLine(line: LineView, isLast: boolean, groupInProgress: boolean) {
-    const slipLeg = parlayLegs.find(l => l.marketId === line.marketId)
+  // One subject row (≥1 markets → one button set), shared by the collapsible
+  // (O/U) and headerless (moneyline) section layouts. Single mode opens the
+  // wager sheet; parlay mode toggles the slip; an in-progress game makes every
+  // side inert. Each button binds its own (line, selection).
+  function renderLineSet(lines: LineView[], isLast: boolean, groupInProgress: boolean) {
     return (
       <LineRow
-        line={line}
+        lines={lines}
         isLast={isLast}
         inProgress={groupInProgress}
-        onSelect={sel =>
+        onSelect={(line, sel) =>
           placeMode === 'parlay' ? toggleParlayLeg(line, sel) : onSingleSelect(line, sel)
         }
-        selectionState={sel =>
+        selectionState={(line, sel) =>
           placeMode === 'parlay'
-            ? { selected: slipLeg?.selectionId === sel.selectionId, disabled: isSelfTank(line, sel) }
+            ? {
+                selected: parlayLegs.some(l => l.selectionId === sel.selectionId),
+                disabled: isSelfTank(line, sel),
+              }
             : { disabled: balance < 10 || isSelfTank(line, sel) }
         }
       />
@@ -441,13 +467,13 @@ export default function SportsbookScreen() {
               // per-section note instead.
               const gameInProgress =
                 group.key !== 'season' &&
-                categories.some(({ lines }) => lines.some(l => l.inProgress))
+                categories.some(({ rows }) => rows.some(r => r.lines.some(l => l.inProgress)))
               return (
               <View key={group.key}>
                 <Text style={styles.gameLabel}>{group.label}</Text>
                 {gameInProgress && (
                   <Text style={styles.inProgressNote}>
-                    {closedBettingNote(categories[0].lines[0])}
+                    {closedBettingNote(categories[0].rows[0].lines[0])}
                   </Text>
                 )}
                 {/* Week-level specials share the night props' WEEKLY group. */}
@@ -456,20 +482,21 @@ export default function SportsbookScreen() {
                 {/* This game's custom lines lead its sections. */}
                 {group.key !== 'season' && customByGame.has(group.sortOrder) &&
                   renderSpecialsCard(customByGame.get(group.sortOrder)!, gameInProgress)}
-                {categories.map(({ category, lines }) => {
-                  const groupInProgress = gameInProgress || lines.some(l => l.inProgress)
+                {categories.map(({ category, rows, count }) => {
+                  const groupInProgress =
+                    gameInProgress || rows.some(r => r.lines.some(l => l.inProgress))
                   // Moneylines: headerless. The "Your Team" row is self-explanatory
                   // (one per game), so it renders inline with no collapsible header.
                   if (category.key === 'moneyline') {
                     return (
                       <View key={category.key}>
                         {groupInProgress && !gameInProgress && (
-                          <Text style={styles.adminHint}>{closedBettingNote(lines[0])}</Text>
+                          <Text style={styles.adminHint}>{closedBettingNote(rows[0].lines[0])}</Text>
                         )}
                         <View style={styles.card}>
-                          {lines.map((line, idx) => (
-                            <Fragment key={line.marketId}>
-                              {renderLine(line, idx === lines.length - 1, groupInProgress)}
+                          {rows.map((row, idx) => (
+                            <Fragment key={row.key}>
+                              {renderLineSet(row.lines, idx === rows.length - 1, groupInProgress)}
                             </Fragment>
                           ))}
                         </View>
@@ -480,20 +507,20 @@ export default function SportsbookScreen() {
                     <LineRowContainer
                       key={category.key}
                       title={category.label}
-                      count={lines.length}
-                      note={groupInProgress && !gameInProgress ? closedBettingNote(lines[0]) : undefined}
+                      count={count}
+                      note={groupInProgress && !gameInProgress ? closedBettingNote(rows[0].lines[0]) : undefined}
                       defaultCollapsed
                       disabled={gameInProgress}
-                      rows={lines.map(line => {
-                        const slipLeg = parlayLegs.find(l => l.marketId === line.marketId)
-                        return {
-                          key: line.marketId,
-                          // Keep a line visible while collapsed if it's in the
-                          // parlay slip — lets players build across sections.
-                          pinned: placeMode === 'parlay' && !!slipLeg,
-                          render: (isLast: boolean) => renderLine(line, isLast, groupInProgress),
-                        }
-                      })}
+                      rows={rows.map(row => ({
+                        key: row.key,
+                        // Keep a subject's row visible while collapsed if any of
+                        // its lines is in the parlay slip — lets players build
+                        // across sections.
+                        pinned:
+                          placeMode === 'parlay' &&
+                          row.lines.some(l => parlayLegs.some(leg => leg.marketId === l.marketId)),
+                        render: (isLast: boolean) => renderLineSet(row.lines, isLast, groupInProgress),
+                      }))}
                     />
                   )
                 })}

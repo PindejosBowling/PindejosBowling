@@ -12,53 +12,60 @@ export interface SelectionUiState {
 }
 
 interface LineRowProps {
-  line: LineView
+  // One subject's markets (≥1) presented as a single row: the subject on the
+  // left, one pick button per (line, selection) on the right — e.g. a player's
+  // "142.5+ PINS · 4.5+ STRIKES · 2.5+ SPARES" set. Single-market rows
+  // (moneyline) are just the one-element case.
+  lines: LineView[]
   isLast: boolean
-  // Whole market closed for betting: dim the row and make every side inert.
+  // Whole row closed for betting: dim it and make every side inert.
   inProgress?: boolean
   // Per-selection cosmetic state; defaults to all-enabled when omitted.
-  selectionState?: (sel: SelectionView) => SelectionUiState
+  selectionState?: (line: LineView, sel: SelectionView) => SelectionUiState
   // Tapping a selection. Omit (or set `inProgress`) to render inert pills.
-  onSelect?: (sel: SelectionView) => void
+  onSelect?: (line: LineView, sel: SelectionView) => void
 }
 
-// Presentational, data-driven row for one bettable market: the subject/line on
-// the left and one pick button per `bet_selections` side on the right. Generic
-// over market_type — new line kinds render through this same component; only the
+// Presentational, data-driven row for one betting subject. Generic over
+// market_type — new line kinds render through this same component; only the
 // caller's `selectionState` / `onSelect` change (mirrors BetRow's design).
-export default function LineRow({ line, isLast, inProgress, selectionState, onSelect }: LineRowProps) {
+// Each button carries its own (line, selection), so a row can span markets.
+export default function LineRow({ lines, isLast, inProgress, selectionState, onSelect }: LineRowProps) {
   const pressable = !inProgress && !!onSelect
+  const first = lines[0]
 
   return (
     <View
       style={[styles.lineRow, !isLast && styles.lineRowBorder, inProgress && styles.lineRowInProgress]}
     >
       <View style={styles.lineInfo}>
-        <Text style={styles.lineName}>{line.subjectName}</Text>
-        {/* Optional metadata (a prop's stat, moneyline matchup). The line value
-            itself lives in the pick button ("142.5+") — selectionButtonLabel. */}
-        {line.subtitle != null && (
-          <Text style={styles.lineValue}>{line.subtitle}</Text>
+        <Text style={styles.lineName}>{first.subjectName}</Text>
+        {/* Optional metadata (moneyline matchup). The bet condition itself
+            lives in each pick button ("142.5+ PINS") — selectionButtonLabel. */}
+        {first.subtitle != null && (
+          <Text style={styles.lineValue}>{first.subtitle}</Text>
         )}
       </View>
       <View style={styles.pickBtns}>
-        {line.selections.map(sel => {
-          const st = selectionState?.(sel) ?? {}
-          const dim = inProgress || st.disabled
-          return (
-            <TouchableOpacity
-              key={sel.selectionId}
-              style={[styles.pickBtn, st.selected && styles.pickBtnSelected, dim && styles.pickBtnDisabled]}
-              onPress={pressable ? () => onSelect!(sel) : undefined}
-              disabled={!pressable}
-              activeOpacity={0.7}
-            >
-              <Text style={[styles.pickBtnText, st.selected && styles.pickBtnTextSelected]}>
-                {selectionButtonLabel(line, sel)}
-              </Text>
-            </TouchableOpacity>
-          )
-        })}
+        {lines.flatMap(line =>
+          line.selections.map(sel => {
+            const st = selectionState?.(line, sel) ?? {}
+            const dim = inProgress || line.inProgress || st.disabled
+            return (
+              <TouchableOpacity
+                key={sel.selectionId}
+                style={[styles.pickBtn, st.selected && styles.pickBtnSelected, dim && styles.pickBtnDisabled]}
+                onPress={pressable ? () => onSelect!(line, sel) : undefined}
+                disabled={!pressable}
+                activeOpacity={0.7}
+              >
+                <Text style={[styles.pickBtnText, st.selected && styles.pickBtnTextSelected]}>
+                  {selectionButtonLabel(line, sel)}
+                </Text>
+              </TouchableOpacity>
+            )
+          })
+        )}
       </View>
     </View>
   )
@@ -77,7 +84,7 @@ const styles = StyleSheet.create({
     borderBottomColor: colors.border,
   },
   lineRowInProgress: { opacity: 0.5 },
-  lineInfo: { flex: 1 },
+  lineInfo: { flexShrink: 1, minWidth: 72 },
   lineName: {
     fontFamily: fonts.barlowCondensed,
     fontSize: 15,
@@ -91,7 +98,14 @@ const styles = StyleSheet.create({
     marginTop: 1,
     letterSpacing: 0.5,
   },
-  pickBtns: { flexDirection: 'row', gap: 6 },
+  // A subject's full button set; wraps when the conditions outgrow the row.
+  pickBtns: {
+    flex: 1,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'flex-end',
+    gap: 6,
+  },
   pickBtn: {
     paddingHorizontal: 10,
     paddingVertical: 6,
