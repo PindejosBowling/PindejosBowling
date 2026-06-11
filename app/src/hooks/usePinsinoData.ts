@@ -79,9 +79,9 @@ export function lineGroup(line: LineView): LineGroup {
     return { key: `game-${line.gameNumber}`, label: `GAME ${line.gameNumber}`, sortOrder: line.gameNumber }
   }
   // Night-scoped stat props (no single game, settled over the whole night)
-  // collect after the games, before any season-long markets.
+  // lead the board, above the game groups (game numbers start at 1).
   if (line.marketType === 'prop') {
-    return { key: 'weekly', label: 'WEEKLY', sortOrder: Number.MAX_SAFE_INTEGER - 1 }
+    return { key: 'weekly', label: 'WEEKLY', sortOrder: 0 }
   }
   // Season-long / futures markets (no game scope) collect at the end.
   return { key: 'season', label: 'SEASON', sortOrder: Number.MAX_SAFE_INTEGER }

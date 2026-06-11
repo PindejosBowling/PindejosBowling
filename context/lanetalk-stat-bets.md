@@ -104,7 +104,8 @@ whose subject/game fell off the ladder are DELETEd (bets refunded whole).
 Third consumer of the line-board stack (see
 [betting-line-board.md](betting-line-board.md)): per-game props group as
 **Player Props** under each game; night props as **Night Props** under a
-**WEEKLY** group (after games, before SEASON). `LineView.statKey` +
+**WEEKLY** group that leads the board, above the game groups (shared with the
+week-level specials' header). `LineView.statKey` +
 `subtitle` (`STRIKES · LINE 4.5`) carry the stat; **unders are UI-hidden**
 (same social policy + trivial revert as score O/U). Game start/stop toggles
 (`setPropStatusByWeekGame`) close a game's props with it; **closing game 1 also

@@ -423,8 +423,10 @@ export default function SportsbookScreen() {
         {lineGroups.length > 0 || topSpecials.length > 0 ? (
           <View style={styles.board}>
             {/* Week-level specials (legs across games) lead the board under a
-                WEEKLY header styled like the game labels. */}
-            {topSpecials.length > 0 && (
+                WEEKLY header styled like the game labels. When night props exist
+                they form their own WEEKLY group (first, below), so the specials
+                render inside it instead of under a duplicate header here. */}
+            {topSpecials.length > 0 && !lineGroups.some(g => g.group.key === 'weekly') && (
               <View>
                 <Text style={styles.gameLabel}>WEEKLY</Text>
                 {renderSpecialsCard(topSpecials, false)}
@@ -447,6 +449,9 @@ export default function SportsbookScreen() {
                     {closedBettingNote(categories[0].lines[0])}
                   </Text>
                 )}
+                {/* Week-level specials share the night props' WEEKLY group. */}
+                {group.key === 'weekly' && topSpecials.length > 0 &&
+                  renderSpecialsCard(topSpecials, gameInProgress)}
                 {/* This game's custom lines lead its sections. */}
                 {group.key !== 'season' && customByGame.has(group.sortOrder) &&
                   renderSpecialsCard(customByGame.get(group.sortOrder)!, gameInProgress)}
