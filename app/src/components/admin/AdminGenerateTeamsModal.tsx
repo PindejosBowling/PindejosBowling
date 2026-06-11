@@ -15,6 +15,7 @@ import type { TablesInsert } from '../../utils/supabase/database.types'
 import { colors, fonts, radius } from '../../theme'
 import Toast from '../ui/Toast'
 import Button from '../ui/Button'
+import ToggleGroup from '../ui/ToggleGroup'
 
 interface Props {
   visible: boolean
@@ -65,33 +66,6 @@ function buildSchedule(numTeams: number): ScheduleTemplate[] {
     { game_number: 2, team_a: 6, team_b: 1 },
   ]
   return []
-}
-
-function ToggleGroup<T extends string>({
-  options,
-  value,
-  onChange,
-}: {
-  options: { key: T; label: string }[]
-  value: T
-  onChange: (v: T) => void
-}) {
-  return (
-    <View style={styles.toggleGroup}>
-      {options.map(o => (
-        <TouchableOpacity
-          key={o.key}
-          style={[styles.toggleBtn, value === o.key && styles.toggleBtnActive]}
-          onPress={() => onChange(o.key)}
-          activeOpacity={0.7}
-        >
-          <Text style={[styles.toggleBtnText, value === o.key && styles.toggleBtnTextActive]}>
-            {o.label}
-          </Text>
-        </TouchableOpacity>
-      ))}
-    </View>
-  )
 }
 
 export default function AdminGenerateTeamsModal({ visible, onClose }: Props) {
@@ -365,6 +339,7 @@ export default function AdminGenerateTeamsModal({ visible, onClose }: Props) {
                   options={[2, 3, 4, 5, 6].map(n => ({ key: String(n) as any, label: String(n) }))}
                   value={String(genNumTeams)}
                   onChange={v => set({ genNumTeams: parseInt(v), genTeams: null })}
+                  style={styles.toggleGroup}
                 />
               </View>
 
@@ -374,6 +349,7 @@ export default function AdminGenerateTeamsModal({ visible, onClose }: Props) {
                   options={[1, 2, 3, 4, 5, 6].map(n => ({ key: String(n) as any, label: String(n) }))}
                   value={String(genTeamSize)}
                   onChange={v => set({ genTeamSize: parseInt(v), genTeams: null })}
+                  style={styles.toggleGroup}
                 />
               </View>
 
@@ -387,6 +363,7 @@ export default function AdminGenerateTeamsModal({ visible, onClose }: Props) {
                   ]}
                   value={genAvgSource}
                   onChange={v => set({ genAvgSource: v })}
+                  style={styles.toggleGroup}
                 />
               </View>
 
@@ -521,29 +498,9 @@ const styles = StyleSheet.create({
     color: colors.muted,
   },
   toggleGroup: {
-    flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 6,
-  },
-  toggleBtn: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: colors.border2,
-  },
-  toggleBtnActive: {
-    backgroundColor: colors.accentDim,
-    borderColor: colors.accent,
-  },
-  toggleBtnText: {
-    fontFamily: fonts.barlowCondensed,
-    fontSize: 13,
-    color: colors.muted,
-    letterSpacing: 0.5,
-  },
-  toggleBtnTextActive: {
-    color: colors.accent,
+    justifyContent: 'flex-start',
   },
   availRow: {
     paddingVertical: 2,

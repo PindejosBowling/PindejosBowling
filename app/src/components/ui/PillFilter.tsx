@@ -1,5 +1,5 @@
-import { ScrollView, TouchableOpacity, Text, StyleSheet, StyleProp, ViewStyle } from 'react-native'
-import { colors, fonts } from '../../theme'
+import { StyleSheet, StyleProp, ViewStyle } from 'react-native'
+import ToggleGroup from './ToggleGroup'
 
 interface PillFilterProps {
   items: string[]
@@ -9,49 +9,21 @@ interface PillFilterProps {
   style?: StyleProp<ViewStyle>
 }
 
+// Horizontal scrollable filter bar — a thin wrapper over ToggleGroup's 'pill'
+// variant keeping the string-list API used by the filter screens.
 export default function PillFilter({ items, value, onChange, renderLabel, style }: PillFilterProps) {
   return (
-    <ScrollView
-      horizontal
-      showsHorizontalScrollIndicator={false}
-      style={styles.pillScroll}
-      contentContainerStyle={[styles.pillRow, style]}
-    >
-      {items.map((item) => {
-        const active = item === value
-        return (
-          <TouchableOpacity
-            key={item}
-            style={[styles.pill, active && styles.pillActive]}
-            onPress={() => onChange(item)}
-          >
-            <Text style={[styles.pillText, active && styles.pillTextActive]}>
-              {renderLabel ? renderLabel(item) : item}
-            </Text>
-          </TouchableOpacity>
-        )
-      })}
-    </ScrollView>
+    <ToggleGroup
+      options={items.map(item => ({ key: item, label: renderLabel ? renderLabel(item) : item }))}
+      value={value}
+      onChange={onChange}
+      variant="pill"
+      scrollable
+      style={[styles.row, style]}
+    />
   )
 }
 
 const styles = StyleSheet.create({
-  pillScroll: { flexGrow: 0 },
-  pillRow: {
-    flexDirection: 'row',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    gap: 8,
-  },
-  pill: {
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: colors.border2,
-    backgroundColor: colors.surface,
-  },
-  pillActive: { backgroundColor: colors.accentDim, borderColor: colors.accent },
-  pillText: { fontFamily: fonts.barlowCondensed, fontSize: 13, color: colors.muted, letterSpacing: 0.5 },
-  pillTextActive: { color: colors.accent },
+  row: { paddingHorizontal: 16, paddingVertical: 10 },
 })

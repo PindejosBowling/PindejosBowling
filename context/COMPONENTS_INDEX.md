@@ -25,10 +25,10 @@ Every reusable component in [app/src/components/](../app/src/components/), group
 
 | Component | Props | Purpose |
 |---|---|---|
-| `ToggleGroup` | `{ options: {key,label}[], value, onChange, style? }` (generic over key) | Segmented toggle — the standard view switcher (Place/Active/Settled Bets, Activity/P&L, scores/expected…). |
-| `PillFilter` | `{ items: string[], value, onChange, renderLabel?, style? }` | Horizontal scrolling pill row — the standard season/week/status filter (12 screens). |
+| `ToggleGroup` | `{ options: Option[], value: T \| null, onChange, empty?, variant?: 'segment'\|'pill', scrollable?, style? }` (generic over key; exports `Option<T>`) | **The single pill-button implementation.** `'segment'` (default) = the standard view switcher (Place/Active/Settled Bets, Activity/P&L, scores/expected…); `'pill'` = the radius-20 filter look. `null` value = nothing selected; `empty` text renders when `options` is empty. `GamePicker` and `PillFilter` are thin wrappers over it. |
+| `PillFilter` | `{ items: string[], value, onChange, renderLabel?, style? }` | Horizontal scrolling pill row — the standard season/week/status filter (12 screens). Thin wrapper over `ToggleGroup` (`variant="pill"`, `scrollable`). |
 | `Dropdown` | `{ options: {key,label,color?,tint?}[], value, onChange, disabled?, style? }` (generic) | Compact anchored dropdown: bordered trigger + floating menu in a transparent Modal positioned beneath it (kept on-screen). Options can carry a per-option accent color/tint. |
-| `GamePicker` | `{ games: number[], value, onChange, emptyText? }` | Pill selector over the game numbers actually scheduled this week — use anywhere a game number is chosen (never a free-form input). |
+| `GamePicker` | `{ games: number[], value, onChange, emptyText? }` | Pill selector over the game numbers actually scheduled this week — use anywhere a game number is chosen (never a free-form input). Thin wrapper over `ToggleGroup` mapping `number ↔ string` keys. |
 | `PlayerPickerModal` | `{ visible, onClose, title?, players?+onSelect \| items?+onSelectItem }` | Bottom-sheet player search/select. Two modes: name-only (`players: string[]`) or id-aware (`items: {id,name}[]`). Rows render `PlayerAvatar` (photo, initials fallback). `visible`-prop mounted. |
 | `PlayerAvatar` | `{ name?, playerId?, size?, style? }` | Profile photo resolved from `useAvatarStore` (by id, else lowercased name), falling back to an initials circle. |
 | `PlayerBadges` | `{ badges: Badge[], style? }` | Inline status emojis after a player's name; takes `badgesForPlayer()` output, renders nothing when empty. See [ui-system.md](ui-system.md) §Player Badges. |
