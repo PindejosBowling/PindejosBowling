@@ -1,9 +1,7 @@
 import { useState } from 'react'
-import {
-  Modal, View, Text, TouchableOpacity, StyleSheet, Platform, ScrollView,
-} from 'react-native'
+import { View, Text, StyleSheet } from 'react-native'
 import { colors, fonts } from '../../theme'
-import Toast from '../ui/Toast'
+import BottomSheet from '../ui/BottomSheet'
 import Button from '../ui/Button'
 import { useUiStore } from '../../stores/uiStore'
 import { pvpChallenges } from '../../utils/supabase/db'
@@ -45,37 +43,14 @@ export default function PvpAcceptModal({ challenge: c, viewerId, onClose, onDone
   }
 
   return (
-    <Modal visible transparent animationType="slide" onRequestClose={() => !saving && onClose()}>
-      <View style={styles.backdrop}>
-        <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={() => !saving && onClose()} />
-        <View style={styles.sheet}>
-          <Text style={styles.title}>Accept {CONTRACT_TYPE_LABEL[c.contractType]}</Text>
-          <Text style={styles.subtitle}>vs {c.creatorName} · {c.gameNumber != null ? `Game ${c.gameNumber}` : 'Series'}</Text>
-
-          <ScrollView style={styles.body}>
-            <View style={styles.row}>
-              <Text style={styles.rowLabel}>Your stake</Text>
-              <Text style={styles.rowValue}>{myStake.toLocaleString()} pins</Text>
-            </View>
-            <View style={styles.row}>
-              <Text style={styles.rowLabel}>Opponent's stake</Text>
-              <Text style={styles.rowValue}>{oppStake.toLocaleString()} pins</Text>
-            </View>
-            <View style={styles.row}>
-              <Text style={styles.rowLabel}>Total pot</Text>
-              <Text style={styles.rowValueAccent}>{c.totalPot.toLocaleString()} pins</Text>
-            </View>
-            <View style={styles.row}>
-              <Text style={styles.rowLabel}>Winner's payout</Text>
-              <Text style={styles.rowValueAccent}>{c.payoutAmount.toLocaleString()} pins</Text>
-            </View>
-            <Text style={styles.rule}>{CONTRACT_TYPE_RULE[c.contractType]}</Text>
-            <Text style={styles.note}>
-              Accepting escrows your stake immediately and locks the contract. It settles automatically
-              when the week is archived. Winner takes the whole pot.
-            </Text>
-          </ScrollView>
-
+    <BottomSheet
+      title={`Accept ${CONTRACT_TYPE_LABEL[c.contractType]}`}
+      subtitle={`vs ${c.creatorName} · ${c.gameNumber != null ? `Game ${c.gameNumber}` : 'Series'}`}
+      onClose={onClose}
+      busy={saving}
+      bodyMaxHeight={320}
+      footer={
+        <>
           <Button
             label={`Accept & Stake ${myStake.toLocaleString()}`}
             size="lg"
@@ -85,27 +60,35 @@ export default function PvpAcceptModal({ challenge: c, viewerId, onClose, onDone
             style={styles.confirmBtn}
           />
           <Button label="Cancel" variant="ghost" onPress={() => !saving && onClose()} />
-        </View>
+        </>
+      }
+    >
+      <View style={styles.row}>
+        <Text style={styles.rowLabel}>Your stake</Text>
+        <Text style={styles.rowValue}>{myStake.toLocaleString()} pins</Text>
       </View>
-      <Toast />
-    </Modal>
+      <View style={styles.row}>
+        <Text style={styles.rowLabel}>Opponent's stake</Text>
+        <Text style={styles.rowValue}>{oppStake.toLocaleString()} pins</Text>
+      </View>
+      <View style={styles.row}>
+        <Text style={styles.rowLabel}>Total pot</Text>
+        <Text style={styles.rowValueAccent}>{c.totalPot.toLocaleString()} pins</Text>
+      </View>
+      <View style={styles.row}>
+        <Text style={styles.rowLabel}>Winner's payout</Text>
+        <Text style={styles.rowValueAccent}>{c.payoutAmount.toLocaleString()} pins</Text>
+      </View>
+      <Text style={styles.rule}>{CONTRACT_TYPE_RULE[c.contractType]}</Text>
+      <Text style={styles.note}>
+        Accepting escrows your stake immediately and locks the contract. It settles automatically
+        when the week is archived. Winner takes the whole pot.
+      </Text>
+    </BottomSheet>
   )
 }
 
 const styles = StyleSheet.create({
-  backdrop: { flex: 1, backgroundColor: colors.overlay, justifyContent: 'flex-end' },
-  sheet: {
-    backgroundColor: colors.surface,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 24,
-    paddingBottom: Platform.OS === 'ios' ? 40 : 24,
-  },
-  title: { fontFamily: fonts.barlowCondensed, fontSize: 22, color: colors.text, fontWeight: '700' },
-  subtitle: { fontFamily: fonts.barlowCondensed, fontSize: 13, color: colors.muted, letterSpacing: 0.5, marginTop: 2, marginBottom: 14 },
-  body: { maxHeight: 320 },
   row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 10 },
   rowLabel: { fontFamily: fonts.barlow, fontSize: 14, color: colors.muted },
   rowValue: { fontFamily: fonts.barlowCondensed, fontSize: 16, color: colors.text },

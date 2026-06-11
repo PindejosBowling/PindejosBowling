@@ -1,9 +1,7 @@
 import { useState } from 'react'
-import {
-  Modal, View, Text, TouchableOpacity, StyleSheet, Platform, ScrollView,
-} from 'react-native'
+import { Text, StyleSheet } from 'react-native'
 import { colors, fonts } from '../../theme'
-import Toast from '../ui/Toast'
+import BottomSheet from '../ui/BottomSheet'
 import Button from '../ui/Button'
 import { useUiStore } from '../../stores/uiStore'
 import { bountyPosts } from '../../utils/supabase/db'
@@ -44,28 +42,14 @@ export default function BountyEntryModal({ bounty: b, onClose, onDone }: Props) 
   }
 
   return (
-    <Modal visible transparent animationType="slide" onRequestClose={() => !saving && onClose()}>
-      <View style={styles.backdrop}>
-        <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={() => !saving && onClose()} />
-        <View style={styles.sheet}>
-          <Text style={styles.title}>Join the Hunt</Text>
-          <Text style={styles.subtitle}>{b.title}</Text>
-
-          <ScrollView style={styles.body}>
-            <Text style={styles.copy}>You are joining as <Text style={styles.bold}>Hunter #{n}</Text> ({b.hunterCount}/{b.maxHunters} in so far).</Text>
-            <Text style={styles.copy}>You will stake <Text style={styles.bold}>{stake.toLocaleString()}</Text> pins.</Text>
-            <Text style={styles.copy}>
-              If the hunters win, you receive <Text style={styles.bold}>{total.toLocaleString()}</Text> pins total
-              (your stake back + <Text style={styles.bold}>{reward.toLocaleString()}</Text> reward).
-            </Text>
-            <Text style={styles.copy}>Every hunter gets the same reward — more hunters never reduce your payout.</Text>
-            <Text style={styles.copy}>If <Text style={styles.bold}>any</Text> hunter pulls it off, the whole pack wins. Bringing friends only helps.</Text>
-            <Text style={styles.note}>
-              An admin will manually settle this bounty based on the posted description. Your slot is an
-              estimate until the server confirms it.
-            </Text>
-          </ScrollView>
-
+    <BottomSheet
+      title="Join the Hunt"
+      subtitle={b.title}
+      onClose={onClose}
+      busy={saving}
+      bodyMaxHeight={320}
+      footer={
+        <>
           <Button
             label={`Join & Stake ${stake.toLocaleString()}`}
             size="lg"
@@ -75,27 +59,26 @@ export default function BountyEntryModal({ bounty: b, onClose, onDone }: Props) 
             style={styles.confirmBtn}
           />
           <Button label="Cancel" variant="ghost" onPress={() => !saving && onClose()} />
-        </View>
-      </View>
-      <Toast />
-    </Modal>
+        </>
+      }
+    >
+      <Text style={styles.copy}>You are joining as <Text style={styles.bold}>Hunter #{n}</Text> ({b.hunterCount}/{b.maxHunters} in so far).</Text>
+      <Text style={styles.copy}>You will stake <Text style={styles.bold}>{stake.toLocaleString()}</Text> pins.</Text>
+      <Text style={styles.copy}>
+        If the hunters win, you receive <Text style={styles.bold}>{total.toLocaleString()}</Text> pins total
+        (your stake back + <Text style={styles.bold}>{reward.toLocaleString()}</Text> reward).
+      </Text>
+      <Text style={styles.copy}>Every hunter gets the same reward — more hunters never reduce your payout.</Text>
+      <Text style={styles.copy}>If <Text style={styles.bold}>any</Text> hunter pulls it off, the whole pack wins. Bringing friends only helps.</Text>
+      <Text style={styles.note}>
+        An admin will manually settle this bounty based on the posted description. Your slot is an
+        estimate until the server confirms it.
+      </Text>
+    </BottomSheet>
   )
 }
 
 const styles = StyleSheet.create({
-  backdrop: { flex: 1, backgroundColor: colors.overlay, justifyContent: 'flex-end' },
-  sheet: {
-    backgroundColor: colors.surface,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 24,
-    paddingBottom: Platform.OS === 'ios' ? 40 : 24,
-  },
-  title: { fontFamily: fonts.barlowCondensed, fontSize: 22, color: colors.text, fontWeight: '700' },
-  subtitle: { fontFamily: fonts.barlowCondensed, fontSize: 14, color: colors.muted, letterSpacing: 0.3, marginTop: 2, marginBottom: 14 },
-  body: { maxHeight: 320 },
   copy: { fontFamily: fonts.barlow, fontSize: 15, color: colors.text, lineHeight: 24 },
   bold: { fontFamily: fonts.barlowCondensed, color: colors.accent },
   note: { fontFamily: fonts.barlow, fontSize: 12, color: colors.muted2, lineHeight: 18, marginTop: 12 },

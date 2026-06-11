@@ -1,11 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
-import {
-  Modal, View, Text, TextInput, TouchableOpacity, StyleSheet,
-  KeyboardAvoidingView, Platform, ScrollView,
-} from 'react-native'
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, Platform } from 'react-native'
 import DateTimePicker from '@react-native-community/datetimepicker'
 import { colors, fonts, radius } from '../../theme'
-import Toast from '../ui/Toast'
+import BottomSheet from '../ui/BottomSheet'
 import Button from '../ui/Button'
 import { useUiStore } from '../../stores/uiStore'
 import { bountyPosts, players, seasons } from '../../utils/supabase/db'
@@ -95,62 +92,15 @@ export default function BountyHouseCreateModal({ weekId, onClose, onDone }: Prop
   }
 
   return (
-    <Modal visible transparent animationType="slide" onRequestClose={() => !saving && onClose()}>
-      <KeyboardAvoidingView style={styles.backdrop} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={() => !saving && onClose()} />
-        <View style={styles.sheet}>
-          <Text style={styles.title}>New House Bounty</Text>
-          <Text style={styles.subtitle}>Posted by the Pinsino · Let the Hunt Begin</Text>
-
-          <ScrollView style={styles.body} keyboardShouldPersistTaps="handled">
-            <Text style={styles.label}>TITLE</Text>
-            <TextInput style={styles.input} value={title} onChangeText={setTitle} placeholder="Title" placeholderTextColor={colors.muted2} maxLength={MAX_TITLE_LEN} />
-
-            <Text style={styles.label}>DESCRIPTION</Text>
-            <TextInput
-              style={[styles.input, styles.multiline]}
-              value={description}
-              onChangeText={setDescription}
-              placeholder="How the bounty is won (admin-settled)."
-              placeholderTextColor={colors.muted2}
-              multiline
-              maxLength={MAX_DESCRIPTION_LEN}
-            />
-
-            <View style={styles.row}>
-              <View style={styles.rowCol}>
-                <Text style={styles.label}>HUNTER STAKE</Text>
-                <TextInput style={styles.input} value={hunterStake} onChangeText={t => setHunterStake(t.replace(/[^0-9]/g, ''))} placeholder={`min ${MIN_HUNTER_STAKE}`} placeholderTextColor={colors.muted2} keyboardType="number-pad" />
-              </View>
-              <View style={styles.rowCol}>
-                <Text style={styles.label}>REWARD / HUNTER</Text>
-                <TextInput style={styles.input} value={reward} onChangeText={t => setReward(t.replace(/[^0-9]/g, ''))} placeholder={`min ${MIN_REWARD_PER_HUNTER}`} placeholderTextColor={colors.muted2} keyboardType="number-pad" />
-              </View>
-              <View style={styles.rowCol}>
-                <Text style={styles.label}>MAX HUNTERS</Text>
-                <TextInput style={styles.input} value={maxHunters} onChangeText={t => setMaxHunters(t.replace(/[^0-9]/g, ''))} placeholder={`1–${MAX_MAX_HUNTERS}`} placeholderTextColor={colors.muted2} keyboardType="number-pad" />
-              </View>
-            </View>
-
-            <Text style={styles.label}>CLOSE TIME</Text>
-            <TouchableOpacity style={styles.dateBtn} onPress={() => setPickerOpen(o => !o)} activeOpacity={0.8}>
-              <Text style={styles.dateBtnText}>{formatCloseTime(closesAt.toISOString())}</Text>
-              <Text style={styles.dateBtnChevron}>›</Text>
-            </TouchableOpacity>
-            {pickerOpen && (
-              <DateTimePicker
-                value={closesAt}
-                mode="datetime"
-                display={Platform.OS === 'ios' ? 'inline' : 'default'}
-                minimumDate={new Date()}
-                onChange={onPickerValue}
-                themeVariant="dark"
-              />
-            )}
-
-            {error && <Text style={styles.errorText}>{error}</Text>}
-          </ScrollView>
-
+    <BottomSheet
+      title="New House Bounty"
+      subtitle="Posted by the Pinsino · Let the Hunt Begin"
+      onClose={onClose}
+      busy={saving}
+      keyboardAvoiding
+      bodyMaxHeight={440}
+      footer={
+        <>
           <Button
             label="Post House Bounty"
             size="lg"
@@ -160,22 +110,60 @@ export default function BountyHouseCreateModal({ weekId, onClose, onDone }: Prop
             style={styles.submitBtn}
           />
           <Button label="Cancel" variant="ghost" onPress={() => !saving && onClose()} />
+        </>
+      }
+    >
+      <Text style={styles.label}>TITLE</Text>
+      <TextInput style={styles.input} value={title} onChangeText={setTitle} placeholder="Title" placeholderTextColor={colors.muted2} maxLength={MAX_TITLE_LEN} />
+
+      <Text style={styles.label}>DESCRIPTION</Text>
+      <TextInput
+        style={[styles.input, styles.multiline]}
+        value={description}
+        onChangeText={setDescription}
+        placeholder="How the bounty is won (admin-settled)."
+        placeholderTextColor={colors.muted2}
+        multiline
+        maxLength={MAX_DESCRIPTION_LEN}
+      />
+
+      <View style={styles.row}>
+        <View style={styles.rowCol}>
+          <Text style={styles.label}>HUNTER STAKE</Text>
+          <TextInput style={styles.input} value={hunterStake} onChangeText={t => setHunterStake(t.replace(/[^0-9]/g, ''))} placeholder={`min ${MIN_HUNTER_STAKE}`} placeholderTextColor={colors.muted2} keyboardType="number-pad" />
         </View>
-      </KeyboardAvoidingView>
-      <Toast />
-    </Modal>
+        <View style={styles.rowCol}>
+          <Text style={styles.label}>REWARD / HUNTER</Text>
+          <TextInput style={styles.input} value={reward} onChangeText={t => setReward(t.replace(/[^0-9]/g, ''))} placeholder={`min ${MIN_REWARD_PER_HUNTER}`} placeholderTextColor={colors.muted2} keyboardType="number-pad" />
+        </View>
+        <View style={styles.rowCol}>
+          <Text style={styles.label}>MAX HUNTERS</Text>
+          <TextInput style={styles.input} value={maxHunters} onChangeText={t => setMaxHunters(t.replace(/[^0-9]/g, ''))} placeholder={`1–${MAX_MAX_HUNTERS}`} placeholderTextColor={colors.muted2} keyboardType="number-pad" />
+        </View>
+      </View>
+
+      <Text style={styles.label}>CLOSE TIME</Text>
+      <TouchableOpacity style={styles.dateBtn} onPress={() => setPickerOpen(o => !o)} activeOpacity={0.8}>
+        <Text style={styles.dateBtnText}>{formatCloseTime(closesAt.toISOString())}</Text>
+        <Text style={styles.dateBtnChevron}>›</Text>
+      </TouchableOpacity>
+      {pickerOpen && (
+        <DateTimePicker
+          value={closesAt}
+          mode="datetime"
+          display={Platform.OS === 'ios' ? 'inline' : 'default'}
+          minimumDate={new Date()}
+          onChange={onPickerValue}
+          themeVariant="dark"
+        />
+      )}
+
+      {error && <Text style={styles.errorText}>{error}</Text>}
+    </BottomSheet>
   )
 }
 
 const styles = StyleSheet.create({
-  backdrop: { flex: 1, backgroundColor: colors.overlay, justifyContent: 'flex-end' },
-  sheet: {
-    backgroundColor: colors.surface, borderTopLeftRadius: 20, borderTopRightRadius: 20,
-    borderWidth: 1, borderColor: colors.border, padding: 24, paddingBottom: Platform.OS === 'ios' ? 40 : 24,
-  },
-  title: { fontFamily: fonts.barlowCondensed, fontSize: 22, color: colors.text, fontWeight: '700' },
-  subtitle: { fontFamily: fonts.barlowCondensed, fontSize: 13, color: colors.muted, letterSpacing: 0.3, marginTop: 2, marginBottom: 8 },
-  body: { maxHeight: 440 },
   label: { fontFamily: fonts.barlowCondensed, fontSize: 12, letterSpacing: 1.5, color: colors.muted, marginTop: 12, marginBottom: 8 },
   input: {
     backgroundColor: colors.surface2, borderRadius: radius.cardSm, borderWidth: 1, borderColor: colors.border2,

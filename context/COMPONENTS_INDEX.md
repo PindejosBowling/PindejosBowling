@@ -20,6 +20,7 @@ Every reusable component in [app/src/components/](../app/src/components/), group
 | `ScreenHeader` | `{ title, subtitle?, onBack }` | Back-arrow + title (+ subtitle) header for every inner stack screen (used by 30+ screens). |
 | `AppHeader` | none | *(lives in `components/league/`)* Tab-root header: 🎳 PINDEJOS logo + "Season N · Week N" subline (self-loads via `weeks`/`seasons`, re-fetches on `uiStore.weekVersion`) + top-right `PlayerAvatar` that opens `ProfileMenuModal`. Used on the five tab home screens. |
 | `ConfirmBar` | `{ icon, title, subtext?, saving, onDiscard, onSave }` | Sticky bottom Save/Discard bar for staged edits (RSVP, scores, week editor). Shows a spinner while `saving`. |
+| `BottomSheet` | `{ title, subtitle?, onClose, busy?, children, footer?, keyboardAvoiding?, bodyMaxHeight? }` | **The bottom-sheet scaffold** — transparent slide Modal → backdrop dismiss-touchable (blocked while `busy`) → sheet → title/subtitle → body (ScrollView when `bodyMaxHeight` set) → `footer`. Renders `<Toast />` inside the Modal unconditionally, so converted sheets can't forget the toast rule. Always-visible; callers keep the conditional-mount contract. Used by the betting/economy/pvp/bounty confirm + admin sheets. |
 
 ## Selection controls & pickers (`components/ui/`)
 

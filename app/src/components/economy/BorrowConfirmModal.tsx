@@ -1,14 +1,7 @@
 import { useState } from 'react'
-import {
-  Modal,
-  View,
-  Text,
-  TouchableOpacity,
-  StyleSheet,
-  Platform,
-} from 'react-native'
+import { View, Text, StyleSheet } from 'react-native'
 import { colors, fonts, radius } from '../../theme'
-import Toast from '../ui/Toast'
+import BottomSheet from '../ui/BottomSheet'
 import Button from '../ui/Button'
 import { useUiStore } from '../../stores/uiStore'
 import { loans } from '../../utils/supabase/db'
@@ -50,46 +43,13 @@ export default function BorrowConfirmModal({ product, onClose, onBorrowed }: Bor
   }
 
   return (
-    <Modal visible transparent animationType="slide" onRequestClose={() => !borrowing && onClose()}>
-      <View style={styles.modalBackdrop}>
-        <TouchableOpacity
-          style={StyleSheet.absoluteFill}
-          activeOpacity={1}
-          onPress={() => !borrowing && onClose()}
-        />
-        <View style={styles.modalSheet}>
-          <Text style={styles.modalTitle}>{product.display_name}</Text>
-          <Text style={styles.modalSubtitle}>CONFIRM YOUR DEAL WITH THE SHARK</Text>
-
-          <View>
-            <View style={styles.statRow}>
-              <Text style={styles.statLabel}>BORROW</Text>
-              <Text style={styles.statValueBig}>{product.borrow_amount.toLocaleString()} pins</Text>
-            </View>
-            <View style={styles.statGrid}>
-              <View style={styles.statCell}>
-                <Text style={styles.statLabel}>WEEKLY PINCOME CUT</Text>
-                <Text style={styles.statValue}>{garnishPct}%</Text>
-              </View>
-              <View style={styles.statCell}>
-                <Text style={styles.statLabel}>WEEKLY PINTEREST</Text>
-                <Text style={styles.statValue}>{interestPct}%</Text>
-              </View>
-            </View>
-
-            {/* Special product warning (Feeding Frenzy / Blood in the Water). */}
-            {product.special_warning_text ? (
-              <View style={styles.specialWarn}>
-                <Text style={styles.specialWarnText}>⚠ {product.special_warning_text}</Text>
-              </View>
-            ) : null}
-
-            <Text style={styles.warnText}>{GENERAL_WARNING}</Text>
-            <Text style={styles.warnText}>
-              You have the option to pay off this loan, in part or in full, at any time. The loan is closed when the outstanding balance reaches zero.
-            </Text>
-          </View>
-
+    <BottomSheet
+      title={product.display_name}
+      subtitle="CONFIRM YOUR DEAL WITH THE SHARK"
+      onClose={onClose}
+      busy={borrowing}
+      footer={
+        <>
           <Button
             label={`Borrow ${product.borrow_amount.toLocaleString()} Pins`}
             size="lg"
@@ -99,38 +59,40 @@ export default function BorrowConfirmModal({ product, onClose, onBorrowed }: Bor
             style={styles.confirmBtn}
           />
           <Button label="Cancel" variant="ghost" onPress={() => !borrowing && onClose()} />
+        </>
+      }
+    >
+      <View style={styles.statRow}>
+        <Text style={styles.statLabel}>BORROW</Text>
+        <Text style={styles.statValueBig}>{product.borrow_amount.toLocaleString()} pins</Text>
+      </View>
+      <View style={styles.statGrid}>
+        <View style={styles.statCell}>
+          <Text style={styles.statLabel}>WEEKLY PINCOME CUT</Text>
+          <Text style={styles.statValue}>{garnishPct}%</Text>
+        </View>
+        <View style={styles.statCell}>
+          <Text style={styles.statLabel}>WEEKLY PINTEREST</Text>
+          <Text style={styles.statValue}>{interestPct}%</Text>
         </View>
       </View>
-      <Toast />
-    </Modal>
+
+      {/* Special product warning (Feeding Frenzy / Blood in the Water). */}
+      {product.special_warning_text ? (
+        <View style={styles.specialWarn}>
+          <Text style={styles.specialWarnText}>⚠ {product.special_warning_text}</Text>
+        </View>
+      ) : null}
+
+      <Text style={styles.warnText}>{GENERAL_WARNING}</Text>
+      <Text style={styles.warnText}>
+        You have the option to pay off this loan, in part or in full, at any time. The loan is closed when the outstanding balance reaches zero.
+      </Text>
+    </BottomSheet>
   )
 }
 
 const styles = StyleSheet.create({
-  modalBackdrop: { flex: 1, backgroundColor: colors.overlay, justifyContent: 'flex-end' },
-  modalSheet: {
-    backgroundColor: colors.surface,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 24,
-    paddingBottom: Platform.OS === 'ios' ? 40 : 24,
-  },
-  modalTitle: {
-    fontFamily: fonts.barlowCondensed,
-    fontSize: 22,
-    color: colors.text,
-    fontWeight: '700',
-    marginBottom: 4,
-  },
-  modalSubtitle: {
-    fontFamily: fonts.barlowCondensed,
-    fontSize: 12,
-    color: colors.muted,
-    letterSpacing: 1.5,
-    marginBottom: 16,
-  },
   statRow: {
     flexDirection: 'row',
     alignItems: 'baseline',
@@ -181,12 +143,6 @@ const styles = StyleSheet.create({
     color: colors.muted,
     lineHeight: 19,
     marginBottom: 10,
-  },
-  note: {
-    fontFamily: fonts.barlow,
-    fontSize: 12,
-    color: colors.muted,
-    lineHeight: 17,
   },
   confirmBtn: { marginTop: 20 },
 })

@@ -1,17 +1,7 @@
 import { useState } from 'react'
-import {
-  Modal,
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  StyleSheet,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
-} from 'react-native'
+import { View, Text, TextInput, StyleSheet } from 'react-native'
 import { colors, fonts, radius } from '../../theme'
-import Toast from '../ui/Toast'
+import BottomSheet from '../ui/BottomSheet'
 import Button from '../ui/Button'
 import { useUiStore } from '../../stores/uiStore'
 import { betMarkets } from '../../utils/supabase/db'
@@ -95,120 +85,79 @@ export default function SettleBetModal({ bet, onClose, onSettled }: SettleBetMod
   }
 
   return (
-    <Modal visible transparent animationType="slide" onRequestClose={() => !settling && onClose()}>
-      <KeyboardAvoidingView
-        style={styles.modalBackdrop}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      >
-        <TouchableOpacity
-          style={StyleSheet.absoluteFill}
-          activeOpacity={1}
-          onPress={() => !settling && onClose()}
+    <BottomSheet
+      title={isParlay ? `Settle ${bet.legCount}-Leg Parlay` : `Settle — ${bet.subjectName} Game ${bet.gameNumber}`}
+      subtitle={
+        isParlay
+          ? `${bet.bettorName} · enter each leg's actual score`
+          : bet.marketType === 'over_under'
+            ? `LINE: ${bet.line.toFixed(1)}`
+            : 'Settles from game scores'
+      }
+      onClose={onClose}
+      busy={settling}
+      keyboardAvoiding
+      bodyMaxHeight={360}
+      footer={
+        <Button
+          label={isParlay ? 'Settle Parlay' : 'Settle Bet'}
+          size="lg"
+          onPress={settle}
+          loading={settling}
+          disabled={settling}
+          style={styles.placeBtn}
         />
-        <View style={styles.modalSheet}>
-          <Text style={styles.modalTitle}>
-            {isParlay ? `Settle ${bet.legCount}-Leg Parlay` : `Settle — ${bet.subjectName} Game ${bet.gameNumber}`}
-          </Text>
-          <Text style={styles.modalSubtitle}>
-            {isParlay
-              ? `${bet.bettorName} · enter each leg's actual score`
-              : bet.marketType === 'over_under'
-                ? `LINE: ${bet.line.toFixed(1)}`
-                : 'Settles from game scores'}
-          </Text>
-
-          <ScrollView style={styles.legs} keyboardShouldPersistTaps="handled">
-            {bet.legs.map((leg, i) => {
-              const settled = leg.result != null
-              const isOU = leg.marketType === 'over_under'
-              const value = scores[i] ?? ''
-              const preview = isOU ? previewResult(value, leg.line) : null
-              return (
-                <View key={i} style={[styles.legBlock, i > 0 && styles.legBlockBorder]}>
-                  <Text style={styles.legSubject}>
-                    {leg.subjectName} · {leg.pick?.toUpperCase()}
-                    {isOU ? ` ${leg.line.toFixed(1)}` : ''}
-                    {leg.gameNumber != null ? ` · G${leg.gameNumber}` : ''}
-                  </Text>
-                  {settled ? (
-                    <Text style={styles.legSettled}>
-                      Settled
-                      {leg.actualScore != null ? ` · actual ${leg.actualScore}` : ''}
-                      {leg.result ? ` (${leg.result.toUpperCase()})` : ''}
-                    </Text>
-                  ) : isOU ? (
-                    <>
-                      <TextInput
-                        style={styles.wagerInput}
-                        value={value}
-                        onChangeText={v => setScores(s => ({ ...s, [i]: v.replace(/[^0-9]/g, '') }))}
-                        keyboardType="number-pad"
-                        placeholder="0 – 300"
-                        placeholderTextColor={colors.muted2}
-                        maxLength={3}
-                      />
-                      <Text style={styles.wagerHint}>
-                        {preview
-                          ? `Result: ${preview} — resolves all bets on this line`
-                          : `${leg.subjectName}'s actual score${leg.gameNumber != null ? ` for game ${leg.gameNumber}` : ''}`}
-                      </Text>
-                    </>
-                  ) : (
-                    <Text style={styles.wagerHint}>
-                      Winner is the higher combined team score for game {leg.gameNumber}.
-                      Resolves from entered scores.
-                    </Text>
-                  )}
-                </View>
-              )
-            })}
-          </ScrollView>
-
-          <Button
-            label={isParlay ? 'Settle Parlay' : 'Settle Bet'}
-            size="lg"
-            onPress={settle}
-            loading={settling}
-            disabled={settling}
-            style={styles.placeBtn}
-          />
-        </View>
-      </KeyboardAvoidingView>
-      <Toast />
-    </Modal>
+      }
+    >
+      {bet.legs.map((leg, i) => {
+        const settled = leg.result != null
+        const isOU = leg.marketType === 'over_under'
+        const value = scores[i] ?? ''
+        const preview = isOU ? previewResult(value, leg.line) : null
+        return (
+          <View key={i} style={[styles.legBlock, i > 0 && styles.legBlockBorder]}>
+            <Text style={styles.legSubject}>
+              {leg.subjectName} · {leg.pick?.toUpperCase()}
+              {isOU ? ` ${leg.line.toFixed(1)}` : ''}
+              {leg.gameNumber != null ? ` · G${leg.gameNumber}` : ''}
+            </Text>
+            {settled ? (
+              <Text style={styles.legSettled}>
+                Settled
+                {leg.actualScore != null ? ` · actual ${leg.actualScore}` : ''}
+                {leg.result ? ` (${leg.result.toUpperCase()})` : ''}
+              </Text>
+            ) : isOU ? (
+              <>
+                <TextInput
+                  style={styles.wagerInput}
+                  value={value}
+                  onChangeText={v => setScores(s => ({ ...s, [i]: v.replace(/[^0-9]/g, '') }))}
+                  keyboardType="number-pad"
+                  placeholder="0 – 300"
+                  placeholderTextColor={colors.muted2}
+                  maxLength={3}
+                />
+                <Text style={styles.wagerHint}>
+                  {preview
+                    ? `Result: ${preview} — resolves all bets on this line`
+                    : `${leg.subjectName}'s actual score${leg.gameNumber != null ? ` for game ${leg.gameNumber}` : ''}`}
+                </Text>
+              </>
+            ) : (
+              <Text style={styles.wagerHint}>
+                Winner is the higher combined team score for game {leg.gameNumber}.
+                Resolves from entered scores.
+              </Text>
+            )}
+          </View>
+        )
+      })}
+    </BottomSheet>
   )
 }
 
 const styles = StyleSheet.create({
-  modalBackdrop: {
-    flex: 1,
-    backgroundColor: colors.overlay,
-    justifyContent: 'flex-end',
-  },
-  modalSheet: {
-    backgroundColor: colors.surface,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 24,
-    paddingBottom: Platform.OS === 'ios' ? 40 : 24,
-  },
-  modalTitle: {
-    fontFamily: fonts.barlowCondensed,
-    fontSize: 20,
-    color: colors.text,
-    fontWeight: '700',
-    marginBottom: 4,
-  },
-  modalSubtitle: {
-    fontFamily: fonts.barlowCondensed,
-    fontSize: 14,
-    color: colors.muted,
-    letterSpacing: 1,
-    marginBottom: 16,
-  },
-  legs: { maxHeight: 360 },
   legBlock: { paddingVertical: 14 },
   legBlockBorder: { borderTopWidth: 1, borderTopColor: colors.border },
   legSubject: {

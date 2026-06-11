@@ -1,10 +1,7 @@
 import { useEffect, useState } from 'react'
-import {
-  Modal, View, Text, TextInput, TouchableOpacity, StyleSheet,
-  KeyboardAvoidingView, Platform, ScrollView,
-} from 'react-native'
+import { View, Text, TextInput, TouchableOpacity, StyleSheet } from 'react-native'
 import { colors, fonts, radius } from '../../theme'
-import Toast from '../ui/Toast'
+import BottomSheet from '../ui/BottomSheet'
 import Button from '../ui/Button'
 import { useUiStore } from '../../stores/uiStore'
 import { pvpChallenges, seasons, games, CounterPvpArgs } from '../../utils/supabase/db'
@@ -140,150 +137,134 @@ export default function PvpCounterModal({ challenge: c, viewerId, balance, onClo
   }
 
   return (
-    <Modal visible transparent animationType="slide" onRequestClose={() => !saving && onClose()}>
-      <KeyboardAvoidingView style={styles.backdrop} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={() => !saving && onClose()} />
-        <View style={styles.sheet}>
-          <Text style={styles.title}>Counter {CONTRACT_TYPE_LABEL[c.contractType]}</Text>
-          <Text style={styles.subtitle}>vs {firstName(c.creatorName)}</Text>
+    <BottomSheet
+      title={`Counter ${CONTRACT_TYPE_LABEL[c.contractType]}`}
+      subtitle={`vs ${firstName(c.creatorName)}`}
+      onClose={onClose}
+      busy={saving}
+      keyboardAvoiding
+      bodyMaxHeight={380}
+      footer={
+        <Button
+          label="Send Counteroffer"
+          size="lg"
+          onPress={confirm}
+          loading={saving}
+          disabled={saving || !validStake}
+          style={styles.confirmBtn}
+        />
+      }
+    >
+      <View style={styles.stakeHeader}>
+        <Text style={[styles.label, styles.stakeLabel]}>{customStakes ? 'YOUR STAKE' : 'STAKE'} (MIN {PVP_MIN_STAKE})</Text>
+        <TouchableOpacity
+          style={[styles.customToggle, customStakes && styles.customToggleOn]}
+          onPress={() => setCustomStakes(o => !o)}
+          activeOpacity={0.7}
+        >
+          <Text style={[styles.customToggleText, customStakes && styles.customToggleTextOn]}>Custom stakes</Text>
+        </TouchableOpacity>
+      </View>
+      <TextInput
+        style={styles.input}
+        value={stake}
+        onChangeText={v => setStake(v.replace(/[^0-9]/g, ''))}
+        keyboardType="number-pad"
+        placeholder={`${PVP_MIN_STAKE}`}
+        placeholderTextColor={colors.muted2}
+        maxLength={7}
+      />
+      <Text style={styles.help}>Balance: {balance.toLocaleString()} pins</Text>
 
-          <ScrollView style={styles.body} keyboardShouldPersistTaps="handled">
-            <View style={styles.stakeHeader}>
-              <Text style={[styles.label, styles.stakeLabel]}>{customStakes ? 'YOUR STAKE' : 'STAKE'} (MIN {PVP_MIN_STAKE})</Text>
-              <TouchableOpacity
-                style={[styles.customToggle, customStakes && styles.customToggleOn]}
-                onPress={() => setCustomStakes(o => !o)}
-                activeOpacity={0.7}
-              >
-                <Text style={[styles.customToggleText, customStakes && styles.customToggleTextOn]}>Custom stakes</Text>
-              </TouchableOpacity>
-            </View>
-            <TextInput
-              style={styles.input}
-              value={stake}
-              onChangeText={v => setStake(v.replace(/[^0-9]/g, ''))}
-              keyboardType="number-pad"
-              placeholder={`${PVP_MIN_STAKE}`}
-              placeholderTextColor={colors.muted2}
-              maxLength={7}
-            />
-            <Text style={styles.help}>Balance: {balance.toLocaleString()} pins</Text>
-
-            {customStakes && (
-              <>
-                <Text style={styles.label}>OPPONENT'S STAKE (MIN {PVP_MIN_STAKE})</Text>
-                <TextInput
-                  style={styles.input}
-                  value={opponentStake}
-                  onChangeText={v => setOpponentStake(v.replace(/[^0-9]/g, ''))}
-                  keyboardType="number-pad"
-                  placeholder={`${PVP_MIN_STAKE}`}
-                  placeholderTextColor={colors.muted2}
-                  maxLength={7}
-                />
-              </>
-            )}
-
-            {!noGame && (
-              <>
-                <Text style={styles.label}>GAME</Text>
-                <GamePicker games={gameNumbers} value={game} onChange={setGame} />
-              </>
-            )}
-
-            <Text style={styles.label}>MESSAGE (OPTIONAL)</Text>
-            <TextInput
-              style={[styles.input, styles.messageInput]}
-              value={message}
-              onChangeText={setMessage}
-              placeholder="Your terms…"
-              placeholderTextColor={colors.muted2}
-              multiline
-              maxLength={240}
-            />
-
-            {isLineDuel && (
-              <LineDuelLines
-                sides={[
-                  { name: 'Your line', value: myLineShown != null ? myLineShown.toFixed(1) : '—' },
-                  { name: oppName, value: oppLine != null ? oppLine.toFixed(1) : '—' },
-                ]}
-              />
-            )}
-
-            {isHeadToHead && (
-              <>
-                <View style={styles.handicapRow}>
-                  <View style={styles.handicapCell}>
-                    <Text style={styles.label} numberOfLines={1}>YOUR HANDICAP</Text>
-                    <TextInput
-                      style={styles.input}
-                      value={myHandicap}
-                      onChangeText={v => setMyHandicap(sanitizeHandicap(v))}
-                      keyboardType="numbers-and-punctuation"
-                      placeholder="0"
-                      placeholderTextColor={colors.muted2}
-                      maxLength={4}
-                    />
-                  </View>
-                  <View style={styles.handicapCell}>
-                    <Text style={styles.label} numberOfLines={1}>{oppName.toUpperCase()}'S HANDICAP</Text>
-                    <TextInput
-                      style={styles.input}
-                      value={oppHandicap}
-                      onChangeText={v => setOppHandicap(sanitizeHandicap(v))}
-                      keyboardType="numbers-and-punctuation"
-                      placeholder="0"
-                      placeholderTextColor={colors.muted2}
-                      maxLength={4}
-                    />
-                  </View>
-                </View>
-                <LineDuelLines
-                  label="HANDICAPS"
-                  sides={[
-                    { name: 'You', value: formatHandicap(myHandicapNum) },
-                    { name: oppName, value: formatHandicap(oppHandicapNum) },
-                  ]}
-                />
-              </>
-            )}
-
-            <View style={styles.potRow}>
-              <Text style={styles.potLabel}>New pot (winner takes all)</Text>
-              <Text style={styles.potValue}>{pot.toLocaleString()} pins</Text>
-            </View>
-          </ScrollView>
-
-          <Button
-            label="Send Counteroffer"
-            size="lg"
-            onPress={confirm}
-            loading={saving}
-            disabled={saving || !validStake}
-            style={styles.confirmBtn}
+      {customStakes && (
+        <>
+          <Text style={styles.label}>OPPONENT'S STAKE (MIN {PVP_MIN_STAKE})</Text>
+          <TextInput
+            style={styles.input}
+            value={opponentStake}
+            onChangeText={v => setOpponentStake(v.replace(/[^0-9]/g, ''))}
+            keyboardType="number-pad"
+            placeholder={`${PVP_MIN_STAKE}`}
+            placeholderTextColor={colors.muted2}
+            maxLength={7}
           />
-        </View>
-      </KeyboardAvoidingView>
-      <Toast />
-    </Modal>
+        </>
+      )}
+
+      {!noGame && (
+        <>
+          <Text style={styles.label}>GAME</Text>
+          <GamePicker games={gameNumbers} value={game} onChange={setGame} />
+        </>
+      )}
+
+      <Text style={styles.label}>MESSAGE (OPTIONAL)</Text>
+      <TextInput
+        style={[styles.input, styles.messageInput]}
+        value={message}
+        onChangeText={setMessage}
+        placeholder="Your terms…"
+        placeholderTextColor={colors.muted2}
+        multiline
+        maxLength={240}
+      />
+
+      {isLineDuel && (
+        <LineDuelLines
+          sides={[
+            { name: 'Your line', value: myLineShown != null ? myLineShown.toFixed(1) : '—' },
+            { name: oppName, value: oppLine != null ? oppLine.toFixed(1) : '—' },
+          ]}
+        />
+      )}
+
+      {isHeadToHead && (
+        <>
+          <View style={styles.handicapRow}>
+            <View style={styles.handicapCell}>
+              <Text style={styles.label} numberOfLines={1}>YOUR HANDICAP</Text>
+              <TextInput
+                style={styles.input}
+                value={myHandicap}
+                onChangeText={v => setMyHandicap(sanitizeHandicap(v))}
+                keyboardType="numbers-and-punctuation"
+                placeholder="0"
+                placeholderTextColor={colors.muted2}
+                maxLength={4}
+              />
+            </View>
+            <View style={styles.handicapCell}>
+              <Text style={styles.label} numberOfLines={1}>{oppName.toUpperCase()}'S HANDICAP</Text>
+              <TextInput
+                style={styles.input}
+                value={oppHandicap}
+                onChangeText={v => setOppHandicap(sanitizeHandicap(v))}
+                keyboardType="numbers-and-punctuation"
+                placeholder="0"
+                placeholderTextColor={colors.muted2}
+                maxLength={4}
+              />
+            </View>
+          </View>
+          <LineDuelLines
+            label="HANDICAPS"
+            sides={[
+              { name: 'You', value: formatHandicap(myHandicapNum) },
+              { name: oppName, value: formatHandicap(oppHandicapNum) },
+            ]}
+          />
+        </>
+      )}
+
+      <View style={styles.potRow}>
+        <Text style={styles.potLabel}>New pot (winner takes all)</Text>
+        <Text style={styles.potValue}>{pot.toLocaleString()} pins</Text>
+      </View>
+    </BottomSheet>
   )
 }
 
 const styles = StyleSheet.create({
-  backdrop: { flex: 1, backgroundColor: colors.overlay, justifyContent: 'flex-end' },
-  sheet: {
-    backgroundColor: colors.surface,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 24,
-    paddingBottom: Platform.OS === 'ios' ? 40 : 24,
-  },
-  title: { fontFamily: fonts.barlowCondensed, fontSize: 22, color: colors.text, fontWeight: '700' },
-  subtitle: { fontFamily: fonts.barlowCondensed, fontSize: 13, color: colors.muted, letterSpacing: 0.5, marginTop: 2, marginBottom: 8 },
-  body: { maxHeight: 380 },
   label: { fontFamily: fonts.barlowCondensed, fontSize: 12, letterSpacing: 1.5, color: colors.muted, marginTop: 14, marginBottom: 8 },
   stakeHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   stakeLabel: { flex: 1 },

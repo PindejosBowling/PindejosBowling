@@ -47,6 +47,7 @@ app/
 │   ├── components/              # Domain subfolders — full per-component reference in COMPONENTS_INDEX.md
 │   │   ├── ui/                  # Generic primitives, controls, pickers
 │   │   │   ├── Button.tsx
+│   │   │   ├── BottomSheet.tsx  # Canonical bottom-sheet scaffold (backdrop, busy-guarded dismiss, Toast inside)
 │   │   │   ├── Toast.tsx
 │   │   │   ├── LoadingView.tsx
 │   │   │   ├── ScreenHeader.tsx

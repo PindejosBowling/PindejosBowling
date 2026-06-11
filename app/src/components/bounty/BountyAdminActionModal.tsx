@@ -1,10 +1,9 @@
 import { useMemo, useState } from 'react'
 import {
-  Modal, View, Text, TextInput, TouchableOpacity, StyleSheet,
-  KeyboardAvoidingView, Platform, ActivityIndicator, ScrollView, Alert,
+  View, Text, TextInput, StyleSheet, ActivityIndicator, Alert,
 } from 'react-native'
 import { colors, fonts, radius } from '../../theme'
-import Toast from '../ui/Toast'
+import BottomSheet from '../ui/BottomSheet'
 import Button from '../ui/Button'
 import { useUiStore } from '../../stores/uiStore'
 import { bountyPosts } from '../../utils/supabase/db'
@@ -67,83 +66,72 @@ export default function BountyAdminActionModal({ bounty: b, onClose, onDone }: P
   const sponsorLabel = b.bountyType === 'house_bounty' ? 'The Pinsino' : (b.sponsorName ?? '—')
 
   return (
-    <Modal visible transparent animationType="slide" onRequestClose={() => !saving && onClose()}>
-      <KeyboardAvoidingView style={styles.backdrop} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={() => !saving && onClose()} />
-        <View style={styles.sheet}>
-          <Text style={styles.title}>{b.title}</Text>
-          <Text style={styles.subtitle}>
-            {sponsorLabel} · {b.status.toUpperCase()} · {b.hunterCount} hunter{b.hunterCount === 1 ? '' : 's'}
-          </Text>
-
-          <ScrollView style={styles.body} keyboardShouldPersistTaps="handled">
-            {b.status === 'open' && (
-              <>
-                <Text style={styles.section}>CLOSE</Text>
-                <Button
-                  variant="outline"
-                  label="Close to new hunters"
-                  disabled={saving}
-                  onPress={() => run('Bounty closed', () => bountyPosts.close(b.id))}
-                  style={styles.actSpacing}
-                />
-              </>
-            )}
-
-            {b.status !== 'settled' && (
-              <>
-                <Text style={styles.section}>SETTLE</Text>
-                <Text style={styles.label}>SETTLEMENT REASONING (REQUIRED, PUBLIC)</Text>
-                <TextInput
-                  style={styles.input}
-                  value={reasoning}
-                  onChangeText={setReasoning}
-                  placeholder="Explain the outcome — shown publicly on the bounty."
-                  placeholderTextColor={colors.muted2}
-                  multiline
-                  maxLength={1000}
-                />
-
-                <View style={styles.previewCard}>
-                  <View style={styles.kv}><Text style={styles.muted}>Sponsor wins → sponsor keeps</Text><Text style={styles.kvValue}>{econ.sponsorTakeOnWin.toLocaleString()}</Text></View>
-                  {b.hunters.map(h => (
-                    <View key={h.id} style={styles.kv}>
-                      <Text style={styles.muted}>Hunters win → {h.playerName ?? `Hunter #${h.entryNumber}`}</Text>
-                      <Text style={styles.kvValue}>{hunterPayout(h.stakeAmount, b.rewardPerHunter).toLocaleString()}</Text>
-                    </View>
-                  ))}
-                  {b.bountyType === 'house_bounty' && (
-                    <View style={styles.kv}><Text style={styles.muted}>House subsidy (hunter win)</Text><Text style={styles.kvValue}>{econ.totalReward.toLocaleString()}</Text></View>
-                  )}
-                </View>
-
-                <Button variant="outline" label="Sponsor Wins" disabled={saving} onPress={() => settle('sponsor_win', 'Sponsor wins')} style={styles.actSpacing} />
-                <Button variant="outline" label="Hunters Win" disabled={saving} onPress={() => settle('hunter_win', 'Hunters win')} style={styles.actSpacing} />
-              </>
-            )}
-
-            <Text style={styles.section}>DESTRUCTIVE</Text>
-            <Button variant="outline" tone="danger" label="Cancel (erase bounty)" disabled={saving} onPress={cancel} style={styles.actSpacing} />
-          </ScrollView>
-
+    <BottomSheet
+      title={b.title}
+      subtitle={`${sponsorLabel} · ${b.status.toUpperCase()} · ${b.hunterCount} hunter${b.hunterCount === 1 ? '' : 's'}`}
+      onClose={onClose}
+      busy={saving}
+      keyboardAvoiding
+      bodyMaxHeight={460}
+      footer={
+        <>
           {saving && <ActivityIndicator size="small" color={colors.accent} style={{ marginTop: 12 }} />}
           <Button variant="ghost" label="Close" onPress={() => !saving && onClose()} />
-        </View>
-      </KeyboardAvoidingView>
-      <Toast />
-    </Modal>
+        </>
+      }
+    >
+      {b.status === 'open' && (
+        <>
+          <Text style={styles.section}>CLOSE</Text>
+          <Button
+            variant="outline"
+            label="Close to new hunters"
+            disabled={saving}
+            onPress={() => run('Bounty closed', () => bountyPosts.close(b.id))}
+            style={styles.actSpacing}
+          />
+        </>
+      )}
+
+      {b.status !== 'settled' && (
+        <>
+          <Text style={styles.section}>SETTLE</Text>
+          <Text style={styles.label}>SETTLEMENT REASONING (REQUIRED, PUBLIC)</Text>
+          <TextInput
+            style={styles.input}
+            value={reasoning}
+            onChangeText={setReasoning}
+            placeholder="Explain the outcome — shown publicly on the bounty."
+            placeholderTextColor={colors.muted2}
+            multiline
+            maxLength={1000}
+          />
+
+          <View style={styles.previewCard}>
+            <View style={styles.kv}><Text style={styles.muted}>Sponsor wins → sponsor keeps</Text><Text style={styles.kvValue}>{econ.sponsorTakeOnWin.toLocaleString()}</Text></View>
+            {b.hunters.map(h => (
+              <View key={h.id} style={styles.kv}>
+                <Text style={styles.muted}>Hunters win → {h.playerName ?? `Hunter #${h.entryNumber}`}</Text>
+                <Text style={styles.kvValue}>{hunterPayout(h.stakeAmount, b.rewardPerHunter).toLocaleString()}</Text>
+              </View>
+            ))}
+            {b.bountyType === 'house_bounty' && (
+              <View style={styles.kv}><Text style={styles.muted}>House subsidy (hunter win)</Text><Text style={styles.kvValue}>{econ.totalReward.toLocaleString()}</Text></View>
+            )}
+          </View>
+
+          <Button variant="outline" label="Sponsor Wins" disabled={saving} onPress={() => settle('sponsor_win', 'Sponsor wins')} style={styles.actSpacing} />
+          <Button variant="outline" label="Hunters Win" disabled={saving} onPress={() => settle('hunter_win', 'Hunters win')} style={styles.actSpacing} />
+        </>
+      )}
+
+      <Text style={styles.section}>DESTRUCTIVE</Text>
+      <Button variant="outline" tone="danger" label="Cancel (erase bounty)" disabled={saving} onPress={cancel} style={styles.actSpacing} />
+    </BottomSheet>
   )
 }
 
 const styles = StyleSheet.create({
-  backdrop: { flex: 1, backgroundColor: colors.overlay, justifyContent: 'flex-end' },
-  sheet: {
-    backgroundColor: colors.surface, borderTopLeftRadius: 20, borderTopRightRadius: 20,
-    borderWidth: 1, borderColor: colors.border, padding: 24, paddingBottom: Platform.OS === 'ios' ? 40 : 24,
-  },
-  title: { fontFamily: fonts.barlowCondensed, fontSize: 22, color: colors.text, fontWeight: '700' },
-  subtitle: { fontFamily: fonts.barlowCondensed, fontSize: 13, color: colors.muted, letterSpacing: 0.3, marginTop: 2, marginBottom: 8 },
-  body: { maxHeight: 460 },
   section: { fontFamily: fonts.barlowCondensed, fontSize: 12, letterSpacing: 2, color: colors.muted, marginTop: 18, marginBottom: 8 },
   label: { fontFamily: fonts.barlowCondensed, fontSize: 12, letterSpacing: 1.5, color: colors.muted, marginBottom: 8 },
   input: {
