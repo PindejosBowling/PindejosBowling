@@ -113,7 +113,11 @@ CREATE TABLE bets (
   placed_at timestamp with time zone NOT NULL DEFAULT now(),
   settled_at timestamp with time zone,
   created_at timestamp with time zone NOT NULL DEFAULT now(),
-  updated_at timestamp with time zone NOT NULL DEFAULT now()
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  custom_line_id uuid,
+  custom_line_title text,
+  custom_line_description text,
+  custom_line_category text
 );
 
 CREATE TABLE board_posts (
@@ -592,6 +596,8 @@ ALTER TABLE bet_selections ADD CONSTRAINT bet_selections_result_check CHECK ((re
 
 ALTER TABLE bets ADD CONSTRAINT bets_counterparty_check CHECK ((counterparty = ANY (ARRAY['house'::text, 'peer'::text])));
 
+ALTER TABLE bets ADD CONSTRAINT bets_custom_line_id_fkey FOREIGN KEY (custom_line_id) REFERENCES custom_lines(id) ON DELETE SET NULL;
+
 ALTER TABLE bets ADD CONSTRAINT bets_pkey PRIMARY KEY (id);
 
 ALTER TABLE bets ADD CONSTRAINT bets_player_id_fkey FOREIGN KEY (player_id) REFERENCES players(id) ON DELETE CASCADE;
@@ -946,6 +952,8 @@ CREATE UNIQUE INDEX activity_feed_unique_bounty_event ON public.activity_feed_ev
 CREATE UNIQUE INDEX activity_feed_unique_loan_event ON public.activity_feed_events USING btree (loan_id, event_type) WHERE (loan_id IS NOT NULL);
 
 CREATE UNIQUE INDEX activity_feed_unique_pvp_event ON public.activity_feed_events USING btree (pvp_challenge_id, event_type) WHERE (pvp_challenge_id IS NOT NULL);
+
+CREATE INDEX bets_custom_line_idx ON public.bets USING btree (custom_line_id);
 
 CREATE INDEX bounty_hunter_stakes_player_idx ON public.bounty_hunter_stakes USING btree (player_id, bounty_post_id);
 
@@ -3011,7 +3019,7 @@ END;
 $function$
 ;
 
-CREATE OR REPLACE FUNCTION public.place_house_bet(p_selection_ids uuid[], p_stake integer)
+CREATE OR REPLACE FUNCTION public.place_house_bet(p_selection_ids uuid[], p_stake integer, p_custom_line_id uuid DEFAULT NULL::uuid)
  RETURNS uuid
  LANGUAGE plpgsql
  SECURITY DEFINER
@@ -3027,6 +3035,7 @@ DECLARE
   v_bet_id    uuid;
   v_sel       record;
   v_n         integer;
+  v_line      public.custom_lines%ROWTYPE;
 BEGIN
   SELECT id INTO v_player_id FROM public.players WHERE user_id = auth.uid();
   IF v_player_id IS NULL THEN
@@ -3038,6 +3047,16 @@ BEGIN
   END IF;
   IF p_stake IS NULL OR p_stake < 10 THEN
     RAISE EXCEPTION 'Minimum wager is 10 pins';
+  END IF;
+
+  -- Custom line ("Special") tag: snapshot its display identity onto the bet.
+  -- The selections themselves are client-resolved (same trust as the parlay
+  -- slip); the line must simply exist and be live.
+  IF p_custom_line_id IS NOT NULL THEN
+    SELECT * INTO v_line FROM public.custom_lines WHERE id = p_custom_line_id;
+    IF v_line.id IS NULL OR NOT v_line.is_active THEN
+      RAISE EXCEPTION 'This special is no longer available';
+    END IF;
   END IF;
 
   -- Validate every selection, gather odds, resolve + assert a single season, and
@@ -3094,8 +3113,10 @@ BEGIN
     RAISE EXCEPTION 'Wager exceeds your balance';
   END IF;
 
-  INSERT INTO public.bets (player_id, season_id, counterparty, stake, potential_payout, status)
-    VALUES (v_player_id, v_season_id, 'house', p_stake, v_payout, 'pending')
+  INSERT INTO public.bets (player_id, season_id, counterparty, stake, potential_payout, status,
+                           custom_line_id, custom_line_title, custom_line_description, custom_line_category)
+    VALUES (v_player_id, v_season_id, 'house', p_stake, v_payout, 'pending',
+            v_line.id, v_line.title, v_line.description, v_line.category)
     RETURNING id INTO v_bet_id;
 
   INSERT INTO public.bet_legs (bet_id, selection_id, side, odds_at_placement, line_at_placement)

@@ -64,6 +64,12 @@ export default function LedgerRow({ entry, perspective, isLast }: LedgerRowProps
   const content = (
     <>
       <View style={styles.info}>
+        {/* Special branding: the custom line's title headlines its legs. */}
+        {bet?.customLineTitle != null && (
+          <Text style={[styles.customTitle, bet.customLineCategory === 'special' && styles.customTitleSpecial]}>
+            {bet.customLineTitle}
+          </Text>
+        )}
         {bet ? (
           bet.legCount > 1 ? (
             bet.legs.map((leg, i) => (
@@ -121,6 +127,14 @@ const styles = StyleSheet.create({
     borderBottomColor: colors.border,
   },
   info: { flex: 1 },
+  customTitle: {
+    fontFamily: fonts.barlowCondensed,
+    fontSize: 14,
+    color: colors.accent,
+    letterSpacing: 0.4,
+    marginBottom: 1,
+  },
+  customTitleSpecial: { color: colors.gold },
   primary: {
     fontFamily: fonts.barlowCondensed,
     fontSize: 14,
