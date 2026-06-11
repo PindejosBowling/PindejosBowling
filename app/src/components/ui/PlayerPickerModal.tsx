@@ -5,7 +5,7 @@ import {
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { colors, fonts, radius } from '../../theme'
-import { initials } from '../../utils/helpers'
+import PlayerAvatar from './PlayerAvatar'
 
 export interface PlayerPickerItem { id: string; name: string }
 
@@ -73,9 +73,7 @@ export default function PlayerPickerModal({ visible, players, onSelect, items, o
                 onPress={() => handleSelect(item)}
                 activeOpacity={0.7}
               >
-                <View style={styles.avatar}>
-                  <Text style={styles.avatarText}>{initials(item.name)}</Text>
-                </View>
+                <PlayerAvatar name={item.name} size={34} style={styles.avatar} />
                 <Text style={styles.playerName}>{item.name}</Text>
               </TouchableOpacity>
             )}
@@ -150,15 +148,8 @@ const styles = StyleSheet.create({
     borderTopColor: colors.border,
   },
   avatar: {
-    width: 34,
-    height: 34,
-    borderRadius: 8,
-    backgroundColor: colors.surface2,
-    alignItems: 'center',
-    justifyContent: 'center',
     marginRight: 12,
   },
-  avatarText: { fontFamily: fonts.barlowCondensed, fontSize: 13, color: colors.muted },
   playerName: { fontFamily: fonts.barlow, fontSize: 15, color: colors.text },
 
   empty: {

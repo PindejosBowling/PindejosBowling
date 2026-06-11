@@ -2,8 +2,8 @@ import { Modal, View, Text, TouchableOpacity, StyleSheet } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useNavigation } from '@react-navigation/native'
 import { useAuthStore } from '../../stores/authStore'
-import { colors, fonts, radius } from '../../theme'
-import { initials } from '../../utils/helpers'
+import { colors, fonts } from '../../theme'
+import PlayerAvatar from '../ui/PlayerAvatar'
 
 interface Props {
   visible: boolean
@@ -13,6 +13,7 @@ interface Props {
 export default function ProfileMenuModal({ visible, onClose }: Props) {
   const navigation = useNavigation()
   const playerName = useAuthStore(s => s.playerName)
+  const playerId = useAuthStore(s => s.playerId)
   const signOut = useAuthStore(s => s.signOut)
 
   function handleViewProfile() {
@@ -37,11 +38,7 @@ export default function ProfileMenuModal({ visible, onClose }: Props) {
           <View style={styles.handle} />
 
           <View style={styles.identity}>
-            <View style={styles.avatar}>
-              <Text style={styles.avatarText}>
-                {playerName ? initials(playerName) : '?'}
-              </Text>
-            </View>
+            <PlayerAvatar name={playerName} playerId={playerId} size={64} style={styles.avatar} />
             <Text style={styles.name}>{playerName ?? 'Player'}</Text>
           </View>
 
@@ -89,21 +86,7 @@ const styles = StyleSheet.create({
     paddingVertical: 20,
   },
   avatar: {
-    width: 64,
-    height: 64,
-    borderRadius: radius.cardSm,
-    backgroundColor: colors.accentDim,
-    borderWidth: 1.5,
-    borderColor: colors.accent,
-    alignItems: 'center',
-    justifyContent: 'center',
     marginBottom: 12,
-  },
-  avatarText: {
-    fontFamily: fonts.barlowCondensedHeavy,
-    fontSize: 28,
-    color: colors.accent,
-    letterSpacing: 0.5,
   },
   name: {
     fontFamily: fonts.barlowCondensed,

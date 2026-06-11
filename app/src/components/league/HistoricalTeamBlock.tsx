@@ -1,6 +1,6 @@
 import { View, Text, StyleSheet } from 'react-native'
 import { colors, fonts, radius } from '../../theme'
-import { initials } from '../../utils/helpers'
+import PlayerAvatar from '../ui/PlayerAvatar'
 
 interface Player {
   name: string
@@ -23,9 +23,13 @@ export default function HistoricalTeamBlock({ team, players, total, winner }: Pr
 
       {players.map((p, i) => (
         <View key={`${p.name}-${i}`} style={[styles.playerRow, !p.present && styles.playerRowAbsent]}>
-          <View style={styles.avatar}>
-            <Text style={styles.avatarText}>{p.isFill ? '∅' : initials(p.name)}</Text>
-          </View>
+          {p.isFill ? (
+            <View style={styles.avatar}>
+              <Text style={styles.avatarText}>∅</Text>
+            </View>
+          ) : (
+            <PlayerAvatar name={p.name} size={28} style={styles.avatarSpacing} />
+          )}
           <Text style={[styles.playerName, (!p.present || p.isFill) && styles.playerNameAbsent, p.isFill && styles.playerNameFill]} numberOfLines={1}>
             {p.isFill ? 'League Avg Fill' : p.name}{!p.present ? ' ' : ''}
             {!p.present ? <Text style={styles.absentTag}>OUT</Text> : null}
@@ -79,6 +83,7 @@ const styles = StyleSheet.create({
     marginRight: 10,
   },
   avatarText: { fontFamily: fonts.barlowCondensed, fontSize: 12, color: colors.muted },
+  avatarSpacing: { marginRight: 10 },
   playerName: { flex: 1, fontFamily: fonts.barlow, fontSize: 14, color: colors.text },
   playerNameAbsent: { color: colors.muted },
   playerNameFill: { fontStyle: 'italic' },

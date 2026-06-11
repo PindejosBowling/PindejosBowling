@@ -29,7 +29,7 @@ Every reusable component in [app/src/components/](../app/src/components/), group
 | `PillFilter` | `{ items: string[], value, onChange, renderLabel?, style? }` | Horizontal scrolling pill row — the standard season/week/status filter (12 screens). |
 | `Dropdown` | `{ options: {key,label,color?,tint?}[], value, onChange, disabled?, style? }` (generic) | Compact anchored dropdown: bordered trigger + floating menu in a transparent Modal positioned beneath it (kept on-screen). Options can carry a per-option accent color/tint. |
 | `GamePicker` | `{ games: number[], value, onChange, emptyText? }` | Pill selector over the game numbers actually scheduled this week — use anywhere a game number is chosen (never a free-form input). |
-| `PlayerPickerModal` | `{ visible, onClose, title?, players?+onSelect \| items?+onSelectItem }` | Bottom-sheet player search/select. Two modes: name-only (`players: string[]`) or id-aware (`items: {id,name}[]`). `visible`-prop mounted. |
+| `PlayerPickerModal` | `{ visible, onClose, title?, players?+onSelect \| items?+onSelectItem }` | Bottom-sheet player search/select. Two modes: name-only (`players: string[]`) or id-aware (`items: {id,name}[]`). Rows render `PlayerAvatar` (photo, initials fallback). `visible`-prop mounted. |
 | `PlayerAvatar` | `{ name?, playerId?, size?, style? }` | Profile photo resolved from `useAvatarStore` (by id, else lowercased name), falling back to an initials circle. |
 | `PlayerBadges` | `{ badges: Badge[], style? }` | Inline status emojis after a player's name; takes `badgesForPlayer()` output, renders nothing when empty. See [ui-system.md](ui-system.md) §Player Badges. |
 
@@ -44,9 +44,9 @@ Every reusable component in [app/src/components/](../app/src/components/), group
 
 | Component | Props | Purpose |
 |---|---|---|
-| `PlayerScoreRow` | `{ player, gameNum, mode: 'scores'\|'expected', leagueAvg, onCommit?, readOnly? }` | One player row in the live matchup: editable score input writing to `usePendingStore` (key `"${teamSlotId}\|${gameNum}"`), or expected-avg display. `onCommit` (admin) flushes on blur; `readOnly` renders static text. |
+| `PlayerScoreRow` | `{ player, gameNum, mode: 'scores'\|'expected', leagueAvg, onCommit?, readOnly? }` | One player row in the live matchup: `PlayerAvatar` (photo/initials; fill rows keep the `∅` glyph), editable score input writing to `usePendingStore` (key `"${teamSlotId}\|${gameNum}"`), or expected-avg display. `onCommit` (admin) flushes on blur; `readOnly` renders static text. |
 | `EditableWeek` | `{ editor: WeekEditor }` | Inline per-game roster/score editor for one week (swap/add/remove players via `PlayerPickerModal`). Purely presentational — all mutations go through the `useWeekEditor` editor object. Rendered in edit mode by MatchupsScreen + HistoryScreen. |
-| `HistoricalTeamBlock` | `{ team, players: {name,score?,present,isFill?}[], total, winner }` | Archived-week team card: roster with scores, OUT tags, League-Avg-Fill rows, winner-highlighted total. |
+| `HistoricalTeamBlock` | `{ team, players: {name,score?,present,isFill?}[], total, winner }` | Archived-week team card: roster with `PlayerAvatar`s and scores, OUT tags, League-Avg-Fill rows (`∅` glyph), winner-highlighted total. |
 | `OddsBlock` | `{ teamA, teamB, leagueAvg, label }` | Betting-style spread + moneyline card computed from expected team scores (`spreadAndML` helper). Easter egg on MatchupsScreen (`Expected` mode). |
 
 ## Admin season/week modals (`components/admin/`, `visible`-prop mounted)
@@ -60,7 +60,7 @@ All follow confirm → `db.ts` call(s) → toast → close, with `<Toast />` ins
 | `AdminOpenRegistrationModal` | `{ visible, onClose, onCreated? }` | Creates season N+1 with `registration_open = true` (number from `seasons.getLatest()`), date pickers for start/end, +100 pin champion bonus to prior champs. |
 | `AdminEditSeasonModal` | `{ season: SeasonOption \| null, onClose, onSaved? }` | Edits a season's bowling night + start/end dates (local-date-safe ISO handling). Conditionally mounted via the `season` prop. |
 | `AdminGenerateTeamsModal` | `{ visible, onClose }` | Generates balanced teams from RSVPs (state in `usePendingStore.gen*`), writes teams/slots/schedule, then idempotently syncs O/U markets via `sync_over_under_markets_for_week`. |
-| `ProfileMenuModal` | `{ visible, onClose }` | *(lives in `components/league/`)* Bottom sheet from the AppHeader avatar: identity + My Profile (cross-tab nav to PlayerDetail) + Log Out. |
+| `ProfileMenuModal` | `{ visible, onClose }` | *(lives in `components/league/`)* Bottom sheet from the AppHeader avatar: identity (`PlayerAvatar`, 64px) + My Profile (cross-tab nav to PlayerDetail) + Log Out. |
 
 ## Betting / Sportsbook & ledger (`components/betting/`)
 

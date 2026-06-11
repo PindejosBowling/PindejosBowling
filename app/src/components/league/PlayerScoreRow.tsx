@@ -1,7 +1,7 @@
 import { View, Text, TextInput, StyleSheet } from 'react-native'
 import { usePendingStore } from '../../stores/pendingStore'
-import { initials } from '../../utils/helpers'
 import { colors, fonts, radius } from '../../theme'
+import PlayerAvatar from '../ui/PlayerAvatar'
 
 interface PlayerScoreRowProps {
   player: {
@@ -61,9 +61,17 @@ export default function PlayerScoreRow({ player, gameNum, mode, leagueAvg, onCom
 
   return (
     <View style={[styles.row, player.isOut && styles.rowAbsent]}>
-      <View style={[styles.avatar, player.isChampion && styles.avatarChamp]}>
-        <Text style={styles.avatarText}>{player.isFill ? '∅' : initials(player.name)}</Text>
-      </View>
+      {player.isFill ? (
+        <View style={styles.avatar}>
+          <Text style={styles.avatarText}>∅</Text>
+        </View>
+      ) : (
+        <PlayerAvatar
+          name={player.name}
+          size={32}
+          style={[styles.avatarSpacing, player.isChampion && styles.avatarChamp]}
+        />
+      )}
       <View style={{ flex: 1 }}>
         {player.isFill ? (
           <Text style={[styles.playerName, { color: colors.muted, fontStyle: 'italic' }]}>League Avg Fill</Text>
@@ -126,6 +134,9 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface3,
     alignItems: 'center',
     justifyContent: 'center',
+    marginRight: 10,
+  },
+  avatarSpacing: {
     marginRight: 10,
   },
   avatarChamp: {
