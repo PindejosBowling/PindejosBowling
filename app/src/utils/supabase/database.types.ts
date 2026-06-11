@@ -2278,7 +2278,7 @@ export type Database = {
       lanetalk_seed_lines: {
         Args: { p_player_id: string }
         Returns: {
-          clean_pct_line: number
+          clean_frames_per_game: number
           first_ball_avg_line: number
           spares_line: number
           strikes_line: number

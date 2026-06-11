@@ -3023,7 +3023,7 @@ $function$
 ;
 
 CREATE OR REPLACE FUNCTION public.lanetalk_seed_lines(p_player_id uuid)
- RETURNS TABLE(strikes_line numeric, spares_line numeric, clean_pct_line numeric, first_ball_avg_line numeric)
+ RETURNS TABLE(strikes_line numeric, spares_line numeric, clean_frames_per_game numeric, first_ball_avg_line numeric)
  LANGUAGE sql
  STABLE SECURITY DEFINER
  SET search_path TO ''
@@ -3031,7 +3031,7 @@ AS $function$
   SELECT
     LEAST(9.5, GREATEST(0.5, floor(avg(st.strikes)) + 0.5))      AS strikes_line,
     LEAST(9.5, GREATEST(0.5, floor(avg(st.spares)) + 0.5))       AS spares_line,
-    floor((sum(st.clean_pct * f.n) / sum(f.n)) / 5) * 5 + 2.5    AS clean_pct_line,
+    avg(st.strikes + st.spares)                                  AS clean_frames_per_game,
     round(sum(st.first_ball_avg * f.n) / sum(f.n), 1)            AS first_ball_avg_line
   FROM public.lanetalk_game_imports i
   CROSS JOIN LATERAL (
@@ -4188,7 +4188,7 @@ BEGIN
     v_stat  := v_mkt.params ->> 'stat';
     v_value := NULL;
 
-    IF v_stat NOT IN ('strikes', 'spares', 'clean_pct', 'first_ball_avg') THEN
+    IF v_stat NOT IN ('strikes', 'spares', 'clean_frames', 'clean_pct', 'first_ball_avg') THEN
       RAISE EXCEPTION 'Unknown LaneTalk stat % on market %', v_stat, v_mkt.id;
     END IF;
 
@@ -4197,6 +4197,7 @@ BEGIN
       SELECT CASE v_stat
                WHEN 'strikes'        THEN st.strikes::numeric
                WHEN 'spares'         THEN st.spares::numeric
+               WHEN 'clean_frames'   THEN (st.strikes + st.spares)::numeric
                WHEN 'clean_pct'      THEN st.clean_pct
                WHEN 'first_ball_avg' THEN st.first_ball_avg
              END
@@ -4232,6 +4233,7 @@ BEGIN
         SELECT CASE v_stat
                  WHEN 'strikes'        THEN SUM(st.strikes)::numeric
                  WHEN 'spares'         THEN SUM(st.spares)::numeric
+                 WHEN 'clean_frames'   THEN (SUM(st.strikes) + SUM(st.spares))::numeric
                  WHEN 'clean_pct'      THEN SUM(st.clean_pct * st.frames) / NULLIF(SUM(st.frames), 0)
                  WHEN 'first_ball_avg' THEN SUM(st.first_ball_avg * st.frames) / NULLIF(SUM(st.frames), 0)
                END
@@ -4763,8 +4765,10 @@ DECLARE
   v_has_teams    boolean;
   v_has_games    boolean;
   v_target_games integer[];
+  v_n_games      integer;
   v_rec          record;
   v_market_id    uuid;
+  v_clean_line   numeric;
 BEGIN
   SELECT season_id INTO v_season_id FROM public.weeks WHERE id = p_week_id;
   IF v_season_id IS NULL THEN
@@ -4797,19 +4801,22 @@ BEGIN
       v_target_games := ARRAY[1, 2];
     END IF;
   END IF;
+  v_n_games := COALESCE(array_length(v_target_games, 1), 2);
 
   -- --- Prune: refund + remove every open/closed lanetalk prop whose subject ---
-  -- lost eligibility (ladder ∩ official history) or whose game number left the
-  -- schedule. Night markets (game_number NULL) follow the subject's standing in
-  -- ANY target game. Settled/void markets are immutable — never pruned.
+  -- lost eligibility (ladder ∩ official history), whose game number left the
+  -- schedule, or whose stat key left the catalog (clean_pct → clean_frames).
+  -- Night markets (game_number NULL) follow the subject's standing in ANY
+  -- target game. Settled/void markets are immutable — never pruned.
   DELETE FROM public.bet_markets m
    WHERE m.week_id = p_week_id
      AND m.market_type = 'prop'
      AND m.params ->> 'source' = 'lanetalk'
      AND m.status IN ('open', 'closed')
      AND (
+       m.params ->> 'stat' NOT IN ('strikes', 'spares', 'clean_frames', 'first_ball_avg')
        -- no official import history → no line
-       NOT EXISTS (
+       OR NOT EXISTS (
          SELECT 1 FROM public.lanetalk_game_imports i
          WHERE i.player_id = m.subject_player_id
            AND i.classification = 'official'
@@ -4904,10 +4911,10 @@ BEGIN
     END IF;
   END LOOP;
 
-  -- --- Create missing night markets (clean % + first-ball avg) --------------
+  -- --- Create missing night markets (clean frames + first-ball avg) ---------
   FOR v_rec IN
     SELECT DISTINCT ep.player_id, p.name,
-           sl.clean_pct_line, sl.first_ball_avg_line
+           sl.clean_frames_per_game, sl.first_ball_avg_line
     FROM (
       SELECT DISTINCT ts.player_id
       FROM public.scores s
@@ -4930,20 +4937,25 @@ BEGIN
     JOIN public.players p ON p.id = ep.player_id
     JOIN LATERAL public.lanetalk_seed_lines(ep.player_id) sl ON true
   LOOP
+    -- Night clean line: per-game average scaled to this week's schedule, on a
+    -- half so it can't push, clamped inside the possible range.
+    v_clean_line := LEAST(10 * v_n_games - 0.5,
+                    GREATEST(0.5, floor(v_rec.clean_frames_per_game * v_n_games) + 0.5));
+
     IF NOT EXISTS (
       SELECT 1 FROM public.bet_markets m
       WHERE m.week_id = p_week_id AND m.market_type = 'prop'
-        AND m.params ->> 'source' = 'lanetalk' AND m.params ->> 'stat' = 'clean_pct'
+        AND m.params ->> 'source' = 'lanetalk' AND m.params ->> 'stat' = 'clean_frames'
         AND m.game_number IS NULL AND m.subject_player_id = v_rec.player_id
     ) THEN
       INSERT INTO public.bet_markets (market_type, title, week_id, game_number, subject_player_id, params, status)
-        VALUES ('prop', v_rec.name || ' Clean % — Night',
+        VALUES ('prop', v_rec.name || ' Clean Frames — Night',
                 p_week_id, NULL, v_rec.player_id,
-                jsonb_build_object('source', 'lanetalk', 'stat', 'clean_pct', 'scope', 'night'), 'open')
+                jsonb_build_object('source', 'lanetalk', 'stat', 'clean_frames', 'scope', 'night'), 'open')
         RETURNING id INTO v_market_id;
       INSERT INTO public.bet_selections (market_id, key, label, odds, line, sort_order) VALUES
-        (v_market_id, 'over',  'Over',  2.000, v_rec.clean_pct_line, 0),
-        (v_market_id, 'under', 'Under', 2.000, v_rec.clean_pct_line, 1);
+        (v_market_id, 'over',  'Over',  2.000, v_clean_line, 0),
+        (v_market_id, 'under', 'Under', 2.000, v_clean_line, 1);
     END IF;
 
     IF NOT EXISTS (
@@ -4973,7 +4985,8 @@ BEGIN
       SELECT CASE m.params ->> 'stat'
                WHEN 'strikes'        THEN sl.strikes_line
                WHEN 'spares'         THEN sl.spares_line
-               WHEN 'clean_pct'      THEN sl.clean_pct_line
+               WHEN 'clean_frames'   THEN LEAST(10 * v_n_games - 0.5,
+                                        GREATEST(0.5, floor(sl.clean_frames_per_game * v_n_games) + 0.5))
                WHEN 'first_ball_avg' THEN sl.first_ball_avg_line
              END AS line
     ) d
