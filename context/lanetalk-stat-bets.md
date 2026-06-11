@@ -1,7 +1,7 @@
 # LaneTalk Stat Bets — frame-stat props on a second settlement clock
 
 Bet lines on LaneTalk frame stats: **strikes O/U + spares O/U per game**, and
-**night-level clean % + first-ball avg O/U** — generated from imported
+**night-level clean frames + first-ball avg O/U** — generated from imported
 **official** LaneTalk games and settled when the admin taps **"Confirm LaneTalk
 Data"** on the import screen. Archive runs night-of; LaneTalk data often lands
 the next day, so these bets ride a **separate settlement clock** from
@@ -12,7 +12,7 @@ existing betting architecture:
 
 - A stat line = `bet_markets` with **`market_type = 'prop'`** (the
   PIN_ECONOMY_SCHEMA §7 escape hatch) and
-  `params = { source: 'lanetalk', stat: 'strikes'|'spares'|'clean_pct'|'first_ball_avg', scope: 'game'|'night' }`.
+  `params = { source: 'lanetalk', stat: 'strikes'|'spares'|'clean_frames'|'first_ball_avg', scope: 'game'|'night' }`.
   Per-game markets carry `game_number`; night markets have `game_number = null`.
 - Sides = ordinary `bet_selections` (`key: 'over'|'under'`, shared `line`,
   even-money odds like score O/U). Bets/legs/ledger flow untouched
@@ -29,8 +29,11 @@ The four stats have **one money definition**: the SQL function
 |---|---|
 | `strikes` | frames with `is_strike` |
 | `spares` | frames with `is_spare` |
-| `clean_pct` | (strikes + spares) / frames × 100 |
+| `clean_frames` | strikes + spares (a frame count; night = total across games) |
 | `first_ball_avg` | Σ first-ball pins (`throws->0->>'pins'`) / frames |
+
+(`clean_pct` — (strikes+spares)/frames×100 — is retired for new markets; the
+settle RPC still grades any pre-change market carrying it.)
 
 The client mirror lives in
 [app/src/data/lanetalk/stats.ts](../app/src/data/lanetalk/stats.ts)
@@ -55,7 +58,7 @@ aggregates are **frame-level totals**, not per-game means.
      (week, player, game_number) via `lanetalk_game_stats`.
    - **Night markets**: frame-weighted aggregate across the player's official
      imports for the week, **only when their official-game count ≥ their
-     scored-game count** (never settle clean% off half a night); else missing.
+     scored-game count** (never settle a night stat off half a night); else missing.
    - Data present → `settle_market_internal` (relaxed to
      `IN ('over_under','prop')` — same over/under/push engine).
    - Missing → left pending when `NOT p_void_missing`; else the market is
@@ -100,8 +103,9 @@ sit alongside the `syncOUForWeek` belt-and-braces call sites. Idempotent.
   **reprice unbet open/closed markets** whose seeded line drifted after new
   imports; a line never moves under a placed bet.
 - **Rounding:** counts → `floor(avg)+0.5` clamped [0.5, 9.5] (no pushes);
-  clean% → `floor(avg/5)*5+2.5` (20-frame night results are multiples of 5 →
-  no pushes); first-ball avg → `round(avg,1)` (a rare push refunds normally).
+  night clean frames → `floor(avg-per-game × scheduled-games)+0.5` clamped
+  [0.5, 10·games−0.5] (no pushes); first-ball avg → `round(avg,1)` (a rare
+  push refunds normally).
 
 ## Board & bet surfaces
 

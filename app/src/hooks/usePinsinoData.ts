@@ -48,6 +48,9 @@ export function selectionBetsAgainstSubject(marketType: string, selectionKey: st
 export const STAT_LABELS: Record<string, string> = {
   strikes: 'Strikes',
   spares: 'Spares',
+  clean_frames: 'Clean Frames',
+  // Retired for new markets (replaced by clean_frames) — kept so settled
+  // history renders its label.
   clean_pct: 'Clean %',
   first_ball_avg: 'First-Ball Avg',
 }
