@@ -3001,6 +3001,27 @@ AS $function$
 $function$
 ;
 
+CREATE OR REPLACE FUNCTION public.lanetalk_game_stats(p_payload jsonb)
+ RETURNS TABLE(strikes integer, spares integer, clean_pct numeric, first_ball_avg numeric)
+ LANGUAGE sql
+ IMMUTABLE
+ SET search_path TO ''
+AS $function$
+  SELECT
+    COUNT(*) FILTER (WHERE COALESCE((f.value ->> 'is_strike')::boolean, false))::integer AS strikes,
+    COUNT(*) FILTER (WHERE COALESCE((f.value ->> 'is_spare')::boolean,  false))::integer AS spares,
+    CASE WHEN COUNT(*) > 0 THEN
+      (COUNT(*) FILTER (WHERE COALESCE((f.value ->> 'is_strike')::boolean, false)
+                           OR COALESCE((f.value ->> 'is_spare')::boolean,  false)))::numeric
+        / COUNT(*) * 100
+    END AS clean_pct,
+    CASE WHEN COUNT(*) > 0 THEN
+      SUM(COALESCE((f.value -> 'throws' -> 0 ->> 'pins')::numeric, 0)) / COUNT(*)
+    END AS first_ball_avg
+  FROM jsonb_array_elements(COALESCE(p_payload -> 'frames', '[]'::jsonb)) AS f(value);
+$function$
+;
+
 CREATE OR REPLACE FUNCTION public.link_auth_user_to_player()
  RETURNS trigger
  LANGUAGE plpgsql
@@ -3831,13 +3852,23 @@ BEGIN
   -- force: void those bets and refund their stakes. The void is snapshot-
   -- reversible — bets/bet_legs pre-images are captured by archive_week, and the
   -- bet_refund rows are bet-linked (and week-stamped) so unarchive deletes them.
+  --
+  -- EXEMPTION: bets with ≥1 leg on an UNSETTLED prop market (LaneTalk stat
+  -- bets) are deliberately left pending — their data lands after archive and
+  -- settle_lanetalk_props_for_week settles them on the Confirm clock.
   -- --------------------------------------------------------------------------
   SELECT count(DISTINCT b.id) INTO v_n_pending
   FROM public.bets b
   JOIN public.bet_legs l       ON l.bet_id = b.id
   JOIN public.bet_selections s ON s.id = l.selection_id
   JOIN public.bet_markets m    ON m.id = s.market_id
-  WHERE m.week_id = p_week_id AND b.status = 'pending';
+  WHERE m.week_id = p_week_id AND b.status = 'pending'
+    AND NOT EXISTS (
+      SELECT 1 FROM public.bet_legs l2
+      JOIN public.bet_selections s2 ON s2.id = l2.selection_id
+      JOIN public.bet_markets m2    ON m2.id = s2.market_id
+      WHERE l2.bet_id = b.id AND m2.market_type = 'prop' AND m2.status <> 'settled'
+    );
 
   IF v_n_pending > 0 THEN
     IF NOT p_force THEN
@@ -3846,7 +3877,14 @@ BEGIN
       JOIN public.bet_legs l       ON l.bet_id = b.id
       JOIN public.bet_selections s ON s.id = l.selection_id
       JOIN public.bet_markets m    ON m.id = s.market_id
-      WHERE m.week_id = p_week_id AND b.status = 'pending' AND m.status <> 'settled';
+      WHERE m.week_id = p_week_id AND b.status = 'pending' AND m.status <> 'settled'
+        AND m.market_type <> 'prop'
+        AND NOT EXISTS (
+          SELECT 1 FROM public.bet_legs l2
+          JOIN public.bet_selections s2 ON s2.id = l2.selection_id
+          JOIN public.bet_markets m2    ON m2.id = s2.market_id
+          WHERE l2.bet_id = b.id AND m2.market_type = 'prop' AND m2.status <> 'settled'
+        );
 
       RAISE EXCEPTION '% bet(s) would remain pending after settlement — unsettleable market(s): %. Re-run with force to void and refund them.',
         v_n_pending, COALESCE(v_titles, 'unknown');
@@ -3859,6 +3897,12 @@ BEGIN
       JOIN public.bet_selections s ON s.id = l.selection_id
       JOIN public.bet_markets m    ON m.id = s.market_id
       WHERE m.week_id = p_week_id AND b.status = 'pending'
+        AND NOT EXISTS (
+          SELECT 1 FROM public.bet_legs l2
+          JOIN public.bet_selections s2 ON s2.id = l2.selection_id
+          JOIN public.bet_markets m2    ON m2.id = s2.market_id
+          WHERE l2.bet_id = b.id AND m2.market_type = 'prop' AND m2.status <> 'settled'
+        )
     LOOP
       UPDATE public.bet_legs SET result = 'void' WHERE bet_id = v_bet.id AND result IS NULL;
       UPDATE public.bets SET status = 'void', settled_at = now() WHERE id = v_bet.id;
@@ -4085,6 +4129,120 @@ END;
 $function$
 ;
 
+CREATE OR REPLACE FUNCTION public.settle_lanetalk_props_for_week(p_week_id uuid, p_void_missing boolean DEFAULT false)
+ RETURNS TABLE(settled integer, voided integer, left_pending integer)
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+DECLARE
+  v_mkt        record;
+  v_stat       text;
+  v_value      numeric;
+  v_official_n integer;
+  v_scored_n   integer;
+  v_settled    integer := 0;
+  v_voided     integer := 0;
+  v_pending    integer := 0;
+BEGIN
+  IF ((SELECT auth.jwt()) -> 'app_metadata' ->> 'role') <> 'admin' THEN
+    RAISE EXCEPTION 'Admin only';
+  END IF;
+
+  IF NOT EXISTS (SELECT 1 FROM public.weeks WHERE id = p_week_id) THEN
+    RAISE EXCEPTION 'Week not found';
+  END IF;
+
+  FOR v_mkt IN
+    SELECT id, subject_player_id, game_number, params
+    FROM public.bet_markets
+    WHERE week_id = p_week_id
+      AND market_type = 'prop'
+      AND params ->> 'source' = 'lanetalk'
+      AND status IN ('open', 'closed')
+  LOOP
+    v_stat  := v_mkt.params ->> 'stat';
+    v_value := NULL;
+
+    IF v_stat NOT IN ('strikes', 'spares', 'clean_pct', 'first_ball_avg') THEN
+      RAISE EXCEPTION 'Unknown LaneTalk stat % on market %', v_stat, v_mkt.id;
+    END IF;
+
+    IF (v_mkt.params ->> 'scope') = 'game' THEN
+      -- Per-game: the player's official import for this exact game.
+      SELECT CASE v_stat
+               WHEN 'strikes'        THEN st.strikes::numeric
+               WHEN 'spares'         THEN st.spares::numeric
+               WHEN 'clean_pct'      THEN st.clean_pct
+               WHEN 'first_ball_avg' THEN st.first_ball_avg
+             END
+        INTO v_value
+      FROM public.lanetalk_game_imports i
+      CROSS JOIN LATERAL public.lanetalk_game_stats(i.payload) st
+      WHERE i.week_id = p_week_id
+        AND i.player_id = v_mkt.subject_player_id
+        AND i.game_number = v_mkt.game_number
+        AND i.classification = 'official'
+      LIMIT 1;
+    ELSE
+      -- Night: only settle off a COMPLETE night — official imports must cover
+      -- every game the player has a recorded score for.
+      SELECT count(*) INTO v_official_n
+      FROM public.lanetalk_game_imports i
+      WHERE i.week_id = p_week_id
+        AND i.player_id = v_mkt.subject_player_id
+        AND i.classification = 'official';
+
+      SELECT count(*) INTO v_scored_n
+      FROM public.scores s
+      JOIN public.games g       ON g.id = s.game_id
+      JOIN public.team_slots ts ON ts.id = s.team_slot_id
+      JOIN public.teams t       ON t.id = ts.team_id
+      WHERE t.week_id = p_week_id
+        AND ts.player_id = v_mkt.subject_player_id
+        AND ts.is_fill = false
+        AND s.score IS NOT NULL;
+
+      IF v_official_n > 0 AND v_official_n >= v_scored_n THEN
+        -- Frame-level aggregate across the night (totals, not per-game means).
+        SELECT CASE v_stat
+                 WHEN 'strikes'        THEN SUM(st.strikes)::numeric
+                 WHEN 'spares'         THEN SUM(st.spares)::numeric
+                 WHEN 'clean_pct'      THEN SUM(st.clean_pct * st.frames) / NULLIF(SUM(st.frames), 0)
+                 WHEN 'first_ball_avg' THEN SUM(st.first_ball_avg * st.frames) / NULLIF(SUM(st.frames), 0)
+               END
+          INTO v_value
+        FROM public.lanetalk_game_imports i
+        CROSS JOIN LATERAL (
+          SELECT g.strikes, g.spares, g.clean_pct, g.first_ball_avg,
+                 jsonb_array_length(COALESCE(i.payload -> 'frames', '[]'::jsonb)) AS frames
+          FROM public.lanetalk_game_stats(i.payload) g
+        ) st
+        WHERE i.week_id = p_week_id
+          AND i.player_id = v_mkt.subject_player_id
+          AND i.classification = 'official'
+          AND st.frames > 0;
+      END IF;
+    END IF;
+
+    IF v_value IS NOT NULL THEN
+      PERFORM public.settle_market_internal(v_mkt.id, v_value);
+      v_settled := v_settled + 1;
+    ELSIF p_void_missing THEN
+      -- Delete-refund rail: refund_bets_before_market_delete refunds every
+      -- touched bet whole (incl. parlays spanning other markets).
+      DELETE FROM public.bet_markets WHERE id = v_mkt.id;
+      v_voided := v_voided + 1;
+    ELSE
+      v_pending := v_pending + 1;
+    END IF;
+  END LOOP;
+
+  RETURN QUERY SELECT v_settled, v_voided, v_pending;
+END;
+$function$
+;
+
 CREATE OR REPLACE FUNCTION public.settle_loans_for_season_close(p_season_id uuid)
  RETURNS void
  LANGUAGE plpgsql
@@ -4171,8 +4329,8 @@ BEGIN
   IF v_market.id IS NULL THEN
     RAISE EXCEPTION 'Market not found';
   END IF;
-  IF v_market.market_type <> 'over_under' THEN
-    RAISE EXCEPTION 'settle_market_internal only handles over_under markets';
+  IF v_market.market_type NOT IN ('over_under', 'prop') THEN
+    RAISE EXCEPTION 'settle_market_internal only handles over_under/prop markets';
   END IF;
   IF v_market.status = 'settled' THEN
     RETURN;  -- idempotent

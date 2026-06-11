@@ -12,6 +12,31 @@ export type Database = {
   __InternalSupabase: {
     PostgrestVersion: "14.5"
   }
+  graphql_public: {
+    Tables: {
+      [_ in never]: never
+    }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      graphql: {
+        Args: {
+          extensions?: Json
+          operationName?: string
+          query?: string
+          variables?: Json
+        }
+        Returns: Json
+      }
+    }
+    Enums: {
+      [_ in never]: never
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
+  }
   public: {
     Tables: {
       activity_feed_events: {
@@ -2241,6 +2266,15 @@ export type Database = {
         Returns: undefined
       }
       is_registered_player: { Args: { phone: string }; Returns: boolean }
+      lanetalk_game_stats: {
+        Args: { p_payload: Json }
+        Returns: {
+          clean_pct: number
+          first_ball_avg: number
+          spares: number
+          strikes: number
+        }[]
+      }
       place_house_bet: {
         Args: {
           p_custom_line_id?: string
@@ -2302,6 +2336,14 @@ export type Database = {
           p_outcome: string
         }
         Returns: undefined
+      }
+      settle_lanetalk_props_for_week: {
+        Args: { p_void_missing?: boolean; p_week_id: string }
+        Returns: {
+          left_pending: number
+          settled: number
+          voided: number
+        }[]
       }
       settle_loans_for_season_close: {
         Args: { p_season_id: string }
@@ -2482,6 +2524,9 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
+  graphql_public: {
+    Enums: {},
+  },
   public: {
     Enums: {},
   },
