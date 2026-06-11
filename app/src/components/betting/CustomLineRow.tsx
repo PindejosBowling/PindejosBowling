@@ -23,7 +23,7 @@ export default function CustomLineRow({ line, isLast, inProgress, disabled, onTa
   const special = line.category === 'special'
 
   return (
-    <View style={[styles.row, !isLast && styles.rowBorder, inProgress && styles.rowInProgress]}>
+    <View style={[styles.row, special && styles.rowSpecial, !isLast && styles.rowBorder, inProgress && styles.rowInProgress]}>
       <View style={styles.info}>
         <Text style={[styles.title, special && styles.titleSpecial]}>{line.title}</Text>
         {line.description !== '' && (
@@ -68,6 +68,8 @@ const styles = StyleSheet.create({
     borderBottomColor: colors.border,
   },
   rowInProgress: { opacity: 0.5 },
+  // Specials get the gold wash (same weight as the board's with/against tints).
+  rowSpecial: { backgroundColor: colors.goldTint },
   info: { flex: 1 },
   title: {
     fontFamily: fonts.barlowCondensed,
@@ -101,7 +103,7 @@ const styles = StyleSheet.create({
   },
   takeBtnSpecial: {
     borderColor: colors.gold,
-    backgroundColor: 'rgba(251,191,36,0.12)',
+    backgroundColor: colors.goldDim,
   },
   takeBtnDisabled: { borderColor: colors.border2, backgroundColor: 'transparent', opacity: 0.4 },
   // The multiplier IS the button — oversized for scanability.

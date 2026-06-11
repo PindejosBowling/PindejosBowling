@@ -403,6 +403,28 @@ export const betMarkets = {
       .eq('market_type', 'moneyline')
       .in('status', ['open', 'closed'])
       .order('game_number'),
+  // Active (open + closed-for-betting) prop markets for a week — the LaneTalk
+  // stat lines (strikes/spares per game, clean%/first-ball avg per night).
+  // Night markets carry game_number null and group under WEEKLY on the board.
+  listActivePropByWeek: (weekId: string) =>
+    supabase
+      .from('bet_markets')
+      .select(MARKET_GRAPH)
+      .eq('week_id', weekId)
+      .eq('market_type', 'prop')
+      .in('status', ['open', 'closed'])
+      .order('game_number', { nullsFirst: false })
+      .order('subject_player_id'),
+  // Unsettled LaneTalk prop markets across ALL weeks — the import screen groups
+  // these by week to surface its "Confirm LaneTalk Data" button. These ride a
+  // separate settlement clock from archive (data lands the next day).
+  listUnsettledLanetalkProps: () =>
+    supabase
+      .from('bet_markets')
+      .select('id, week_id, game_number, subject_player_id, params, status, title')
+      .eq('market_type', 'prop')
+      .eq('params->>source', 'lanetalk')
+      .in('status', ['open', 'closed']),
   // Start/reopen a game's betting: flip every O/U market for a week+game between
   // 'open' and 'closed' in one admin write. Closing blocks new bets (place_house_bet
   // rejects non-open selections) but leaves settlement intact (settle_betting_for_week
@@ -425,16 +447,40 @@ export const betMarkets = {
       .eq('market_type', 'moneyline')
       .eq('game_number', gameNumber)
       .eq('status', status === 'closed' ? 'open' : 'closed'),
+  // Same open/close toggle for a week+game's stat-prop markets (run alongside the
+  // O/U + moneyline toggles when a game starts/reopens). Night-scoped props
+  // (game_number null) ride game 1's toggle — once the night's bowling starts,
+  // night-stat betting closes too.
+  setPropStatusByWeekGame: async (weekId: string, gameNumber: number, status: 'open' | 'closed') => {
+    const from = status === 'closed' ? 'open' : 'closed'
+    const res = await supabase
+      .from('bet_markets')
+      .update({ status })
+      .eq('week_id', weekId)
+      .eq('market_type', 'prop')
+      .eq('game_number', gameNumber)
+      .eq('status', from)
+    if (res.error || gameNumber !== 1) return res
+    return supabase
+      .from('bet_markets')
+      .update({ status })
+      .eq('week_id', weekId)
+      .eq('market_type', 'prop')
+      .is('game_number', null)
+      .eq('status', from)
+  },
   // Reopen every closed O/U line for a week. Clear Matchups returns the week to a
   // pre-game state, so Start Game's betting suspension must not survive the reset —
   // surviving lines (both players still RSVP'd in) would otherwise be stranded
   // unbettable with no games row left to expose the reopen toggle.
+  // Covers stat props too — they suspend with the games, so the reset must
+  // reopen them alongside the O/U lines.
   reopenOUForWeek: (weekId: string) =>
     supabase
       .from('bet_markets')
       .update({ status: 'open' })
       .eq('week_id', weekId)
-      .eq('market_type', 'over_under')
+      .in('market_type', ['over_under', 'prop'])
       .eq('status', 'closed'),
   // Create/refund of O/U markets (SECURITY DEFINER, server-side). Line ownership:
   // RSVP owns the lines until the week has teams; the roster (team_slots) owns
@@ -444,6 +490,12 @@ export const betMarkets = {
   // extraGames adds schedule game numbers not yet present (team-gen game 3).
   syncOUForWeek: (weekId: string, extraGames: number[] = []) =>
     supabase.rpc('sync_over_under_markets_for_week', { p_week_id: weekId, p_extra_games: extraGames }),
+  // Server-side create/prune/reprice of LaneTalk stat-prop markets — same
+  // coupling model as the O/U sync (run by the rsvp/team_slots/games/scores
+  // resync triggers; explicit calls here are belt-and-braces). Lines are
+  // seeded from each player's official imports; no imports → no lines.
+  syncLanetalkPropsForWeek: (weekId: string) =>
+    supabase.rpc('sync_lanetalk_prop_markets_for_week', { p_week_id: weekId }),
   // Schedule-driven create of even-money moneyline markets (one per games row),
   // SECURITY DEFINER. Run on team generation / when a game is added, not on RSVP.
   syncMoneylineForWeek: (weekId: string) =>
@@ -462,6 +514,14 @@ export const betMarkets = {
   // Admin: credit scores + settle all open markets for an archived week.
   settleForWeek: (weekId: string) =>
     supabase.rpc('settle_betting_for_week', { p_week_id: weekId }),
+  // Admin: settle the week's LaneTalk stat props from imported official games —
+  // the "Confirm LaneTalk Data" clock, separate from archive. Actuals are
+  // derived server-side from lanetalk_game_imports.payload (the client never
+  // supplies a result value). voidMissing deletes markets with no data (the
+  // delete-refund rail); otherwise they stay pending for a later re-run.
+  // Returns one summary row { settled, voided, left_pending } for the toast.
+  settleLanetalkProps: (weekId: string, voidMissing = false) =>
+    supabase.rpc('settle_lanetalk_props_for_week', { p_week_id: weekId, p_void_missing: voidMissing }),
 }
 
 export const bets = {
@@ -472,7 +532,12 @@ export const bets = {
       .select('*, players(name), ' + LEG_GRAPH)
       .eq('player_id', playerId)
       .order('placed_at', { ascending: false }),
-  // All bets with a leg on an over_under or moneyline market in this week (Active Bets).
+  // All bets with a leg on one of this week's markets (Active Bets).
+  // Deliberately market-type-agnostic — the week_id filter on the joined
+  // market is the whole scope, so new market types flow through with no edit
+  // here (a now-removed type enumeration once made prop-only bets vanish and
+  // truncated mixed parlays' embeds: inner-join filters gate the bet AND
+  // prune its embedded legs).
   listByWeek: (weekId: string) =>
     supabase
       .from('bets')
@@ -481,7 +546,6 @@ export const bets = {
         'bet_markets!inner(*, subject:players!bet_markets_subject_player_id_fkey(name))))'
       )
       .eq('bet_legs.bet_selections.bet_markets.week_id', weekId)
-      .in('bet_legs.bet_selections.bet_markets.market_type', ['over_under', 'moneyline'])
       .order('placed_at', { ascending: false }),
   // All settled bets for a season (Settled Bets), with leg → selection → market(+week).
   listSettledBySeason: (seasonId: string) =>
@@ -1108,6 +1172,14 @@ export const lanetalkImports = {
       .from('lanetalk_game_imports')
       .select('id', { count: 'exact', head: true })
       .eq('player_id', playerId),
+  // One week's official imports — the Confirm modal's data-coverage preview
+  // (informational; the settlement RPC recomputes authoritatively server-side).
+  listOfficialByWeek: (weekId: string) =>
+    supabase
+      .from('lanetalk_game_imports')
+      .select('player_id, game_number, payload')
+      .eq('week_id', weekId)
+      .eq('classification', 'official'),
   // Admin re-classification of a single imported game (Official ⇄ Recreational).
   setClassification: (id: string, classification: 'official' | 'recreational') =>
     supabase

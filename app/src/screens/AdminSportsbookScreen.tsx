@@ -19,7 +19,7 @@ import { useRefresh } from '../hooks/useRefresh'
 import { useHousePinsinoData } from '../hooks/useHousePinsinoData'
 import { useAuthStore } from '../stores/authStore'
 import { useUiStore } from '../stores/uiStore'
-import { type BetView } from '../hooks/usePinsinoData'
+import { betLineSuffix, type BetView } from '../hooks/usePinsinoData'
 import { bets, customLines } from '../utils/supabase/db'
 import EmptyCard from '../components/ui/EmptyCard'
 
@@ -72,7 +72,7 @@ export default function AdminSportsbookScreen() {
   function confirmCancelBet(bet: BetView) {
     Alert.alert(
       'Cancel this bet?',
-      `Remove ${bet.bettorName}'s ${bet.legCount > 1 ? `${bet.legCount}-leg parlay` : `${bet.pick?.toUpperCase()}${bet.marketType === 'over_under' ? ` ${bet.line.toFixed(1)}` : ''} bet on ${bet.subjectName}${bet.gameNumber != null ? ` (Game ${bet.gameNumber})` : ''}`}. This fully reverses the bet's pin effect — restoring the balance to before it was placed — and cannot be undone.`,
+      `Remove ${bet.bettorName}'s ${bet.legCount > 1 ? `${bet.legCount}-leg parlay` : `${bet.pick?.toUpperCase()}${betLineSuffix(bet.marketType, bet.line, bet.statKey)} bet on ${bet.subjectName}${bet.gameNumber != null ? ` (Game ${bet.gameNumber})` : ''}`}. This fully reverses the bet's pin effect — restoring the balance to before it was placed — and cannot be undone.`,
       [
         { text: 'Keep Bet', style: 'cancel' },
         { text: 'Cancel Bet', style: 'destructive', onPress: () => cancelBet(bet) },

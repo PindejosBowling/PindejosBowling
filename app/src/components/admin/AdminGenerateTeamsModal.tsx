@@ -291,6 +291,7 @@ export default function AdminGenerateTeamsModal({ visible, onClose }: Props) {
       // (current-season avg → floor+0.5), idempotently.
       const scheduleGames = Array.from(new Set(buildSchedule(numTeams).map(s => s.game_number)))
       const { error: eSync } = await betMarkets.syncOUForWeek(weekId, scheduleGames)
+      await betMarkets.syncLanetalkPropsForWeek(weekId)
       if (eSync) console.warn('Failed to sync O/U markets:', eSync.message)
 
       // Moneylines derive from the matchups (games rows) just written, so sync

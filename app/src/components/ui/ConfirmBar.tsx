@@ -53,7 +53,7 @@ const styles = StyleSheet.create({
     gap: 12,
     backgroundColor: colors.surface2,
     borderTopWidth: 1,
-    borderTopColor: 'rgba(251,191,36,0.3)',
+    borderTopColor: 'rgba(244,208,63,0.3)',
     paddingHorizontal: 16,
     paddingVertical: 12,
   },
@@ -80,7 +80,7 @@ const styles = StyleSheet.create({
     paddingVertical: 7,
     borderRadius: radius.cardSm,
     borderWidth: 1,
-    borderColor: 'rgba(251,191,36,0.4)',
+    borderColor: 'rgba(244,208,63,0.4)',
   },
   btnDiscardText: {
     fontFamily: fonts.barlowCondensed,

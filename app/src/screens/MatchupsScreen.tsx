@@ -133,6 +133,7 @@ export default function MatchupsScreen() {
       // in-players that were pruned while undrafted. (The roster-change DB
       // triggers can't fire here: the cascade deletes resolve to no week.)
       await betMarkets.syncOUForWeek(weekId)
+      await betMarkets.syncLanetalkPropsForWeek(weekId)
       // The reset puts the week back in a pre-game state: lines closed by Start
       // Game must reopen rather than stay stranded unbettable.
       await betMarkets.reopenOUForWeek(weekId)
@@ -183,6 +184,8 @@ export default function MatchupsScreen() {
     try {
       await betMarkets.setOUStatusByWeekGame(weekId, gameNum, started ? 'closed' : 'open')
       await betMarkets.setMoneylineStatusByWeekGame(weekId, gameNum, started ? 'closed' : 'open')
+      // Stat props suspend with the game too (game 1 also flips the night-scoped props).
+      await betMarkets.setPropStatusByWeekGame(weekId, gameNum, started ? 'closed' : 'open')
       if (started) {
         await pvpChallenges.closeOpenForGame(weekId, gameNum)
         setOpenGames(prev => ({ ...prev, [gameNum]: true }))
@@ -212,6 +215,7 @@ export default function MatchupsScreen() {
       // schedule game now exists so it creates its RSVP-driven O/U lines (same call
       // team-gen makes for game 3). Idempotent.
       await betMarkets.syncOUForWeek(weekId, [nextGameNum])
+      await betMarkets.syncLanetalkPropsForWeek(weekId)
       // Moneylines do derive from the new games rows — sync them too. Idempotent.
       await betMarkets.syncMoneylineForWeek(weekId)
       await reload()
@@ -270,6 +274,7 @@ export default function MatchupsScreen() {
         for (const num of scoredGameNums) {
           await betMarkets.setOUStatusByWeekGame(weekId, num, 'closed')
           await betMarkets.setMoneylineStatusByWeekGame(weekId, num, 'closed')
+          await betMarkets.setPropStatusByWeekGame(weekId, num, 'closed')
           await pvpChallenges.closeOpenForGame(weekId, num)
         }
       }
@@ -738,7 +743,7 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
     borderRadius: radius.cardSm,
     borderWidth: 1,
-    borderColor: 'rgba(251,191,36,0.4)',
+    borderColor: 'rgba(244,208,63,0.4)',
   },
   unstartGameText: {
     fontFamily: fonts.barlowCondensed,
@@ -902,7 +907,7 @@ const styles = StyleSheet.create({
     gap: 12,
     backgroundColor: colors.surface2,
     borderTopWidth: 1,
-    borderTopColor: 'rgba(251,191,36,0.3)',
+    borderTopColor: 'rgba(244,208,63,0.3)',
     paddingHorizontal: 16,
     paddingVertical: 12,
   },
@@ -925,7 +930,7 @@ const styles = StyleSheet.create({
     paddingVertical: 7,
     borderRadius: radius.cardSm,
     borderWidth: 1,
-    borderColor: 'rgba(251,191,36,0.4)',
+    borderColor: 'rgba(244,208,63,0.4)',
   },
   archiveBarBtnText: {
     fontFamily: fonts.barlowCondensed,

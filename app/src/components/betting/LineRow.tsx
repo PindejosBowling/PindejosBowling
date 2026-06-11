@@ -1,6 +1,6 @@
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native'
 import { colors, fonts } from '../../theme'
-import type { LineView, SelectionView } from '../../hooks/usePinsinoData'
+import { selectionButtonLabel, type LineView, type SelectionView } from '../../hooks/usePinsinoData'
 
 // Per-selection visual state the caller computes (it owns the betting context —
 // balance, slip contents, anti-tank rules). Purely cosmetic: `disabled` dims a
@@ -12,60 +12,80 @@ export interface SelectionUiState {
 }
 
 interface LineRowProps {
-  line: LineView
+  // One subject's markets (≥1) presented as a single row: the subject on the
+  // left, one pick button per (line, selection) on the right — e.g. a player's
+  // "142.5+ PINS · 4.5+ STRIKES · 2.5+ SPARES" set. Single-market rows
+  // (moneyline) are just the one-element case.
+  lines: LineView[]
   isLast: boolean
-  // Whole market closed for betting: dim the row and make every side inert.
+  // The viewer's relationship to the subject ('with' = teammate this week,
+  // 'against' = matchup opponent) — a subtle background tint, nothing more.
+  relation?: 'with' | 'against' | null
+  // Whole row closed for betting: dim it and make every side inert.
   inProgress?: boolean
   // Per-selection cosmetic state; defaults to all-enabled when omitted.
-  selectionState?: (sel: SelectionView) => SelectionUiState
+  selectionState?: (line: LineView, sel: SelectionView) => SelectionUiState
   // Tapping a selection. Omit (or set `inProgress`) to render inert pills.
-  onSelect?: (sel: SelectionView) => void
+  onSelect?: (line: LineView, sel: SelectionView) => void
 }
 
-// Presentational, data-driven row for one bettable market: the subject/line on
-// the left and one pick button per `bet_selections` side on the right. Generic
-// over market_type — new line kinds render through this same component; only the
+// Presentational, data-driven row for one betting subject. Generic over
+// market_type — new line kinds render through this same component; only the
 // caller's `selectionState` / `onSelect` change (mirrors BetRow's design).
-export default function LineRow({ line, isLast, inProgress, selectionState, onSelect }: LineRowProps) {
+// Each button carries its own (line, selection), so a row can span markets.
+export default function LineRow({ lines, isLast, relation, inProgress, selectionState, onSelect }: LineRowProps) {
   const pressable = !inProgress && !!onSelect
+  const first = lines[0]
+  // Player rows (overs + stat props) stack: name centered on its own row, the
+  // button set evenly spaced beneath. Team moneylines keep the original
+  // horizontal name-left / button-right presentation.
+  const stacked = first.marketType !== 'moneyline'
 
   return (
     <View
-      style={[styles.lineRow, !isLast && styles.lineRowBorder, inProgress && styles.lineRowInProgress]}
+      style={[
+        stacked ? styles.lineRowStacked : styles.lineRow,
+        relation === 'with' && styles.lineRowWith,
+        relation === 'against' && styles.lineRowAgainst,
+        !isLast && styles.lineRowBorder,
+        inProgress && styles.lineRowInProgress,
+      ]}
     >
-      <View style={styles.lineInfo}>
-        <Text style={styles.lineName}>{line.subjectName}</Text>
-        {/* Subtitle wins when set (e.g. moneyline metadata); else the O/U line. */}
-        {line.subtitle != null ? (
-          <Text style={styles.lineValue}>{line.subtitle}</Text>
-        ) : line.line != null ? (
-          <Text style={styles.lineValue}>LINE  {line.line.toFixed(1)}</Text>
-        ) : null}
+      <View style={stacked ? styles.lineInfoStacked : styles.lineInfo}>
+        <Text style={[styles.lineName, stacked && styles.centered]}>{first.subjectName}</Text>
+        {/* Optional metadata (moneyline matchup). The bet condition itself
+            lives in each pick button ("142.5+ PINS") — selectionButtonLabel. */}
+        {first.subtitle != null && (
+          <Text style={[styles.lineValue, stacked && styles.centered]}>{first.subtitle}</Text>
+        )}
       </View>
-      <View style={styles.pickBtns}>
-        {line.selections.map(sel => {
-          const st = selectionState?.(sel) ?? {}
-          const dim = inProgress || st.disabled
-          return (
-            <TouchableOpacity
-              key={sel.selectionId}
-              style={[styles.pickBtn, st.selected && styles.pickBtnSelected, dim && styles.pickBtnDisabled]}
-              onPress={pressable ? () => onSelect!(sel) : undefined}
-              disabled={!pressable}
-              activeOpacity={0.7}
-            >
-              <Text style={[styles.pickBtnText, st.selected && styles.pickBtnTextSelected]}>
-                {(sel.label || sel.key).toUpperCase()}
-              </Text>
-            </TouchableOpacity>
-          )
-        })}
+      <View style={stacked ? styles.pickBtnsStacked : styles.pickBtns}>
+        {lines.flatMap(line =>
+          line.selections.map(sel => {
+            const st = selectionState?.(line, sel) ?? {}
+            const dim = inProgress || line.inProgress || st.disabled
+            return (
+              <TouchableOpacity
+                key={sel.selectionId}
+                style={[styles.pickBtn, st.selected && styles.pickBtnSelected, dim && styles.pickBtnDisabled]}
+                onPress={pressable ? () => onSelect!(line, sel) : undefined}
+                disabled={!pressable}
+                activeOpacity={0.7}
+              >
+                <Text style={[styles.pickBtnText, st.selected && styles.pickBtnTextSelected]}>
+                  {selectionButtonLabel(line, sel)}
+                </Text>
+              </TouchableOpacity>
+            )
+          })
+        )}
       </View>
     </View>
   )
 }
 
 const styles = StyleSheet.create({
+  // Horizontal layout (moneylines): name left, button(s) right.
   lineRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -73,12 +93,25 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     gap: 10,
   },
+  // Stacked layout (player overs + props): name centered on its own row, the
+  // full button set evenly spaced beneath it.
+  lineRowStacked: {
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    gap: 8,
+  },
   lineRowBorder: {
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
   },
   lineRowInProgress: { opacity: 0.5 },
+  // Subtle with/against tints — teammates green-cast, matchup opponents
+  // red-cast, everyone else on the plain surface (minimal clutter).
+  lineRowWith: { backgroundColor: 'rgba(74,222,128,0.05)' },
+  lineRowAgainst: { backgroundColor: 'rgba(239,68,68,0.05)' },
   lineInfo: { flex: 1 },
+  lineInfoStacked: { alignItems: 'center' },
+  centered: { textAlign: 'center' },
   lineName: {
     fontFamily: fonts.barlowCondensed,
     fontSize: 15,
@@ -93,6 +126,14 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   pickBtns: { flexDirection: 'row', gap: 6 },
+  // A subject's full button set; wraps when the conditions outgrow the row.
+  pickBtnsStacked: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-evenly',
+    alignItems: 'center',
+    gap: 6,
+  },
   pickBtn: {
     paddingHorizontal: 10,
     paddingVertical: 6,

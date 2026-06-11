@@ -1,6 +1,6 @@
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native'
 import { colors, fonts } from '../../theme'
-import type { BetView } from '../../hooks/usePinsinoData'
+import { betLineSuffix, type BetView } from '../../hooks/usePinsinoData'
 
 interface BetRowProps {
   bet: BetView
@@ -41,7 +41,7 @@ export default function BetRow({
             {bet.legs.map((leg, i) => (
               <Text key={i} style={styles.betSubject}>
                 {leg.subjectName} · {leg.pick?.toUpperCase()}
-                {leg.marketType === 'over_under' ? ` ${leg.line.toFixed(1)}` : ''}
+                {betLineSuffix(leg.marketType, leg.line, leg.statKey)}
                 {leg.gameNumber != null ? ` (G${leg.gameNumber})` : ''}
                 {leg.result ? ` — ${leg.result.toUpperCase()}` : ''}
               </Text>
@@ -54,7 +54,7 @@ export default function BetRow({
           <>
             <Text style={styles.betSubject}>
               {bet.subjectName} · {bet.pick?.toUpperCase()}
-              {bet.marketType === 'over_under' ? ` ${bet.line.toFixed(1)}` : ''}
+              {betLineSuffix(bet.marketType, bet.line, bet.statKey)}
               {bet.gameNumber != null ? ` · G${bet.gameNumber}` : ''}
             </Text>
             <Text style={styles.betDetails}>
@@ -75,7 +75,13 @@ export default function BetRow({
   )
 
   return (
-    <View style={[styles.betRow, !isLast && styles.lineRowBorder]}>
+    <View
+      style={[
+        styles.betRow,
+        bet.customLineCategory === 'special' && styles.betRowSpecial,
+        !isLast && styles.lineRowBorder,
+      ]}
+    >
       {isPressable ? (
         <TouchableOpacity
           style={styles.betPressable}
@@ -113,6 +119,8 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
   },
+  // Special-branded bets carry the gold wash through their placed-bet rows.
+  betRowSpecial: { backgroundColor: colors.goldTint },
   betSubject: {
     fontFamily: fonts.barlowCondensed,
     fontSize: 14,

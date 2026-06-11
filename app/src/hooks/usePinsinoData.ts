@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect } from 'react'
-import { weeks, seasons, betMarkets, bets, pinLedger, loanLedger, loans, pvpChallenges, bountyPosts, teamSlots, customLines } from '../utils/supabase/db'
+import { weeks, seasons, betMarkets, bets, pinLedger, loanLedger, loans, pvpChallenges, bountyPosts, teamSlots, customLines, games } from '../utils/supabase/db'
 
 // One bettable side of a market (a single `bet_selections` row, flattened).
 // Generic over market_type — over/under is the first consumer, but the shape
@@ -23,6 +23,8 @@ export interface LineView {
   subjectName: string
   gameNumber: number | null
   line: number | null        // shared line when every selection shares one (O/U); else null
+  // LaneTalk stat key (bet_markets.params.stat) for prop markets; null otherwise.
+  statKey: string | null
   // Optional left-column metadata line, shown where O/U renders "LINE 142.5".
   // Lets lineless markets (moneyline → "MONEYLINE · vs Team 3") carry context.
   subtitle?: string
@@ -37,7 +39,50 @@ export interface LineView {
 // side here.
 export function selectionBetsAgainstSubject(marketType: string, selectionKey: string): boolean {
   if (marketType === 'over_under') return selectionKey === 'under'
+  // Stat props share O/U shape: the under bets against the subject's night.
+  if (marketType === 'prop') return selectionKey === 'under'
   return false
+}
+
+// Display labels for the LaneTalk stat-prop kinds (bet_markets.params.stat).
+export const STAT_LABELS: Record<string, string> = {
+  strikes: 'Strikes',
+  spares: 'Spares',
+  clean_frames: 'Clean Frames',
+  // Retired for new markets (replaced by clean_frames) — kept so settled
+  // history renders its label.
+  clean_pct: 'Clean %',
+  first_ball_avg: 'First-Ball Avg',
+}
+
+// The pick button IS the line being agreed to. Every side offered on the board
+// is an over (unders are UI-hidden — all bets are over by definition), so the
+// button reads as the full condition: threshold + what's being counted —
+// "142.5+ PINS" on a score line, "4.5+ STRIKES" / "62.5+ CLEAN %" on a stat
+// prop. Lineless sides (moneyline "WIN") keep their label.
+export function selectionButtonLabel(line: LineView, sel: SelectionView): string {
+  const threshold = sel.line ?? line.line
+  if (sel.key === 'over' && threshold != null) {
+    const what =
+      line.marketType === 'prop'
+        ? line.statKey ? STAT_LABELS[line.statKey] ?? line.statKey : null
+        : line.marketType === 'over_under' ? 'Pins' : null
+    return `${threshold.toFixed(1)}+${what ? ` ${what.toUpperCase()}` : ''}`
+  }
+  return (sel.label || sel.key).toUpperCase()
+}
+
+// The line suffix placed-bet surfaces append after the pick ("OVER 4.5 STRIKES",
+// "OVER 142.5"). One helper so every gate (BetRow, detail/settle modals, parlay
+// slips) treats stat props and score O/U the same way.
+export function betLineSuffix(marketType: string, line: number | null, statKey?: string | null): string {
+  if (line == null) return ''
+  if (marketType === 'over_under') return ` ${line.toFixed(1)}`
+  if (marketType === 'prop') {
+    const label = statKey ? STAT_LABELS[statKey] ?? statKey : null
+    return ` ${line.toFixed(1)}${label ? ` ${label.toUpperCase()}` : ''}`
+  }
+  return ''
 }
 
 // The section a line is bucketed under on the Place Bets board. Per-game markets
@@ -52,6 +97,11 @@ export interface LineGroup {
 export function lineGroup(line: LineView): LineGroup {
   if (line.gameNumber != null) {
     return { key: `game-${line.gameNumber}`, label: `GAME ${line.gameNumber}`, sortOrder: line.gameNumber }
+  }
+  // Night-scoped stat props (no single game, settled over the whole night)
+  // lead the board, above the game groups (game numbers start at 1).
+  if (line.marketType === 'prop') {
+    return { key: 'weekly', label: 'WEEKLY', sortOrder: 0 }
   }
   // Season-long / futures markets (no game scope) collect at the end.
   return { key: 'season', label: 'SEASON', sortOrder: Number.MAX_SAFE_INTEGER }
@@ -77,6 +127,13 @@ export function lineCategory(line: LineView): LineCategory {
       // SportsbookScreen / context/betting-line-board.md), so the section reads
       // "Player Overs" rather than "Player Over/Unders".
       return { key: 'player_ou', label: 'Player Overs', sortOrder: 1 }
+    case 'prop':
+      // LaneTalk stat lines: per-game strike/spare props share the score O/U's
+      // "Player Overs" section (one collapsible menu per game); night-level
+      // clean% / first-ball props get their own section under WEEKLY.
+      return line.gameNumber != null
+        ? { key: 'player_ou', label: 'Player Overs', sortOrder: 1 }
+        : { key: 'night_props', label: 'Night Props', sortOrder: 0 }
     default:
       return { key: line.marketType, label: line.title || line.marketType, sortOrder: 99 }
   }
@@ -89,6 +146,33 @@ export function closedBettingNote(line: LineView): string {
   return 'The Pinsino does not take action while this market is in progress'
 }
 
+// This week's team topology, for the board's with/against presentation.
+export interface WeekTeams {
+  myTeamId: string | null
+  // player id → their team id this week (from team_slots).
+  teamByPlayer: Record<string, string>
+  // game number → the team the VIEWER's team plays in that game.
+  opponentTeamByGame: Record<number, string>
+}
+export const EMPTY_WEEK_TEAMS: WeekTeams = { myTeamId: null, teamByPlayer: {}, opponentTeamByGame: {} }
+
+// The viewer's relationship to a line's subject — drives the subtle row tint
+// on the board. 'with' = the subject is on the viewer's team this week;
+// 'against' = the subject's team is the viewer's matchup opponent (in that
+// game for per-game lines; in any game for night lines); null = neutral.
+export function subjectRelation(
+  teams: WeekTeams,
+  subjectPlayerId: string | null,
+  gameNumber: number | null,
+): 'with' | 'against' | null {
+  if (!subjectPlayerId || !teams.myTeamId) return null
+  const team = teams.teamByPlayer[subjectPlayerId]
+  if (!team) return null
+  if (team === teams.myTeamId) return 'with'
+  if (gameNumber != null) return teams.opponentTeamByGame[gameNumber] === team ? 'against' : null
+  return Object.values(teams.opponentTeamByGame).includes(team) ? 'against' : null
+}
+
 // One resolved leg of a bet (a single backed selection).
 export interface LegView {
   selectionId: string       // the backed bet_selections row (custom-line matching key)
@@ -97,6 +181,7 @@ export interface LegView {
   subjectName: string
   pick: string              // display label: 'Over' / 'Under' / a team name
   line: number              // the O/U line; meaningless (0) for lineless markets
+  statKey: string | null    // LaneTalk stat key for prop legs (display suffix)
   gameNumber: number | null
   actualScore: number | null
   result: string | null     // won | lost | push | void | null (pending)
@@ -115,6 +200,7 @@ export interface BetView {
   potentialPayout: number
   pick: string              // first leg's selection label ('Over' / a team name)
   line: number
+  statKey: string | null    // first leg's LaneTalk stat key (prop display suffix)
   gameNumber: number | null
   subjectName: string
   marketId: string          // first leg's market
@@ -169,6 +255,7 @@ export function normalizeBet(b: any): BetView {
       // for moneylines, whose `key` is a team uuid) over the raw key.
       pick: sel?.label ?? sel?.key ?? '',
       line: Number(leg?.line_at_placement ?? sel?.line ?? 0),
+      statKey: mkt?.params?.stat ?? null,
       gameNumber: mkt?.game_number ?? null,
       actualScore: mkt?.result_value != null ? Number(mkt.result_value) : null,
       result: leg?.result ?? null,
@@ -188,6 +275,7 @@ export function normalizeBet(b: any): BetView {
     potentialPayout: b.potential_payout,
     pick: firstSel?.label ?? firstSel?.key ?? '',
     line: Number(firstLeg?.line_at_placement ?? firstSel?.line ?? 0),
+    statKey: firstMkt?.params?.stat ?? null,
     gameNumber: firstMkt?.game_number ?? null,
     subjectName: firstMkt?.subject?.name ?? firstMkt?.title ?? '—',
     marketId: firstMkt?.id ?? '',
@@ -223,6 +311,10 @@ function normalizeMarket(m: any): LineView {
   const sharedLine =
     lineVals.length > 0 && lineVals.every(v => v === lineVals[0]) ? lineVals[0] : null
 
+  // Stat props carry their kind in params.stat; the full condition (threshold
+  // + stat) renders in the pick button (selectionButtonLabel), so no subtitle.
+  const statKey: string | null = m.market_type === 'prop' ? m.params?.stat ?? null : null
+
   return {
     marketId: m.id,
     marketType: m.market_type,
@@ -233,6 +325,7 @@ function normalizeMarket(m: any): LineView {
     subjectName: m.subject?.name ?? m.title ?? '—',
     gameNumber: m.game_number ?? null,
     line: sharedLine,
+    statKey,
     selections,
     inProgress: m.status === 'closed',
   }
@@ -428,6 +521,10 @@ export function usePinsinoData(playerId: string | null) {
   // balance at placement, so this recovers the at-risk portion for the net calc.
   const [openAction, setOpenAction] = useState(0)
   const [activeLoan, setActiveLoan] = useState<ActiveLoanSummary | null>(null)
+  // This week's team topology, for the board's with/against presentation:
+  // every player's team, the viewer's team, and per game the team the
+  // viewer's team is matched up against.
+  const [weekTeams, setWeekTeams] = useState<WeekTeams>(EMPTY_WEEK_TEAMS)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -444,9 +541,10 @@ export function usePinsinoData(playerId: string | null) {
 
       const fetches: PromiseLike<any>[] = []
 
-      // Open O/U + moneyline markets + all bets for this week
+      // Open O/U + moneyline + stat-prop markets + all bets for this week
       let marketsData: any[] = []
       let moneylineData: any[] = []
+      let propData: any[] = []
       let weekBetsData: any[] = []
       // The player's team for this week — drives "Your Team" on the moneyline board.
       let myTeamId: string | null = null
@@ -458,16 +556,24 @@ export function usePinsinoData(playerId: string | null) {
         )
       }
       // Active custom lines + the week's full roster (player → team mapping for
-      // resolving moneyline anchor legs of any player, not just the caller).
+      // resolving moneyline anchor legs of any player, not just the caller) +
+      // the schedule (matchups → the board's with/against tinting).
       let customLinesData: any[] = []
       let weekSlotsData: any[] = []
+      let weekGamesData: any[] = []
       if (weekId) {
         fetches.push(
+          games.listByWeek(weekId).then(({ data }) => {
+            weekGamesData = data ?? []
+          }),
           betMarkets.listActiveOUByWeek(weekId).then(({ data }) => {
             marketsData = data ?? []
           }),
           betMarkets.listActiveMoneylineByWeek(weekId).then(({ data }) => {
             moneylineData = data ?? []
+          }),
+          betMarkets.listActivePropByWeek(weekId).then(({ data }) => {
+            propData = data ?? []
           }),
           bets.listByWeek(weekId).then(({ data }) => {
             weekBetsData = data ?? []
@@ -539,10 +645,21 @@ export function usePinsinoData(playerId: string | null) {
       // Resolve custom lines against the RAW market views (pre-policy: before
       // "Your Team" reshaping / under-hiding) — specials may bundle selections
       // the viewer's own board hides.
-      const rawLineViews = [...marketsData, ...moneylineData].map(normalizeMarket)
+      const rawLineViews = [...marketsData, ...moneylineData, ...propData].map(normalizeMarket)
       const slotByPlayer = new Map<string, { teamId: string; playerName: string }>()
       for (const s of weekSlotsData) {
         if (s.player_id) slotByPlayer.set(s.player_id, { teamId: s.team_id, playerName: s.players?.name ?? '—' })
+      }
+
+      // Week team topology for the board's with/against tinting.
+      const teamByPlayer: Record<string, string> = {}
+      for (const [pid, slot] of slotByPlayer) teamByPlayer[pid] = slot.teamId
+      const opponentTeamByGame: Record<number, string> = {}
+      if (myTeamId) {
+        for (const g of weekGamesData) {
+          if (g.team_a_id === myTeamId) opponentTeamByGame[g.game_number] = g.team_b_id
+          else if (g.team_b_id === myTeamId) opponentTeamByGame[g.game_number] = g.team_a_id
+        }
       }
       const applicableCustom = customLinesData.filter(
         cl => cl.week_ids == null || (weekId != null && cl.week_ids.includes(weekId))
@@ -728,6 +845,7 @@ export function usePinsinoData(playerId: string | null) {
         }
       }
       setOpenLines(openLinesResolved)
+      setWeekTeams({ myTeamId, teamByPlayer, opponentTeamByGame })
       setCustomLineViews(resolvedCustom)
       setWeekBets(weekBetViews)
       setSettledBets(settledBetsData.map(normalizeBet).map(brandBet))
@@ -744,5 +862,5 @@ export function usePinsinoData(playerId: string | null) {
 
   useEffect(() => { load() }, [load])
 
-  return { loading, balance, debt, openAction, netWorth: balance + openAction - debt, activeLoan, openLines, customLines: customLineViews, myBets, weekBets, settledBets, leaderboard, myBetMarketIds, currentWeekId, currentSeasonId, reload: load }
+  return { loading, balance, debt, openAction, netWorth: balance + openAction - debt, activeLoan, openLines, weekTeams, customLines: customLineViews, myBets, weekBets, settledBets, leaderboard, myBetMarketIds, currentWeekId, currentSeasonId, reload: load }
 }

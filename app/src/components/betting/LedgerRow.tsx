@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native'
 import { colors, fonts } from '../../theme'
 import type { LedgerEntry } from '../../hooks/usePlayerPinsinoData'
+import { betLineSuffix } from '../../hooks/usePinsinoData'
 import BetDetailModal from './BetDetailModal'
 import { formatDateShort } from '../../utils/helpers'
 
@@ -74,13 +75,15 @@ export default function LedgerRow({ entry, perspective, isLast }: LedgerRowProps
           ) : bet.legCount > 1 ? (
             bet.legs.map((leg, i) => (
               <Text key={i} style={styles.primary}>
-                {leg.subjectName} · {leg.pick?.toUpperCase()} {leg.line.toFixed(1)}
+                {leg.subjectName} · {leg.pick?.toUpperCase()}
+                {betLineSuffix(leg.marketType, leg.line, leg.statKey)}
                 {leg.gameNumber != null ? ` (G${leg.gameNumber})` : ''}
               </Text>
             ))
           ) : (
             <Text style={styles.primary}>
-              {bet.subjectName} · {bet.pick?.toUpperCase()} {bet.line.toFixed(1)}
+              {bet.subjectName} · {bet.pick?.toUpperCase()}
+              {betLineSuffix(bet.marketType, bet.line, bet.statKey)}
               {bet.gameNumber != null ? ` · G${bet.gameNumber}` : ''}
             </Text>
           )
@@ -97,20 +100,23 @@ export default function LedgerRow({ entry, perspective, isLast }: LedgerRowProps
     </>
   )
 
+  // Special-branded bets carry the gold wash through the ledger too.
+  const rowStyle = [
+    styles.row,
+    bet?.customLineCategory === 'special' && styles.rowSpecial,
+    !isLast && styles.rowBorder,
+  ]
+
   // Bet-backed rows open the shared Bet Details overlay; mints (score/bonus) don't.
   return bet ? (
     <>
-      <TouchableOpacity
-        style={[styles.row, !isLast && styles.rowBorder]}
-        activeOpacity={0.7}
-        onPress={() => setDetailOpen(true)}
-      >
+      <TouchableOpacity style={rowStyle} activeOpacity={0.7} onPress={() => setDetailOpen(true)}>
         {content}
       </TouchableOpacity>
       <BetDetailModal bet={detailOpen ? bet : null} onClose={() => setDetailOpen(false)} />
     </>
   ) : (
-    <View style={[styles.row, !isLast && styles.rowBorder]}>{content}</View>
+    <View style={rowStyle}>{content}</View>
   )
 }
 
@@ -126,6 +132,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
   },
+  rowSpecial: { backgroundColor: colors.goldTint },
   info: { flex: 1 },
   customTitle: {
     fontFamily: fonts.barlowCondensed,
