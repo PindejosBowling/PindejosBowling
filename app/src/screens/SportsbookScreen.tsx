@@ -539,7 +539,9 @@ export default function SportsbookScreen() {
                   <LineRowContainer
                     title={title}
                     count={lineCount}
-                    defaultCollapsed
+                    // Game 1 opens the board ready to bet; everything else
+                    // starts as a collapsed summary bar.
+                    defaultCollapsed={group.key !== 'game-1'}
                     disabled={gameInProgress}
                     rows={containerRows}
                   />
