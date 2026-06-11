@@ -481,71 +481,69 @@ export default function SportsbookScreen() {
               </View>
             )}
             {lineGroups.map(({ group, categories }) => {
-              // Starting a game closes every one of its markets at once, so the
-              // in-progress warning is promoted to the game level: one note under
-              // the game label, and every section below it rendered inert. Season
-              // (non-game) markets close individually, so they keep the
-              // per-section note instead.
+              // ONE collapsible per outer group — "Weekly Overs", "Game 1",
+              // "Game 2", … — holding everything that used to sit under the
+              // group's text header: its specials, the moneyline row, and the
+              // team-grouped player rows (in category sort order).
               const gameInProgress =
                 group.key !== 'season' &&
                 categories.some(({ rows }) => rows.some(r => r.lines.some(l => l.inProgress)))
-              return (
-              <View key={group.key}>
-                <Text style={styles.gameLabel}>{group.label}</Text>
-                {gameInProgress && (
-                  <Text style={styles.inProgressNote}>
-                    {closedBettingNote(categories[0].rows[0].lines[0])}
-                  </Text>
-                )}
-                {/* Week-level specials share the night props' WEEKLY group. */}
-                {group.key === 'weekly' && topSpecials.length > 0 &&
-                  renderSpecialsCard(topSpecials, gameInProgress)}
-                {/* This game's custom lines lead its sections. */}
-                {group.key !== 'season' && customByGame.has(group.sortOrder) &&
-                  renderSpecialsCard(customByGame.get(group.sortOrder)!, gameInProgress)}
-                {categories.map(({ category, rows, count }) => {
-                  const groupInProgress =
-                    gameInProgress || rows.some(r => r.lines.some(l => l.inProgress))
-                  // Moneylines: headerless. The "Your Team" row is self-explanatory
-                  // (one per game), so it renders inline with no collapsible header.
-                  if (category.key === 'moneyline') {
-                    return (
-                      <View key={category.key}>
-                        {groupInProgress && !gameInProgress && (
-                          <Text style={styles.adminHint}>{closedBettingNote(rows[0].lines[0])}</Text>
-                        )}
-                        <View style={styles.card}>
-                          {rows.map((row, idx) => (
-                            <Fragment key={row.key}>
-                              {renderLineSet(row.lines, idx === rows.length - 1, groupInProgress)}
-                            </Fragment>
-                          ))}
-                        </View>
-                      </View>
-                    )
-                  }
-                  return (
-                    <LineRowContainer
-                      key={category.key}
-                      title={category.label}
-                      count={count}
-                      note={groupInProgress && !gameInProgress ? closedBettingNote(rows[0].lines[0]) : undefined}
-                      defaultCollapsed
-                      disabled={gameInProgress}
-                      rows={rows.map(row => ({
-                        key: row.key,
-                        // Keep a subject's row visible while collapsed if any of
-                        // its lines is in the parlay slip — lets players build
-                        // across sections.
-                        pinned:
-                          placeMode === 'parlay' &&
-                          row.lines.some(l => parlayLegs.some(leg => leg.marketId === l.marketId)),
-                        render: (isLast: boolean) => renderLineSet(row.lines, isLast, groupInProgress),
-                      }))}
+              const specials = group.key === 'weekly'
+                ? topSpecials
+                : group.key !== 'season' ? customByGame.get(group.sortOrder) ?? [] : []
+              const title = group.key === 'weekly'
+                ? 'Weekly Overs'
+                : group.key === 'season' ? 'Season' : `Game ${group.sortOrder}`
+              const lineCount =
+                specials.length + categories.reduce((n, c) => n + c.count, 0)
+              const containerRows = [
+                ...specials.map(cl => ({
+                  key: cl.id,
+                  render: (isLast: boolean) => (
+                    <CustomLineRow
+                      line={cl}
+                      isLast={isLast}
+                      inProgress={gameInProgress || cl.inProgress}
+                      disabled={balance < 10 || customLineSelfTank(cl, playerId)}
+                      onTake={() => onTakeCustom(cl)}
                     />
-                  )
-                })}
-              </View>
+                  ),
+                })),
+                ...categories.flatMap(({ rows }) =>
+                  rows.map(row => ({
+                    key: row.key,
+                    // Keep a subject's row visible while collapsed if any of
+                    // its lines is in the parlay slip — lets players build
+                    // across collapsed games.
+                    pinned:
+                      placeMode === 'parlay' &&
+                      row.lines.some(l => parlayLegs.some(leg => leg.marketId === l.marketId)),
+                    render: (isLast: boolean) =>
+                      renderLineSet(
+                        row.lines,
+                        isLast,
+                        gameInProgress || row.lines.some(l => l.inProgress),
+                      ),
+                  })),
+                ),
+              ]
+              return (
+                <View key={group.key}>
+                  {/* Game started: the container locks collapsed, so the
+                      in-progress note renders above the bar. */}
+                  {gameInProgress && (
+                    <Text style={styles.inProgressNote}>
+                      {closedBettingNote(categories[0].rows[0].lines[0])}
+                    </Text>
+                  )}
+                  <LineRowContainer
+                    title={title}
+                    count={lineCount}
+                    defaultCollapsed
+                    disabled={gameInProgress}
+                    rows={containerRows}
+                  />
+                </View>
               )
             })}
           </View>
