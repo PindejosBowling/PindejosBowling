@@ -507,6 +507,31 @@ export const bets = {
     supabase.rpc('cancel_bet', { p_bet_id: betId }),
 }
 
+// ── Custom lines ("Specials") ────────────────────────────────────────────────
+// Admin-authored templates bundling existing bet_selections under a custom
+// title. Legs are abstract specs ({kind, player_id, game_number, pick}) resolved
+// client-side against the week's markets in usePinsinoData; taking one places an
+// ordinary single/parlay via bets.place — no bespoke settlement path. week_ids
+// null = permanent (offered every week while is_active). Admin writes are direct
+// table ops through RLS (no money moves at create/edit time).
+export const customLines = {
+  // Place Bets board: active lines only; week applicability (week_ids null or
+  // containing the current week) is filtered client-side in usePinsinoData.
+  listActive: () =>
+    supabase.from('custom_lines').select('*').eq('is_active', true).order('created_at', { ascending: false }),
+  // Admin Specials view: everything, including disabled lines.
+  listAll: () =>
+    supabase.from('custom_lines').select('*').order('created_at', { ascending: false }),
+  create: (data: TablesInsert<'custom_lines'>) =>
+    supabase.from('custom_lines').insert(data),
+  // Edits replace legs jsonb wholesale; bets already placed are unaffected —
+  // they hold concrete selection ids snapshotted at placement.
+  update: (id: string, data: TablesUpdate<'custom_lines'>) =>
+    supabase.from('custom_lines').update(data).eq('id', id),
+  remove: (id: string) =>
+    supabase.from('custom_lines').delete().eq('id', id),
+}
+
 // ── Loan Shark (loan_products → loans → loan_ledger) ────────────────────────
 // Immutable historical loan offers; a loan is lifecycle-only (balance derived
 // from loan_ledger SUM(amount)). All player write paths (take/repay) and admin

@@ -86,6 +86,9 @@ app/
 │   │   │   ├── SettleBetModal.tsx    # Admin single-market settlement overlay (settle_market RPC)
 │   │   │   ├── LineRow.tsx           # One market row; data-driven selection buttons (see Betting Line Board)
 │   │   │   ├── LineRowContainer.tsx  # Collapsible per-category section; pinned rows stay visible collapsed (see Betting Line Board)
+│   │   │   ├── CustomLineRow.tsx     # One admin custom line ("special"): title/desc/legs + single TAKE button (see Betting Line Board)
+│   │   │   ├── CustomLineCreateModal.tsx       # Admin create/edit sheet for custom lines (leg builder + week-scope picker)
+│   │   │   ├── CustomLineAdminActionModal.tsx  # Admin per-line actions: edit / enable-disable / delete
 │   │   │   ├── LedgerRow.tsx         # One pin_ledger activity row, shared by both ledger screens
 │   │   │   └── PinsinoLeaderboardTable.tsx  # Shared leaderboard table (rank, name, balance, debt, net worth, upside); limit prop for preview
 │   │   ├── pvp/                 # PvP Challenge Contracts

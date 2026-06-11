@@ -1,4 +1,4 @@
-# Database Schema (21 tables)
+# Database Schema (22 tables)
 
 > **Betting / pin economy is documented separately.** [supabase/PIN_ECONOMY_SCHEMA.md](../supabase/PIN_ECONOMY_SCHEMA.md) is the **source of truth** for `pin_ledger` and the canonical betting tables (`bet_markets`, `bet_selections`, `bets`, `bet_legs`, `bet_offers`, `bet_matches`), the accounting model, the RPCs, and how to add a bet type. Read it before touching any `bet_*` / `pin_ledger` code. The rows below are a pointer only.
 >
@@ -19,6 +19,7 @@
 | `board_posts` | `id`, `player_id`, `message`, `created_at` |
 | `pin_ledger` | `id`, `player_id` (nullable — `NULL` for house rows), `season_id`, `amount`, `type`, `description`, `is_house`, `bet_id`, `loan_ledger_id`, `created_at`, `updated_at` |
 | **betting** (canonical model) | `bet_markets`, `bet_selections`, `bets`, `bet_legs`, `bet_offers`, `bet_matches` — columns + relationships in [supabase/PIN_ECONOMY_SCHEMA.md](../supabase/PIN_ECONOMY_SCHEMA.md) §2 |
+| `custom_lines` | `id`, `title`, `description`, `category` (`default`/`special`), `legs` (jsonb leg specs), `week_ids` (uuid[]; NULL = permanent), `is_active`, `created_by_player_id` — admin "Specials": presentation templates over existing `bet_selections`, **not** markets (taking one places an ordinary bet). Full doc: [betting-line-board.md](betting-line-board.md) |
 | `loan_products` | `id`, `display_name`, `description`, `special_warning_text`, `risk_level`, `borrow_amount`, `weekly_interest_rate`, `garnishment_rate`, `is_active`, `season_id` (NULL = global), `sort_order`, `available_from`, `available_until`, `max_uses` — immutable financial terms enforced by trigger |
 | `loans` | `id`, `player_id`, `season_id`, `loan_product_id`, `status` (`active`/`paid_off`/`season_closed`), `issued_at`, `paid_off_at`, `season_closed_at` — lifecycle only; balance derived from `loan_ledger` |
 | `loan_ledger` | `id`, `loan_id`, `player_id`, `season_id`, `week_id`, `amount` (signed), `type` (`loan_issued`/`manual_repayment`/`weekly_garnishment`/`weekly_interest`/`season_close_settlement`), `description`, `pin_ledger_id` — append-only debt log; `SUM(amount)` per loan = outstanding |

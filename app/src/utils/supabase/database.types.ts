@@ -12,31 +12,6 @@ export type Database = {
   __InternalSupabase: {
     PostgrestVersion: "14.5"
   }
-  graphql_public: {
-    Tables: {
-      [_ in never]: never
-    }
-    Views: {
-      [_ in never]: never
-    }
-    Functions: {
-      graphql: {
-        Args: {
-          extensions?: Json
-          operationName?: string
-          query?: string
-          variables?: Json
-        }
-        Returns: Json
-      }
-    }
-    Enums: {
-      [_ in never]: never
-    }
-    CompositeTypes: {
-      [_ in never]: never
-    }
-  }
   public: {
     Tables: {
       activity_feed_events: {
@@ -851,6 +826,53 @@ export type Database = {
           {
             foreignKeyName: "bounty_settlements_settled_by_admin_id_fkey"
             columns: ["settled_by_admin_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      custom_lines: {
+        Row: {
+          category: string
+          created_at: string
+          created_by_player_id: string | null
+          description: string
+          id: string
+          is_active: boolean
+          legs: Json
+          title: string
+          updated_at: string
+          week_ids: string[] | null
+        }
+        Insert: {
+          category?: string
+          created_at?: string
+          created_by_player_id?: string | null
+          description?: string
+          id?: string
+          is_active?: boolean
+          legs?: Json
+          title: string
+          updated_at?: string
+          week_ids?: string[] | null
+        }
+        Update: {
+          category?: string
+          created_at?: string
+          created_by_player_id?: string | null
+          description?: string
+          id?: string
+          is_active?: boolean
+          legs?: Json
+          title?: string
+          updated_at?: string
+          week_ids?: string[] | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "custom_lines_created_by_player_id_fkey"
+            columns: ["created_by_player_id"]
             isOneToOne: false
             referencedRelation: "players"
             referencedColumns: ["id"]
@@ -2437,9 +2459,6 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
-  graphql_public: {
-    Enums: {},
-  },
   public: {
     Enums: {},
   },

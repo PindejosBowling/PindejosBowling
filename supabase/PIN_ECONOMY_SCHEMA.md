@@ -197,6 +197,7 @@ Created when an offer is accepted; links the two opposing `bets`.
 | **House bet** | `bets.counterparty=house`; legs all `back`; house is the implicit lay. |
 | **Peer bet** | `bet_offers` → accept → two `bets` (`back`/`lay`) + `bet_matches` with pooled escrow. |
 | **Non-even odds** | `bet_selections.odds` (any value > 1.0), snapshotted per leg. |
+| **Custom line / "Special" (LIVE)** | **Not a market.** A `custom_lines` row (title/description/category + abstract leg-spec jsonb + `week_ids`/permanent lifecycle) is an admin presentation template over existing selections; the app resolves it weekly — leg specs may be **bettor-relative** (`player_id` null = whoever takes it, resolved per-viewer) — and taking it calls `place_house_bet` with the underlying selection ids: the bet is an ordinary single/parlay, zero bespoke accounting or settlement. Full doc: [context/betting-line-board.md](../context/betting-line-board.md). |
 
 ---
 
