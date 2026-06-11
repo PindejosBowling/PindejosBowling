@@ -69,7 +69,7 @@ export default function AdminSportsbookScreen() {
     const { result, error } = await generateStatLines(currentWeekId)
     if (error) { showToast(error, 'error'); return }
     showToast(
-      `Stat lines: ${result!.created} created · ${result!.skipped} kept · ${result!.pruned} pruned`,
+      `Stat lines: ${result!.created} created · ${result!.repriced} repriced · ${result!.skipped} kept · ${result!.pruned} pruned`,
       'success',
     )
     await reload()
@@ -132,8 +132,9 @@ export default function AdminSportsbookScreen() {
             />
             <Text style={styles.statLinesHint}>
               Creates this week's LaneTalk stat props (strikes/spares per game, clean% +
-              first-ball avg per night). Re-run after roster changes — strays are pruned
-              with their bets refunded.
+              first-ball avg per night), priced off each player's official imports — no
+              imports, no lines. Re-run after roster changes or new imports: unbet lines
+              reprice, strays are pruned with their bets refunded.
             </Text>
             <ActiveBetsView
               bets={activeBets}

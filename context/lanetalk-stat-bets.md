@@ -87,11 +87,13 @@ Confirm-before-archive composes too.
 + re-runnable: existing markets (any status) are skipped; open/closed markets
 whose subject/game fell off the ladder are DELETEd (bets refunded whole).
 
-- **Eligibility** = the O/U sync's ladder: participation `scores` rows when
-  games exist, else team slots, else RSVP `'in'` (× games 1–2).
-- **Seeding** (official imports only): player history when ≥3 official games,
-  else league average across all official imports, else defaults
-  (strikes 3.5, spares 3.5, clean 62.5, first-ball 8.0).
+- **Eligibility** = the O/U sync's ladder (participation `scores` rows when
+  games exist, else team slots, else RSVP `'in'` × games 1–2) **∩ players with
+  ≥1 official import**. No league-average or default fallback — a player with
+  no imported official games has no stat lines (leftovers prune on re-run).
+- **Seeding**: the player's own official-import history, frame-weighted (one
+  game is sufficient). Re-runs **reprice unbet markets** whose seeded line
+  drifted after new imports; a line never moves under a placed bet.
 - **Rounding:** counts → `floor(avg)+0.5` clamped [0.5, 9.5] (no pushes);
   clean% → `floor(avg/5)*5+2.5` (20-frame night results are multiples of 5 →
   no pushes); first-ball avg → `round(avg,1)` (a rare push refunds normally).

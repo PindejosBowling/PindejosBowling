@@ -12,13 +12,17 @@ import { STAT_LABELS } from './usePinsinoData'
 // skipped; markets whose subject/game fell off the eligibility ladder are
 // DELETEd (the refund_bets_before_market_delete trigger refunds bets whole).
 //
-// Eligibility mirrors the O/U sync's ladder: participation `scores` rows when
-// games exist, else team slots, else RSVP 'in' (× games 1–2).
+// Eligibility = the O/U sync's ladder (participation `scores` rows when games
+// exist, else team slots, else RSVP 'in' × games 1–2) **∩ players with ≥1
+// official import**. There is NO league-average or default fallback — a player
+// with no imported official games simply has no stat lines (and any leftovers
+// from before their imports were removed get pruned).
 //
-// Line seeding is priced off OFFICIAL imports only — player history when ≥3
-// official games, else the league average across all official imports, else
-// hardcoded defaults. Pricing is display-risk only: settlement derives actuals
-// server-side (settle_lanetalk_props_for_week), never from these numbers.
+// Line seeding is priced off the player's OFFICIAL imports only. Re-runs also
+// REPRICE markets whose seeded line drifted — but only unbet ones (never move
+// a line under a placed bet). Pricing is display-risk only: settlement derives
+// actuals server-side (settle_lanetalk_props_for_week), never from these
+// numbers.
 //
 // Caveat (documented in context/lanetalk-stat-bets.md): there is no
 // server-side roster coupling for props — roster changes after generation need
@@ -27,16 +31,6 @@ import { STAT_LABELS } from './usePinsinoData'
 type StatKey = 'strikes' | 'spares' | 'clean_pct' | 'first_ball_avg'
 const GAME_STATS: StatKey[] = ['strikes', 'spares']
 const NIGHT_STATS: StatKey[] = ['clean_pct', 'first_ball_avg']
-
-// League has no official imports at all → hardcoded seeds.
-const DEFAULT_LINES: Record<StatKey, number> = {
-  strikes: 3.5,
-  spares: 3.5,
-  clean_pct: 62.5,
-  first_ball_avg: 8.0,
-}
-
-const MIN_HISTORY_GAMES = 3
 
 // Rounding policy (TODO/design): counts land on a half so they can't push;
 // clean% lands between the 5%-multiples a 20-frame night can produce; the
@@ -81,6 +75,7 @@ function averagesFromPayloads(payloads: any[]): SeedAverages | null {
 export interface GenerateStatLinesResult {
   created: number
   pruned: number
+  repriced: number
   skipped: number
 }
 
@@ -148,10 +143,9 @@ export function useLanetalkLineAdmin() {
           }
         }
       }
-      const subjects = new Set([...pairs].map(p => p.split('|')[0]))
-
-      // Seed lines per subject: player official history (≥3 games) → league
-      // average over all official imports → hardcoded defaults.
+      // Seed lines strictly from each player's own official history — one game
+      // is sufficient; no league-average or default fallback. A player with no
+      // usable official imports gets NO entry here, and therefore no markets.
       const payloadsByPlayer = new Map<string, any[]>()
       for (const r of importRows as any[]) {
         if (!r.player_id) continue
@@ -159,19 +153,18 @@ export function useLanetalkLineAdmin() {
         if (arr) arr.push(r.payload)
         else payloadsByPlayer.set(r.player_id, [r.payload])
       }
-      const leagueAverages = averagesFromPayloads((importRows as any[]).map(r => r.payload))
-      const leagueLines = leagueAverages ? linesFromAverages(leagueAverages) : DEFAULT_LINES
       const linesByPlayer = new Map<string, Record<StatKey, number>>()
-      for (const pid of subjects) {
-        const payloads = payloadsByPlayer.get(pid) ?? []
-        const own = payloads.length >= MIN_HISTORY_GAMES ? averagesFromPayloads(payloads) : null
-        linesByPlayer.set(pid, own ? linesFromAverages(own) : leagueLines)
+      for (const pid of new Set([...pairs].map(p => p.split('|')[0]))) {
+        const own = averagesFromPayloads(payloadsByPlayer.get(pid) ?? [])
+        if (own) linesByPlayer.set(pid, linesFromAverages(own))
       }
+      const subjects = new Set(linesByPlayer.keys())
 
       // Desired market set, keyed `${playerId}|${gameNumber ?? 'night'}|${stat}`.
       const desired = new Map<string, { playerId: string; gameNumber: number | null; stat: StatKey }>()
       for (const pair of pairs) {
         const [pid, gnStr] = pair.split('|')
+        if (!subjects.has(pid)) continue
         for (const stat of GAME_STATS) {
           desired.set(`${pid}|${gnStr}|${stat}`, { playerId: pid, gameNumber: Number(gnStr), stat })
         }
@@ -196,6 +189,22 @@ export function useLanetalkLineAdmin() {
         if (error) return { error: error.message }
       }
 
+      // Reprice kept markets whose seeded line drifted (new imports since the
+      // last run) — UNBET ones only: a line never moves under a placed bet.
+      let repriced = 0
+      for (const m of existingRows as any[]) {
+        const d = desired.get(existingKey(m))
+        if (!d || (m.status !== 'open' && m.status !== 'closed')) continue
+        const want = linesByPlayer.get(d.playerId)?.[d.stat]
+        const sels: any[] = m.bet_selections ?? []
+        const current = sels[0]?.line != null ? Number(sels[0].line) : null
+        const hasBets = sels.some(s => (s.bet_legs ?? []).length > 0)
+        if (want == null || current === want || hasBets) continue
+        const { error } = await betMarkets.setSelectionLineByMarket(m.id, want)
+        if (error) return { error: error.message }
+        repriced += 1
+      }
+
       // Create what's missing.
       const toCreate = [...desired.entries()].filter(([key]) => !existingKeys.has(key))
       let created = 0
@@ -217,7 +226,8 @@ export function useLanetalkLineAdmin() {
         const selectionRows: TablesInsert<'bet_selections'>[] = []
         for (const m of (inserted ?? []) as any[]) {
           const stat = m.params?.stat as StatKey
-          const line = (linesByPlayer.get(m.subject_player_id) ?? DEFAULT_LINES)[stat]
+          // Markets are only ever created for subjects in linesByPlayer.
+          const line = linesByPlayer.get(m.subject_player_id)![stat]
           selectionRows.push(
             { market_id: m.id, key: 'over', label: 'Over', odds: 2.0, line, sort_order: 0 },
             { market_id: m.id, key: 'under', label: 'Under', odds: 2.0, line, sort_order: 1 },
@@ -232,6 +242,7 @@ export function useLanetalkLineAdmin() {
         result: {
           created,
           pruned: staleIds.length,
+          repriced,
           skipped: desired.size - created,
         },
       }

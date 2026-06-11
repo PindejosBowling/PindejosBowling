@@ -416,11 +416,12 @@ export const betMarkets = {
       .order('game_number', { nullsFirst: false })
       .order('subject_player_id'),
   // Every LaneTalk prop market for a week, any status — drives idempotent line
-  // generation (skip existing, prune ineligible).
+  // generation (skip existing, prune ineligible, reprice unbet lines). The
+  // selections embed carries each side's line + whether any bet leg holds it.
   listLanetalkPropsByWeek: (weekId: string) =>
     supabase
       .from('bet_markets')
-      .select('id, game_number, subject_player_id, params, status, title')
+      .select('id, game_number, subject_player_id, params, status, title, bet_selections(id, line, bet_legs(id))')
       .eq('week_id', weekId)
       .eq('market_type', 'prop')
       .eq('params->>source', 'lanetalk'),
@@ -441,6 +442,11 @@ export const betMarkets = {
     supabase.from('bet_markets').insert(rows).select('id, subject_player_id, game_number, params'),
   insertSelections: (rows: TablesInsert<'bet_selections'>[]) =>
     supabase.from('bet_selections').insert(rows),
+  // Reprice both sides of an (unbet) market — line-generation re-runs move a
+  // stale line to the subject's current seeded value. Callers must ensure no
+  // bet legs hold the market's selections (never reprice under a placed bet).
+  setSelectionLineByMarket: (marketId: string, line: number) =>
+    supabase.from('bet_selections').update({ line }).eq('market_id', marketId),
   // Admin prune of stale prop markets. The refund_bets_before_market_delete
   // trigger refunds every touched bet whole (incl. parlays spanning others).
   removeMarkets: (ids: string[]) =>
