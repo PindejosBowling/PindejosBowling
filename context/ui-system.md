@@ -2,7 +2,7 @@
 
 ## Player Badges
 
-**File:** [src/utils/badges.ts](../app/src/utils/badges.ts) + [src/components/PlayerBadges.tsx](../app/src/components/PlayerBadges.tsx)
+**File:** [src/utils/badges.ts](../app/src/utils/badges.ts) + [src/components/ui/PlayerBadges.tsx](../app/src/components/ui/PlayerBadges.tsx)
 
 Status emojis shown next to a player's name (e.g. 👑 next to the reigning champion in Standings). The system is a declarative **rule list**, not scattered inline conditions.
 
@@ -122,6 +122,8 @@ Central signed-URL cache for player profile pictures. `load()` fetches `players.
 
 ## Component Inventory
 
+> The complete per-component index (props, mount patterns, shared conventions, all 49 components grouped by domain) lives in [COMPONENTS_INDEX.md](COMPONENTS_INDEX.md). The tables below keep the narrative detail for the core + betting components.
+
 | Component | Purpose |
 |---|---|
 | `AppHeader` | App logo + current Week/Season badge, reads from Supabase (`weeks.getCurrent`, `seasons.getCurrent`). Top-right avatar is a `<PlayerAvatar>` opening `ProfileMenuModal` |
@@ -157,7 +159,7 @@ These render the betting/pin-economy UI and are reused across SportsbookScreen (
 | `LedgerRow` | One `pin_ledger` activity row (`{ entry, perspective, isLast }`) — the **single shared renderer for both ledger surfaces**. Shows the bet specifics when the entry carries an associated `bet` (`subject · PICK line · G#`, or per-leg for parlays), else the raw `description`; plus an **action label** derived from `(type, perspective)` (`BET PLACED`/`BET TAKEN`, `WINNING PAYOUT`, `PUSH · REFUND`, `GAME SCORE`, `BONUS`; and for loan types: `LOAN ADVANCE`/`LOAN ISSUED`, `REPAYMENT`/`REPAYMENT RECEIVED`, `GARNISHED`/`GARNISHMENT`, `SEASON-CLOSE PAYMENT`/`SEASON-CLOSE COLLECTION`), the bettor name on the house side, the date, and the signed amount (gold for bonuses). `perspective` = `'player'` \| `'house'`. **Bet-backed rows are tappable** and open the shared `BetDetailModal`; mint and loan rows render as static `View`s. Used in PlayerPinsinoScreen (Activity) + PinsinoAccountingScreen (Activity) |
 | `BetDetailModal` | Shared **"Bet Details" overlay** (`{ bet: BetView \| null, onClose }`; renders `null` when `bet` is null). The canonical single-bet breakdown: bettor / season / week, a **consolidated leg view for 1+ legs** (a single bet is just one leg — labeled `SELECTION`, parlays `LEGS (N)`), then wager / status / return. Each leg shows `subject · PICK line · G#` and, once settled, a ` -- ` divider followed by the leg's actual score **color-coded to its win/loss/push outcome** (status word is not repeated — the bet `status` row reports it once). When `BetView.customLineTitle` is set (client-matched special), a `SPECIAL` row with the title (gold for `special` category) precedes the legs. Also **exports the `resultBadge(status)` and `betReturnText(bet)` helpers** (status→badge color/label; signed return text) reused by BetRow callers. Opened from `BetRow` taps (SportsbookScreen + AdminSportsbookScreen Active/Settled) and `LedgerRow` taps (both ledger Activity tabs) |
 | `CustomLineRow` | One admin custom line ("special") on the Place Bets board (`{ line: CustomLineView, isLast, inProgress?, disabled?, onTake? }`). Title + description + per-leg summary left, a single `×odds TAKE` button right; `category === 'special'` → gold chip/colors, `default` → standard accent. Mirrors `LineRow`'s callback-gating (`disabled` dims but stays pressable for toasts). See **Betting Line Board → Custom lines** |
-| `CustomLineCreateModal` | Admin create/edit sheet for custom lines (`{ currentWeekId, seasonId, initial?, onClose, onDone }`). Title/description/style, scope (This Week / Pick Weeks / Every Week), and a leg builder (Player O/U or Team Win anchor via `PlayerPickerModal`, game chips, over/under pick). Direct `customLines` table writes through admin RLS. **Mount conditionally**; pass `initial` (raw row) for Edit |
-| `CustomLineAdminActionModal` | Admin per-line action sheet (`{ line, onClose, onDone, onEdit }`): Edit / Enable–Disable / Delete (destructive `Alert.alert` confirm — placed bets keep their selections and settle normally). **Mount conditionally.** Used only by AdminSportsbookScreen's Specials view |
+| `CustomLineCreateModal` | Admin create/edit sheet for custom lines on `BottomSheet` (`{ currentWeekId, seasonId, initial?, onClose, onDone }`). Title/description/style, scope (This Week / Pick Weeks / Every Week), and a leg builder (Player O/U or Team Win anchor via `PlayerPickerModal`, game chips, over/under pick). Direct `customLines` table writes through admin RLS. **Mount conditionally**; pass `initial` (raw row) for Edit |
+| `CustomLineAdminActionModal` | Admin per-line action sheet on `BottomSheet` + `useAdminAction` (`{ line, onClose, onDone, onEdit }`): Edit / Enable–Disable / Delete (destructive confirm — placed bets keep their selections and settle normally). **Mount conditionally.** Used only by AdminSportsbookScreen's Specials view |
 
 > **Ledger Activity is bet-aware.** `pinLedger.listByPlayerSeason` / `listHouseBySeason` embed the bet graph (`bets(*, players(name), <LEG_GRAPH>)`) off `pin_ledger.bet_id`; the hooks (`usePlayerPinsinoData`, `useHousePinsinoData`) normalize it onto each `LedgerEntry.bet` via `normalizeBet`, so a `bet_*` ledger row can render the same bet detail (and open the same overlay) as the Bets tabs. `score_credit` / `bonus` rows have no `bet_id` → `bet` is `null`.

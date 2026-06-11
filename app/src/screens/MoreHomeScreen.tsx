@@ -5,8 +5,8 @@ import { useNavigation } from '@react-navigation/native'
 import { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { colors, fonts, radius } from '../theme'
 import { MoreStackParamList } from '../navigation/types'
-import AppHeader from '../components/AppHeader'
-import AdminEndSeasonModal from '../components/AdminEndSeasonModal'
+import AppHeader from '../components/league/AppHeader'
+import AdminEndSeasonModal from '../components/admin/AdminEndSeasonModal'
 import { useAuthStore } from '../stores/authStore'
 
 type Nav = NativeStackNavigationProp<MoreStackParamList>

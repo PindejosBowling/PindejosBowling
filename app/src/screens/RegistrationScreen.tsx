@@ -13,9 +13,9 @@ import { colors, fonts, radius } from '../theme'
 import { useRegistrationData } from '../hooks/useRegistrationData'
 import { useRefresh } from '../hooks/useRefresh'
 import { MoreStackParamList } from '../navigation/types'
-import LoadingView from '../components/LoadingView'
-import ScreenHeader from '../components/ScreenHeader'
-import PillFilter from '../components/PillFilter'
+import LoadingView from '../components/ui/LoadingView'
+import ScreenHeader from '../components/ui/ScreenHeader'
+import PillFilter from '../components/ui/PillFilter'
 
 type Nav = NativeStackNavigationProp<MoreStackParamList>
 

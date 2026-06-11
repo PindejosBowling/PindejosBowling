@@ -12,9 +12,9 @@ import {
 } from 'react-native'
 import { useRefresh } from '../hooks/useRefresh'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import AppHeader from '../components/AppHeader'
-import ConfirmBar from '../components/ConfirmBar'
-import LoadingView from '../components/LoadingView'
+import AppHeader from '../components/league/AppHeader'
+import ConfirmBar from '../components/ui/ConfirmBar'
+import LoadingView from '../components/ui/LoadingView'
 import { usePendingStore } from '../stores/pendingStore'
 import { useAuthStore } from '../stores/authStore'
 import {

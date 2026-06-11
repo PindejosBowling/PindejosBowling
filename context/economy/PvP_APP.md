@@ -46,14 +46,14 @@ surfaces.
 **Pattern templates to copy from:**
 - Data hook: `app/src/hooks/usePinsinoData.ts`, `usePlayerPinsinoData.ts` (fetch → flatten;
   no memo in hook).
-- Action modal: `app/src/components/SettleBetModal.tsx` (bottom sheet, `<Toast/>` inside,
+- Action modal: `app/src/components/betting/SettleBetModal.tsx` (bottom sheet, `<Toast/>` inside,
   RPC→toast→`onDone`→`onClose`); `AdminEndSeasonModal.tsx` (centered confirm card,
   disabled-while-saving).
 - Hub screen + tiles: `app/src/screens/PinsinoScreen.tsx`, `PinsinoAdminScreen.tsx`.
 - Admin list + cancel UX: `app/src/screens/AdminSportsbookScreen.tsx`.
-- Opponent picker: `app/src/components/PlayerPickerModal.tsx`.
+- Opponent picker: `app/src/components/ui/PlayerPickerModal.tsx`.
 - db.ts query objects + RPC wrappers: `app/src/utils/supabase/db.ts`.
-- Ledger row rendering: `app/src/components/LedgerRow.tsx`.
+- Ledger row rendering: `app/src/components/betting/LedgerRow.tsx`.
 
 ---
 
@@ -227,7 +227,7 @@ From `usePvpChallengeDetail`:
   viewer's turn), **Rematch** (loser of a settled contract — opens create prefilled,
   double stake, same type), or none.
 
-### Counteroffer modal + Accept-confirm modal (`app/src/components/`)
+### Counteroffer modal + Accept-confirm modal (`app/src/components/pvp/`)
 Both modeled on `SettleBetModal` (bottom sheet, `<Toast/>` inside, mounted conditionally
 so they reset between opens, disabled-while-saving).
 - **`PvpAcceptModal`**: re-displays the full revised terms and **recomputed
@@ -262,7 +262,7 @@ so they reset between opens, disabled-while-saving).
   (title "PvP Admin").
 
 ### Ledger rendering — PvP-aware rows
-`app/src/components/LedgerRow.tsx`: add action labels for the three new `pin_ledger` PvP
+`app/src/components/betting/LedgerRow.tsx`: add action labels for the three new `pin_ledger` PvP
 types, for both perspectives (player vs house):
 - `pvp_stake` → player "CHALLENGE STAKE", house "CHALLENGE ESCROW"
 - `pvp_payout` → player "CHALLENGE WIN", house "CHALLENGE PAYOUT"

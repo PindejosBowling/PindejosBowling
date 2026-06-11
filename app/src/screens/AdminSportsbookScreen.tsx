@@ -5,22 +5,23 @@ import { useNavigation } from '@react-navigation/native'
 import { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { colors, fonts, radius } from '../theme'
 import { MoreStackParamList } from '../navigation/types'
-import ScreenHeader from '../components/ScreenHeader'
-import LoadingView from '../components/LoadingView'
-import ToggleGroup from '../components/ToggleGroup'
-import ActiveBetsView from '../components/ActiveBetsView'
-import SettledBetsView from '../components/SettledBetsView'
-import BetDetailModal from '../components/BetDetailModal'
-import SettleBetModal from '../components/SettleBetModal'
-import Button from '../components/Button'
-import CustomLineCreateModal from '../components/CustomLineCreateModal'
-import CustomLineAdminActionModal from '../components/CustomLineAdminActionModal'
+import ScreenHeader from '../components/ui/ScreenHeader'
+import LoadingView from '../components/ui/LoadingView'
+import ToggleGroup from '../components/ui/ToggleGroup'
+import ActiveBetsView from '../components/betting/ActiveBetsView'
+import SettledBetsView from '../components/betting/SettledBetsView'
+import BetDetailModal from '../components/betting/BetDetailModal'
+import SettleBetModal from '../components/betting/SettleBetModal'
+import Button from '../components/ui/Button'
+import CustomLineCreateModal from '../components/betting/CustomLineCreateModal'
+import CustomLineAdminActionModal from '../components/betting/CustomLineAdminActionModal'
 import { useRefresh } from '../hooks/useRefresh'
 import { useHousePinsinoData } from '../hooks/useHousePinsinoData'
 import { useAuthStore } from '../stores/authStore'
 import { useUiStore } from '../stores/uiStore'
 import { type BetView } from '../hooks/usePinsinoData'
 import { bets, customLines } from '../utils/supabase/db'
+import EmptyCard from '../components/ui/EmptyCard'
 
 type Nav = NativeStackNavigationProp<MoreStackParamList>
 type HouseView = 'active' | 'settled' | 'specials'
@@ -85,9 +86,7 @@ export default function AdminSportsbookScreen() {
     return (
       <SafeAreaView style={styles.safe} edges={['top']}>
         <ScreenHeader title="Sportsbook" onBack={() => navigation.goBack()} />
-        <View style={styles.emptyCard}>
-          <Text style={styles.emptyText}>Admins only</Text>
-        </View>
+        <EmptyCard text="Admins only" />
       </SafeAreaView>
     )
   }
@@ -136,9 +135,7 @@ export default function AdminSportsbookScreen() {
             </Text>
             <Button label="New Special" onPress={() => setCreateOpen(true)} style={styles.newSpecialBtn} />
             {specials.length === 0 ? (
-              <View style={styles.emptyCard}>
-                <Text style={styles.emptyText}>No specials yet</Text>
-              </View>
+              <EmptyCard text="No specials yet" />
             ) : (
               <View style={styles.specialsCard}>
                 {specials.map((line, idx) => {
@@ -218,21 +215,6 @@ const styles = StyleSheet.create({
   content: { paddingHorizontal: 16, paddingBottom: 40 },
 
   viewToggle: { marginBottom: 20 },
-
-  emptyCard: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.cardMd,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 20,
-    alignItems: 'center',
-  },
-  emptyText: {
-    fontFamily: fonts.barlowCondensed,
-    fontSize: 14,
-    color: colors.muted,
-    letterSpacing: 0.3,
-  },
 
   // Specials manager
   specialsHint: {

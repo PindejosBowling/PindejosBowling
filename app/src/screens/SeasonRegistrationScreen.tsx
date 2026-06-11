@@ -18,11 +18,11 @@ import { useRegistrationData, SeasonOption } from '../hooks/useRegistrationData'
 import { useRefresh } from '../hooks/useRefresh'
 import { registrations, seasons } from '../utils/supabase/db'
 import { MoreStackParamList } from '../navigation/types'
-import LoadingView from '../components/LoadingView'
-import ScreenHeader from '../components/ScreenHeader'
-import PillFilter from '../components/PillFilter'
-import AdminOpenRegistrationModal from '../components/AdminOpenRegistrationModal'
-import AdminEditSeasonModal from '../components/AdminEditSeasonModal'
+import LoadingView from '../components/ui/LoadingView'
+import ScreenHeader from '../components/ui/ScreenHeader'
+import PillFilter from '../components/ui/PillFilter'
+import AdminOpenRegistrationModal from '../components/admin/AdminOpenRegistrationModal'
+import AdminEditSeasonModal from '../components/admin/AdminEditSeasonModal'
 
 type Nav = NativeStackNavigationProp<MoreStackParamList>
 

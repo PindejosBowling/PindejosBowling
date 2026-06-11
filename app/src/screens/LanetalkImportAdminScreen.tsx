@@ -7,15 +7,16 @@ import { useNavigation } from '@react-navigation/native'
 import { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { colors, fonts, radius } from '../theme'
 import { MoreStackParamList } from '../navigation/types'
-import ScreenHeader from '../components/ScreenHeader'
-import LoadingView from '../components/LoadingView'
-import Toast from '../components/Toast'
-import Dropdown from '../components/Dropdown'
+import ScreenHeader from '../components/ui/ScreenHeader'
+import LoadingView from '../components/ui/LoadingView'
+import Toast from '../components/ui/Toast'
+import Dropdown from '../components/ui/Dropdown'
 import { useRefresh } from '../hooks/useRefresh'
 import { useAuthStore } from '../stores/authStore'
 import { useUiStore } from '../stores/uiStore'
 import { useLanetalkImportAdmin } from '../hooks/useLanetalkImportAdmin'
 import { lanetalkImports, type LanetalkImportSummary } from '../utils/supabase/db'
+import EmptyCard from '../components/ui/EmptyCard'
 
 type Nav = NativeStackNavigationProp<MoreStackParamList>
 
@@ -185,7 +186,7 @@ export default function LanetalkImportAdminScreen() {
     return (
       <SafeAreaView style={styles.safe} edges={['top']}>
         <ScreenHeader title="Lanetalk Import" onBack={() => navigation.goBack()} />
-        <View style={styles.emptyCard}><Text style={styles.emptyText}>Admins only</Text></View>
+        <EmptyCard text="Admins only" style={{ marginTop: 12 }} />
       </SafeAreaView>
     )
   }
@@ -249,7 +250,7 @@ export default function LanetalkImportAdminScreen() {
 
         <Text style={styles.sectionHeader}>RECENT IMPORTS</Text>
         {weekGroups.length === 0 ? (
-          <View style={styles.emptyCard}><Text style={styles.emptyText}>No imports yet.</Text></View>
+          <EmptyCard text="No imports yet." style={{ marginTop: 12 }} />
         ) : (
           weekGroups.map(wg => {
             const expanded = isWeekExpanded(wg.weekKey)
@@ -417,14 +418,4 @@ const styles = StyleSheet.create({
   gameClassCol: { alignItems: 'center' },
   gameLabel: { fontFamily: fonts.barlowCondensed, fontSize: 15, color: colors.text, textAlign: 'center' },
   gameScore: { fontFamily: fonts.barlowCondensed, fontSize: 18, color: colors.text, textAlign: 'center' },
-  emptyCard: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.cardMd,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 20,
-    alignItems: 'center',
-    marginTop: 12,
-  },
-  emptyText: { fontFamily: fonts.barlowCondensed, fontSize: 14, color: colors.muted, letterSpacing: 0.3 },
 })

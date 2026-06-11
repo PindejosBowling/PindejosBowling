@@ -4,12 +4,12 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { useNavigation, useFocusEffect } from '@react-navigation/native'
 import { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { colors, fonts, radius } from '../theme'
-import ScreenHeader from '../components/ScreenHeader'
-import LoadingView from '../components/LoadingView'
-import PillFilter from '../components/PillFilter'
-import MarketMoveCard from '../components/MarketMoveCard'
-import BetDetailModal from '../components/BetDetailModal'
-import PvPChallengeDetailModal from '../components/PvPChallengeDetailModal'
+import ScreenHeader from '../components/ui/ScreenHeader'
+import LoadingView from '../components/ui/LoadingView'
+import PillFilter from '../components/ui/PillFilter'
+import MarketMoveCard from '../components/economy/MarketMoveCard'
+import BetDetailModal from '../components/betting/BetDetailModal'
+import PvpChallengeDetailModal from '../components/pvp/PvpChallengeDetailModal'
 import { useMarketMovesData, FeedFilter, WeekInfoById } from '../hooks/useMarketMovesData'
 import { useRefresh } from '../hooks/useRefresh'
 import { useAuthStore } from '../stores/authStore'
@@ -189,7 +189,7 @@ export default function MarketMovesScreen() {
       />
       <BetDetailModal bet={detailBet} onClose={() => setDetailBet(null)} />
       {detailChallengeId && (
-        <PvPChallengeDetailModal
+        <PvpChallengeDetailModal
           challengeId={detailChallengeId}
           onClose={() => setDetailChallengeId(null)}
           onChanged={reload}

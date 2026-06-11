@@ -15,18 +15,19 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { useNavigation } from '@react-navigation/native'
 import { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { colors, fonts, radius } from '../theme'
-import ScreenHeader from '../components/ScreenHeader'
-import LoadingView from '../components/LoadingView'
-import ToggleGroup from '../components/ToggleGroup'
-import Toast from '../components/Toast'
-import BetRow from '../components/BetRow'
-import ActiveBetsView from '../components/ActiveBetsView'
-import SettledBetsView from '../components/SettledBetsView'
-import BetDetailModal, { resultBadge, betReturnText } from '../components/BetDetailModal'
-import LineRow from '../components/LineRow'
-import LineRowContainer from '../components/LineRowContainer'
-import CustomLineRow from '../components/CustomLineRow'
-import Button from '../components/Button'
+import ScreenHeader from '../components/ui/ScreenHeader'
+import LoadingView from '../components/ui/LoadingView'
+import ToggleGroup from '../components/ui/ToggleGroup'
+import Toast from '../components/ui/Toast'
+import BetRow from '../components/betting/BetRow'
+import ActiveBetsView from '../components/betting/ActiveBetsView'
+import SettledBetsView from '../components/betting/SettledBetsView'
+import BetDetailModal from '../components/betting/BetDetailModal'
+import { resultBadge, betReturnText } from '../utils/bets'
+import LineRow from '../components/betting/LineRow'
+import LineRowContainer from '../components/betting/LineRowContainer'
+import CustomLineRow from '../components/betting/CustomLineRow'
+import Button from '../components/ui/Button'
 import {
   usePinsinoData,
   selectionBetsAgainstSubject,
@@ -46,6 +47,7 @@ import { useAuthStore } from '../stores/authStore'
 import { useUiStore } from '../stores/uiStore'
 import { bets } from '../utils/supabase/db'
 import { PinsinoStackParamList } from '../navigation/types'
+import EmptyCard from '../components/ui/EmptyCard'
 
 type PinsinoNav = NativeStackNavigationProp<PinsinoStackParamList>
 
@@ -483,9 +485,7 @@ export default function SportsbookScreen() {
             })}
           </>
         ) : topSpecials.length === 0 ? (
-          <View style={styles.emptyCard}>
-            <Text style={styles.emptyText}>No open lines this week</Text>
-          </View>
+          <EmptyCard text="No open lines this week" />
         ) : null}
 
         {/* Week-wide specials (legs across games) — own top-level section. */}
@@ -809,20 +809,6 @@ const styles = StyleSheet.create({
     fontFamily: fonts.barlowCondensed,
     fontSize: 15,
     color: colors.danger,
-  },
-  emptyCard: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.cardMd,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 20,
-    alignItems: 'center',
-  },
-  emptyText: {
-    fontFamily: fonts.barlowCondensed,
-    fontSize: 14,
-    color: colors.muted,
-    letterSpacing: 0.3,
   },
 
   adminHint: {

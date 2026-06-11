@@ -4,7 +4,7 @@ import { useNavigation } from '@react-navigation/native'
 import { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { colors, fonts, radius } from '../theme'
 import { MoreStackParamList } from '../navigation/types'
-import ScreenHeader from '../components/ScreenHeader'
+import ScreenHeader from '../components/ui/ScreenHeader'
 
 type Nav = NativeStackNavigationProp<MoreStackParamList>
 

@@ -1,6 +1,6 @@
 # Toast system
 
-The global toast (`app/src/components/Toast.tsx` + the `toasts` array / `showToast` action in `app/src/stores/uiStore.ts`).
+The global toast (`app/src/components/ui/Toast.tsx` + the `toasts` array / `showToast` action in `app/src/stores/uiStore.ts`).
 
 ## How it works
 
@@ -23,3 +23,7 @@ The original symptom: `PvPCreateScreen.submit()` calls `showToast('Challenge sen
 Fix (in `Toast.tsx`): each instance records the latest toast `id` present **when it mounts** (its baseline) and only renders toasts with a greater id. A screen sliding in therefore never inherits a toast its predecessor triggered mid-transition — each toast belongs to the screen mounted when it fired. Modal toasts are unaffected (a modal mounts before its own actions fire, so newer ids still show).
 
 **If you see duplicate toasts during a navigation transition, check this mount-baseline logic — not the individual `showToast` call sites.**
+
+## BottomSheet enforces the rule structurally
+
+`components/ui/BottomSheet.tsx` (the shared bottom-sheet scaffold) renders `<Toast />` inside its `<Modal>` unconditionally — any sheet built on it gets the in-modal Toast for free. Only hand-rolled `<Modal>`s (the older `visible`-prop family) still need to remember to mount `<Toast />` themselves.

@@ -12,12 +12,12 @@ import { computeStandingsFromSupabase } from '../hooks/useStandingsData'
 import { useRefresh } from '../hooks/useRefresh'
 import { useWeekEditor } from '../hooks/useWeekEditor'
 import { MoreStackParamList } from '../navigation/types'
-import LoadingView from '../components/LoadingView'
-import ScreenHeader from '../components/ScreenHeader'
-import PillFilter from '../components/PillFilter'
-import HistoricalTeamBlock from '../components/HistoricalTeamBlock'
-import EditableWeek from '../components/EditableWeek'
-import ConfirmBar from '../components/ConfirmBar'
+import LoadingView from '../components/ui/LoadingView'
+import ScreenHeader from '../components/ui/ScreenHeader'
+import PillFilter from '../components/ui/PillFilter'
+import HistoricalTeamBlock from '../components/league/HistoricalTeamBlock'
+import EditableWeek from '../components/league/EditableWeek'
+import ConfirmBar from '../components/ui/ConfirmBar'
 
 type Nav = NativeStackNavigationProp<MoreStackParamList>
 

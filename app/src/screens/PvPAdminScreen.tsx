@@ -5,16 +5,17 @@ import { useNavigation } from '@react-navigation/native'
 import { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { colors, fonts, radius } from '../theme'
 import { MoreStackParamList } from '../navigation/types'
-import ScreenHeader from '../components/ScreenHeader'
-import LoadingView from '../components/LoadingView'
-import PillFilter from '../components/PillFilter'
-import PvpChallengeRow from '../components/PvpChallengeRow'
-import PvpAdminActionModal from '../components/PvpAdminActionModal'
+import ScreenHeader from '../components/ui/ScreenHeader'
+import LoadingView from '../components/ui/LoadingView'
+import PillFilter from '../components/ui/PillFilter'
+import PvpChallengeRow from '../components/pvp/PvpChallengeRow'
+import PvpAdminActionModal from '../components/pvp/PvpAdminActionModal'
 import { useRefresh } from '../hooks/useRefresh'
 import { useAuthStore } from '../stores/authStore'
 import { seasons, pvpChallenges } from '../utils/supabase/db'
 import { normalizeChallenge, PvpChallengeView } from '../hooks/usePvpData'
 import { CONTRACT_TYPE_LABEL, STATUS_LABEL } from '../utils/pvp'
+import EmptyCard from '../components/ui/EmptyCard'
 
 type Nav = NativeStackNavigationProp<MoreStackParamList>
 
@@ -58,7 +59,7 @@ export default function PvPAdminScreen() {
     return (
       <SafeAreaView style={styles.safe} edges={['top']}>
         <ScreenHeader title="PvP Admin" onBack={() => navigation.goBack()} />
-        <View style={styles.emptyCard}><Text style={styles.emptyText}>Admins only</Text></View>
+        <EmptyCard text="Admins only" style={{ margin: 16 }} />
       </SafeAreaView>
     )
   }
@@ -79,7 +80,7 @@ export default function PvPAdminScreen() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.muted} />}
       >
         {rows.length === 0 ? (
-          <View style={styles.emptyCard}><Text style={styles.emptyText}>No open, active, or settled contracts.</Text></View>
+          <EmptyCard text="No open, active, or settled contracts." style={{ margin: 16 }} />
         ) : (
           rows.map(c => (
             <PvpChallengeRow
@@ -103,14 +104,4 @@ export default function PvPAdminScreen() {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.bg },
   content: { paddingHorizontal: 16, paddingBottom: 40 },
-  emptyCard: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.cardMd,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 20,
-    alignItems: 'center',
-    margin: 16,
-  },
-  emptyText: { fontFamily: fonts.barlowCondensed, fontSize: 14, color: colors.muted, letterSpacing: 0.3 },
 })
