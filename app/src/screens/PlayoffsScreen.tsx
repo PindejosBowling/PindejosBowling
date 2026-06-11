@@ -356,14 +356,12 @@ export default function PlayoffsScreen() {
                   {draft.status === 'completed' && (
                     <Button label="Create teams" onPress={() => setConfirmMaterialize(true)} />
                   )}
-                  {draft.status !== 'materialized' && (
-                    <Button
-                      label="Reset draft"
-                      variant="outline"
-                      tone="danger"
-                      onPress={() => setConfirmReset(true)}
-                    />
-                  )}
+                  <Button
+                    label="Reset draft"
+                    variant="outline"
+                    tone="danger"
+                    onPress={() => setConfirmReset(true)}
+                  />
                 </View>
               </>
             )}
@@ -397,13 +395,17 @@ export default function PlayoffsScreen() {
           title="Reset the draft?"
           confirmLabel="Reset draft"
           confirmVariant="danger"
-          action={() => playoffDrafts.remove(draft.id)}
+          action={() => playoffDrafts.reset(draft.id)}
           successMessage="Draft reset"
           onClose={() => setConfirmReset(false)}
           onDone={reload}
         >
           <Text style={styles.sheetBody}>
-            Deletes the draft, its captains, pool, and all {draft.picks.length} picks. Set up a fresh draft afterwards.
+            Deletes the draft, its captains, pool, and all {draft.picks.length} picks
+            {draft.status === 'materialized'
+              ? `, and removes the created teams (and any of their scores) from Week ${draft.weekNumber ?? '?'}`
+              : ''}
+            . Set up a fresh draft afterwards.
           </Text>
         </ConfirmActionSheet>
       )}

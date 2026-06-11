@@ -2466,6 +2466,7 @@ export type Database = {
         Args: { p_draft_id: string }
         Returns: undefined
       }
+      playoff_reset_draft: { Args: { p_draft_id: string }; Returns: undefined }
       playoff_undo_pick: { Args: { p_draft_id: string }; Returns: undefined }
       process_weekly_loans: { Args: { p_week_id: string }; Returns: undefined }
       publish_activity_event: {

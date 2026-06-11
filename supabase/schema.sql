@@ -3555,6 +3555,42 @@ END;
 $function$
 ;
 
+CREATE OR REPLACE FUNCTION public.playoff_reset_draft(p_draft_id uuid)
+ RETURNS void
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+DECLARE
+  v_is_admin boolean;
+  v_draft    public.playoff_drafts;
+BEGIN
+  v_is_admin := ((SELECT auth.jwt()) -> 'app_metadata' ->> 'role') = 'admin';
+  IF NOT v_is_admin THEN
+    RAISE EXCEPTION 'Only admins can reset a playoff draft';
+  END IF;
+
+  SELECT * INTO v_draft FROM playoff_drafts WHERE id = p_draft_id FOR UPDATE;
+  IF v_draft.id IS NULL THEN
+    RAISE EXCEPTION 'Draft not found';
+  END IF;
+
+  IF EXISTS (SELECT 1 FROM weeks WHERE id = v_draft.week_id AND is_archived = true) THEN
+    RAISE EXCEPTION 'The playoff week is archived — unarchive it before resetting the draft';
+  END IF;
+
+  IF v_draft.status = 'materialized' THEN
+    DELETE FROM teams WHERE week_id = v_draft.week_id;
+    UPDATE weeks SET is_confirmed = false, updated_at = now() WHERE id = v_draft.week_id;
+  END IF;
+
+  UPDATE weeks SET is_playoff = false, updated_at = now() WHERE id = v_draft.week_id;
+
+  DELETE FROM playoff_drafts WHERE id = p_draft_id;
+END;
+$function$
+;
+
 CREATE OR REPLACE FUNCTION public.playoff_undo_pick(p_draft_id uuid)
  RETURNS void
  LANGUAGE plpgsql

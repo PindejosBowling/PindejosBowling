@@ -1124,9 +1124,11 @@ export const playoffDrafts = {
   // Admin: status flips (setup→drafting) and draft_type edits.
   update: (id: string, data: TablesUpdate<'playoff_drafts'>) =>
     supabase.from('playoff_drafts').update(data).eq('id', id),
-  // Admin reset: cascades captains/pool/picks. weeks.is_playoff stays set.
-  remove: (id: string) =>
-    supabase.from('playoff_drafts').delete().eq('id', id),
+  // Admin reset, valid in every status: deletes the draft (cascades captains/
+  // pool/picks), un-flags the week, and — when materialized — also tears down
+  // the week's teams and unconfirms it. Refuses on an archived playoff week.
+  reset: (id: string) =>
+    supabase.rpc('playoff_reset_draft', { p_draft_id: id }),
   // Captain (or admin on the clock-holder's behalf): record the next pick.
   makePick: (draftId: string, playerId: string) =>
     supabase.rpc('playoff_make_pick', { p_draft_id: draftId, p_player_id: playerId }),

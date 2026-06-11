@@ -36,14 +36,19 @@ rewinds for free; there is no pointer to drift.
   the clock-holder), verifies pool membership, auto-flips `status` to `completed`
   when the pool drains.
 - **Admin fixes**: direct table CRUD under the `admin can write` RLS policies
-  (start draft = status flip, pool pruning, reset = delete draft → cascades).
-  Status-coupled mutations get RPCs: `playoff_undo_pick` (also reopens `completed` →
-  `drafting`), `playoff_materialize_teams`.
+  (start draft = status flip, pool pruning). Status-coupled mutations get RPCs:
+  `playoff_undo_pick` (also reopens `completed` → `drafting`),
+  `playoff_materialize_teams`, `playoff_reset_draft`.
 - **Materialize**: writes `teams` (numbered by seed) + `team_slots` (captain slot 1,
-  picks in pick order) onto the playoff week; refuses if the week already has teams.
-  From there the existing week-editor/matchups/scoring flow takes over — playoff code
-  never touches `games`.
-- **Reset caveat**: deleting a draft does not un-flag `weeks.is_playoff`.
+  picks in pick order) onto the playoff week **and confirms the week**
+  (`is_confirmed = true` — `weeks.getActive()`/Matchups only surfaces confirmed
+  weeks); refuses if the week already has teams. From there the existing
+  week-editor/matchups/scoring flow takes over — playoff code never touches `games`.
+- **Reset** (`playoff_reset_draft`): valid in every status, including
+  `materialized` — deletes the draft (cascades captains/pool/picks), un-flags
+  `weeks.is_playoff`, and when materialized also deletes the week's `teams`
+  (cascading slots/games/scores) and unconfirms the week. Refuses if the playoff
+  week is archived (go through `unarchive_week` first).
 
 ## App layer
 
