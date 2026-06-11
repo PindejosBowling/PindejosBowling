@@ -418,9 +418,14 @@ export default function SportsbookScreen() {
         {lineGroups.length > 0 || topSpecials.length > 0 ? (
           <>
             <Text style={[styles.sectionHeader, { marginTop: 24 }]}>THIS WEEK'S LINES</Text>
-            {/* Week-wide specials lead the board — no header, their styling
-                (gold for 'special') is the distinguishing mark. */}
-            {topSpecials.length > 0 && renderSpecialsCard(topSpecials, false)}
+            {/* Week-level specials (legs across games) lead the board under a
+                WEEKLY header styled like the game labels. */}
+            {topSpecials.length > 0 && (
+              <View>
+                <Text style={styles.gameLabel}>WEEKLY</Text>
+                {renderSpecialsCard(topSpecials, false)}
+              </View>
+            )}
             {lineGroups.map(({ group, categories }) => {
               // Starting a game closes every one of its markets at once, so the
               // in-progress warning is promoted to the game level: one note under
