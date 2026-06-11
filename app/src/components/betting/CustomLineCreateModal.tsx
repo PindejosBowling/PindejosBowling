@@ -49,8 +49,11 @@ export default function CustomLineCreateModal({ currentWeekId, seasonId, initial
   const [legs, setLegs] = useState<CustomLegSpec[]>(Array.isArray(initial?.legs) ? initial.legs : [])
   const [saving, setSaving] = useState(false)
 
-  // Add-leg sub-form.
+  // Add-leg sub-form. Subject is either a specific player or THE BETTOR
+  // (self-referential: "whoever takes this bet" — resolves per-taker, e.g.
+  // "you beat your over" / "your team wins the game").
   const [legKind, setLegKind] = useState<LegKind>('over_under')
+  const [legWho, setLegWho] = useState<'player' | 'bettor'>('player')
   const [legPlayer, setLegPlayer] = useState<PlayerPickerItem | null>(null)
   const [legGame, setLegGame] = useState(1)
   const [legPick, setLegPick] = useState<'over' | 'under'>('over')
@@ -80,19 +83,22 @@ export default function CustomLineCreateModal({ currentWeekId, seasonId, initial
   )
 
   function legSummary(leg: CustomLegSpec): string {
-    const name = nameById.get(leg.player_id) ?? '—'
+    const name = leg.player_id == null ? 'The Bettor' : (nameById.get(leg.player_id) ?? '—')
     return leg.kind === 'over_under'
       ? `${name} · ${leg.pick.toUpperCase()} · G${leg.game_number}`
       : `${name}'s Team · WIN · G${leg.game_number}`
   }
 
   function addLeg() {
-    if (!legPlayer) { showToast('Pick a player for the leg', 'error'); return }
+    if (legWho === 'player' && !legPlayer) { showToast('Pick a player for the leg', 'error'); return }
     const leg: CustomLegSpec = {
       kind: legKind,
-      player_id: legPlayer.id,
+      // null = the bettor (self-referential) — resolved per-taker on the board.
+      player_id: legWho === 'bettor' ? null : legPlayer!.id,
       game_number: legGame,
-      pick: legKind === 'moneyline' ? 'win' : legPick,
+      // A self 'under' would bet against the taker's own performance — always
+      // blocked by anti-tank, so self O/U legs are over-only.
+      pick: legKind === 'moneyline' ? 'win' : legWho === 'bettor' ? 'over' : legPick,
     }
     if (legs.some(l => l.kind === leg.kind && l.player_id === leg.player_id && l.game_number === leg.game_number)) {
       showToast('That leg is already on the line', 'error')
@@ -232,12 +238,25 @@ export default function CustomLineCreateModal({ currentWeekId, seasonId, initial
           value={legKind}
           onChange={(k: LegKind) => setLegKind(k)}
         />
-        <TouchableOpacity style={styles.playerBtn} onPress={() => setPickerOpen(true)} activeOpacity={0.8}>
-          <Text style={[styles.playerBtnText, !legPlayer && { color: colors.muted2 }]}>
-            {legPlayer ? legPlayer.name : legKind === 'moneyline' ? 'Anchor player (their team wins)' : 'Player'}
+        <ToggleGroup
+          options={[{ key: 'player', label: 'Specific Player' }, { key: 'bettor', label: 'Whoever Takes It' }]}
+          value={legWho}
+          onChange={(w: 'player' | 'bettor') => setLegWho(w)}
+        />
+        {legWho === 'player' ? (
+          <TouchableOpacity style={styles.playerBtn} onPress={() => setPickerOpen(true)} activeOpacity={0.8}>
+            <Text style={[styles.playerBtnText, !legPlayer && { color: colors.muted2 }]}>
+              {legPlayer ? legPlayer.name : legKind === 'moneyline' ? 'Anchor player (their team wins)' : 'Player'}
+            </Text>
+            <Text style={styles.playerBtnChevron}>›</Text>
+          </TouchableOpacity>
+        ) : (
+          <Text style={styles.hint}>
+            The leg is about the taker themself — {legKind === 'moneyline'
+              ? '"your team wins the game". Only offered to players on a team that week.'
+              : '"you beat your over". Self legs are over-only (an under would bet against yourself).'}
           </Text>
-          <Text style={styles.playerBtnChevron}>›</Text>
-        </TouchableOpacity>
+        )}
         <View style={styles.addLegRow}>
           <View style={styles.chipWrapInline}>
             {GAME_NUMBERS.map(g => (
@@ -246,7 +265,7 @@ export default function CustomLineCreateModal({ currentWeekId, seasonId, initial
               </TouchableOpacity>
             ))}
           </View>
-          {legKind === 'over_under' && (
+          {legKind === 'over_under' && legWho === 'player' && (
             <View style={styles.chipWrapInline}>
               {(['over', 'under'] as const).map(p => (
                 <TouchableOpacity key={p} style={[styles.chip, legPick === p && styles.chipOn]} onPress={() => setLegPick(p)} activeOpacity={0.7}>
