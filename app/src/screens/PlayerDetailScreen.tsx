@@ -21,10 +21,10 @@ import {
 } from '../hooks/usePlayerDetailData'
 import { initials } from '../utils/helpers'
 import { useHasFrameStats } from '../hooks/useFrameStatsData'
-import LoadingView from '../components/LoadingView'
-import PillFilter from '../components/PillFilter'
-import ScreenHeader from '../components/ScreenHeader'
-import PlayerAvatar from '../components/PlayerAvatar'
+import LoadingView from '../components/ui/LoadingView'
+import PillFilter from '../components/ui/PillFilter'
+import ScreenHeader from '../components/ui/ScreenHeader'
+import PlayerAvatar from '../components/ui/PlayerAvatar'
 
 type PlayerDetailRoute = RouteProp<{ PlayerDetail: { name: string } }, 'PlayerDetail'>
 

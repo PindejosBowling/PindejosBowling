@@ -12,7 +12,7 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { colors, fonts, radius } from '../theme'
 import { supabase } from '../utils/supabase/client'
 import { players } from '../utils/supabase/db'
-import Button from '../components/Button'
+import Button from '../components/ui/Button'
 
 type Step = 'phone' | 'otp'
 

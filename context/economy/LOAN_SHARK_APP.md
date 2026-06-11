@@ -16,7 +16,7 @@ every `<Modal>`, RPC-then-`reload`, admin gate via `useAuthStore(s => s.role) ==
 
 **Pattern templates to copy from:**
 - Data hook: `app/src/hooks/usePinsinoData.ts`, `usePlayerPinsinoData.ts`.
-- Action modal: `app/src/components/SettleBetModal.tsx` (bottom sheet, `<Toast/>` inside, RPC→toast→`onSettled`→`onClose`); `AdminEndSeasonModal.tsx` (centered confirm card, disabled-while-saving).
+- Action modal: `app/src/components/betting/SettleBetModal.tsx` (bottom sheet, `<Toast/>` inside, RPC→toast→`onSettled`→`onClose`); `app/src/components/admin/AdminEndSeasonModal.tsx` (centered confirm card, disabled-while-saving).
 - Hub screen + tiles: `app/src/screens/PinsinoScreen.tsx`, `PinsinoAdminScreen.tsx`.
 - Admin list + cancel: `app/src/screens/AdminSportsbookScreen.tsx`.
 - db.ts query objects + RPC wrappers: `app/src/utils/supabase/db.ts`.
@@ -81,7 +81,7 @@ wrapper: `supabase.rpc('settle_loans_for_season_close', { p_season_id })`.
 - Also surface the **caller's own** figures in the hook's return: `debt` (their
   active-loan outstanding) and an `activeLoan` summary (or `null`). `netWorth = balance − debt`.
 
-### `app/src/components/PinsinoLeaderboardTable.tsx`
+### `app/src/components/betting/PinsinoLeaderboardTable.tsx`
 - Add two right-aligned columns between **Pins** and **Upside** (design §8.1):
   **Debt** (rendered in `colors.danger`, shown as `−N` or blank when 0) and **Net**
   (`colors.text`, or `colors.danger` when negative). Reuse the existing
@@ -151,7 +151,7 @@ Layout (design §8.2):
 - `app/src/navigation/MoreStackNavigator.tsx`: register `LoanSharkAdmin` → `LoanSharkAdminScreen`.
 
 ### Ledger rendering — loan-aware rows
-- `app/src/components/LedgerRow.tsx`: add action labels for the four new `pin_ledger`
+- `app/src/components/betting/LedgerRow.tsx`: add action labels for the four new `pin_ledger`
   loan types, for both perspectives:
   - `loan_issued` → player "LOAN ADVANCE", house "LOAN ISSUED"
   - `loan_manual_repayment` → "REPAYMENT" / "REPAYMENT RECEIVED"
@@ -182,7 +182,7 @@ Layout (design §8.2):
 ### `app/src/screens/PinsinoAdminScreen.tsx`
 - Add a tile to `MENU_TILES`: `{ icon: '🦈', label: 'Loan Shark', route: 'LoanSharkAdmin' }`.
 
-### `app/src/components/AdminEndSeasonModal.tsx` — season-close settlement (§7)
+### `app/src/components/admin/AdminEndSeasonModal.tsx` — season-close settlement (§7)
 - **Before** `seasons.update(season.id, { is_active: false })`, call
   `settle_loans_for_season_close(season.id)` (the new wrapper). On error, surface via
   toast and abort (do not close the season). This makes final standings reflect

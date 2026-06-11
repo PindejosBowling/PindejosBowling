@@ -17,7 +17,7 @@ import {
 
 import RootNavigator from './src/navigation/RootNavigator'
 import LoginScreen from './src/screens/LoginScreen'
-import Toast from './src/components/Toast'
+import Toast from './src/components/ui/Toast'
 import { useAuthStore } from './src/stores/authStore'
 import { useAvatarStore } from './src/stores/avatarStore'
 import { useNotificationStore } from './src/stores/notificationStore'

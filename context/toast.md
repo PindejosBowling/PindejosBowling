@@ -1,6 +1,6 @@
 # Toast system
 
-The global toast (`app/src/components/Toast.tsx` + the `toasts` array / `showToast` action in `app/src/stores/uiStore.ts`).
+The global toast (`app/src/components/ui/Toast.tsx` + the `toasts` array / `showToast` action in `app/src/stores/uiStore.ts`).
 
 ## How it works
 

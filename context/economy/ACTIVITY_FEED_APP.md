@@ -36,9 +36,9 @@ recap cards, notification badge, or `sportsbook_bad_beat` (design §17, §21).
   `PastGamesScreen.tsx`.
 - Hub screen + tiles: `app/src/screens/PinsinoScreen.tsx`, `PinsinoAdminScreen.tsx`.
 - Admin list + action modal (`<Toast/>` inside): `app/src/screens/AdminSportsbookScreen.tsx`,
-  `app/src/components/SettleBetModal.tsx`.
-- Reusable display: `app/src/components/PlayerAvatar.tsx`, `LedgerRow.tsx`,
-  `ScreenHeader.tsx`; relative time via `timeAgo` in `app/src/utils/helpers.ts`.
+  `app/src/components/betting/SettleBetModal.tsx`.
+- Reusable display: `app/src/components/ui/PlayerAvatar.tsx`, `ui/ScreenHeader.tsx`,
+  `betting/LedgerRow.tsx`; relative time via `timeAgo` in `app/src/utils/helpers.ts`.
 - db.ts query objects + RPC wrappers: `app/src/utils/supabase/db.ts`.
 
 ---

@@ -4,14 +4,14 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { useNavigation, useFocusEffect } from '@react-navigation/native'
 import { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { colors, fonts, radius } from '../theme'
-import ScreenHeader from '../components/ScreenHeader'
-import LoadingView from '../components/LoadingView'
-import PillFilter from '../components/PillFilter'
-import PvpChallengeRow from '../components/PvpChallengeRow'
-import PvpAcceptModal from '../components/PvpAcceptModal'
-import PvpCounterModal from '../components/PvpCounterModal'
-import PvPChallengeDetailModal from '../components/PvPChallengeDetailModal'
-import Button from '../components/Button'
+import ScreenHeader from '../components/ui/ScreenHeader'
+import LoadingView from '../components/ui/LoadingView'
+import PillFilter from '../components/ui/PillFilter'
+import PvpChallengeRow from '../components/pvp/PvpChallengeRow'
+import PvpAcceptModal from '../components/pvp/PvpAcceptModal'
+import PvpCounterModal from '../components/pvp/PvpCounterModal'
+import PvpChallengeDetailModal from '../components/pvp/PvpChallengeDetailModal'
+import Button from '../components/ui/Button'
 import { usePvpData, PvpChallengeView } from '../hooks/usePvpData'
 import { useRefresh } from '../hooks/useRefresh'
 import { useAuthStore } from '../stores/authStore'
@@ -134,7 +134,7 @@ export default function PvPBoardScreen() {
         />
       )}
       {detailId && (
-        <PvPChallengeDetailModal
+        <PvpChallengeDetailModal
           challengeId={detailId}
           onClose={() => setDetailId(null)}
           onChanged={reload}

@@ -1,6 +1,6 @@
 # Components Index
 
-Every reusable component in [app/src/components/](../app/src/components/), grouped by domain. Check here **before building anything new for a screen** — most list rows, modals, pickers, and chart pieces already exist. One component per file, default export, named after the file.
+Every reusable component in [app/src/components/](../app/src/components/), grouped by domain. The directory is organized into domain subfolders — `ui/`, `charts/`, `league/`, `admin/`, `betting/`, `pvp/`, `bounty/`, `economy/` — matching the section groupings below (each heading names its folder). Check here **before building anything new for a screen** — most list rows, modals, pickers, and chart pieces already exist. One component per file, default export, named after the file.
 
 ## Shared conventions
 
@@ -10,7 +10,7 @@ Every reusable component in [app/src/components/](../app/src/components/), group
 - **Presentational rows gate behavior by callback.** List rows (`BetRow`, `LineRow`, …) become tappable/cancellable only when the caller passes `onPress` / `onCancelPress`-style callbacks; read-only surfaces simply omit them. Reuse this pattern instead of `isAdmin` props.
 - **Betting data shape.** The betting components all consume the flat `BetView` / `LineView` / `LedgerEntry` views produced by the hooks (`usePinsinoData`, `usePlayerPinsinoData`) — never raw DB rows.
 
-## Core primitives
+## Core primitives (`components/ui/`)
 
 | Component | Props | Purpose |
 |---|---|---|
@@ -18,10 +18,10 @@ Every reusable component in [app/src/components/](../app/src/components/), group
 | `Toast` | none (reads `uiStore.toasts`) | Absolute-positioned auto-dismissing toast. Mounted at app root **and** inside any `<Modal>` that toasts. Mount-baseline guard prevents duplicate toasts during nav transitions. See [toast.md](toast.md). |
 | `LoadingView` | `{ label? }` | Centered full-screen spinner + uppercase label (default "Loading"). The standard `if (loading) return <LoadingView />` for every screen. |
 | `ScreenHeader` | `{ title, subtitle?, onBack }` | Back-arrow + title (+ subtitle) header for every inner stack screen (used by 30+ screens). |
-| `AppHeader` | none | Tab-root header: 🎳 PINDEJOS logo + "Season N · Week N" subline (self-loads via `weeks`/`seasons`, re-fetches on `uiStore.weekVersion`) + top-right `PlayerAvatar` that opens `ProfileMenuModal`. Used on the five tab home screens. |
+| `AppHeader` | none | *(lives in `components/league/`)* Tab-root header: 🎳 PINDEJOS logo + "Season N · Week N" subline (self-loads via `weeks`/`seasons`, re-fetches on `uiStore.weekVersion`) + top-right `PlayerAvatar` that opens `ProfileMenuModal`. Used on the five tab home screens. |
 | `ConfirmBar` | `{ icon, title, subtext?, saving, onDiscard, onSave }` | Sticky bottom Save/Discard bar for staged edits (RSVP, scores, week editor). Shows a spinner while `saving`. |
 
-## Selection controls & pickers
+## Selection controls & pickers (`components/ui/`)
 
 | Component | Props | Purpose |
 |---|---|---|
@@ -33,14 +33,14 @@ Every reusable component in [app/src/components/](../app/src/components/), group
 | `PlayerAvatar` | `{ name?, playerId?, size?, style? }` | Profile photo resolved from `useAvatarStore` (by id, else lowercased name), falling back to an initials circle. |
 | `PlayerBadges` | `{ badges: Badge[], style? }` | Inline status emojis after a player's name; takes `badgesForPlayer()` output, renders nothing when empty. See [ui-system.md](ui-system.md) §Player Badges. |
 
-## Charts (react-native-svg)
+## Charts (`components/charts/`, react-native-svg)
 
 | Component | Props | Purpose |
 |---|---|---|
 | `StatDonut` | `{ value (0..1), valueText, label, color, size? }` | Donut/progress ring with big center text + caption (FrameStatsScreen). |
 | `StatRadarChart` | `{ axes: RadarAxis[], size? }` — exports `RadarAxis { label, valueText, radial (0..1) }` | N-spoke radar/web chart; caller pre-normalizes each axis to 0..1 (FrameStatsScreen). |
 
-## League / matchup display
+## League / matchup display (`components/league/`)
 
 | Component | Props | Purpose |
 |---|---|---|
@@ -49,7 +49,7 @@ Every reusable component in [app/src/components/](../app/src/components/), group
 | `HistoricalTeamBlock` | `{ team, players: {name,score?,present,isFill?}[], total, winner }` | Archived-week team card: roster with scores, OUT tags, League-Avg-Fill rows, winner-highlighted total. |
 | `OddsBlock` | `{ teamA, teamB, leagueAvg, label }` | Betting-style spread + moneyline card computed from expected team scores (`spreadAndML` helper). Easter egg on MatchupsScreen (`Expected` mode). |
 
-## Admin season/week modals (`visible`-prop mounted)
+## Admin season/week modals (`components/admin/`, `visible`-prop mounted)
 
 All follow confirm → `db.ts` call(s) → toast → close, with `<Toast />` inside the Modal.
 
@@ -60,9 +60,9 @@ All follow confirm → `db.ts` call(s) → toast → close, with `<Toast />` ins
 | `AdminOpenRegistrationModal` | `{ visible, onClose, onCreated? }` | Creates season N+1 with `registration_open = true` (number from `seasons.getLatest()`), date pickers for start/end, +100 pin champion bonus to prior champs. |
 | `AdminEditSeasonModal` | `{ season: SeasonOption \| null, onClose, onSaved? }` | Edits a season's bowling night + start/end dates (local-date-safe ISO handling). Conditionally mounted via the `season` prop. |
 | `AdminGenerateTeamsModal` | `{ visible, onClose }` | Generates balanced teams from RSVPs (state in `usePendingStore.gen*`), writes teams/slots/schedule, then idempotently syncs O/U markets via `sync_over_under_markets_for_week`. |
-| `ProfileMenuModal` | `{ visible, onClose }` | Bottom sheet from the AppHeader avatar: identity + My Profile (cross-tab nav to PlayerDetail) + Log Out. |
+| `ProfileMenuModal` | `{ visible, onClose }` | *(lives in `components/league/`)* Bottom sheet from the AppHeader avatar: identity + My Profile (cross-tab nav to PlayerDetail) + Log Out. |
 
-## Betting / Sportsbook & ledger
+## Betting / Sportsbook & ledger (`components/betting/`)
 
 See [betting-line-board.md](betting-line-board.md) for the line-board stack and [ui-system.md](ui-system.md) §Betting display components for the deeper narrative.
 
@@ -78,26 +78,26 @@ See [betting-line-board.md](betting-line-board.md) for the line-board stack and 
 | `LedgerRow` | `{ entry: LedgerEntry, perspective: 'player'\|'house', isLast }` | The single renderer for both pin-ledger Activity surfaces. Derives an action label from `(type, perspective)` for every ledger type (bet/score/bonus/loan/pvp/bounty); bet-backed rows are tappable and open `BetDetailModal` internally. |
 | `PinsinoLeaderboardTable` | `{ leaderboard, playerId, onRowPress, limit?, mode?: 'summary'\|'detail' }` | Pin-balance leaderboard table (rank, name + movement arrows, Pins/Open/Debt/Net columns in `detail`; name + net only in `summary`). `limit` for previews (top 3 on PinsinoScreen). |
 
-## Loan Shark
+## Loan Shark (`components/economy/`)
 
 | Component | Props | Purpose |
 |---|---|---|
 | `BorrowConfirmModal` | `{ product: LoanProductView, onClose, onBorrowed }` | Borrow confirmation (terms: interest %, garnishment %, warning copy) → `take_loan` RPC. **Mount conditionally.** |
 
-## PvP Challenge Contracts
+## PvP Challenge Contracts (`components/pvp/`)
 
 All viewer-relative: `viewerId` maps "you vs opponent" onto the role-fixed creator/counterparty fields. All modals **mounted conditionally**.
 
 | Component | Props | Purpose |
 |---|---|---|
 | `PvpChallengeRow` | `{ challenge: PvpChallengeView, viewerId, onPress, cta? }` | One challenge card: type/custom title, viewer-relative opponent + result chip (WON/LOST/PUSH/ACTIVE/…), scope · stakes · pot. Used on board, my-challenges, and admin lists. |
-| `PvPChallengeDetailModal` | `{ challengeId, onClose, onChanged }` | Full contract detail — **self-loading** via `usePvpChallengeDetail` (offers, escrow ledger, pull-to-refresh) with accept / counter / decline / cancel actions opening the modals below. |
+| `PvpChallengeDetailModal` | `{ challengeId, onClose, onChanged }` | Full contract detail — **self-loading** via `usePvpChallengeDetail` (offers, escrow ledger, pull-to-refresh) with accept / counter / decline / cancel actions opening the modals below. |
 | `PvpAcceptModal` | `{ challenge, viewerId, onClose, onDone }` | Confirm acceptance of the full revised contract (shows both sides' stakes — they may be asymmetric) → `accept` RPC. |
 | `PvpCounterModal` | `{ challenge, viewerId, balance, onClose, onDone }` | Counter-offer sheet: stakes (optionally asymmetric), game scope via `GamePicker`, message; Line Duel taker sets their own line. → `counter` RPC. |
 | `PvpAdminActionModal` | `{ challenge, onClose, onDone }` | Admin settle / void / cancel with note, native confirm alerts, mapped to the live RPCs. |
 | `LineDuelLines` | `{ sides: [LineSide, LineSide], label?, note? }` | Shared "LINES TO BEAT" card for a Line Duel (create screen, counter modal, detail). Each side is `{ name, value }` with the value preformatted by the caller. |
 
-## Bounty Board
+## Bounty Board (`components/bounty/`)
 
 All bounty modals **mounted conditionally**; All-Comers model (see [economy/BOUNTIES_APP.md](economy/BOUNTIES_APP.md)).
 
@@ -108,7 +108,7 @@ All bounty modals **mounted conditionally**; All-Comers model (see [economy/BOUN
 | `BountyHouseCreateModal` | `{ weekId, onClose, onDone }` | Admin creates a House bounty (title, description, reward, hunter stake, max hunters — defaults to season player count — close time). Validates against `utils/bounty` min/max constants. |
 | `BountyAdminActionModal` | `{ bounty, onClose, onDone }` | Admin close / settle (sponsor-win or hunter-win, **reasoning required**, amounts computed by `bountyEconomics` — never entered) / cancel-with-clawback. |
 
-## Activity Feed ("Market Moves")
+## Activity Feed ("Market Moves") (`components/economy/`)
 
 | Component | Props | Purpose |
 |---|---|---|
