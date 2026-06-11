@@ -3,10 +3,9 @@ import {
   View, Text, TouchableOpacity, StyleSheet, Modal, StyleProp, ViewStyle, useWindowDimensions,
 } from 'react-native'
 import { colors, fonts, radius } from '../../theme'
+import type { Option as BaseOption } from './ToggleGroup'
 
-interface Option<T extends string> {
-  key: T
-  label: string
+interface Option<T extends string> extends BaseOption<T> {
   // Optional accent for this option — when set, the trigger (while selected) and
   // the menu row use `color` for text and `tint` as a translucent background.
   color?: string

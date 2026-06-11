@@ -1,7 +1,7 @@
 import { View, Text, TouchableOpacity, StyleSheet, StyleProp, ViewStyle } from 'react-native'
 import { colors, fonts } from '../../theme'
 
-interface Option<T extends string> {
+export interface Option<T extends string = string> {
   key: T
   label: string
 }

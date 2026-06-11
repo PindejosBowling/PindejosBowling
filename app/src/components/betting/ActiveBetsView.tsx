@@ -2,7 +2,7 @@ import { useMemo } from 'react'
 import { View, Text, StyleSheet } from 'react-native'
 import { colors, fonts, radius } from '../../theme'
 import BetRow from './BetRow'
-import { resultBadge, betReturnText } from './BetDetailModal'
+import { resultBadge, betReturnText } from '../../utils/bets'
 import type { BetView } from '../../hooks/usePinsinoData'
 
 interface ActiveBetsViewProps {

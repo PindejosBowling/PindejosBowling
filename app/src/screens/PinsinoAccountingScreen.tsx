@@ -13,6 +13,7 @@ import { useRefresh } from '../hooks/useRefresh'
 import { useHousePinsinoData } from '../hooks/useHousePinsinoData'
 import { useAuthStore } from '../stores/authStore'
 import { LedgerEntry } from '../hooks/usePlayerPinsinoData'
+import { signed } from '../utils/bets'
 
 type Nav = NativeStackNavigationProp<MoreStackParamList>
 type AccountingView = 'activity' | 'pnl'
@@ -21,10 +22,6 @@ const VIEW_OPTIONS: { key: AccountingView; label: string }[] = [
   { key: 'activity', label: 'Activity' },
   { key: 'pnl', label: 'Weekly P&L' },
 ]
-
-function signed(n: number): string {
-  return `${n > 0 ? '+' : ''}${n.toLocaleString()}`
-}
 
 export default function PinsinoAccountingScreen() {
   const navigation = useNavigation<Nav>()

@@ -14,22 +14,12 @@ import { seasons, seasonChampions, pinLedger } from '../../utils/supabase/db'
 import { colors, fonts, radius } from '../../theme'
 import Toast from '../ui/Toast'
 import Button from '../ui/Button'
+import { toISO, formatDateLong } from '../../utils/helpers'
 
 interface Props {
   visible: boolean
   onClose: () => void
   onCreated?: () => void | Promise<void>
-}
-
-function toISO(date: Date): string {
-  const y = date.getFullYear()
-  const m = String(date.getMonth() + 1).padStart(2, '0')
-  const d = String(date.getDate()).padStart(2, '0')
-  return `${y}-${m}-${d}`
-}
-
-function formatDisplay(date: Date): string {
-  return date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })
 }
 
 // On Android the native dialog is always modal, so we show it imperatively.
@@ -177,7 +167,7 @@ export default function AdminOpenRegistrationModal({ visible, onClose, onCreated
             onPress={() => setActivePicker(activePicker === 'start' ? null : 'start')}
             activeOpacity={0.8}
           >
-            <Text style={styles.dateBtnText}>{formatDisplay(startDate)}</Text>
+            <Text style={styles.dateBtnText}>{formatDateLong(startDate)}</Text>
             <Text style={styles.dateBtnChevron}>›</Text>
           </TouchableOpacity>
           {(showInlinePicker ? activePicker === 'start' : activePicker === 'start') && (
@@ -200,7 +190,7 @@ export default function AdminOpenRegistrationModal({ visible, onClose, onCreated
             activeOpacity={0.8}
           >
             <Text style={[styles.dateBtnText, !endDate && styles.dateBtnPlaceholder]}>
-              {endDate ? formatDisplay(endDate) : 'Select end date'}
+              {endDate ? formatDateLong(endDate) : 'Select end date'}
             </Text>
             <Text style={styles.dateBtnChevron}>›</Text>
           </TouchableOpacity>

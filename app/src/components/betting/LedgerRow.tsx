@@ -3,15 +3,12 @@ import { View, Text, TouchableOpacity, StyleSheet } from 'react-native'
 import { colors, fonts } from '../../theme'
 import type { LedgerEntry } from '../../hooks/usePlayerPinsinoData'
 import BetDetailModal from './BetDetailModal'
+import { formatDateShort } from '../../utils/helpers'
 
 interface LedgerRowProps {
   entry: LedgerEntry
   perspective: 'player' | 'house'
   isLast: boolean
-}
-
-function formatDate(dateStr: string): string {
-  return new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 }
 
 // Short, plain-language label for what moved the balance, from the viewer's side.
@@ -85,7 +82,7 @@ export default function LedgerRow({ entry, perspective, isLast }: LedgerRowProps
           <Text style={styles.primary}>{entry.description}</Text>
         )}
         <Text style={styles.meta}>
-          {meta} · {formatDate(entry.created_at)}
+          {meta} · {formatDateShort(entry.created_at)}
         </Text>
       </View>
       <Text style={[styles.amount, { color: amountColor }]}>

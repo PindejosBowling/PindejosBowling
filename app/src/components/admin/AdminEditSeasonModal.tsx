@@ -15,29 +15,12 @@ import { SeasonOption } from '../../hooks/useRegistrationData'
 import { colors, fonts, radius } from '../../theme'
 import Toast from '../ui/Toast'
 import Button from '../ui/Button'
+import { toISO, fromISO, formatDateLong } from '../../utils/helpers'
 
 interface Props {
   season: SeasonOption | null
   onClose: () => void
   onSaved?: () => void | Promise<void>
-}
-
-function toISO(date: Date): string {
-  const y = date.getFullYear()
-  const m = String(date.getMonth() + 1).padStart(2, '0')
-  const d = String(date.getDate()).padStart(2, '0')
-  return `${y}-${m}-${d}`
-}
-
-// Parse a YYYY-MM-DD string as a local date (avoids UTC off-by-one).
-function fromISO(s: string | null): Date | null {
-  if (!s) return null
-  const [y, m, d] = s.split('-').map(Number)
-  return new Date(y, m - 1, d)
-}
-
-function formatDisplay(date: Date): string {
-  return date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })
 }
 
 type ActivePicker = 'start' | 'end' | null
@@ -133,7 +116,7 @@ export default function AdminEditSeasonModal({ season, onClose, onSaved }: Props
             onPress={() => setActivePicker(activePicker === 'start' ? null : 'start')}
             activeOpacity={0.8}
           >
-            <Text style={styles.dateBtnText}>{formatDisplay(startDate)}</Text>
+            <Text style={styles.dateBtnText}>{formatDateLong(startDate)}</Text>
             <Text style={styles.dateBtnChevron}>›</Text>
           </TouchableOpacity>
           {activePicker === 'start' && (
@@ -156,7 +139,7 @@ export default function AdminEditSeasonModal({ season, onClose, onSaved }: Props
             activeOpacity={0.8}
           >
             <Text style={[styles.dateBtnText, !endDate && styles.dateBtnPlaceholder]}>
-              {endDate ? formatDisplay(endDate) : 'Select end date'}
+              {endDate ? formatDateLong(endDate) : 'Select end date'}
             </Text>
             <Text style={styles.dateBtnChevron}>›</Text>
           </TouchableOpacity>

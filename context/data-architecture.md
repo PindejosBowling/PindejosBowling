@@ -86,5 +86,10 @@ const { refreshing, onRefresh } = useRefresh(reload)
 |---|---|
 | `initials(name)` | 2-char initials from a full name |
 | `timeAgo(date)` | Human-readable relative time string ("2h ago", "3d ago") |
+| `toISO(date)` / `fromISO(s)` | `YYYY-MM-DD` ↔ local `Date` (parse avoids the UTC off-by-one) |
+| `formatDateLong(date)` | "Mon, Jan 5, 2026" — admin season date pickers |
+| `formatDateShort(date)` | "Jan 5, 2026" — ledger rows |
 | `combinations(arr, k)` | All k-length combinations of an array — used by chemistry calculation |
 | `spreadAndML(t1, t2)` | Bowling spread + moneyline odds from two expected team totals |
+
+Bet display helpers (`resultBadge`, `betPayout`, `betReturn`, `betReturnDisplay`, `betReturnText`, `signed`) live in [src/utils/bets.ts](../app/src/utils/bets.ts).

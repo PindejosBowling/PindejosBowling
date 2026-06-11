@@ -33,8 +33,13 @@ app/
 │   │   ├── uiStore.ts           # Ephemeral UI state + toast queue
 │   │   └── avatarStore.ts       # Signed-URL cache for player profile pictures
 │   ├── utils/
+│   │   ├── activityFeedTemplates.ts # Activity Feed copy — renders feed rows from template_key + payload (no stored text)
 │   │   ├── badges.ts            # BADGE_RULES + badgesForPlayer — status→emoji rule list (see Player Badges)
-│   │   ├── helpers.ts           # initials, timeAgo, combinations, spreadAndML
+│   │   ├── bets.ts              # Bet display helpers: resultBadge, betPayout, betReturn, betReturnDisplay, betReturnText, signed
+│   │   ├── bounty.ts            # Bounty pure helpers — mirrors the DB's All Comers settlement math for UI previews
+│   │   ├── helpers.ts           # initials, timeAgo, combinations, spreadAndML, date helpers (toISO/fromISO/formatDateLong/formatDateShort)
+│   │   ├── notifications.ts     # Pinsino pending-action notification sources (per-tile + tab-bar badge counts)
+│   │   ├── pvp.ts               # PvP display helpers — contract-type/status vocabulary, stake bounds
 │   │   └── supabase/
 │   │       ├── client.ts        # Supabase client (env-var configured)
 │   │       ├── database.types.ts # Auto-generated Postgres types
