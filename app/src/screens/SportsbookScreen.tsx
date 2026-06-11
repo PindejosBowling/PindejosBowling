@@ -327,24 +327,23 @@ export default function SportsbookScreen() {
     )
   }
 
-  // One card of custom-line rows, shared by the per-game slot and the top-level
-  // SPECIALS section. Disabled (dim, still pressable → toast) mirrors LineRow.
+  // One card of custom-line rows, shared by the week-wide slot (top of the
+  // board) and the per-game slot (top of each game group). No section header —
+  // the rows' styling (gold for 'special') is the distinguishing mark.
+  // Disabled (dim, still pressable → toast) mirrors LineRow.
   function renderSpecialsCard(lines: CustomLineView[], gameInProgress: boolean) {
     return (
-      <View>
-        <Text style={styles.sectionHeader}>SPECIALS</Text>
-        <View style={styles.card}>
-          {lines.map((cl, idx) => (
-            <CustomLineRow
-              key={cl.id}
-              line={cl}
-              isLast={idx === lines.length - 1}
-              inProgress={gameInProgress || cl.inProgress}
-              disabled={balance < 10 || customLineSelfTank(cl, playerId)}
-              onTake={() => onTakeCustom(cl)}
-            />
-          ))}
-        </View>
+      <View style={styles.card}>
+        {lines.map((cl, idx) => (
+          <CustomLineRow
+            key={cl.id}
+            line={cl}
+            isLast={idx === lines.length - 1}
+            inProgress={gameInProgress || cl.inProgress}
+            disabled={balance < 10 || customLineSelfTank(cl, playerId)}
+            onTake={() => onTakeCustom(cl)}
+          />
+        ))}
       </View>
     )
   }
@@ -416,9 +415,12 @@ export default function SportsbookScreen() {
         )}
 
         {/* Open lines */}
-        {lineGroups.length > 0 ? (
+        {lineGroups.length > 0 || topSpecials.length > 0 ? (
           <>
             <Text style={[styles.sectionHeader, { marginTop: 24 }]}>THIS WEEK'S LINES</Text>
+            {/* Week-wide specials lead the board — no header, their styling
+                (gold for 'special') is the distinguishing mark. */}
+            {topSpecials.length > 0 && renderSpecialsCard(topSpecials, false)}
             {lineGroups.map(({ group, categories }) => {
               // Starting a game closes every one of its markets at once, so the
               // in-progress warning is promoted to the game level: one note under
@@ -436,6 +438,9 @@ export default function SportsbookScreen() {
                     {closedBettingNote(categories[0].lines[0])}
                   </Text>
                 )}
+                {/* This game's custom lines lead its sections. */}
+                {group.key !== 'season' && customByGame.has(group.sortOrder) &&
+                  renderSpecialsCard(customByGame.get(group.sortOrder)!, gameInProgress)}
                 {categories.map(({ category, lines }) => {
                   const groupInProgress = gameInProgress || lines.some(l => l.inProgress)
                   // Moneylines: headerless. The "Your Team" row is self-explanatory
@@ -477,22 +482,12 @@ export default function SportsbookScreen() {
                     />
                   )
                 })}
-                {/* This game's custom lines, under its standard sections. */}
-                {group.key !== 'season' && customByGame.has(group.sortOrder) &&
-                  renderSpecialsCard(customByGame.get(group.sortOrder)!, gameInProgress)}
               </View>
               )
             })}
           </>
-        ) : topSpecials.length === 0 ? (
+        ) : (
           <EmptyCard text="No open lines this week" />
-        ) : null}
-
-        {/* Week-wide specials (legs across games) — own top-level section. */}
-        {topSpecials.length > 0 && (
-          <View style={{ marginTop: lineGroups.length > 0 ? 14 : 0 }}>
-            {renderSpecialsCard(topSpecials, false)}
-          </View>
         )}
         </>}
 

@@ -25,14 +25,7 @@ export default function CustomLineRow({ line, isLast, inProgress, disabled, onTa
   return (
     <View style={[styles.row, !isLast && styles.rowBorder, inProgress && styles.rowInProgress]}>
       <View style={styles.info}>
-        <View style={styles.titleRow}>
-          <Text style={[styles.title, special && styles.titleSpecial]}>{line.title}</Text>
-          {special && (
-            <View style={styles.specialChip}>
-              <Text style={styles.specialChipText}>SPECIAL</Text>
-            </View>
-          )}
-        </View>
+        <Text style={[styles.title, special && styles.titleSpecial]}>{line.title}</Text>
         {line.description !== '' && (
           <Text style={styles.description} numberOfLines={2}>{line.description}</Text>
         )}
@@ -57,7 +50,6 @@ export default function CustomLineRow({ line, isLast, inProgress, disabled, onTa
         <Text style={[styles.takeBtnOdds, special && styles.takeBtnOddsSpecial]}>
           ×{line.combinedOdds.toFixed(line.combinedOdds % 1 === 0 ? 0 : 2)}
         </Text>
-        <Text style={[styles.takeBtnText, special && styles.takeBtnTextSpecial]}>TAKE</Text>
       </TouchableOpacity>
     </View>
   )
@@ -77,7 +69,6 @@ const styles = StyleSheet.create({
   },
   rowInProgress: { opacity: 0.5 },
   info: { flex: 1 },
-  titleRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   title: {
     fontFamily: fonts.barlowCondensed,
     fontSize: 15,
@@ -85,19 +76,6 @@ const styles = StyleSheet.create({
     letterSpacing: 0.3,
   },
   titleSpecial: { color: colors.gold },
-  specialChip: {
-    paddingHorizontal: 5,
-    paddingVertical: 1,
-    borderRadius: 4,
-    borderWidth: 1,
-    borderColor: colors.gold,
-  },
-  specialChipText: {
-    fontFamily: fonts.barlowCondensed,
-    fontSize: 9,
-    color: colors.gold,
-    letterSpacing: 1,
-  },
   description: {
     fontFamily: fonts.barlow,
     fontSize: 12,
@@ -113,8 +91,9 @@ const styles = StyleSheet.create({
   },
   takeBtn: {
     alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    justifyContent: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
     borderRadius: 8,
     borderWidth: 1,
     borderColor: colors.accent,
@@ -125,18 +104,12 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(251,191,36,0.12)',
   },
   takeBtnDisabled: { borderColor: colors.border2, backgroundColor: 'transparent', opacity: 0.4 },
+  // The multiplier IS the button — oversized for scanability.
   takeBtnOdds: {
-    fontFamily: fonts.barlowCondensed,
-    fontSize: 11,
+    fontFamily: fonts.barlowCondensedHeavy,
+    fontSize: 18,
     color: colors.accent,
     letterSpacing: 0.5,
   },
   takeBtnOddsSpecial: { color: colors.gold },
-  takeBtnText: {
-    fontFamily: fonts.barlowCondensed,
-    fontSize: 12,
-    color: colors.accent,
-    letterSpacing: 0.5,
-  },
-  takeBtnTextSpecial: { color: colors.gold },
 })
