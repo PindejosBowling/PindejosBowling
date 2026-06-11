@@ -3546,6 +3546,10 @@ BEGIN
     END LOOP;
   END LOOP;
 
+  -- Matchups (weeks.getActive) only surfaces confirmed weeks — same flag the
+  -- admin generate-teams flow sets once teams are locked.
+  UPDATE weeks SET is_confirmed = true, updated_at = now() WHERE id = v_draft.week_id;
+
   UPDATE playoff_drafts SET status = 'materialized', updated_at = now() WHERE id = p_draft_id;
 END;
 $function$
