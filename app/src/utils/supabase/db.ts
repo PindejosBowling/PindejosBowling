@@ -552,7 +552,11 @@ export const bets = {
       .select('*, players(name), ' + LEG_GRAPH)
       .eq('player_id', playerId)
       .order('placed_at', { ascending: false }),
-  // All bets with a leg on an over_under or moneyline market in this week (Active Bets).
+  // All bets with a leg on one of this week's sportsbook markets (Active Bets).
+  // The market-type filter must cover EVERY sportsbook market type: the inner
+  // joins drop both bets with no qualifying leg (a prop-only bet vanished from
+  // the admin screen before 'prop' was added) and the non-qualifying legs of
+  // mixed parlays (truncated embeds).
   listByWeek: (weekId: string) =>
     supabase
       .from('bets')
@@ -561,7 +565,7 @@ export const bets = {
         'bet_markets!inner(*, subject:players!bet_markets_subject_player_id_fkey(name))))'
       )
       .eq('bet_legs.bet_selections.bet_markets.week_id', weekId)
-      .in('bet_legs.bet_selections.bet_markets.market_type', ['over_under', 'moneyline'])
+      .in('bet_legs.bet_selections.bet_markets.market_type', ['over_under', 'moneyline', 'prop'])
       .order('placed_at', { ascending: false }),
   // All settled bets for a season (Settled Bets), with leg → selection → market(+week).
   listSettledBySeason: (seasonId: string) =>
