@@ -48,6 +48,7 @@ app/
 │   │   ├── ui/                  # Generic primitives, controls, pickers
 │   │   │   ├── Button.tsx
 │   │   │   ├── BottomSheet.tsx  # Canonical bottom-sheet scaffold (backdrop, busy-guarded dismiss, Toast inside)
+│   │   │   ├── ConfirmActionSheet.tsx # Confirm-flow sheet on BottomSheet (saving flag, RPC, toasts, onDone→onClose)
 │   │   │   ├── Toast.tsx
 │   │   │   ├── LoadingView.tsx
 │   │   │   ├── ScreenHeader.tsx

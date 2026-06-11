@@ -1,9 +1,6 @@
-import { useState } from 'react'
 import { Text, StyleSheet } from 'react-native'
 import { colors, fonts } from '../../theme'
-import BottomSheet from '../ui/BottomSheet'
-import Button from '../ui/Button'
-import { useUiStore } from '../../stores/uiStore'
+import ConfirmActionSheet from '../ui/ConfirmActionSheet'
 import { bountyPosts } from '../../utils/supabase/db'
 import { hunterPayout } from '../../utils/bounty'
 import type { BountyView } from '../../hooks/useBountyBoardData'
@@ -18,49 +15,22 @@ interface Props {
 }
 
 export default function BountyEntryModal({ bounty: b, onClose, onDone }: Props) {
-  const { showToast } = useUiStore()
-  const [saving, setSaving] = useState(false)
-
   const n = b.nextEntryNumber
   const stake = b.hunterStakeAmount
   const reward = b.rewardPerHunter
   const total = hunterPayout(stake, reward)
 
-  async function confirm() {
-    setSaving(true)
-    try {
-      const { error } = await bountyPosts.enter(b.id)
-      if (error) { showToast(error.message, 'error'); return }
-      showToast('You joined the hunt', 'success')
-      onDone()
-      onClose()
-    } catch {
-      showToast('Failed to join', 'error')
-    } finally {
-      setSaving(false)
-    }
-  }
-
   return (
-    <BottomSheet
+    <ConfirmActionSheet
       title="Join the Hunt"
       subtitle={b.title}
-      onClose={onClose}
-      busy={saving}
+      confirmLabel={`Join & Stake ${stake.toLocaleString()}`}
+      action={() => bountyPosts.enter(b.id)}
+      successMessage="You joined the hunt"
+      failureMessage="Failed to join"
       bodyMaxHeight={320}
-      footer={
-        <>
-          <Button
-            label={`Join & Stake ${stake.toLocaleString()}`}
-            size="lg"
-            onPress={confirm}
-            loading={saving}
-            disabled={saving}
-            style={styles.confirmBtn}
-          />
-          <Button label="Cancel" variant="ghost" onPress={() => !saving && onClose()} />
-        </>
-      }
+      onClose={onClose}
+      onDone={onDone}
     >
       <Text style={styles.copy}>You are joining as <Text style={styles.bold}>Hunter #{n}</Text> ({b.hunterCount}/{b.maxHunters} in so far).</Text>
       <Text style={styles.copy}>You will stake <Text style={styles.bold}>{stake.toLocaleString()}</Text> pins.</Text>
@@ -74,7 +44,7 @@ export default function BountyEntryModal({ bounty: b, onClose, onDone }: Props) 
         An admin will manually settle this bounty based on the posted description. Your slot is an
         estimate until the server confirms it.
       </Text>
-    </BottomSheet>
+    </ConfirmActionSheet>
   )
 }
 
@@ -82,5 +52,4 @@ const styles = StyleSheet.create({
   copy: { fontFamily: fonts.barlow, fontSize: 15, color: colors.text, lineHeight: 24 },
   bold: { fontFamily: fonts.barlowCondensed, color: colors.accent },
   note: { fontFamily: fonts.barlow, fontSize: 12, color: colors.muted2, lineHeight: 18, marginTop: 12 },
-  confirmBtn: { marginTop: 18 },
 })

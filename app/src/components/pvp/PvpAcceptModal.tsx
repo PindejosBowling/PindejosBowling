@@ -1,9 +1,6 @@
-import { useState } from 'react'
 import { View, Text, StyleSheet } from 'react-native'
 import { colors, fonts } from '../../theme'
-import BottomSheet from '../ui/BottomSheet'
-import Button from '../ui/Button'
-import { useUiStore } from '../../stores/uiStore'
+import ConfirmActionSheet from '../ui/ConfirmActionSheet'
 import { pvpChallenges } from '../../utils/supabase/db'
 import { CONTRACT_TYPE_LABEL, CONTRACT_TYPE_RULE } from '../../utils/pvp'
 import type { PvpChallengeView } from '../../hooks/usePvpData'
@@ -18,50 +15,23 @@ interface Props {
 }
 
 export default function PvpAcceptModal({ challenge: c, viewerId, onClose, onDone }: Props) {
-  const { showToast } = useUiStore()
-  const [saving, setSaving] = useState(false)
-
   // The viewer accepts the *other* side's offer. Stakes may be asymmetric, so show
   // both: the viewer's own side and the opponent's.
   const iAmCreator = viewerId != null && viewerId === c.creatorId
   const myStake = iAmCreator ? c.creatorStake : c.counterpartyStake
   const oppStake = iAmCreator ? c.counterpartyStake : c.creatorStake
 
-  async function confirm() {
-    setSaving(true)
-    try {
-      const { error } = await pvpChallenges.accept(c.id)
-      if (error) { showToast(error.message, 'error'); return }
-      showToast('Challenge accepted', 'success')
-      onDone()
-      onClose()
-    } catch {
-      showToast('Failed to accept', 'error')
-    } finally {
-      setSaving(false)
-    }
-  }
-
   return (
-    <BottomSheet
+    <ConfirmActionSheet
       title={`Accept ${CONTRACT_TYPE_LABEL[c.contractType]}`}
       subtitle={`vs ${c.creatorName} · ${c.gameNumber != null ? `Game ${c.gameNumber}` : 'Series'}`}
-      onClose={onClose}
-      busy={saving}
+      confirmLabel={`Accept & Stake ${myStake.toLocaleString()}`}
+      action={() => pvpChallenges.accept(c.id)}
+      successMessage="Challenge accepted"
+      failureMessage="Failed to accept"
       bodyMaxHeight={320}
-      footer={
-        <>
-          <Button
-            label={`Accept & Stake ${myStake.toLocaleString()}`}
-            size="lg"
-            onPress={confirm}
-            loading={saving}
-            disabled={saving}
-            style={styles.confirmBtn}
-          />
-          <Button label="Cancel" variant="ghost" onPress={() => !saving && onClose()} />
-        </>
-      }
+      onClose={onClose}
+      onDone={onDone}
     >
       <View style={styles.row}>
         <Text style={styles.rowLabel}>Your stake</Text>
@@ -84,7 +54,7 @@ export default function PvpAcceptModal({ challenge: c, viewerId, onClose, onDone
         Accepting escrows your stake immediately and locks the contract. It settles automatically
         when the week is archived. Winner takes the whole pot.
       </Text>
-    </BottomSheet>
+    </ConfirmActionSheet>
   )
 }
 
@@ -95,5 +65,4 @@ const styles = StyleSheet.create({
   rowValueAccent: { fontFamily: fonts.barlowCondensedHeavy, fontSize: 18, color: colors.accent },
   rule: { fontFamily: fonts.barlow, fontSize: 13, color: colors.muted, lineHeight: 19, marginTop: 6 },
   note: { fontFamily: fonts.barlow, fontSize: 12, color: colors.muted2, lineHeight: 17, marginTop: 10 },
-  confirmBtn: { marginTop: 18 },
 })

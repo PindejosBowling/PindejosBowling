@@ -1,9 +1,6 @@
-import { useState } from 'react'
 import { View, Text, StyleSheet } from 'react-native'
 import { colors, fonts, radius } from '../../theme'
-import BottomSheet from '../ui/BottomSheet'
-import Button from '../ui/Button'
-import { useUiStore } from '../../stores/uiStore'
+import ConfirmActionSheet from '../ui/ConfirmActionSheet'
 import { loans } from '../../utils/supabase/db'
 import type { LoanProductView } from '../../hooks/useLoanSharkData'
 
@@ -21,46 +18,19 @@ const GENERAL_WARNING =
   'is still accumulated.'
 
 export default function BorrowConfirmModal({ product, onClose, onBorrowed }: BorrowConfirmModalProps) {
-  const { showToast } = useUiStore()
-  const [borrowing, setBorrowing] = useState(false)
-
   const interestPct = Math.round(product.weekly_interest_rate * 100)
   const garnishPct = Math.round(product.garnishment_rate * 100)
 
-  async function confirm() {
-    setBorrowing(true)
-    try {
-      const { error } = await loans.take(product.id)
-      if (error) { showToast(error.message, 'error'); return }
-      showToast(`Borrowed ${product.borrow_amount.toLocaleString()} pins`, 'success')
-      onBorrowed()
-      onClose()
-    } catch {
-      showToast('Failed to take loan', 'error')
-    } finally {
-      setBorrowing(false)
-    }
-  }
-
   return (
-    <BottomSheet
+    <ConfirmActionSheet
       title={product.display_name}
       subtitle="CONFIRM YOUR DEAL WITH THE SHARK"
+      confirmLabel={`Borrow ${product.borrow_amount.toLocaleString()} Pins`}
+      action={() => loans.take(product.id)}
+      successMessage={`Borrowed ${product.borrow_amount.toLocaleString()} pins`}
+      failureMessage="Failed to take loan"
       onClose={onClose}
-      busy={borrowing}
-      footer={
-        <>
-          <Button
-            label={`Borrow ${product.borrow_amount.toLocaleString()} Pins`}
-            size="lg"
-            onPress={confirm}
-            loading={borrowing}
-            disabled={borrowing}
-            style={styles.confirmBtn}
-          />
-          <Button label="Cancel" variant="ghost" onPress={() => !borrowing && onClose()} />
-        </>
-      }
+      onDone={onBorrowed}
     >
       <View style={styles.statRow}>
         <Text style={styles.statLabel}>BORROW</Text>
@@ -88,7 +58,7 @@ export default function BorrowConfirmModal({ product, onClose, onBorrowed }: Bor
       <Text style={styles.warnText}>
         You have the option to pay off this loan, in part or in full, at any time. The loan is closed when the outstanding balance reaches zero.
       </Text>
-    </BottomSheet>
+    </ConfirmActionSheet>
   )
 }
 
@@ -144,5 +114,4 @@ const styles = StyleSheet.create({
     lineHeight: 19,
     marginBottom: 10,
   },
-  confirmBtn: { marginTop: 20 },
 })
