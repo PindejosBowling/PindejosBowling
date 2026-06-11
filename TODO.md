@@ -3,7 +3,8 @@
 > The previous TODO items (player mapping, Supabase persistence for frame data)
 > shipped with the `lanetalk-import` Edge Function + `lanetalk_game_imports`
 > table and were removed. This file now holds the agreed plan for **LaneTalk
-> stat betting**, designed 2026-06-11 and ready to execute.
+> stat betting**, designed 2026-06-11 (settlement moved server-side in the
+> same-day revision) and ready to execute.
 
 Bet lines on LaneTalk frame stats — **strikes O/U + spares O/U per game**,
 **night-level clean % + first-ball avg O/U** — generated from imported
@@ -23,8 +24,16 @@ the next day, so these bets ride a **separate settlement clock** from
   - Sides = ordinary `bet_selections` (`key: 'over'|'under'`, `line`, same odds
     as score O/U). Bets/legs/ledger flow untouched (`place_house_bet` is
     market-type-agnostic).
-  - Stats computed from `lanetalk_game_imports.payload` jsonb **client-side**
-    (FrameStats screen already does this).
+- **Settlement values are derived server-side**, same trust model as every
+  other settlement path: a SQL function computes the actual stat from
+  `lanetalk_game_imports.payload` jsonb inside the settlement transaction
+  (mirrors `settle_betting_for_week` deriving scores from `scores`). The
+  client never supplies a `result_value` for systematic prop settlement —
+  atomic, app-version-independent, auditable (every `result_value`
+  reproducible from data in the same DB).
+- Client-side stat code (`stats.ts`, shared with FrameStats) is **demoted to
+  non-money duty**: line seeding + display only. A bug there mis-prices a
+  line (visible before settlement), never mis-pays a bet.
 - Line seeding: player's official-import history, **league-average fallback**
   (mirrors score O/U), hardcoded defaults if league has no data.
 - Archive settles normal bets and leaves LaneTalk-prop bets pending (backstop
@@ -33,6 +42,10 @@ the next day, so these bets ride a **separate settlement clock** from
 
 ### Verified enablers (against supabase/schema.sql)
 
+- `lanetalk_game_imports` already carries everything settlement needs, properly
+  keyed (schema.sql:215–228): `week_id`, `player_id`, `game_number`,
+  `classification = 'official'`, full frame data in `payload` jsonb. The four
+  stats are trivial `jsonb_array_elements` aggregations.
 - Admin has INSERT/UPDATE/DELETE RLS on `bet_markets` + `bet_selections`
   (schema.sql:1156–1223) → market creation is pure client-side admin writes
   (same pattern as custom-lines CRUD).
@@ -42,12 +55,13 @@ the next day, so these bets ride a **separate settlement clock** from
   invisible to them (no dedupe collision, no pruning).
 - **Archive/unarchive composes with no snapshot changes:** prop markets are
   week-stamped, so the archive preimage already captures their
-  markets/selections/bets/legs; post-archive settlement via `settle_market`
-  only UPDATEs those captured columns and INSERTs bet-linked, week-stamped
-  `pin_ledger` rows — exactly what `unarchive_week` reverses
-  (schema.sql:5101–5113). Confirm-before-archive also composes.
+  markets/selections/bets/legs; post-archive settlement via
+  `settle_lanetalk_props_for_week` only UPDATEs those captured columns and
+  INSERTs bet-linked, week-stamped `pin_ledger` rows — exactly what
+  `unarchive_week` reverses (schema.sql:5101–5113). Confirm-before-archive
+  also composes.
 
-## 1. The one migration (function bodies only, no DDL) — `lanetalk_prop_settlement`
+## 1. The one migration (function bodies + 2 new functions, no DDL) — `lanetalk_prop_settlement`
 
 - [ ] Relax `settle_market` / `settle_market_internal` (schema.sql:4146/4161)
       from `market_type = 'over_under'` to `IN ('over_under', 'prop')` — the
@@ -58,19 +72,43 @@ the next day, so these bets ride a **separate settlement clock** from
       and force-void. (Mixed parlays already work: `finalize_bets_for_market`
       skips bets with unresolved legs; a lost score-leg still kills the bet at
       archive.)
+- [ ] **New** `lanetalk_game_stats(p_payload jsonb)` — IMMUTABLE helper
+      returning `(strikes int, spares int, clean_pct numeric, first_ball_avg numeric)`
+      from a game payload (strikes = frames with `is_strike`; spares =
+      `is_spare`; cleanPct = (strikes+spares)/frames×100; firstBallAvg =
+      Σ `throws->0->>'pins'` / frames; null-coerce missing fields the way
+      `payloadToGame` does). Single authoritative stat definition for money.
+- [ ] **New** `settle_lanetalk_props_for_week(p_week_id uuid, p_void_missing boolean DEFAULT false)`
+      — admin-gated RPC mirroring `settle_betting_for_week`'s loop
+      (schema.sql:3779–3802), one transaction:
+  - Loop non-settled `prop` markets of the week with
+    `params->>'source' = 'lanetalk'`.
+  - **Game markets**: actual value from the player's `official` import row
+    matching (week, player, game_number) via `lanetalk_game_stats`.
+  - **Night markets**: aggregate stats across the player's official imports
+    for the week, **only when their official-game count ≥ their scored-game
+    count** (never settle clean% off half a night); otherwise treat as
+    missing data.
+  - Data present → `settle_market_internal(market_id, value)` (idempotent).
+  - Data missing → leave pending when `NOT p_void_missing`; else DELETE the
+    market (the `refund_bets_before_market_delete` trigger refunds bets
+    whole, same delete-refund rail as everywhere else).
+  - Return a summary row `(settled int, voided int, left_pending int)` for
+    the confirm toast.
 - [ ] Follow PIN_ECONOMY_SCHEMA §5 function conventions (header comment,
       pinned search_path). Push, then regen `database.types.ts` +
       `./supabase/refresh-schema-snapshot.sh`.
 
-## 2. Shared stat helpers (app)
+## 2. Shared stat helpers (app — display + line seeding only, never settlement)
 
 - [ ] New pure module `app/src/data/lanetalk/stats.ts`, extracted from / shared
-      with `useFrameStatsData.ts` `computeSessionStats` so betting and the
-      FrameStats screen can never disagree:
+      with `useFrameStatsData.ts` `computeSessionStats`:
   - `gameStats(game)` → `{ strikes, spares, cleanPct, firstBallAvg }`
-    (strikes = frames with `is_strike`; spares = `is_spare`;
-    cleanPct = (strikes+spares)/frames×100; firstBallAvg = Σ `throws[0].pins` / frames).
+    (same formulas as `lanetalk_game_stats` — keep a comment cross-linking
+    the two; SQL is authoritative if they ever drift).
   - `nightStats(games)` → same four aggregated across a week's official games.
+- [ ] Consumers: line generation (§3) and FrameStats display. Settlement (§4)
+      goes through the §1 RPC and never touches this module.
 
 ## 3. Line generation — admin client-side writes (no sync function)
 
@@ -92,25 +130,23 @@ the next day, so these bets ride a **separate settlement clock** from
 - [ ] Caveat to document: no server-side roster coupling — roster changes after
       generation need an admin re-tap (or the confirm flow voids strays).
 
-## 4. Settlement — "Confirm LaneTalk Data" (client loop over existing RPC)
+## 4. Settlement — "Confirm LaneTalk Data" (one RPC call)
 
 - [ ] On `LanetalkImportAdminScreen`, per week group with unsettled stat props:
       **Confirm LaneTalk Data** button → `LanetalkConfirmModal`
       (pattern: `AdminArchiveModal` — summary, warning box, armed second action).
-- [ ] Hook computes per market: actual value from official imports joined on
-      (week, player, game) via the §2 helpers. Night markets require the
-      player's official-game count ≥ their scored-game count (never settle
-      clean% off half a night).
-- [ ] **Settle Available**: loop `betMarkets.settle(marketId, value)`
-      (existing `settle_market` RPC, idempotent → safely re-runnable after
-      late imports; partial failure → just re-run).
-- [ ] **Settle + Void Missing** (armed): same, then DELETE data-less markets
-      through RLS → refund trigger returns stakes whole. *Semantics note:
+- [ ] Modal preview (client-side, informational only): which markets have data
+      vs. missing, computed via the §2 helpers — the server recomputes
+      authoritatively inside the RPC.
+- [ ] **Settle Available**: `settle_lanetalk_props_for_week(weekId)` —
+      atomic, idempotent → safely re-runnable after late imports.
+- [ ] **Settle + Void Missing** (armed):
+      `settle_lanetalk_props_for_week(weekId, true)`. *Semantics note:
       refunded bets are removed rather than kept as `void` records — the
       existing delete-refund rail; keeping void records would need a
-      settle-RPC migration later.*
-- [ ] Toast summary (settled / refunded / left pending); reload; button hides
-      when nothing is unsettled.
+      settle-RPC change later.*
+- [ ] Toast summary from the RPC's return row (settled / refunded / left
+      pending); reload; button hides when nothing is unsettled.
 
 ## 5. Board + bet surfaces (pure app code, per context/betting-line-board.md recipe)
 
@@ -131,30 +167,34 @@ the next day, so these bets ride a **separate settlement clock** from
 - [ ] Placed-bet surfaces (`BetRow`, `BetDetailModal`, `SettleBetModal`, ledger
       rows): extend the `marketType === 'over_under'` line-display gates to
       lanetalk props (stat label + line). `SettleBetModal`'s manual
-      enter-a-value path works once the RPC accepts props.
+      enter-a-value path works once the RPC accepts props (admin escape
+      hatch only — systematic settlement is §4's RPC).
 
 ## 6. Docs
 
-- [ ] New `context/lanetalk-stat-bets.md` (stat definitions, line seeding, the
-      two-clock settlement model, delete-refund void semantics, no-roster-
-      coupling caveat) + AGENTS.md index row.
+- [ ] New `context/lanetalk-stat-bets.md` (stat definitions + the SQL-is-
+      authoritative rule, line seeding, the two-clock settlement model,
+      delete-refund void semantics, no-roster-coupling caveat) + AGENTS.md
+      index row.
 - [ ] Update `supabase/PIN_ECONOMY_SCHEMA.md` (§3 mapping row for LaneTalk
-      props, RPC table notes), `context/betting-line-board.md` (third
-      consumer), `context/archive-and-settlement.md` (backstop exemption +
-      post-archive composition).
+      props, RPC table rows for `lanetalk_game_stats` +
+      `settle_lanetalk_props_for_week`), `context/betting-line-board.md`
+      (third consumer), `context/archive-and-settlement.md` (backstop
+      exemption + post-archive composition).
 
 ## Verification (no test suite — Expo + `supabase db query`)
 
 1. Push the migration; settle a throwaway prop via `settle_market`; confirm
-   O/U behavior unchanged.
+   O/U behavior unchanged. Spot-check `lanetalk_game_stats` against the
+   FrameStats screen for a few imported games (`db query`).
 2. Generate stat lines → board shows Player Props per game + Night Props under
    WEEKLY; unders hidden; own-under blocked server-side if forced.
 3. Place a single + a mixed parlay (score leg + stat leg). Archive night-of →
    succeeds without force; score bets settle; stat bets stay pending.
-4. Import a session next day → Confirm → settled values match the FrameStats
-   screen for the same game; payouts hand-checked. Missing-data market: leave
-   pending, re-import, re-confirm; test Void Missing on a throwaway (stakes
-   restored).
+4. Import a session next day → Confirm (RPC) → settled values match the
+   FrameStats screen for the same game; payouts hand-checked. Missing-data
+   market: leave pending, re-import, re-confirm (idempotent); test Void
+   Missing on a throwaway (stakes restored).
 5. Unarchive after confirm → stat bets restored to pending + balances restored
    (PIN_ECONOMY §10 ledger integrity queries); re-archive + re-confirm →
    identical results.
