@@ -1,11 +1,11 @@
 import { useState } from 'react'
 import {
-  View, Text, TextInput, StyleSheet, ActivityIndicator, Alert,
+  View, Text, TextInput, StyleSheet, ActivityIndicator,
 } from 'react-native'
 import { colors, fonts, radius } from '../../theme'
 import BottomSheet from '../ui/BottomSheet'
 import Button from '../ui/Button'
-import { useUiStore } from '../../stores/uiStore'
+import { useAdminAction } from '../../hooks/useAdminAction'
 import { pvpChallenges } from '../../utils/supabase/db'
 import { CONTRACT_TYPE_LABEL, STATUS_LABEL } from '../../utils/pvp'
 import type { PvpChallengeView } from '../../hooks/usePvpData'
@@ -19,33 +19,15 @@ interface Props {
 }
 
 export default function PvpAdminActionModal({ challenge: c, onClose, onDone }: Props) {
-  const { showToast } = useUiStore()
   const [note, setNote] = useState('')
-  const [saving, setSaving] = useState(false)
+  const { saving, run, confirm: confirmAction } = useAdminAction(onDone, onClose)
 
   const isLive = c.status === 'pending' || c.status === 'countered'
   const isLocked = c.status === 'locked' || c.status === 'accepted'
 
-  async function run(label: string, fn: () => PromiseLike<{ error: any }>) {
-    setSaving(true)
-    try {
-      const { error } = await fn()
-      if (error) { showToast(error.message, 'error'); return }
-      showToast(label, 'success')
-      onDone()
-      onClose()
-    } catch {
-      showToast('Action failed', 'error')
-    } finally {
-      setSaving(false)
-    }
-  }
-
+  // Every gate in this sheet shares the same warning copy.
   function confirm(title: string, onYes: () => void) {
-    Alert.alert(title, 'This cannot be undone.', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Confirm', style: 'destructive', onPress: onYes },
-    ])
+    confirmAction(title, 'This cannot be undone.', onYes)
   }
 
   return (

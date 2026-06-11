@@ -21,6 +21,7 @@ app/
 │   │   ├── usePlayerManagementData.ts  # Raw player list for PlayerManagementScreen
 │   │   ├── useRegistrationData.ts  # Registrations + seasons + roster for RegistrationScreen
 │   │   ├── useRefresh.ts        # useRefresh(fn) — RefreshControl helper
+│   │   ├── useAdminAction.ts    # useAdminAction(onDone, onClose) — admin sheet run/confirm machinery
 │   │   └── useStandingsData.ts  # Standings data + computeStandingsFromSupabase
 │   ├── navigation/
 │   │   ├── RootNavigator.tsx    # Bottom tab navigator

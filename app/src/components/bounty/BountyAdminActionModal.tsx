@@ -6,6 +6,7 @@ import { colors, fonts, radius } from '../../theme'
 import BottomSheet from '../ui/BottomSheet'
 import Button from '../ui/Button'
 import { useUiStore } from '../../stores/uiStore'
+import { useAdminAction } from '../../hooks/useAdminAction'
 import { bountyPosts } from '../../utils/supabase/db'
 import { bountyEconomics, hunterPayout } from '../../utils/bounty'
 import type { BountyView } from '../../hooks/useBountyBoardData'
@@ -22,31 +23,18 @@ interface Props {
 export default function BountyAdminActionModal({ bounty: b, onClose, onDone }: Props) {
   const { showToast } = useUiStore()
   const [reasoning, setReasoning] = useState('')
-  const [saving, setSaving] = useState(false)
+  const { saving, run, confirm } = useAdminAction(onDone, onClose)
 
   const econ = useMemo(() => bountyEconomics(b.rewardPerHunter, b.hunters), [b])
 
-  async function run(label: string, fn: () => PromiseLike<{ error: any }>) {
-    setSaving(true)
-    try {
-      const { error } = await fn()
-      if (error) { showToast(error.message, 'error'); return }
-      showToast(label, 'success')
-      onDone()
-      onClose()
-    } catch {
-      showToast('Action failed', 'error')
-    } finally {
-      setSaving(false)
-    }
-  }
-
   function settle(outcome: 'sponsor_win' | 'hunter_win', label: string) {
     if (!reasoning.trim()) { showToast('Settlement reasoning is required', 'error'); return }
-    Alert.alert(`${label}?`, 'This pays out and closes the bounty.', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Confirm', onPress: () => run('Bounty settled', () => bountyPosts.settle(b.id, outcome, reasoning.trim())) },
-    ])
+    confirm(
+      `${label}?`,
+      'This pays out and closes the bounty.',
+      () => run('Bounty settled', () => bountyPosts.settle(b.id, outcome, reasoning.trim())),
+      false,
+    )
   }
 
   function cancel() {
