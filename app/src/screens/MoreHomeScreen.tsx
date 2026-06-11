@@ -8,6 +8,7 @@ import { MoreStackParamList } from '../navigation/types'
 import AppHeader from '../components/league/AppHeader'
 import AdminEndSeasonModal from '../components/admin/AdminEndSeasonModal'
 import { useAuthStore } from '../stores/authStore'
+import { useIsPlayoffCaptain } from '../hooks/usePlayoffDraftData'
 
 type Nav = NativeStackNavigationProp<MoreStackParamList>
 
@@ -23,6 +24,10 @@ export default function MoreHomeScreen() {
   const navigation = useNavigation<Nav>()
   const [showEndSeason, setShowEndSeason] = useState(false)
   const isAdmin = useAuthStore(s => s.role) === 'admin'
+  const playerId = useAuthStore(s => s.playerId)
+  // The Playoffs tile is restricted: admins always (in LEAGUE ADMIN below);
+  // non-admin captains of the current draft get it among the league tools.
+  const isPlayoffCaptain = useIsPlayoffCaptain(playerId)
 
   const leagueToolsTiles: Tile[] = [
     { icon: '🏆', label: 'Records',      onPress: () => navigation.navigate('LeagueRecords') },
@@ -31,6 +36,9 @@ export default function MoreHomeScreen() {
     { icon: '📜', label: 'History',      onPress: () => navigation.navigate('History') },
     { icon: '📝', label: 'Registration', onPress: () => navigation.navigate('Registration') },
     { icon: '🗑️', label: 'Trash Board',  onPress: () => navigation.navigate('TrashBoard') },
+    ...(!isAdmin && isPlayoffCaptain
+      ? [{ icon: '🏁', label: 'Playoffs', onPress: () => navigation.navigate('Playoffs') }]
+      : []),
   ]
 
   const adminTiles: Tile[] = [
