@@ -36,6 +36,7 @@ import {
   lineCategory,
   closedBettingNote,
   betLineSuffix,
+  selectionButtonLabel,
   type BetView,
   type LineView,
   type LineGroup,
@@ -576,7 +577,7 @@ export default function SportsbookScreen() {
                       activeOpacity={0.7}
                     >
                       <Text style={[styles.pickToggleBtnText, active && styles.pickToggleBtnTextActive]}>
-                        {(sel.label || sel.key).toUpperCase()}
+                        {selectionButtonLabel(modal.line, sel)}
                       </Text>
                     </TouchableOpacity>
                   )

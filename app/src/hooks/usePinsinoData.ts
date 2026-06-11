@@ -52,6 +52,16 @@ export const STAT_LABELS: Record<string, string> = {
   first_ball_avg: 'First-Ball Avg',
 }
 
+// The pick button IS the line being agreed to. Every side offered on the board
+// is an over (unders are UI-hidden — all bets are over by definition), so the
+// button reads as the threshold itself: "142.5+" on a score line, "4.5+" on a
+// stat prop. Lineless sides (moneyline "WIN") keep their label.
+export function selectionButtonLabel(line: LineView, sel: SelectionView): string {
+  const threshold = sel.line ?? line.line
+  if (sel.key === 'over' && threshold != null) return `${threshold.toFixed(1)}+`
+  return (sel.label || sel.key).toUpperCase()
+}
+
 // The line suffix placed-bet surfaces append after the pick ("OVER 4.5 STRIKES",
 // "OVER 142.5"). One helper so every gate (BetRow, detail/settle modals, parlay
 // slips) treats stat props and score O/U the same way.
@@ -264,8 +274,8 @@ function normalizeMarket(m: any): LineView {
   const sharedLine =
     lineVals.length > 0 && lineVals.every(v => v === lineVals[0]) ? lineVals[0] : null
 
-  // Stat props carry their kind in params.stat; the subtitle names it where the
-  // plain O/U row would just show "LINE 142.5" (e.g. "STRIKES · LINE 4.5").
+  // Stat props carry their kind in params.stat; the subtitle names the stat
+  // (the threshold itself lives in the pick button — selectionButtonLabel).
   const statKey: string | null = m.market_type === 'prop' ? m.params?.stat ?? null : null
   const statLabel = statKey ? STAT_LABELS[statKey] ?? statKey : null
 
@@ -280,9 +290,7 @@ function normalizeMarket(m: any): LineView {
     gameNumber: m.game_number ?? null,
     line: sharedLine,
     statKey,
-    subtitle: statLabel && sharedLine != null
-      ? `${statLabel.toUpperCase()} · LINE ${sharedLine.toFixed(1)}`
-      : undefined,
+    subtitle: statLabel ? statLabel.toUpperCase() : undefined,
     selections,
     inProgress: m.status === 'closed',
   }

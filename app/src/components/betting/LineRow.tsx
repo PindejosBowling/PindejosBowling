@@ -1,6 +1,6 @@
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native'
 import { colors, fonts } from '../../theme'
-import type { LineView, SelectionView } from '../../hooks/usePinsinoData'
+import { selectionButtonLabel, type LineView, type SelectionView } from '../../hooks/usePinsinoData'
 
 // Per-selection visual state the caller computes (it owns the betting context —
 // balance, slip contents, anti-tank rules). Purely cosmetic: `disabled` dims a
@@ -35,12 +35,11 @@ export default function LineRow({ line, isLast, inProgress, selectionState, onSe
     >
       <View style={styles.lineInfo}>
         <Text style={styles.lineName}>{line.subjectName}</Text>
-        {/* Subtitle wins when set (e.g. moneyline metadata); else the O/U line. */}
-        {line.subtitle != null ? (
+        {/* Optional metadata (a prop's stat, moneyline matchup). The line value
+            itself lives in the pick button ("142.5+") — selectionButtonLabel. */}
+        {line.subtitle != null && (
           <Text style={styles.lineValue}>{line.subtitle}</Text>
-        ) : line.line != null ? (
-          <Text style={styles.lineValue}>LINE  {line.line.toFixed(1)}</Text>
-        ) : null}
+        )}
       </View>
       <View style={styles.pickBtns}>
         {line.selections.map(sel => {
@@ -55,7 +54,7 @@ export default function LineRow({ line, isLast, inProgress, selectionState, onSe
               activeOpacity={0.7}
             >
               <Text style={[styles.pickBtnText, st.selected && styles.pickBtnTextSelected]}>
-                {(sel.label || sel.key).toUpperCase()}
+                {selectionButtonLabel(line, sel)}
               </Text>
             </TouchableOpacity>
           )
