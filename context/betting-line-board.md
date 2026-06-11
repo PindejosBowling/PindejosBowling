@@ -85,7 +85,7 @@ The **"under" side of player O/U lines is intentionally not bettable** from the 
 
 - **Fetch:** `betMarkets.listActivePropByWeek` merged into `openLines` alongside O/U + moneyline.
 - **`LineView.statKey`** (from `params.stat`) + a `subtitle` like `STRIKES · LINE 4.5` — the stat rides the same slot the moneyline uses for its metadata.
-- **Grouping:** per-game props → a `Player Props` category under each `GAME N`; night props (`gameNumber == null`) → a `Night Props` category under a new **`WEEKLY`** outer group that leads the board, above the game groups (week-level specials render inside it rather than under their own duplicate `WEEKLY` header).
+- **Grouping:** per-game props share the score O/U's `Player Overs` category (one collapsible menu per game); night props (`gameNumber == null`) → a `Night Props` category under a new **`WEEKLY`** outer group that leads the board, above the game groups (week-level specials render inside it rather than under their own duplicate `WEEKLY` header).
 - **Anti-tank + under-hide:** `selectionBetsAgainstSubject('prop','under') → true`, and `isSelectionHiddenInUI` hides the prop under exactly like the score O/U under (same social policy, same trivial revert).
 - **Open/close:** props ride the game toggles (`setPropStatusByWeekGame`); closing game 1 also closes the night markets; `reopenOUForWeek` reopens props too.
 - **Placed-bet surfaces** (`BetRow`, `BetDetailModal`, `SettleBetModal`, `LedgerRow`) render the shared `betLineSuffix` helper ("OVER 4.5 STRIKES"); `LegView`/`BetView` carry `statKey`.

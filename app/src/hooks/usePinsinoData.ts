@@ -108,10 +108,11 @@ export function lineCategory(line: LineView): LineCategory {
       // "Player Overs" rather than "Player Over/Unders".
       return { key: 'player_ou', label: 'Player Overs', sortOrder: 1 }
     case 'prop':
-      // LaneTalk stat lines: per-game strike/spare props under each game,
-      // night-level clean% / first-ball props under the WEEKLY group.
+      // LaneTalk stat lines: per-game strike/spare props share the score O/U's
+      // "Player Overs" section (one collapsible menu per game); night-level
+      // clean% / first-ball props get their own section under WEEKLY.
       return line.gameNumber != null
-        ? { key: 'player_props', label: 'Player Props', sortOrder: 2 }
+        ? { key: 'player_ou', label: 'Player Overs', sortOrder: 1 }
         : { key: 'night_props', label: 'Night Props', sortOrder: 0 }
     default:
       return { key: line.marketType, label: line.title || line.marketType, sortOrder: 99 }
