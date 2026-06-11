@@ -122,6 +122,8 @@ Central signed-URL cache for player profile pictures. `load()` fetches `players.
 
 ## Component Inventory
 
+> The complete per-component index (props, mount patterns, shared conventions, all 46 components grouped by domain) lives in [COMPONENTS_INDEX.md](COMPONENTS_INDEX.md). The tables below keep the narrative detail for the core + betting components.
+
 | Component | Purpose |
 |---|---|
 | `AppHeader` | App logo + current Week/Season badge, reads from Supabase (`weeks.getCurrent`, `seasons.getCurrent`). Top-right avatar is a `<PlayerAvatar>` opening `ProfileMenuModal` |

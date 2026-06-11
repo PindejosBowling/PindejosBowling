@@ -29,6 +29,7 @@ This file is an **index**. The detailed reference is split across [context/](con
 | [context/db-queries.md](context/db-queries.md) | The `db.ts` typed query objects — every method per table (always query through these, never raw client joins) |
 | [context/data-architecture.md](context/data-architecture.md) | The hook + compute-function pattern, archived-vs-live data, standings computation, the full hooks table, and pure utilities (`helpers.ts`) |
 | [context/ui-system.md](context/ui-system.md) | Player badges, the four Zustand stores, navigation architecture (tabs + stacks + routes), and the component inventory (incl. betting display components) |
+| [context/COMPONENTS_INDEX.md](context/COMPONENTS_INDEX.md) | The full index of `src/components/` — props, purpose, mount pattern, and shared conventions for every reusable component, grouped by domain. **Check before building any new UI for a screen** |
 | [context/betting-line-board.md](context/betting-line-board.md) | The Place Bets line board — the market-type-agnostic stack, data shapes, seam helpers, the recipe for adding a new market type to the UI, and the **UI policy hiding the "under" side** (social-dynamics reason; mechanic preserved in the DB/RPC layer) |
 | [context/patterns.md](context/patterns.md) | Key patterns (useMemo, pull-to-refresh, toasts-in-modals, optimistic edits, admin flows) and the theme system (colors / fonts / radius) |
 | [context/file-map.md](context/file-map.md) | The full `app/` source tree with a one-line note per file |
