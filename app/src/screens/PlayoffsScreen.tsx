@@ -17,7 +17,8 @@ import { useUiStore } from '../stores/uiStore'
 import { useRefresh } from '../hooks/useRefresh'
 import { usePlayoffDraftData, computeDraftTurnSeed, DraftType } from '../hooks/usePlayoffDraftData'
 import { computeStandingsFromSupabase } from '../hooks/useStandingsData'
-import { playoffDrafts } from '../utils/supabase/db'
+import { playoffDrafts, teams, games, betMarkets } from '../utils/supabase/db'
+import { buildSchedule } from '../components/admin/AdminGenerateTeamsModal'
 
 type Nav = NativeStackNavigationProp<MoreStackParamList>
 
@@ -113,6 +114,7 @@ export default function PlayoffsScreen() {
       id: rawDraft.id as string,
       status: rawDraft.status as string,
       draftType: rawDraft.draft_type as DraftType,
+      weekId: rawDraft.week_id as string,
       weekNumber: week?.week_number as number | undefined,
       captains,
       picks,
@@ -148,6 +150,40 @@ export default function PlayoffsScreen() {
 
   const toggleCaptain = (playerId: string) =>
     setCaptainIds(ids => (ids.includes(playerId) ? ids.filter(id => id !== playerId) : [...ids, playerId]))
+
+  // Materialize via the RPC, then lay the standard rails the generate-teams
+  // flow lays after writing teams: the schedule (games) for the team count and
+  // the betting-market syncs. Sync failures are warnings there — same here.
+  const materializeAndSchedule = async (): Promise<{ error: { message: string } | null }> => {
+    if (!draft) return { error: { message: 'No draft' } }
+    const res = await playoffDrafts.materializeTeams(draft.id)
+    if (res.error) return res
+
+    const { data: teamRows, error: teamsErr } = await teams.listByWeek(draft.weekId)
+    if (teamsErr) return { error: teamsErr }
+    const teamIdByNumber = new Map<number, string>((teamRows ?? []).map((t: any) => [t.team_number, t.id]))
+
+    const schedule = buildSchedule((teamRows ?? []).length)
+    if (schedule.length) {
+      const { error: gamesErr } = await games.insert(
+        schedule.map(s => ({
+          game_number: s.game_number,
+          team_a_id: teamIdByNumber.get(s.team_a)!,
+          team_b_id: teamIdByNumber.get(s.team_b)!,
+        })),
+      )
+      if (gamesErr) return { error: gamesErr }
+    }
+
+    const scheduleGames = Array.from(new Set(schedule.map(s => s.game_number)))
+    const { error: ouErr } = await betMarkets.syncOUForWeek(draft.weekId, scheduleGames)
+    if (ouErr) console.warn('Failed to sync O/U markets:', ouErr.message)
+    await betMarkets.syncLanetalkPropsForWeek(draft.weekId)
+    const { error: mlErr } = await betMarkets.syncMoneylineForWeek(draft.weekId)
+    if (mlErr) console.warn('Failed to sync moneyline markets:', mlErr.message)
+
+    return { error: null }
+  }
 
   const createDraft = async () => {
     if (!seasonId || !setupWeekId || captainIds.length < 2) return
@@ -414,14 +450,14 @@ export default function PlayoffsScreen() {
         <ConfirmActionSheet
           title="Create playoff teams?"
           confirmLabel="Create teams"
-          action={() => playoffDrafts.materializeTeams(draft.id)}
+          action={materializeAndSchedule}
           successMessage="Playoff teams created"
           onClose={() => setConfirmMaterialize(false)}
           onDone={reload}
         >
           <Text style={styles.sheetBody}>
             Writes the drafted rosters as real teams on Week {draft.weekNumber ?? '?'} (captain in slot 1, picks in
-            order). Matchups and scoring then run through the usual week screens.
+            order) with the standard game schedule. Matchups and scoring then run through the usual week screens.
           </Text>
         </ConfirmActionSheet>
       )}
