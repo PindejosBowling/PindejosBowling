@@ -109,7 +109,7 @@ All database queries MUST be implemented in `db.ts`. Queries like `scores.listFo
 | `listByPlayer(playerId)` | A player's bets with `bet_legs → bet_selections → bet_markets`(+subject, +week) — newest first |
 | `listByWeek(weekId)` | All bets with a leg on an `over_under` market in this week (Active Bets) |
 | `listSettledBySeason(seasonId)` | All settled bets for a season with the full leg/selection/market(+week) graph (Settled Bets) |
-| `place(selectionIds, stake)` | RPC `place_house_bet` — atomic, balance/anti-tank-checked; O/U passes one selection id |
+| `place(selectionIds, stake, customLineId?)` | RPC `place_house_bet` — atomic, balance/anti-tank-checked; O/U passes one selection id. `customLineId` tags the bet with a special's identity (title/description/category snapshotted server-side onto `bets`) |
 | `cancel(betId)` | RPC `cancel_bet` (admin) — total undo: removes ledger pair(s) + bet, re-opens a settled market if it was the last bet |
 
 ### `customLines` (admin "Specials" — see [betting-line-board.md](betting-line-board.md))

@@ -235,7 +235,8 @@ export default function SportsbookScreen() {
     try {
       // Same atomic RPC as singles/parlays — the special is just its bundle of
       // selections; payout falls out of the legs' combined odds server-side.
-      const { error } = await bets.place(takeModal.line.selectionIds, wagerNum)
+      // The lineId tag snapshots the special's title/description onto the bet.
+      const { error } = await bets.place(takeModal.line.selectionIds, wagerNum, takeModal.line.lineId)
       if (error) { showToast(error.message, 'error'); return }
       showToast('Bet placed!', 'success')
       setTakeModal(null)
