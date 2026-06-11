@@ -33,20 +33,28 @@ interface LineRowProps {
 export default function LineRow({ lines, isLast, inProgress, selectionState, onSelect }: LineRowProps) {
   const pressable = !inProgress && !!onSelect
   const first = lines[0]
+  // Player rows (overs + stat props) stack: name centered on its own row, the
+  // button set evenly spaced beneath. Team moneylines keep the original
+  // horizontal name-left / button-right presentation.
+  const stacked = first.marketType !== 'moneyline'
 
   return (
     <View
-      style={[styles.lineRow, !isLast && styles.lineRowBorder, inProgress && styles.lineRowInProgress]}
+      style={[
+        stacked ? styles.lineRowStacked : styles.lineRow,
+        !isLast && styles.lineRowBorder,
+        inProgress && styles.lineRowInProgress,
+      ]}
     >
-      <View style={styles.lineInfo}>
-        <Text style={styles.lineName}>{first.subjectName}</Text>
+      <View style={stacked ? styles.lineInfoStacked : styles.lineInfo}>
+        <Text style={[styles.lineName, stacked && styles.centered]}>{first.subjectName}</Text>
         {/* Optional metadata (moneyline matchup). The bet condition itself
             lives in each pick button ("142.5+ PINS") — selectionButtonLabel. */}
         {first.subtitle != null && (
-          <Text style={styles.lineValue}>{first.subtitle}</Text>
+          <Text style={[styles.lineValue, stacked && styles.centered]}>{first.subtitle}</Text>
         )}
       </View>
-      <View style={styles.pickBtns}>
+      <View style={stacked ? styles.pickBtnsStacked : styles.pickBtns}>
         {lines.flatMap(line =>
           line.selections.map(sel => {
             const st = selectionState?.(line, sel) ?? {}
@@ -72,6 +80,7 @@ export default function LineRow({ lines, isLast, inProgress, selectionState, onS
 }
 
 const styles = StyleSheet.create({
+  // Horizontal layout (moneylines): name left, button(s) right.
   lineRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -79,12 +88,21 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     gap: 10,
   },
+  // Stacked layout (player overs + props): name centered on its own row, the
+  // full button set evenly spaced beneath it.
+  lineRowStacked: {
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    gap: 8,
+  },
   lineRowBorder: {
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
   },
   lineRowInProgress: { opacity: 0.5 },
-  lineInfo: { flexShrink: 1, minWidth: 72 },
+  lineInfo: { flex: 1 },
+  lineInfoStacked: { alignItems: 'center' },
+  centered: { textAlign: 'center' },
   lineName: {
     fontFamily: fonts.barlowCondensed,
     fontSize: 15,
@@ -98,12 +116,13 @@ const styles = StyleSheet.create({
     marginTop: 1,
     letterSpacing: 0.5,
   },
+  pickBtns: { flexDirection: 'row', gap: 6 },
   // A subject's full button set; wraps when the conditions outgrow the row.
-  pickBtns: {
-    flex: 1,
+  pickBtnsStacked: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    justifyContent: 'flex-end',
+    justifyContent: 'space-evenly',
+    alignItems: 'center',
     gap: 6,
   },
   pickBtn: {
