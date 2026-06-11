@@ -12,31 +12,6 @@ export type Database = {
   __InternalSupabase: {
     PostgrestVersion: "14.5"
   }
-  graphql_public: {
-    Tables: {
-      [_ in never]: never
-    }
-    Views: {
-      [_ in never]: never
-    }
-    Functions: {
-      graphql: {
-        Args: {
-          extensions?: Json
-          operationName?: string
-          query?: string
-          variables?: Json
-        }
-        Returns: Json
-      }
-    }
-    Enums: {
-      [_ in never]: never
-    }
-    CompositeTypes: {
-      [_ in never]: never
-    }
-  }
   public: {
     Tables: {
       activity_feed_events: {
@@ -1412,6 +1387,184 @@ export type Database = {
         }
         Relationships: []
       }
+      playoff_draft_captains: {
+        Row: {
+          created_at: string
+          draft_id: string
+          id: string
+          player_id: string
+          seed: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          draft_id: string
+          id?: string
+          player_id: string
+          seed: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          draft_id?: string
+          id?: string
+          player_id?: string
+          seed?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "playoff_draft_captains_draft_id_fkey"
+            columns: ["draft_id"]
+            isOneToOne: false
+            referencedRelation: "playoff_drafts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "playoff_draft_captains_player_id_fkey"
+            columns: ["player_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      playoff_draft_picks: {
+        Row: {
+          captain_player_id: string
+          created_at: string
+          draft_id: string
+          id: string
+          pick_number: number
+          picked_player_id: string
+          updated_at: string
+        }
+        Insert: {
+          captain_player_id: string
+          created_at?: string
+          draft_id: string
+          id?: string
+          pick_number: number
+          picked_player_id: string
+          updated_at?: string
+        }
+        Update: {
+          captain_player_id?: string
+          created_at?: string
+          draft_id?: string
+          id?: string
+          pick_number?: number
+          picked_player_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "playoff_draft_picks_captain_player_id_fkey"
+            columns: ["captain_player_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "playoff_draft_picks_draft_id_fkey"
+            columns: ["draft_id"]
+            isOneToOne: false
+            referencedRelation: "playoff_drafts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "playoff_draft_picks_picked_player_id_fkey"
+            columns: ["picked_player_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      playoff_draft_pool: {
+        Row: {
+          created_at: string
+          draft_id: string
+          id: string
+          player_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          draft_id: string
+          id?: string
+          player_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          draft_id?: string
+          id?: string
+          player_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "playoff_draft_pool_draft_id_fkey"
+            columns: ["draft_id"]
+            isOneToOne: false
+            referencedRelation: "playoff_drafts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "playoff_draft_pool_player_id_fkey"
+            columns: ["player_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      playoff_drafts: {
+        Row: {
+          created_at: string
+          draft_type: string
+          id: string
+          season_id: string
+          status: string
+          updated_at: string
+          week_id: string
+        }
+        Insert: {
+          created_at?: string
+          draft_type?: string
+          id?: string
+          season_id: string
+          status?: string
+          updated_at?: string
+          week_id: string
+        }
+        Update: {
+          created_at?: string
+          draft_type?: string
+          id?: string
+          season_id?: string
+          status?: string
+          updated_at?: string
+          week_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "playoff_drafts_season_id_fkey"
+            columns: ["season_id"]
+            isOneToOne: true
+            referencedRelation: "seasons"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "playoff_drafts_week_id_fkey"
+            columns: ["week_id"]
+            isOneToOne: false
+            referencedRelation: "weeks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       pvp_challenge_offers: {
         Row: {
           accepted_at: string | null
@@ -2127,6 +2280,7 @@ export type Database = {
           id: string
           is_archived: boolean
           is_confirmed: boolean
+          is_playoff: boolean
           season_id: string
           updated_at: string
           week_number: number
@@ -2137,6 +2291,7 @@ export type Database = {
           id?: string
           is_archived?: boolean
           is_confirmed?: boolean
+          is_playoff?: boolean
           season_id: string
           updated_at?: string
           week_number: number
@@ -2147,6 +2302,7 @@ export type Database = {
           id?: string
           is_archived?: boolean
           is_confirmed?: boolean
+          is_playoff?: boolean
           season_id?: string
           updated_at?: string
           week_number?: number
@@ -2292,6 +2448,25 @@ export type Database = {
         }
         Returns: string
       }
+      playoff_create_draft: {
+        Args: {
+          p_captain_player_ids: string[]
+          p_draft_type: string
+          p_season_id: string
+          p_week_id: string
+        }
+        Returns: string
+      }
+      playoff_current_turn: { Args: { p_draft_id: string }; Returns: string }
+      playoff_make_pick: {
+        Args: { p_draft_id: string; p_player_id: string }
+        Returns: undefined
+      }
+      playoff_materialize_teams: {
+        Args: { p_draft_id: string }
+        Returns: undefined
+      }
+      playoff_undo_pick: { Args: { p_draft_id: string }; Returns: undefined }
       process_weekly_loans: { Args: { p_week_id: string }; Returns: undefined }
       publish_activity_event: {
         Args: {
@@ -2537,9 +2712,6 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
-  graphql_public: {
-    Enums: {},
-  },
   public: {
     Enums: {},
   },
