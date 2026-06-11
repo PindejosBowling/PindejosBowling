@@ -79,6 +79,17 @@ The **"under" side of player O/U lines is intentionally not bettable** from the 
 - **No anti-tank.** `selectionBetsAgainstSubject` returns false for moneyline (backing your own team to win is the *only* allowed bet).
 - **Auto-generated, auto-settled.** `sync_moneyline_markets_for_week` creates one even-money market per `games` row (wired to **team generation / add-game**, not RSVP — moneylines derive from the schedule). Settlement is automatic on week-archive (`settle_betting_for_week`): winner = the team with the higher combined game score, ties → push. The admin `SettleBetModal` also exposes a manual per-leg path (`settle_moneyline_market`, no score input — derived from entered scores). DB details: [supabase/PIN_ECONOMY_SCHEMA.md](../supabase/PIN_ECONOMY_SCHEMA.md).
 
+### LaneTalk stat props (the third consumer)
+
+**LaneTalk stat lines** (strikes/spares O/U per game, clean% + first-ball avg O/U per night; `market_type='prop'`, `params.stat`/`params.scope`) render through the stack with zero new row components — full feature doc: [lanetalk-stat-bets.md](lanetalk-stat-bets.md). Board specifics:
+
+- **Fetch:** `betMarkets.listActivePropByWeek` merged into `openLines` alongside O/U + moneyline.
+- **`LineView.statKey`** (from `params.stat`) + a `subtitle` like `STRIKES · LINE 4.5` — the stat rides the same slot the moneyline uses for its metadata.
+- **Grouping:** per-game props → a `Player Props` category under each `GAME N`; night props (`gameNumber == null`) → a `Night Props` category under a new **`WEEKLY`** outer group (after the games, before `SEASON` — same label styling the week-level specials use).
+- **Anti-tank + under-hide:** `selectionBetsAgainstSubject('prop','under') → true`, and `isSelectionHiddenInUI` hides the prop under exactly like the score O/U under (same social policy, same trivial revert).
+- **Open/close:** props ride the game toggles (`setPropStatusByWeekGame`); closing game 1 also closes the night markets; `reopenOUForWeek` reopens props too.
+- **Placed-bet surfaces** (`BetRow`, `BetDetailModal`, `SettleBetModal`, `LedgerRow`) render the shared `betLineSuffix` helper ("OVER 4.5 STRIKES"); `LegView`/`BetView` carry `statKey`.
+
 ### Recipe — adding a new market type to the board
 
 The board needs **no new render code**:

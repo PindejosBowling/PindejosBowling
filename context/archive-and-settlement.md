@@ -118,7 +118,7 @@ idempotency guard:
 | c | **Moneyline settlement** | Each non-`settled` moneyline whose game has ≥1 score → `settle_moneyline_market_internal` (higher combined team total wins; tie = push; a side with zero scores totals 0). **Zero scores in the game → `closed`** | same as (b) | same as (b) |
 | d | **Loans** (`process_weekly_loans`) | Per active loan: **garnish** = min(week pincome × rate, outstanding) → then **interest** = ceil(remaining × rate) on still-active loans; outstanding ≤ 0 → `status='paid_off'` | garnish: `pin_ledger` pair (`loan_weekly_garnishment`) + `loan_ledger weekly_garnishment`; interest: `loan_ledger weekly_interest` **only** (debt grows, no pin movement) | per-(loan, week) guard on `loan_ledger` types |
 | e | **PvP** (`settle_pvp_for_week`) | Close still-open offers/challenges (pending/countered → `cancelled`, nothing was escrowed) then auto-settle every `locked` contract: decisive → winner takes pot; tie → push (refund); missing data (incl. a deleted prop market — FK is SET NULL) → **void** (refund). Publishes `pvp_challenge_settled` feed events | win: `pvp_payout` pair; push/void: `pvp_refund` pairs | challenge `status` checks; settled/pushed/voided return early |
-| f | **BACKSTOP** | Count bets with a leg in this week still `pending`. **>0 and not force → RAISE** (whole archive rolls back) naming the unsettleable markets. **Force →** each such bet: legs `result='void'`, bet `status='void'`, stake refunded | force: `bet_refund` pair ("Voided at archive — market never settled") | n/a (state-driven) |
+| f | **BACKSTOP** | Count bets with a leg in this week still `pending`. **>0 and not force → RAISE** (whole archive rolls back) naming the unsettleable markets. **Force →** each such bet: legs `result='void'`, bet `status='void'`, stake refunded. **Exemption: bets with ≥1 leg on an unsettled `prop` market (LaneTalk stat bets) are excluded from the count, the listing, AND the force-void** — they settle later via `settle_lanetalk_props_for_week` ([lanetalk-stat-bets.md](lanetalk-stat-bets.md)) | force: `bet_refund` pair ("Voided at archive — market never settled") | n/a (state-driven) |
 | g | **House weekly P&L feed event** | `sportsbook_weekly_house_result` with `house_net` = SUM of house `bet_stake/bet_payout/bet_refund` **via `bet_id` through the week's markets** (`bet_id` is the authoritative link for bet money; payout/refund rows are also week-stamped since `…191008_week_stamp_bet_settlement_ledger`) | none (feed row) | `(season, week, event_type)` existence check |
 
 **Backstop reversibility:** the force-void is an UPDATE on `bets`/`bet_legs`
@@ -128,6 +128,17 @@ exact pre-archive state, voided bets returning to `pending`.
 
 **App force flow:** `AdminArchiveModal` arms a red **Force Archive** retry when
 the RPC error matches `/remain pending/i`, mirroring the unarchive force flow.
+
+**Post-archive prop settlement composes.** LaneTalk stat props ride a second
+settlement clock: their bets stay `pending` through archive (the backstop
+exemption above) and settle when the admin runs
+`settle_lanetalk_props_for_week` from the import screen — which only UPDATEs
+columns the §2 preimage already captured (markets/selections/bets/legs) and
+INSERTs bet-linked, week-stamped `pin_ledger` rows, exactly what
+`unarchive_week` reverses. Confirm-before-archive composes too. Missing-data
+markets are either left pending or (admin choice) DELETEd via the
+refund-on-market-death rail (§5c). Full doc:
+[lanetalk-stat-bets.md](lanetalk-stat-bets.md).
 
 **What never settles here:** bounties (admin-manual `settle_bounty`/`close_bounty`
 only), bet/PvP **stakes** (debited at placement/acceptance), season-close loan
