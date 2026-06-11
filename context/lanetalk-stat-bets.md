@@ -108,9 +108,9 @@ Third consumer of the line-board stack (see
 game's **Player Overs** menu with the score O/U lines; night props form a
 **Night Props** section under a
 **WEEKLY** group that leads the board, above the game groups (shared with the
-week-level specials' header). `LineView.statKey` +
-`subtitle` (`STRIKES`) carry the stat, and the pick button is the line itself
-(`4.5+`, via `selectionButtonLabel` — all board bets are overs by definition); **unders are UI-hidden**
+week-level specials' header). `LineView.statKey` carries the stat, and the pick button is the full condition
+itself (`4.5+ STRIKES`, via `selectionButtonLabel` — all board bets are overs
+by definition; score lines read `142.5+ PINS`); **unders are UI-hidden**
 (same social policy + trivial revert as score O/U). Game start/stop toggles
 (`setPropStatusByWeekGame`) close a game's props with it; **closing game 1 also
 closes the night markets**; `reopenOUForWeek` reopens props too. Placed-bet

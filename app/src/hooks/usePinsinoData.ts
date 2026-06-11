@@ -54,11 +54,18 @@ export const STAT_LABELS: Record<string, string> = {
 
 // The pick button IS the line being agreed to. Every side offered on the board
 // is an over (unders are UI-hidden — all bets are over by definition), so the
-// button reads as the threshold itself: "142.5+" on a score line, "4.5+" on a
-// stat prop. Lineless sides (moneyline "WIN") keep their label.
+// button reads as the full condition: threshold + what's being counted —
+// "142.5+ PINS" on a score line, "4.5+ STRIKES" / "62.5+ CLEAN %" on a stat
+// prop. Lineless sides (moneyline "WIN") keep their label.
 export function selectionButtonLabel(line: LineView, sel: SelectionView): string {
   const threshold = sel.line ?? line.line
-  if (sel.key === 'over' && threshold != null) return `${threshold.toFixed(1)}+`
+  if (sel.key === 'over' && threshold != null) {
+    const what =
+      line.marketType === 'prop'
+        ? line.statKey ? STAT_LABELS[line.statKey] ?? line.statKey : null
+        : line.marketType === 'over_under' ? 'Pins' : null
+    return `${threshold.toFixed(1)}+${what ? ` ${what.toUpperCase()}` : ''}`
+  }
   return (sel.label || sel.key).toUpperCase()
 }
 
@@ -274,10 +281,9 @@ function normalizeMarket(m: any): LineView {
   const sharedLine =
     lineVals.length > 0 && lineVals.every(v => v === lineVals[0]) ? lineVals[0] : null
 
-  // Stat props carry their kind in params.stat; the subtitle names the stat
-  // (the threshold itself lives in the pick button — selectionButtonLabel).
+  // Stat props carry their kind in params.stat; the full condition (threshold
+  // + stat) renders in the pick button (selectionButtonLabel), so no subtitle.
   const statKey: string | null = m.market_type === 'prop' ? m.params?.stat ?? null : null
-  const statLabel = statKey ? STAT_LABELS[statKey] ?? statKey : null
 
   return {
     marketId: m.id,
@@ -290,7 +296,6 @@ function normalizeMarket(m: any): LineView {
     gameNumber: m.game_number ?? null,
     line: sharedLine,
     statKey,
-    subtitle: statLabel ? statLabel.toUpperCase() : undefined,
     selections,
     inProgress: m.status === 'closed',
   }
