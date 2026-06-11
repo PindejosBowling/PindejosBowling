@@ -356,7 +356,13 @@ export default function SportsbookScreen() {
       <LineRow
         lines={lines}
         isLast={isLast}
-        relation={subjectRelation(weekTeams, lines[0].subjectPlayerId, lines[0].gameNumber)}
+        relation={
+          // Every moneyline on the player board is "Your Team" (toYourTeamMoneyline),
+          // so it shares the teammate green — one color story for "your side".
+          lines[0].marketType === 'moneyline'
+            ? 'with'
+            : subjectRelation(weekTeams, lines[0].subjectPlayerId, lines[0].gameNumber)
+        }
         inProgress={groupInProgress}
         onSelect={(line, sel) =>
           placeMode === 'parlay' ? toggleParlayLeg(line, sel) : onSingleSelect(line, sel)
