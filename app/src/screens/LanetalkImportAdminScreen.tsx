@@ -17,6 +17,7 @@ import { useUiStore } from '../stores/uiStore'
 import { useLanetalkImportAdmin } from '../hooks/useLanetalkImportAdmin'
 import { lanetalkImports, type LanetalkImportSummary } from '../utils/supabase/db'
 import EmptyCard from '../components/ui/EmptyCard'
+import LanetalkConfirmModal from '../components/admin/LanetalkConfirmModal'
 
 type Nav = NativeStackNavigationProp<MoreStackParamList>
 
@@ -63,8 +64,23 @@ export default function LanetalkImportAdminScreen() {
   const navigation = useNavigation<Nav>()
   const isAdmin = useAuthStore(s => s.role) === 'admin'
   const showToast = useUiStore(s => s.showToast)
-  const { loading, rawImports, reload } = useLanetalkImportAdmin()
+  const { loading, rawImports, unsettledProps, reload } = useLanetalkImportAdmin()
   const { refreshing, onRefresh } = useRefresh(reload)
+
+  // Unsettled LaneTalk stat props, grouped by week — each week group with any
+  // pending props gets a "Confirm LaneTalk Data" action. The button hides once
+  // nothing is unsettled (the list reloads after each confirm).
+  const propsByWeek = useMemo(() => {
+    const map = new Map<string, any[]>()
+    for (const m of unsettledProps) {
+      if (!m.week_id) continue
+      const arr = map.get(m.week_id)
+      if (arr) arr.push(m)
+      else map.set(m.week_id, [m])
+    }
+    return map
+  }, [unsettledProps])
+  const [confirmWeek, setConfirmWeek] = useState<{ weekId: string; title: string } | null>(null)
 
   const [url, setUrl] = useState('')
   const [busy, setBusy] = useState(false)
@@ -268,6 +284,23 @@ export default function LanetalkImportAdminScreen() {
                   <Text style={[styles.chevron, expanded && styles.chevronUp]}>›</Text>
                 </TouchableOpacity>
 
+                {/* Stat-prop settlement: shown while this week has unsettled
+                    LaneTalk props (they settle on this Confirm clock, not at
+                    archive — the data usually lands the next day). */}
+                {expanded && propsByWeek.has(wg.weekKey) && (
+                  <View style={styles.confirmRow}>
+                    <TouchableOpacity
+                      style={styles.confirmBtn}
+                      onPress={() => setConfirmWeek({ weekId: wg.weekKey, title: title })}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={styles.confirmBtnText}>
+                        Confirm LaneTalk Data ({propsByWeek.get(wg.weekKey)!.length} props pending)
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+
                 {expanded && wg.players.map((g, gi) => (
                   <View key={g.key} style={[styles.groupCard, gi > 0 && styles.groupCardBorder]}>
                     <View style={styles.groupHeader}>
@@ -295,6 +328,17 @@ export default function LanetalkImportAdminScreen() {
           })
         )}
       </ScrollView>
+
+      {/* Stat-prop settlement modal (mounted conditionally so state resets). */}
+      {confirmWeek && (
+        <LanetalkConfirmModal
+          weekId={confirmWeek.weekId}
+          weekTitle={confirmWeek.title}
+          markets={propsByWeek.get(confirmWeek.weekId) ?? []}
+          onClose={() => setConfirmWeek(null)}
+          onDone={reload}
+        />
+      )}
 
       <Toast />
     </SafeAreaView>
@@ -392,6 +436,21 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
   },
   weekHeaderExpanded: { borderBottomWidth: 1, borderBottomColor: colors.border },
+  confirmRow: { paddingHorizontal: 14, paddingTop: 12 },
+  confirmBtn: {
+    backgroundColor: colors.accentDim,
+    borderRadius: radius.cardSm,
+    borderWidth: 1,
+    borderColor: colors.accent,
+    paddingVertical: 10,
+    alignItems: 'center',
+  },
+  confirmBtnText: {
+    fontFamily: fonts.barlowCondensed,
+    fontSize: 14,
+    color: colors.accent,
+    letterSpacing: 0.4,
+  },
   weekTitle: {
     flex: 1,
     fontFamily: fonts.barlowCondensed,
