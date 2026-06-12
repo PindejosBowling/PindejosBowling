@@ -1,14 +1,13 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, Platform } from 'react-native'
 import DateTimePicker from '@react-native-community/datetimepicker'
 import { colors, fonts, radius } from '../../theme'
 import BottomSheet from '../ui/BottomSheet'
 import Button from '../ui/Button'
 import { useUiStore } from '../../stores/uiStore'
-import { AuctionView, defaultAuctionCloseAt } from '../../utils/auction'
+import { AuctionView, CatalogItemView, DEFAULT_BOUNCE_FEE, defaultAuctionCloseAt, itemHowToUse } from '../../utils/auction'
 import { formatCloseTime } from '../../utils/bounty'
-// MOCK: swap for the db.ts auctions object when the DB layer lands.
-import { AuctionInput, createAuction, mockCatalog, updateAuction, MOCK_BOUNCE_FEE } from '../../utils/auctionMockStore'
+import { auctions, itemCatalog } from '../../utils/supabase/db'
 
 interface Props {
   // Admin create/edit. All fields editable at create; metadata frozen once the
@@ -24,10 +23,8 @@ export default function AuctionCreateModal({ initial, onClose, onDone }: Props) 
   const { showToast } = useUiStore()
   const editing = initial != null
 
-  const [itemKey, setItemKey] = useState(() =>
-    editing
-      ? mockCatalog.find(c => c.name === initial.itemName)?.key ?? mockCatalog[0].key
-      : mockCatalog[0].key)
+  const [catalog, setCatalog] = useState<CatalogItemView[]>([])
+  const [itemKey, setItemKey] = useState(initial?.itemKey ?? '')
   const [description, setDescription] = useState(initial?.description ?? '')
   const [minimumBid, setMinimumBid] = useState(initial ? String(initial.minimumBid) : '')
   const [opensAt, setOpensAt] = useState<Date>(() => (initial ? new Date(initial.opensAt) : new Date()))
@@ -36,28 +33,46 @@ export default function AuctionCreateModal({ initial, onClose, onDone }: Props) 
   const [pickerFor, setPickerFor] = useState<'opens' | 'closes' | null>(null)
   const [saving, setSaving] = useState(false)
 
+  // Active catalog rows feed the item chips; default the selection to the
+  // first item once loaded (create mode only — edit keeps the auction's item).
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      const { data } = await itemCatalog.listActive()
+      if (cancelled || !data) return
+      const items = data.map((c: any): CatalogItemView => ({
+        key: c.key, icon: c.icon, name: c.name,
+        effectLine: c.description, howToUse: itemHowToUse(c.activation_mode),
+      }))
+      setCatalog(items)
+      setItemKey(prev => (prev ? prev : items[0]?.key ?? ''))
+    })()
+    return () => { cancelled = true }
+  }, [])
+
   const minBid = Number(minimumBid) || 0
 
   const error = useMemo<string | null>(() => {
+    if (!itemKey) return 'Pick an item'
     if (!description.trim()) return 'Add a description'
     if (minBid <= 0) return 'Minimum bid must be at least 1'
     if (closesAt.getTime() <= Date.now()) return 'Close time must be in the future'
     if (closesAt.getTime() <= opensAt.getTime()) return 'Close time must be after open time'
     return null
-  }, [description, minBid, opensAt, closesAt])
+  }, [itemKey, description, minBid, opensAt, closesAt])
 
   async function submit() {
     if (saving || error) return
     setSaving(true)
     try {
-      const input: AuctionInput = {
-        itemKey,
+      const input = {
+        catalogKey: itemKey,
         description: description.trim(),
         minimumBid: minBid,
         opensAt: opensAt.toISOString(),
         closesAt: closesAt.toISOString(),
       }
-      const { error: rpcErr } = editing ? await updateAuction(initial.id, input) : await createAuction(input)
+      const { error: rpcErr } = editing ? await auctions.update(initial.id, input) : await auctions.create(input)
       if (rpcErr) { showToast(rpcErr.message, 'error'); return }
       showToast(editing ? 'Auction updated' : 'Auction created', 'success')
       onDone()
@@ -101,7 +116,7 @@ export default function AuctionCreateModal({ initial, onClose, onDone }: Props) 
     >
       <Text style={styles.label}>ITEM</Text>
       <View style={styles.itemRow}>
-        {mockCatalog.map(c => (
+        {catalog.map(c => (
           <TouchableOpacity
             key={c.key}
             style={[styles.itemChip, itemKey === c.key && styles.itemChipActive]}
@@ -160,7 +175,7 @@ export default function AuctionCreateModal({ initial, onClose, onDone }: Props) 
       )}
 
       {/* The bounce fee is a rule, not a knob — shown so the admin knows the terms. */}
-      <Text style={styles.bounceNote}>Bounce penalty: min(balance, {MOCK_BOUNCE_FEE}) pins — fixed by the House.</Text>
+      <Text style={styles.bounceNote}>Bounce penalty: min(balance, {initial?.bounceFee ?? DEFAULT_BOUNCE_FEE}) pins — fixed by the House.</Text>
 
       {error && <Text style={styles.errorText}>{error}</Text>}
     </BottomSheet>

@@ -1,8 +1,7 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
+import { auctions, auctionLedger, pinLedger, seasons } from '../utils/supabase/db'
 import { AuctionView } from '../utils/auction'
-// MOCK: fixture-backed until the auction DB layer lands — swap these imports
-// for db.ts query objects and delete utils/auctionMockStore.ts.
-import { MOCK_BALANCE, readAuctions } from '../utils/auctionMockStore'
+import { bouncesByAuction, normalizeAuction } from './useAuctionHouseData'
 
 export interface AuctionDetailData {
   loading: boolean
@@ -11,19 +10,46 @@ export interface AuctionDetailData {
   reload: () => Promise<void>
 }
 
+// One auction with the viewer's decoded bid (owner-only) and the public
+// bounce story. Countdown ticking lives in the screen, not here.
 export function useAuctionDetailData(auctionId: string, playerId: string | null): AuctionDetailData {
   const [loading, setLoading] = useState(true)
   const [balance, setBalance] = useState(0)
   const [auction, setAuction] = useState<AuctionView | null>(null)
+  const loadedOnce = useRef(false)
 
-  const reload = useCallback(async () => {
-    // MOCK: synchronous fixture read stands in for the db.ts fetch.
-    setBalance(MOCK_BALANCE)
-    setAuction(readAuctions().find(a => a.id === auctionId) ?? null)
-    setLoading(false)
+  const load = useCallback(async () => {
+    if (!loadedOnce.current) setLoading(true)
+    try {
+      const reset = () => { setBalance(0); setAuction(null) }
+      if (!playerId) { reset(); return }
+
+      const seasonRes = await seasons.getCurrent()
+      const seasonId = seasonRes.data?.id ?? null
+      if (!seasonId) { reset(); return }
+
+      let row: any = null
+      let myAmount: number | null = null
+      let ledgerData: any[] = []
+      let auctionLedgerData: any[] = []
+      await Promise.all([
+        auctions.getById(auctionId).then(({ data }) => { row = data }),
+        auctions.myBidAmount(auctionId).then(({ data }) => { myAmount = (data as number | null) ?? null }),
+        pinLedger.listByPlayerSeason(playerId, seasonId).then(({ data }) => { ledgerData = data ?? [] }),
+        auctionLedger.listBySeason(seasonId).then(({ data }) => { auctionLedgerData = data ?? [] }),
+      ])
+
+      setBalance(ledgerData.reduce((sum, e) => sum + e.amount, 0))
+      if (!row) { setAuction(null); return }
+      const bounceMap = bouncesByAuction(auctionLedgerData)
+      setAuction(normalizeAuction(row, myAmount, bounceMap.get(row.id) ?? []))
+    } finally {
+      loadedOnce.current = true
+      setLoading(false)
+    }
   }, [auctionId, playerId])
 
-  useEffect(() => { reload() }, [reload])
+  useEffect(() => { load() }, [load])
 
-  return { loading, balance, auction, reload }
+  return { loading, balance, auction, reload: load }
 }

@@ -117,7 +117,7 @@ All bounty modals **mounted conditionally**; All-Comers model (see [economy/BOUN
 
 ## Auction House (`components/auction/`)
 
-All sheets **mounted conditionally**. Components bind to the view types in `utils/auction.ts` — currently fed by the MOCK fixture store (`utils/auctionMockStore.ts`) until the auction DB layer lands (see [economy/AUCTION_FINDINGS.md](economy/AUCTION_FINDINGS.md) §8). Sealed-bid contract: bid amounts render only for their owner.
+All sheets **mounted conditionally**. Components bind to the view types in `utils/auction.ts`, fed by `useAuctionHouseData` / `useAuctionDetailData` over the `auctions` / `itemCatalog` / `inventoryItems` / `auctionLedger` objects in `db.ts` (see [economy/AUCTION_FINDINGS.md](economy/AUCTION_FINDINGS.md) §8). Sealed-bid contract: bid amounts render only for their owner (`my_bid_amount` RPC — the column is ciphertext).
 
 | Component | Props | Purpose |
 |---|---|---|

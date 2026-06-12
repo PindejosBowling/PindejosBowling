@@ -5,8 +5,7 @@ import BottomSheet from '../ui/BottomSheet'
 import Button from '../ui/Button'
 import { useUiStore } from '../../stores/uiStore'
 import { AuctionView, isLargeBid } from '../../utils/auction'
-// MOCK: swap for the db.ts auctions object when the DB layer lands.
-import { placeBid } from '../../utils/auctionMockStore'
+import { auctions } from '../../utils/supabase/db'
 
 interface Props {
   // Place or edit the viewer's sealed bid (free re-pricing — no increment,
@@ -37,7 +36,7 @@ export default function AuctionBidSheet({ auction: a, balance, onClose, onDone }
     if (saving || error) return
     setSaving(true)
     try {
-      const { error: rpcErr } = await placeBid(a.id, amount)
+      const { error: rpcErr } = await auctions.placeBid(a.id, amount)
       if (rpcErr) { showToast(rpcErr.message, 'error'); return }
       showToast(editing ? 'Bid updated' : 'Bid pledged', 'success')
       onDone()

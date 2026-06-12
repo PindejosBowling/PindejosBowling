@@ -4,8 +4,7 @@ import BottomSheet from '../ui/BottomSheet'
 import Button from '../ui/Button'
 import { useAdminAction } from '../../hooks/useAdminAction'
 import { AuctionView } from '../../utils/auction'
-// MOCK: swap for the db.ts auctions object when the DB layer lands.
-import { cancelAuction, openAuctionNow, reverseAuction, settleAuctionNow } from '../../utils/auctionMockStore'
+import { auctions } from '../../utils/supabase/db'
 
 interface Props {
   // Admin actions by status. Deliberately NO bid inspection — admins are
@@ -26,7 +25,7 @@ export default function AuctionAdminActionModal({ auction: a, onClose, onDone, o
       'This erases the auction and every sealed bid — nothing has been paid, nothing is owed. This cannot be undone.',
       [
         { text: 'Keep it', style: 'cancel' },
-        { text: 'Erase auction', style: 'destructive', onPress: () => run('Auction cancelled', () => cancelAuction(a.id)) },
+        { text: 'Erase auction', style: 'destructive', onPress: () => run('Auction cancelled', () => auctions.cancel(a.id)) },
       ],
     )
   }
@@ -37,7 +36,7 @@ export default function AuctionAdminActionModal({ auction: a, onClose, onDone, o
       'Claws back the winning purchase, revokes the item, and erases the auction as if it never happened. Fails if the item has already been used. This cannot be undone.',
       [
         { text: 'Keep it', style: 'cancel' },
-        { text: 'Reverse settlement', style: 'destructive', onPress: () => run('Auction reversed', () => reverseAuction(a.id)) },
+        { text: 'Reverse settlement', style: 'destructive', onPress: () => run('Auction reversed', () => auctions.reverse(a.id)) },
       ],
     )
   }
@@ -63,7 +62,7 @@ export default function AuctionAdminActionModal({ auction: a, onClose, onDone, o
             variant="outline"
             label="Open now"
             disabled={saving}
-            onPress={() => confirm('Open now?', 'Bidding starts immediately.', () => run('Auction opened', () => openAuctionNow(a.id)), false)}
+            onPress={() => confirm('Open now?', 'Bidding starts immediately.', () => run('Auction opened', () => auctions.openNow(a.id)), false)}
             style={styles.actSpacing}
           />
         </>
@@ -80,7 +79,7 @@ export default function AuctionAdminActionModal({ auction: a, onClose, onDone, o
               confirm(
                 'Settle now?',
                 'Closes bidding immediately and settles against the sealed bids (or marks no-sale if there are none).',
-                () => run('Auction settled', () => settleAuctionNow(a.id)),
+                () => run('Auction settled', () => auctions.settle(a.id)),
                 false,
               )}
             style={styles.actSpacing}

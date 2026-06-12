@@ -21,6 +21,7 @@ export interface AuctionView {
   id: string
   status: AuctionStatus
   // Catalog-owned copy — the auction never overrides item naming.
+  itemKey: string
   itemIcon: string
   itemName: string
   itemEffectLine: string
@@ -82,6 +83,22 @@ export const SOURCE_LABEL: Record<InventoryItemSource, string> = {
   merchant: 'Bought from the Merchant',
   admin_grant: 'Granted by the House',
 }
+
+// Usage copy derives from the catalog's activation_mode (no stored how-to text).
+export function itemHowToUse(activationMode: string): string {
+  switch (activationMode) {
+    case 'attach_to_bet':
+      return 'Toggle it on when placing a bet in the Sportsbook. The item is spent at placement, win or lose.'
+    case 'passive':
+      return 'Always active while you own it.'
+    default:
+      return 'See the House — this one is honored manually.'
+  }
+}
+
+// The House's bounce penalty (DB: auctions.bounce_fee DEFAULT 50 — frozen per
+// row at create; no admin knob in v1). Display constant only.
+export const DEFAULT_BOUNCE_FEE = 50
 
 // Stronger §18.3 bounce copy kicks in at half the player's balance. A warning,
 // never a gate.

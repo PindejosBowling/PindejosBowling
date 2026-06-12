@@ -16,8 +16,7 @@ import { useUiStore } from '../stores/uiStore'
 import { formatCountdown } from '../utils/auction'
 import { formatCloseTime } from '../utils/bounty'
 import { PinsinoStackParamList } from '../navigation/types'
-// MOCK: swap for the db.ts auctions object when the DB layer lands.
-import { cancelBid } from '../utils/auctionMockStore'
+import { auctions } from '../utils/supabase/db'
 
 type Route = RouteProp<PinsinoStackParamList, 'AuctionDetail'>
 
@@ -75,7 +74,7 @@ export default function AuctionDetailScreen() {
           text: 'Cancel bid',
           style: 'destructive',
           onPress: async () => {
-            const { error } = await cancelBid(a.id)
+            const { error } = await auctions.cancelBid(a.id)
             if (error) { showToast(error.message, 'error'); return }
             showToast('Bid cancelled', 'success')
             setBidRevealed(false)
