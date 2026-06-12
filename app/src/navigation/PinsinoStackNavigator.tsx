@@ -15,6 +15,8 @@ import MarketMovesScreen from '../screens/MarketMovesScreen'
 import BountyBoardScreen from '../screens/BountyBoardScreen'
 import BountyCreateScreen from '../screens/BountyCreateScreen'
 import BountyDetailScreen from '../screens/BountyDetailScreen'
+import AuctionHouseScreen from '../screens/AuctionHouseScreen'
+import AuctionDetailScreen from '../screens/AuctionDetailScreen'
 
 const Stack = createNativeStackNavigator<PinsinoStackParamList>()
 
@@ -38,6 +40,8 @@ export default function PinsinoStackNavigator() {
       <Stack.Screen name="BountyBoard" component={BountyBoardScreen} options={{ title: 'Bounties' }} />
       <Stack.Screen name="BountyCreate" component={BountyCreateScreen} options={{ title: 'Post a Bounty' }} />
       <Stack.Screen name="BountyDetail" component={BountyDetailScreen} options={{ title: 'Bounty' }} />
+      <Stack.Screen name="AuctionHouse" component={AuctionHouseScreen} options={{ title: 'Auction House' }} />
+      <Stack.Screen name="AuctionDetail" component={AuctionDetailScreen} options={{ title: 'Auction' }} />
     </Stack.Navigator>
   )
 }

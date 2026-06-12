@@ -1,4 +1,4 @@
-import { Fragment, useMemo, useState } from 'react'
+import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
 import {
   View,
   Text,
@@ -19,6 +19,7 @@ import ActiveBetsView from '../components/betting/ActiveBetsView'
 import SettledBetsView from '../components/betting/SettledBetsView'
 import BetDetailModal from '../components/betting/BetDetailModal'
 import WagerSheet from '../components/betting/WagerSheet'
+import SafetyTicketToggle from '../components/auction/SafetyTicketToggle'
 import { resultBadge, betReturnText } from '../utils/bets'
 import LineRow from '../components/betting/LineRow'
 import LineRowContainer from '../components/betting/LineRowContainer'
@@ -44,7 +45,7 @@ import {
 import { useRefresh } from '../hooks/useRefresh'
 import { useAuthStore } from '../stores/authStore'
 import { useUiStore } from '../stores/uiStore'
-import { bets } from '../utils/supabase/db'
+import { bets, inventoryItems, seasons } from '../utils/supabase/db'
 import { PinsinoStackParamList } from '../navigation/types'
 import EmptyCard from '../components/ui/EmptyCard'
 
@@ -115,6 +116,27 @@ export default function SportsbookScreen() {
   const [detailModal, setDetailModal] = useState<BetView | null>(null)
   // Wager sheet for taking a custom line ("special") — the whole bundle at once.
   const [takeModal, setTakeModal] = useState<{ line: CustomLineView; wager: string } | null>(null)
+
+  // Safety Tickets (auction-won bet insurance): unconsumed attach_to_bet items,
+  // oldest first — the toggle consumes tickets[0]. Default OFF per sheet open;
+  // spending a scarce item is always a deliberate act.
+  const [tickets, setTickets] = useState<string[]>([])
+  const [insureBet, setInsureBet] = useState(false)
+
+  const reloadTickets = useCallback(async () => {
+    if (!playerId) { setTickets([]); return }
+    const { data: season } = await seasons.getCurrent()
+    if (!season) { setTickets([]); return }
+    const { data } = await inventoryItems.listByPlayerSeason(playerId, season.id)
+    const usable = (data ?? [])
+      .filter((i: any) => i.consumed_at == null
+        && i.item_catalog?.effect_type === 'bet_insurance'
+        && i.item_catalog?.activation_mode === 'attach_to_bet')
+      .sort((a: any, b: any) => a.granted_at.localeCompare(b.granted_at))
+    setTickets(usable.map((i: any) => i.id))
+  }, [playerId])
+
+  useEffect(() => { reloadTickets() }, [reloadTickets])
 
   // Active = this week's still-pending bets (settled ones move to Settled Bets).
   // The public tab is read-only: Active/Settled rows just open the details overlay
@@ -220,6 +242,7 @@ export default function SportsbookScreen() {
   function onSingleSelect(line: LineView, sel: SelectionView) {
     if (isSelfTank(line, sel)) { showToast("Believe in yourself man", 'error'); return }
     if (balance < 10) return
+    setInsureBet(false)
     setModal({ line, selectedId: sel.selectionId, wager: '' })
   }
 
@@ -238,12 +261,13 @@ export default function SportsbookScreen() {
       // Atomic + balance-checked, server-side (place_house_bet RPC). The bettor is
       // resolved from the JWT and the double-entry stake ledger pair is written in
       // the same transaction — the client no longer writes any betting rows.
-      const { error: betErr } = await bets.place([sel.selectionId], wagerNum)
+      const { error: betErr } = await bets.place(
+        [sel.selectionId], wagerNum, undefined, insureBet ? tickets[0] : undefined)
       if (betErr) { showToast(betErr.message, 'error'); return }
 
-      showToast('Bet placed!', 'success')
+      showToast(insureBet ? 'Bet placed — Safety Ticket attached!' : 'Bet placed!', 'success')
       setModal(null)
-      await reload()
+      await Promise.all([reload(), reloadTickets()])
     } catch {
       showToast('Failed to place bet', 'error')
     } finally {
@@ -258,6 +282,7 @@ export default function SportsbookScreen() {
   function onTakeCustom(line: CustomLineView) {
     if (customLineSelfTank(line, playerId)) { showToast("Believe in yourself man", 'error'); return }
     if (balance < 10) return
+    setInsureBet(false)
     setTakeModal({ line, wager: '' })
   }
 
@@ -272,11 +297,12 @@ export default function SportsbookScreen() {
       // Same atomic RPC as singles/parlays — the special is just its bundle of
       // selections; payout falls out of the legs' combined odds server-side.
       // The lineId tag snapshots the special's title/description onto the bet.
-      const { error } = await bets.place(takeModal.line.selectionIds, wagerNum, takeModal.line.lineId)
+      const { error } = await bets.place(
+        takeModal.line.selectionIds, wagerNum, takeModal.line.lineId, insureBet ? tickets[0] : undefined)
       if (error) { showToast(error.message, 'error'); return }
-      showToast('Bet placed!', 'success')
+      showToast(insureBet ? 'Bet placed — Safety Ticket attached!' : 'Bet placed!', 'success')
       setTakeModal(null)
-      await reload()
+      await Promise.all([reload(), reloadTickets()])
     } catch {
       showToast('Failed to place bet', 'error')
     } finally {
@@ -327,13 +353,14 @@ export default function SportsbookScreen() {
 
     setPlacing(true)
     try {
-      const { error } = await bets.place(parlayLegs.map(l => l.selectionId), wagerNum)
+      const { error } = await bets.place(
+        parlayLegs.map(l => l.selectionId), wagerNum, undefined, insureBet ? tickets[0] : undefined)
       if (error) { showToast(error.message, 'error'); return }
-      showToast('Parlay placed!', 'success')
+      showToast(insureBet ? 'Parlay placed — Safety Ticket attached!' : 'Parlay placed!', 'success')
       setParlayModalOpen(false)
       setParlayLegs([])
       setParlayWager('')
-      await reload()
+      await Promise.all([reload(), reloadTickets()])
     } catch {
       showToast('Failed to place parlay', 'error')
     } finally {
@@ -568,7 +595,7 @@ export default function SportsbookScreen() {
           <Button variant="ghost" label="Clear" onPress={() => setParlayLegs([])} style={styles.slipClear} />
           <Button
             label={parlayLegs.length < 2 ? 'Add 2+' : 'Build'}
-            onPress={() => { if (parlayLegs.length >= 2) setParlayModalOpen(true) }}
+            onPress={() => { if (parlayLegs.length >= 2) { setInsureBet(false); setParlayModalOpen(true) } }}
             disabled={parlayLegs.length < 2}
             style={styles.slipBuild}
           />
@@ -621,6 +648,7 @@ export default function SportsbookScreen() {
               )
             })}
           </View>
+          <SafetyTicketToggle ticketCount={tickets.length} enabled={insureBet} onToggle={setInsureBet} disabled={placing} />
         </WagerSheet>
       )}
 
@@ -652,6 +680,7 @@ export default function SportsbookScreen() {
               </View>
             ))}
           </View>
+          <SafetyTicketToggle ticketCount={tickets.length} enabled={insureBet} onToggle={setInsureBet} disabled={placing} />
         </WagerSheet>
       )}
 
@@ -681,6 +710,7 @@ export default function SportsbookScreen() {
               </View>
             ))}
           </View>
+          <SafetyTicketToggle ticketCount={tickets.length} enabled={insureBet} onToggle={setInsureBet} disabled={placing} />
         </WagerSheet>
       )}
 

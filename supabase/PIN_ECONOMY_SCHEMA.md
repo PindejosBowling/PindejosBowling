@@ -260,7 +260,7 @@ counter-rows, by design.)
 
 Every player↔house transfer goes through
 `pin_ledger_double_entry(player, season, week, amount, type, description,
-house_description?, bet_id?, bounty_post_id?)` — it inserts the player row
+house_description?, bet_id?, bounty_post_id?, auction_id?)` — it inserts the player row
 (signed `amount`) and the house mirror (`-amount`) and returns both ids, making
 the nets-to-zero invariant structural. EXECUTE is revoked from all client
 roles; only the SECURITY DEFINER RPCs (running as owner) may call it. Callers
@@ -271,10 +271,18 @@ single-sided mints: `score_credit` and (one side of) season-open `bonus`.
 
 **Ref-column policy:** a new economy feature gets **exactly one** root-entity
 ref column on `pin_ledger` — the one its cancel/refund path deletes by
-(`bet_id`, `bounty_post_id`, or a `<x>_ledger_id` back-link). The granular
-bounty refs (`bounty_hunter_stake_id`, `bounty_settlement_id`,
+(`bet_id`, `bounty_post_id`, `auction_id`, or a `<x>_ledger_id` back-link).
+The granular bounty refs (`bounty_hunter_stake_id`, `bounty_settlement_id`,
 `bounty_payout_id`) were dropped 2026-06-12 (`bets_bounty_adopt_helpers`);
 payout-level granularity lives in `bounty_payouts`.
+
+**Auction money** (types `auction_purchase`, `auction_check_bounce`; root ref
+`auction_id`) is week-stamped with the season's open week at settlement for
+accounting, but **exempt from `unarchive_week`'s reversal**
+(`AND pl.auction_id IS NULL` in its pin delete) — auctions settle on their own
+clock (pg_cron) and reverse only via `reverse_settled_auction`. The
+`bet_insurance_refund` type is bet-domain (rides `bet_id`, archive-reversible).
+Full spec: [context/economy/SILENT_AUCTIONS_DB.md](../context/economy/SILENT_AUCTIONS_DB.md).
 
 ### Reversal rule — delete-refund vs append-reversal
 
@@ -323,7 +331,7 @@ All `SECURITY DEFINER`, pinned `search_path`, identity from `auth.uid()`/`auth.j
 |---|---|
 | `sync_over_under_markets_for_week(week_id, extra_games default {})` | Create/refund of O/U markets + selections. **Line eligibility ladder for (player, game N): week has games → the player has a non-fill participation row (`scores`, score nullable) for game N; teams but no games yet → non-fill slot; no teams → RSVP `'in'`.** **Target games: the `games` table is authoritative once a schedule exists** (∪ `extra_games`); before teams it's existing market numbers ∪ extras, default {1,2}. Prunes (market delete → trigger refund) any open/closed market with an ineligible subject **or an out-of-schedule game number**; never touches settled/void markets. Re-run automatically by the coupling triggers (below). Idempotent. `authenticated`. |
 | `remove_over_under_markets_for_game(week_id, game_number)` | **Admin.** Inverse of the sync's *create*: refund every bet on that week+game's O/U markets (delete the ledger pair[s] by `bet_id`, restoring balances — parlays touching the game refund whole) and drop the markets. Belt-and-braces alongside the games-delete trigger (the sync now prunes to the schedule). |
-| `place_house_bet(selection_ids[], stake, custom_line_id?)` | Atomic, balance-checked, anti-tank-checked house bet; writes `bets` + `bet_legs` + the `bet_stake` double-entry pair. Parlay-shaped (O/U passes one selection). When `custom_line_id` is set (a "Special" take), the line must exist + be active, and its title/description/category are **snapshotted onto `bets.custom_line_*`** — durable branding for ledger/history surfaces (settlement never touches these columns). Returns `bets.id`. `authenticated`. |
+| `place_house_bet(selection_ids[], stake, custom_line_id?, insurance_item_id?)` | Atomic, balance-checked, anti-tank-checked house bet; writes `bets` + `bet_legs` + the `bet_stake` double-entry pair. Parlay-shaped (O/U passes one selection). When `custom_line_id` is set (a "Special" take), the line must exist + be active, and its title/description/category are **snapshotted onto `bets.custom_line_*`** — durable branding for ledger/history surfaces (settlement never touches these columns). When `insurance_item_id` is set (a Safety Ticket), the atomic item is consumed at placement (win or lose) and the lost branch of `finalize_bets_for_market` refunds `floor(stake × refund_share)` House-funded — see [SILENT_AUCTIONS_DB.md](../context/economy/SILENT_AUCTIONS_DB.md) §7. Returns `bets.id`. `authenticated`. |
 | `sync_moneyline_markets_for_week(week_id)` | Schedule-driven create of even-money moneyline markets + team selections (one per `games` row). Wired to **team generation / add-game**, not RSVP. Idempotent (create-only). `authenticated`. |
 | `place_house_bet(selection_ids[], stake)` | (above — market-type-agnostic; moneyline needs no change). |
 | `settle_market(market_id, result_value)` | **Admin.** Settle one O/U **or prop** market: set selection results, derive leg results (back/lay), finalize bets, post payout/refund pairs. Idempotent. For LaneTalk props this is the manual escape hatch — systematic settlement is `settle_lanetalk_props_for_week`. |
