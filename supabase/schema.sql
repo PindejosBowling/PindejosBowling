@@ -41,7 +41,40 @@ CREATE TABLE activity_feed_events (
   created_at timestamp with time zone NOT NULL DEFAULT now(),
   updated_at timestamp with time zone NOT NULL DEFAULT now(),
   pvp_challenge_id uuid,
-  bounty_post_id uuid
+  bounty_post_id uuid,
+  auction_id uuid
+);
+
+CREATE TABLE auction_bids (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  auction_id uuid NOT NULL,
+  player_id uuid NOT NULL,
+  bid_amount_enc bytea NOT NULL,
+  status text NOT NULL DEFAULT 'active'::text,
+  submitted_at timestamp with time zone NOT NULL DEFAULT now(),
+  settled_at timestamp with time zone,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now()
+);
+
+CREATE TABLE auctions (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  season_id uuid NOT NULL,
+  catalog_item_id uuid NOT NULL,
+  description text NOT NULL,
+  quantity integer NOT NULL DEFAULT 1,
+  status text NOT NULL DEFAULT 'scheduled'::text,
+  opens_at timestamp with time zone NOT NULL,
+  closes_at timestamp with time zone NOT NULL,
+  minimum_bid integer NOT NULL,
+  bounce_fee integer NOT NULL DEFAULT 50,
+  bidder_count integer NOT NULL DEFAULT 0,
+  winner_player_id uuid,
+  winning_bid_id uuid,
+  winning_price integer,
+  settled_at timestamp with time zone,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now()
 );
 
 CREATE TABLE bet_legs (
@@ -101,7 +134,8 @@ CREATE TABLE bets (
   custom_line_title text,
   custom_line_description text,
   custom_line_category text,
-  week_id uuid
+  week_id uuid,
+  insurance_item_id uuid
 );
 
 CREATE TABLE board_posts (
@@ -196,6 +230,20 @@ CREATE TABLE games (
   team_b_id uuid NOT NULL
 );
 
+CREATE TABLE item_catalog (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  key text NOT NULL,
+  name text NOT NULL,
+  description text NOT NULL,
+  icon text NOT NULL,
+  effect_type text NOT NULL,
+  effect_params jsonb NOT NULL DEFAULT '{}'::jsonb,
+  activation_mode text NOT NULL,
+  is_active boolean NOT NULL DEFAULT true,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now()
+);
+
 CREATE TABLE lanetalk_game_imports (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   source_url text NOT NULL,
@@ -276,7 +324,21 @@ CREATE TABLE pin_ledger (
   week_id uuid,
   loan_ledger_id uuid,
   pvp_ledger_id uuid,
-  bounty_post_id uuid
+  bounty_post_id uuid,
+  auction_id uuid
+);
+
+CREATE TABLE player_inventory_items (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  player_id uuid NOT NULL,
+  catalog_item_id uuid NOT NULL,
+  season_id uuid NOT NULL,
+  source text NOT NULL,
+  auction_id uuid,
+  granted_at timestamp with time zone NOT NULL DEFAULT now(),
+  consumed_at timestamp with time zone,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now()
 );
 
 CREATE TABLE players (
@@ -512,11 +574,13 @@ CREATE TABLE weeks (
 -- CONSTRAINTS
 -- =====================================================
 
-ALTER TABLE activity_event_catalog ADD CONSTRAINT activity_event_catalog_allowed_fk_check CHECK ((allowed_fk = ANY (ARRAY['sportsbook_bet_id'::text, 'loan_id'::text, 'pvp_challenge_id'::text, 'bounty_post_id'::text, 'none'::text])));
+ALTER TABLE activity_event_catalog ADD CONSTRAINT activity_event_catalog_allowed_fk_check CHECK ((allowed_fk = ANY (ARRAY['sportsbook_bet_id'::text, 'loan_id'::text, 'pvp_challenge_id'::text, 'bounty_post_id'::text, 'auction_id'::text, 'none'::text])));
 
 ALTER TABLE activity_event_catalog ADD CONSTRAINT activity_event_catalog_pkey PRIMARY KEY (event_type);
 
 ALTER TABLE activity_feed_events ADD CONSTRAINT activity_feed_events_actor_player_id_fkey FOREIGN KEY (actor_player_id) REFERENCES players(id) ON DELETE SET NULL;
+
+ALTER TABLE activity_feed_events ADD CONSTRAINT activity_feed_events_auction_id_fkey FOREIGN KEY (auction_id) REFERENCES auctions(id) ON DELETE CASCADE;
 
 ALTER TABLE activity_feed_events ADD CONSTRAINT activity_feed_events_bounty_post_id_fkey FOREIGN KEY (bounty_post_id) REFERENCES bounty_post(id) ON DELETE CASCADE;
 
@@ -532,7 +596,7 @@ ALTER TABLE activity_feed_events ADD CONSTRAINT activity_feed_events_season_id_f
 
 ALTER TABLE activity_feed_events ADD CONSTRAINT activity_feed_events_secondary_player_id_fkey FOREIGN KEY (secondary_player_id) REFERENCES players(id) ON DELETE SET NULL;
 
-ALTER TABLE activity_feed_events ADD CONSTRAINT activity_feed_events_source_feature_check CHECK ((source_feature = ANY (ARRAY['sportsbook'::text, 'loan_shark'::text, 'pvp'::text, 'bounty_board'::text, 'system'::text, 'admin'::text])));
+ALTER TABLE activity_feed_events ADD CONSTRAINT activity_feed_events_source_feature_check CHECK ((source_feature = ANY (ARRAY['sportsbook'::text, 'loan_shark'::text, 'pvp'::text, 'bounty_board'::text, 'auction_house'::text, 'system'::text, 'admin'::text])));
 
 ALTER TABLE activity_feed_events ADD CONSTRAINT activity_feed_events_sportsbook_bet_id_fkey FOREIGN KEY (sportsbook_bet_id) REFERENCES bets(id) ON DELETE CASCADE;
 
@@ -546,7 +610,35 @@ ALTER TABLE activity_feed_events ADD CONSTRAINT activity_feed_events_visibility_
 
 ALTER TABLE activity_feed_events ADD CONSTRAINT activity_feed_events_week_id_fkey FOREIGN KEY (week_id) REFERENCES weeks(id) ON DELETE SET NULL;
 
-ALTER TABLE activity_feed_events ADD CONSTRAINT activity_feed_one_source_check CHECK (((((((sportsbook_bet_id IS NOT NULL))::integer + ((loan_id IS NOT NULL))::integer) + ((pvp_challenge_id IS NOT NULL))::integer) + ((bounty_post_id IS NOT NULL))::integer) <= 1));
+ALTER TABLE activity_feed_events ADD CONSTRAINT activity_feed_one_source_check CHECK ((((((((sportsbook_bet_id IS NOT NULL))::integer + ((loan_id IS NOT NULL))::integer) + ((pvp_challenge_id IS NOT NULL))::integer) + ((bounty_post_id IS NOT NULL))::integer) + ((auction_id IS NOT NULL))::integer) <= 1));
+
+ALTER TABLE auction_bids ADD CONSTRAINT auction_bids_auction_id_fkey FOREIGN KEY (auction_id) REFERENCES auctions(id) ON DELETE CASCADE;
+
+ALTER TABLE auction_bids ADD CONSTRAINT auction_bids_pkey PRIMARY KEY (id);
+
+ALTER TABLE auction_bids ADD CONSTRAINT auction_bids_player_id_fkey FOREIGN KEY (player_id) REFERENCES players(id) ON DELETE CASCADE;
+
+ALTER TABLE auction_bids ADD CONSTRAINT auction_bids_status_check CHECK ((status = ANY (ARRAY['active'::text, 'won'::text])));
+
+ALTER TABLE auctions ADD CONSTRAINT auctions_bounce_fee_check CHECK ((bounce_fee >= 0));
+
+ALTER TABLE auctions ADD CONSTRAINT auctions_catalog_item_id_fkey FOREIGN KEY (catalog_item_id) REFERENCES item_catalog(id);
+
+ALTER TABLE auctions ADD CONSTRAINT auctions_check CHECK ((closes_at > opens_at));
+
+ALTER TABLE auctions ADD CONSTRAINT auctions_minimum_bid_check CHECK ((minimum_bid > 0));
+
+ALTER TABLE auctions ADD CONSTRAINT auctions_pkey PRIMARY KEY (id);
+
+ALTER TABLE auctions ADD CONSTRAINT auctions_quantity_check CHECK ((quantity = 1));
+
+ALTER TABLE auctions ADD CONSTRAINT auctions_season_id_fkey FOREIGN KEY (season_id) REFERENCES seasons(id) ON DELETE CASCADE;
+
+ALTER TABLE auctions ADD CONSTRAINT auctions_status_check CHECK ((status = ANY (ARRAY['scheduled'::text, 'open'::text, 'settled'::text])));
+
+ALTER TABLE auctions ADD CONSTRAINT auctions_winner_player_id_fkey FOREIGN KEY (winner_player_id) REFERENCES players(id);
+
+ALTER TABLE auctions ADD CONSTRAINT auctions_winning_bid_id_fkey FOREIGN KEY (winning_bid_id) REFERENCES auction_bids(id) ON DELETE SET NULL;
 
 ALTER TABLE bet_legs ADD CONSTRAINT bet_legs_bet_id_fkey FOREIGN KEY (bet_id) REFERENCES bets(id) ON DELETE CASCADE;
 
@@ -589,6 +681,8 @@ ALTER TABLE bet_selections ADD CONSTRAINT bet_selections_pkey PRIMARY KEY (id);
 ALTER TABLE bet_selections ADD CONSTRAINT bet_selections_result_check CHECK ((result = ANY (ARRAY['won'::text, 'lost'::text, 'push'::text, 'void'::text])));
 
 ALTER TABLE bets ADD CONSTRAINT bets_custom_line_id_fkey FOREIGN KEY (custom_line_id) REFERENCES custom_lines(id) ON DELETE SET NULL;
+
+ALTER TABLE bets ADD CONSTRAINT bets_insurance_item_id_fkey FOREIGN KEY (insurance_item_id) REFERENCES player_inventory_items(id) ON DELETE SET NULL;
 
 ALTER TABLE bets ADD CONSTRAINT bets_pkey PRIMARY KEY (id);
 
@@ -688,6 +782,14 @@ ALTER TABLE games ADD CONSTRAINT games_team_a_id_fkey FOREIGN KEY (team_a_id) RE
 
 ALTER TABLE games ADD CONSTRAINT games_team_b_id_fkey FOREIGN KEY (team_b_id) REFERENCES teams(id) ON DELETE CASCADE;
 
+ALTER TABLE item_catalog ADD CONSTRAINT item_catalog_activation_mode_check CHECK ((activation_mode = ANY (ARRAY['attach_to_bet'::text, 'passive'::text, 'admin_honored'::text])));
+
+ALTER TABLE item_catalog ADD CONSTRAINT item_catalog_effect_type_check CHECK ((effect_type = ANY (ARRAY['bet_insurance'::text, 'cosmetic'::text, 'access_pass'::text, 'custom'::text])));
+
+ALTER TABLE item_catalog ADD CONSTRAINT item_catalog_key_key UNIQUE (key);
+
+ALTER TABLE item_catalog ADD CONSTRAINT item_catalog_pkey PRIMARY KEY (id);
+
 ALTER TABLE lanetalk_game_imports ADD CONSTRAINT lanetalk_game_imports_classification_check CHECK ((classification = ANY (ARRAY['official'::text, 'recreational'::text])));
 
 ALTER TABLE lanetalk_game_imports ADD CONSTRAINT lanetalk_game_imports_pkey PRIMARY KEY (id);
@@ -738,6 +840,8 @@ ALTER TABLE loans ADD CONSTRAINT loans_season_id_fkey FOREIGN KEY (season_id) RE
 
 ALTER TABLE loans ADD CONSTRAINT loans_status_check CHECK ((status = ANY (ARRAY['active'::text, 'paid_off'::text, 'season_closed'::text])));
 
+ALTER TABLE pin_ledger ADD CONSTRAINT pin_ledger_auction_id_fkey FOREIGN KEY (auction_id) REFERENCES auctions(id) ON DELETE CASCADE;
+
 ALTER TABLE pin_ledger ADD CONSTRAINT pin_ledger_bet_id_fkey FOREIGN KEY (bet_id) REFERENCES bets(id) ON DELETE SET NULL;
 
 ALTER TABLE pin_ledger ADD CONSTRAINT pin_ledger_bounty_post_id_fkey FOREIGN KEY (bounty_post_id) REFERENCES bounty_post(id) ON DELETE CASCADE;
@@ -754,9 +858,21 @@ ALTER TABLE pin_ledger ADD CONSTRAINT pin_ledger_pvp_ledger_id_fkey FOREIGN KEY 
 
 ALTER TABLE pin_ledger ADD CONSTRAINT pin_ledger_season_id_fkey FOREIGN KEY (season_id) REFERENCES seasons(id) ON DELETE CASCADE;
 
-ALTER TABLE pin_ledger ADD CONSTRAINT pin_ledger_type_check CHECK ((type = ANY (ARRAY['bonus'::text, 'score_credit'::text, 'bet_stake'::text, 'bet_payout'::text, 'bet_refund'::text, 'loan_issued'::text, 'loan_manual_repayment'::text, 'loan_weekly_garnishment'::text, 'loan_season_close_settlement'::text, 'pvp_stake'::text, 'pvp_payout'::text, 'pvp_refund'::text, 'pvp_rake'::text, 'bounty_sponsor_stake'::text, 'bounty_hunter_stake'::text, 'bounty_payout'::text])));
+ALTER TABLE pin_ledger ADD CONSTRAINT pin_ledger_type_check CHECK ((type = ANY (ARRAY['bonus'::text, 'score_credit'::text, 'bet_stake'::text, 'bet_payout'::text, 'bet_refund'::text, 'loan_issued'::text, 'loan_manual_repayment'::text, 'loan_weekly_garnishment'::text, 'loan_season_close_settlement'::text, 'pvp_stake'::text, 'pvp_payout'::text, 'pvp_refund'::text, 'pvp_rake'::text, 'bounty_sponsor_stake'::text, 'bounty_hunter_stake'::text, 'bounty_payout'::text, 'auction_purchase'::text, 'auction_check_bounce'::text, 'bet_insurance_refund'::text])));
 
 ALTER TABLE pin_ledger ADD CONSTRAINT pin_ledger_week_id_fkey FOREIGN KEY (week_id) REFERENCES weeks(id) ON DELETE SET NULL;
+
+ALTER TABLE player_inventory_items ADD CONSTRAINT player_inventory_items_auction_id_fkey FOREIGN KEY (auction_id) REFERENCES auctions(id) ON DELETE SET NULL;
+
+ALTER TABLE player_inventory_items ADD CONSTRAINT player_inventory_items_catalog_item_id_fkey FOREIGN KEY (catalog_item_id) REFERENCES item_catalog(id);
+
+ALTER TABLE player_inventory_items ADD CONSTRAINT player_inventory_items_pkey PRIMARY KEY (id);
+
+ALTER TABLE player_inventory_items ADD CONSTRAINT player_inventory_items_player_id_fkey FOREIGN KEY (player_id) REFERENCES players(id) ON DELETE CASCADE;
+
+ALTER TABLE player_inventory_items ADD CONSTRAINT player_inventory_items_season_id_fkey FOREIGN KEY (season_id) REFERENCES seasons(id) ON DELETE CASCADE;
+
+ALTER TABLE player_inventory_items ADD CONSTRAINT player_inventory_items_source_check CHECK ((source = ANY (ARRAY['auction'::text, 'merchant'::text, 'admin_grant'::text])));
 
 ALTER TABLE players ADD CONSTRAINT players_phone_e164 CHECK (((phone IS NULL) OR (phone ~ '^\+[1-9]\d{6,14}$'::text)));
 
@@ -959,6 +1075,8 @@ ALTER TABLE weeks ADD CONSTRAINT weeks_season_id_week_number_key UNIQUE (season_
 
 CREATE INDEX activity_feed_events_actor_player_id_idx ON public.activity_feed_events USING btree (actor_player_id);
 
+CREATE INDEX activity_feed_events_auction_idx ON public.activity_feed_events USING btree (auction_id) WHERE (auction_id IS NOT NULL);
+
 CREATE INDEX activity_feed_events_bounty_idx ON public.activity_feed_events USING btree (bounty_post_id) WHERE (bounty_post_id IS NOT NULL);
 
 CREATE INDEX activity_feed_events_feature_idx ON public.activity_feed_events USING btree (season_id, source_feature, status, visibility, published_at DESC, id DESC);
@@ -979,6 +1097,10 @@ CREATE INDEX activity_feed_events_suppressed_by_admin_idx ON public.activity_fee
 
 CREATE INDEX activity_feed_events_week_id_idx ON public.activity_feed_events USING btree (week_id);
 
+CREATE UNIQUE INDEX activity_feed_unique_auction_bounce ON public.activity_feed_events USING btree (auction_id, event_type, actor_player_id) WHERE ((auction_id IS NOT NULL) AND (event_type = 'auction_check_bounce'::text));
+
+CREATE UNIQUE INDEX activity_feed_unique_auction_event ON public.activity_feed_events USING btree (auction_id, event_type) WHERE ((auction_id IS NOT NULL) AND (event_type <> 'auction_check_bounce'::text));
+
 CREATE UNIQUE INDEX activity_feed_unique_bet_event ON public.activity_feed_events USING btree (sportsbook_bet_id, event_type) WHERE (sportsbook_bet_id IS NOT NULL);
 
 CREATE UNIQUE INDEX activity_feed_unique_bounty_event ON public.activity_feed_events USING btree (bounty_post_id, event_type) WHERE (bounty_post_id IS NOT NULL);
@@ -987,7 +1109,25 @@ CREATE UNIQUE INDEX activity_feed_unique_loan_event ON public.activity_feed_even
 
 CREATE UNIQUE INDEX activity_feed_unique_pvp_event ON public.activity_feed_events USING btree (pvp_challenge_id, event_type) WHERE (pvp_challenge_id IS NOT NULL);
 
+CREATE INDEX auction_bids_auction_idx ON public.auction_bids USING btree (auction_id);
+
+CREATE UNIQUE INDEX auction_bids_one_active_per_player ON public.auction_bids USING btree (auction_id, player_id) WHERE (status = 'active'::text);
+
+CREATE INDEX auction_bids_player_idx ON public.auction_bids USING btree (player_id);
+
+CREATE INDEX auctions_catalog_idx ON public.auctions USING btree (catalog_item_id);
+
+CREATE INDEX auctions_season_idx ON public.auctions USING btree (season_id);
+
+CREATE INDEX auctions_status_closes_idx ON public.auctions USING btree (status, closes_at);
+
+CREATE INDEX auctions_status_opens_idx ON public.auctions USING btree (status, opens_at);
+
+CREATE INDEX auctions_winner_idx ON public.auctions USING btree (winner_player_id) WHERE (winner_player_id IS NOT NULL);
+
 CREATE INDEX bets_custom_line_idx ON public.bets USING btree (custom_line_id);
+
+CREATE INDEX bets_insurance_item_idx ON public.bets USING btree (insurance_item_id) WHERE (insurance_item_id IS NOT NULL);
 
 CREATE INDEX bounty_hunter_stakes_player_idx ON public.bounty_hunter_stakes USING btree (player_id, bounty_post_id);
 
@@ -1067,6 +1207,8 @@ CREATE INDEX loans_player_id_idx ON public.loans USING btree (player_id);
 
 CREATE INDEX loans_season_id_idx ON public.loans USING btree (season_id);
 
+CREATE INDEX pin_ledger_auction_idx ON public.pin_ledger USING btree (auction_id) WHERE (auction_id IS NOT NULL);
+
 CREATE INDEX pin_ledger_bounty_post_id_idx ON public.pin_ledger USING btree (bounty_post_id);
 
 CREATE INDEX pin_ledger_loan_ledger_id_idx ON public.pin_ledger USING btree (loan_ledger_id);
@@ -1074,6 +1216,14 @@ CREATE INDEX pin_ledger_loan_ledger_id_idx ON public.pin_ledger USING btree (loa
 CREATE INDEX pin_ledger_pvp_ledger_id_idx ON public.pin_ledger USING btree (pvp_ledger_id);
 
 CREATE INDEX pin_ledger_week_id_idx ON public.pin_ledger USING btree (week_id);
+
+CREATE INDEX player_inventory_items_auction_idx ON public.player_inventory_items USING btree (auction_id) WHERE (auction_id IS NOT NULL);
+
+CREATE INDEX player_inventory_items_catalog_idx ON public.player_inventory_items USING btree (catalog_item_id);
+
+CREATE INDEX player_inventory_items_player_idx ON public.player_inventory_items USING btree (player_id);
+
+CREATE INDEX player_inventory_items_season_idx ON public.player_inventory_items USING btree (season_id);
 
 CREATE INDEX playoff_draft_captains_draft_idx ON public.playoff_draft_captains USING btree (draft_id);
 
@@ -1162,6 +1312,18 @@ CREATE POLICY "admin can update" ON activity_feed_events AS PERMISSIVE FOR UPDAT
 
 CREATE POLICY "authenticated can read public published" ON activity_feed_events AS PERMISSIVE FOR SELECT TO authenticated
   USING (((status = 'published'::text) AND (visibility = 'public'::text)));
+
+ALTER TABLE auction_bids ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "owner can read own bids" ON auction_bids AS PERMISSIVE FOR SELECT TO authenticated
+  USING ((player_id IN ( SELECT p.id
+   FROM players p
+  WHERE (p.user_id = ( SELECT auth.uid() AS uid)))));
+
+ALTER TABLE auctions ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "authenticated can read auctions" ON auctions AS PERMISSIVE FOR SELECT TO authenticated
+  USING (true);
 
 ALTER TABLE bet_legs ENABLE ROW LEVEL SECURITY;
 
@@ -1324,6 +1486,11 @@ CREATE POLICY "admin can insert" ON games AS PERMISSIVE FOR INSERT TO authentica
 CREATE POLICY "authenticated can read" ON games AS PERMISSIVE FOR SELECT TO authenticated
   USING (true);
 
+ALTER TABLE item_catalog ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "authenticated can read catalog" ON item_catalog AS PERMISSIVE FOR SELECT TO authenticated
+  USING (true);
+
 ALTER TABLE lanetalk_game_imports ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "admin can update" ON lanetalk_game_imports AS PERMISSIVE FOR UPDATE TO authenticated
@@ -1388,6 +1555,13 @@ CREATE POLICY "admin can insert" ON pin_ledger AS PERMISSIVE FOR INSERT TO authe
 
 CREATE POLICY "authenticated can read" ON pin_ledger AS PERMISSIVE FOR SELECT TO authenticated
   USING (true);
+
+ALTER TABLE player_inventory_items ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "owner or admin can read inventory" ON player_inventory_items AS PERMISSIVE FOR SELECT TO authenticated
+  USING ((( SELECT is_admin() AS is_admin) OR (player_id IN ( SELECT p.id
+   FROM players p
+  WHERE (p.user_id = ( SELECT auth.uid() AS uid))))));
 
 ALTER TABLE players ENABLE ROW LEVEL SECURITY;
 
@@ -1874,6 +2048,89 @@ END;
 $function$
 ;
 
+CREATE OR REPLACE FUNCTION public.auction_bid_key()
+ RETURNS text
+ LANGUAGE plpgsql
+ STABLE SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+DECLARE
+  v_key text;
+BEGIN
+  SELECT decrypted_secret INTO v_key
+    FROM vault.decrypted_secrets
+   WHERE name = 'auction_bid_amount_key';
+  IF v_key IS NULL THEN
+    RAISE EXCEPTION 'Vault secret auction_bid_amount_key is missing — create it before running auctions';
+  END IF;
+  RETURN v_key;
+END;
+$function$
+;
+
+CREATE OR REPLACE FUNCTION public.cancel_auction(p_auction_id uuid)
+ RETURNS void
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+DECLARE
+  v_status text;
+BEGIN
+  PERFORM public.assert_admin();
+
+  SELECT status INTO v_status FROM public.auctions WHERE id = p_auction_id FOR UPDATE;
+  IF v_status IS NULL THEN
+    RAISE EXCEPTION 'Auction not found';
+  END IF;
+  IF v_status = 'settled' THEN
+    RAISE EXCEPTION 'Settled auctions are reversed, not cancelled';
+  END IF;
+  -- Defensive: no money can have moved pre-settlement.
+  IF EXISTS (SELECT 1 FROM public.pin_ledger WHERE auction_id = p_auction_id) THEN
+    RAISE EXCEPTION 'Auction has ledger rows — refusing to cancel';
+  END IF;
+
+  -- Bids cascade; feed rows cascade (M6 FK); inventory can't exist pre-settlement.
+  DELETE FROM public.auctions WHERE id = p_auction_id;
+END;
+$function$
+;
+
+CREATE OR REPLACE FUNCTION public.cancel_auction_bid(p_auction_id uuid)
+ RETURNS void
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+DECLARE
+  v_player  uuid;
+  v_auction public.auctions;
+BEGIN
+  v_player := public.current_player_id();
+
+  SELECT * INTO v_auction FROM public.auctions WHERE id = p_auction_id FOR UPDATE;
+  IF v_auction.id IS NULL THEN
+    RAISE EXCEPTION 'Auction not found';
+  END IF;
+  IF v_auction.status <> 'open' OR now() >= v_auction.closes_at THEN
+    RAISE EXCEPTION 'Auction is not open';
+  END IF;
+
+  DELETE FROM public.auction_bids
+   WHERE auction_id = p_auction_id AND player_id = v_player AND status = 'active';
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'No bid to cancel';
+  END IF;
+
+  UPDATE public.auctions a
+     SET bidder_count = (SELECT count(*) FROM public.auction_bids b
+                          WHERE b.auction_id = a.id AND b.status = 'active')
+   WHERE a.id = p_auction_id;
+END;
+$function$
+;
+
 CREATE OR REPLACE FUNCTION public.cancel_bet(p_bet_id uuid)
  RETURNS void
  LANGUAGE plpgsql
@@ -1891,6 +2148,13 @@ BEGIN
   FROM public.bet_legs l
   JOIN public.bet_selections s ON s.id = l.selection_id
   WHERE l.bet_id = p_bet_id;
+
+  -- Restore the Safety Ticket consumed at placement (consumed_at back to NULL
+  -- on the exact row the bet points at). The only sanctioned un-spend.
+  UPDATE public.player_inventory_items
+     SET consumed_at = NULL
+   WHERE id = (SELECT insurance_item_id FROM public.bets WHERE id = p_bet_id)
+     AND consumed_at IS NOT NULL;
 
   DELETE FROM public.pin_ledger WHERE bet_id = p_bet_id;
   DELETE FROM public.bets WHERE id = p_bet_id;
@@ -2239,6 +2503,75 @@ BEGIN
   WHERE id = p_challenge_id;
 
   RETURN p_challenge_id;
+END;
+$function$
+;
+
+CREATE OR REPLACE FUNCTION public.create_auction(p_catalog_key text, p_description text, p_minimum_bid integer, p_opens_at timestamp with time zone, p_closes_at timestamp with time zone)
+ RETURNS uuid
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+DECLARE
+  v_season  uuid;
+  v_cat     public.item_catalog;
+  v_id      uuid;
+  v_opens   timestamptz;
+BEGIN
+  PERFORM public.assert_admin();
+  v_season := public.current_season_id();
+
+  SELECT * INTO v_cat FROM public.item_catalog WHERE key = p_catalog_key;
+  IF v_cat.id IS NULL THEN
+    RAISE EXCEPTION 'Unknown catalog item: %', p_catalog_key;
+  END IF;
+  -- Storefront rule: retired items can't be newly auctioned (owned instances
+  -- are unaffected — retirement never confiscates).
+  IF NOT v_cat.is_active THEN
+    RAISE EXCEPTION 'Catalog item % is retired', p_catalog_key;
+  END IF;
+
+  v_opens := COALESCE(p_opens_at, now());
+  IF p_closes_at IS NULL OR p_closes_at <= now() THEN
+    RAISE EXCEPTION 'Close time must be in the future';
+  END IF;
+  IF p_closes_at <= v_opens THEN
+    RAISE EXCEPTION 'Close time must be after open time';
+  END IF;
+  IF p_minimum_bid IS NULL OR p_minimum_bid <= 0 THEN
+    RAISE EXCEPTION 'Minimum bid must be at least 1';
+  END IF;
+
+  INSERT INTO public.auctions (season_id, catalog_item_id, description, opens_at, closes_at, minimum_bid)
+    VALUES (v_season, v_cat.id, p_description, v_opens, p_closes_at, p_minimum_bid)
+    RETURNING id INTO v_id;
+
+  -- "Opens now" creates open directly (same path as the sweep's open phase).
+  IF v_opens <= now() THEN
+    PERFORM public.open_auction_internal(v_id);
+  END IF;
+
+  RETURN v_id;
+END;
+$function$
+;
+
+CREATE OR REPLACE FUNCTION public.create_catalog_item(p_key text, p_name text, p_description text, p_icon text, p_effect_type text, p_effect_params jsonb, p_activation_mode text)
+ RETURNS uuid
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+DECLARE
+  v_id uuid;
+BEGIN
+  PERFORM public.assert_admin();
+  INSERT INTO public.item_catalog (key, name, description, icon, effect_type, effect_params, activation_mode)
+    VALUES (p_key, p_name, p_description, p_icon, p_effect_type,
+            COALESCE(p_effect_params, '{}'::jsonb), p_activation_mode)
+    RETURNING id INTO v_id;
+  RETURN v_id;
 END;
 $function$
 ;
@@ -2728,6 +3061,26 @@ END;
 $function$
 ;
 
+CREATE OR REPLACE FUNCTION public.decrypt_bid_amount(p_enc bytea)
+ RETURNS integer
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+  SELECT extensions.pgp_sym_decrypt(p_enc, public.auction_bid_key())::integer;
+$function$
+;
+
+CREATE OR REPLACE FUNCTION public.encrypt_bid_amount(p_amount integer)
+ RETURNS bytea
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+  SELECT extensions.pgp_sym_encrypt(p_amount::text, public.auction_bid_key());
+$function$
+;
+
 CREATE OR REPLACE FUNCTION public.enforce_audit_columns()
  RETURNS event_trigger
  LANGUAGE plpgsql
@@ -2875,11 +3228,13 @@ DECLARE
   v_odds    numeric;
   v_payout  integer;
   v_week_id uuid;
+  v_share   numeric;
+  v_refund  integer;
 BEGIN
   SELECT week_id INTO v_week_id FROM public.bet_markets WHERE id = p_market_id;
 
   FOR v_bet IN
-    SELECT DISTINCT b.id, b.player_id, b.season_id, b.stake
+    SELECT DISTINCT b.id, b.player_id, b.season_id, b.stake, b.insurance_item_id
     FROM public.bets b
     JOIN public.bet_legs       l ON l.bet_id = b.id
     JOIN public.bet_selections s ON s.id = l.selection_id
@@ -2901,8 +3256,33 @@ BEGIN
     END IF;
 
     IF EXISTS (SELECT 1 FROM public.bet_legs WHERE bet_id = v_bet.id AND result = 'lost') THEN
-      -- Lost: stake already debited / house already holds it. No ledger.
+      -- Lost: stake already debited / house already holds it. No ledger…
       UPDATE public.bets SET status = 'lost', settled_at = now() WHERE id = v_bet.id;
+
+      -- …unless insured. Safety Ticket: House-funded stake refund of
+      -- floor(stake × refund_share), read from the item's catalog params.
+      -- Bet-linked AND week-stamped → captured/reversed by the archive engine
+      -- exactly like every other bet movement. NOT-EXISTS guard makes
+      -- re-settlement (force re-archive) idempotent. Lost branch ONLY: pushes
+      -- refund normally below and the ticket stays spent; force-void pays only
+      -- bet_refund (this function never runs for voids).
+      IF v_bet.insurance_item_id IS NOT NULL THEN
+        SELECT COALESCE((c.effect_params ->> 'refund_share')::numeric, 1.0) INTO v_share
+          FROM public.player_inventory_items i
+          JOIN public.item_catalog c ON c.id = i.catalog_item_id
+         WHERE i.id = v_bet.insurance_item_id;
+
+        v_refund := FLOOR(v_bet.stake * COALESCE(v_share, 1.0));
+
+        IF v_refund > 0 AND NOT EXISTS (
+          SELECT 1 FROM public.pin_ledger
+           WHERE bet_id = v_bet.id AND type = 'bet_insurance_refund'
+        ) THEN
+          PERFORM public.pin_ledger_double_entry(
+            v_bet.player_id, v_bet.season_id, v_week_id,
+            v_refund, 'bet_insurance_refund', 'Safety Ticket refund', NULL, v_bet.id);
+        END IF;
+      END IF;
 
     ELSIF NOT EXISTS (
       SELECT 1 FROM public.bet_legs WHERE bet_id = v_bet.id AND result NOT IN ('push', 'void')
@@ -2948,6 +3328,42 @@ BEGIN
     RAISE EXCEPTION 'games.team_a_id and team_b_id must belong to the same week (% vs %)', wa, wb;
   END IF;
   RETURN NEW;
+END;
+$function$
+;
+
+CREATE OR REPLACE FUNCTION public.grant_inventory_item(p_player_id uuid, p_catalog_key text, p_quantity integer DEFAULT 1)
+ RETURNS void
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+DECLARE
+  v_cat    public.item_catalog;
+  v_season uuid;
+BEGIN
+  PERFORM public.assert_admin();
+
+  IF p_quantity IS NULL OR p_quantity < 1 OR p_quantity > 50 THEN
+    RAISE EXCEPTION 'Quantity must be between 1 and 50';
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM public.players WHERE id = p_player_id) THEN
+    RAISE EXCEPTION 'Player not found';
+  END IF;
+
+  SELECT * INTO v_cat FROM public.item_catalog WHERE key = p_catalog_key;
+  IF v_cat.id IS NULL THEN
+    RAISE EXCEPTION 'Unknown catalog item: %', p_catalog_key;
+  END IF;
+  IF NOT v_cat.is_active THEN
+    RAISE EXCEPTION 'Catalog item % is retired', p_catalog_key;
+  END IF;
+
+  v_season := public.current_season_id();
+
+  INSERT INTO public.player_inventory_items (player_id, catalog_item_id, season_id, source)
+    SELECT p_player_id, v_cat.id, v_season, 'admin_grant'
+      FROM generate_series(1, p_quantity);
 END;
 $function$
 ;
@@ -3033,6 +3449,81 @@ END;
 $function$
 ;
 
+CREATE OR REPLACE FUNCTION public.my_bid_amount(p_auction_id uuid)
+ RETURNS integer
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+  SELECT public.decrypt_bid_amount(b.bid_amount_enc)
+    FROM public.auction_bids b
+   WHERE b.auction_id = p_auction_id
+     AND b.player_id = public.current_player_id()
+     AND b.status = 'active';
+$function$
+;
+
+CREATE OR REPLACE FUNCTION public.open_auction_internal(p_auction_id uuid)
+ RETURNS void
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+DECLARE
+  v_auction   public.auctions;
+  v_item_name text;
+  v_item_icon text;
+BEGIN
+  UPDATE public.auctions
+     SET status = 'open'
+   WHERE id = p_auction_id AND status = 'scheduled';
+  IF NOT FOUND THEN
+    RETURN;
+  END IF;
+
+  SELECT * INTO v_auction FROM public.auctions WHERE id = p_auction_id;
+  SELECT c.name, c.icon INTO v_item_name, v_item_icon
+    FROM public.item_catalog c WHERE c.id = v_auction.catalog_item_id;
+
+  PERFORM public.publish_activity_event(
+    'auction_house', 'auction_opened',
+    v_auction.season_id, NULL, NULL, NULL, NULL,
+    NULL, NULL,
+    'auction_house.opened',
+    jsonb_build_object('item_name', v_item_name, 'item_icon', v_item_icon,
+                       'minimum_bid', v_auction.minimum_bid, 'closes_at', v_auction.closes_at),
+    jsonb_build_object('auction_id', p_auction_id),
+    NULL, now(),
+    NULL, NULL, p_auction_id);
+END;
+$function$
+;
+
+CREATE OR REPLACE FUNCTION public.open_auction_now(p_auction_id uuid)
+ RETURNS void
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+DECLARE
+  v_status text;
+BEGIN
+  PERFORM public.assert_admin();
+
+  SELECT status INTO v_status FROM public.auctions WHERE id = p_auction_id FOR UPDATE;
+  IF v_status IS NULL THEN
+    RAISE EXCEPTION 'Auction not found';
+  END IF;
+  IF v_status <> 'scheduled' THEN
+    RAISE EXCEPTION 'Only scheduled auctions can be opened';
+  END IF;
+
+  UPDATE public.auctions SET opens_at = now() WHERE id = p_auction_id;
+  PERFORM public.open_auction_internal(p_auction_id);
+END;
+$function$
+;
+
 CREATE OR REPLACE FUNCTION public.pin_balance(p_player_id uuid, p_season_id uuid)
  RETURNS integer
  LANGUAGE sql
@@ -3045,7 +3536,7 @@ AS $function$
 $function$
 ;
 
-CREATE OR REPLACE FUNCTION public.pin_ledger_double_entry(p_player_id uuid, p_season_id uuid, p_week_id uuid, p_amount integer, p_type text, p_description text, p_house_description text DEFAULT NULL::text, p_bet_id uuid DEFAULT NULL::uuid, p_bounty_post_id uuid DEFAULT NULL::uuid)
+CREATE OR REPLACE FUNCTION public.pin_ledger_double_entry(p_player_id uuid, p_season_id uuid, p_week_id uuid, p_amount integer, p_type text, p_description text, p_house_description text DEFAULT NULL::text, p_bet_id uuid DEFAULT NULL::uuid, p_bounty_post_id uuid DEFAULT NULL::uuid, p_auction_id uuid DEFAULT NULL::uuid)
  RETURNS TABLE(player_entry_id uuid, house_entry_id uuid)
  LANGUAGE plpgsql
  SECURITY DEFINER
@@ -3063,16 +3554,16 @@ BEGIN
   END IF;
 
   INSERT INTO public.pin_ledger
-      (player_id, season_id, week_id, is_house, amount, type, description, bet_id, bounty_post_id)
+      (player_id, season_id, week_id, is_house, amount, type, description, bet_id, bounty_post_id, auction_id)
     VALUES
-      (p_player_id, p_season_id, p_week_id, false, p_amount, p_type, p_description, p_bet_id, p_bounty_post_id)
+      (p_player_id, p_season_id, p_week_id, false, p_amount, p_type, p_description, p_bet_id, p_bounty_post_id, p_auction_id)
     RETURNING id INTO v_player;
 
   INSERT INTO public.pin_ledger
-      (player_id, season_id, week_id, is_house, amount, type, description, bet_id, bounty_post_id)
+      (player_id, season_id, week_id, is_house, amount, type, description, bet_id, bounty_post_id, auction_id)
     VALUES
       (NULL, p_season_id, p_week_id, true, -p_amount, p_type,
-       COALESCE(p_house_description, p_description || ' (house)'), p_bet_id, p_bounty_post_id)
+       COALESCE(p_house_description, p_description || ' (house)'), p_bet_id, p_bounty_post_id, p_auction_id)
     RETURNING id INTO v_house;
 
   RETURN QUERY SELECT v_player, v_house;
@@ -3080,7 +3571,64 @@ END;
 $function$
 ;
 
-CREATE OR REPLACE FUNCTION public.place_house_bet(p_selection_ids uuid[], p_stake integer, p_custom_line_id uuid DEFAULT NULL::uuid)
+CREATE OR REPLACE FUNCTION public.place_auction_bid(p_auction_id uuid, p_amount integer)
+ RETURNS void
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+DECLARE
+  v_player   uuid;
+  v_auction  public.auctions;
+  v_bid_id   uuid;
+  v_current  integer;
+BEGIN
+  v_player := public.current_player_id();
+
+  SELECT * INTO v_auction FROM public.auctions WHERE id = p_auction_id FOR UPDATE;
+  IF v_auction.id IS NULL THEN
+    RAISE EXCEPTION 'Auction not found';
+  END IF;
+  -- Authoritative independent of cron lag: time check, not just status.
+  IF v_auction.status <> 'open' OR now() >= v_auction.closes_at THEN
+    RAISE EXCEPTION 'Auction is not open for bids';
+  END IF;
+
+  IF p_amount IS NULL OR p_amount < v_auction.minimum_bid THEN
+    RAISE EXCEPTION 'Bid must be at least % pins', v_auction.minimum_bid;
+  END IF;
+  IF p_amount > public.pin_balance(v_player, v_auction.season_id) THEN
+    RAISE EXCEPTION 'Bid exceeds your balance';
+  END IF;
+
+  SELECT id, public.decrypt_bid_amount(bid_amount_enc) INTO v_bid_id, v_current
+    FROM public.auction_bids
+   WHERE auction_id = p_auction_id AND player_id = v_player AND status = 'active';
+
+  IF v_bid_id IS NOT NULL AND v_current = p_amount THEN
+    RETURN;  -- no-op edit: tie-break clock preserved, idempotent success.
+  END IF;
+
+  IF v_bid_id IS NOT NULL THEN
+    UPDATE public.auction_bids
+       SET bid_amount_enc = public.encrypt_bid_amount(p_amount),
+           submitted_at   = now()
+     WHERE id = v_bid_id;
+  ELSE
+    INSERT INTO public.auction_bids (auction_id, player_id, bid_amount_enc)
+      VALUES (p_auction_id, v_player, public.encrypt_bid_amount(p_amount));
+  END IF;
+
+  -- Recounted, never ±1 (self-healing denorm; we hold the auction lock).
+  UPDATE public.auctions a
+     SET bidder_count = (SELECT count(*) FROM public.auction_bids b
+                          WHERE b.auction_id = a.id AND b.status = 'active')
+   WHERE a.id = p_auction_id;
+END;
+$function$
+;
+
+CREATE OR REPLACE FUNCTION public.place_house_bet(p_selection_ids uuid[], p_stake integer, p_custom_line_id uuid DEFAULT NULL::uuid, p_insurance_item_id uuid DEFAULT NULL::uuid)
  RETURNS uuid
  LANGUAGE plpgsql
  SECURITY DEFINER
@@ -3173,10 +3721,39 @@ BEGIN
     RAISE EXCEPTION 'Wager exceeds your balance';
   END IF;
 
+  -- Safety Ticket: validate the catalog contract, then consume the atomic item
+  -- in one guarded UPDATE (owner + unconsumed + current season — rowcount 0
+  -- means one of those failed). Spent at placement, win or lose; deliberately
+  -- NO is_active check (retirement stops grants, never confiscates).
+  IF p_insurance_item_id IS NOT NULL THEN
+    IF NOT EXISTS (
+      SELECT 1
+        FROM public.player_inventory_items i
+        JOIN public.item_catalog c ON c.id = i.catalog_item_id
+       WHERE i.id = p_insurance_item_id
+         AND c.effect_type = 'bet_insurance'
+         AND c.activation_mode = 'attach_to_bet'
+    ) THEN
+      RAISE EXCEPTION 'That item is not attachable bet insurance';
+    END IF;
+
+    UPDATE public.player_inventory_items
+       SET consumed_at = now()
+     WHERE id = p_insurance_item_id
+       AND player_id = v_player_id
+       AND season_id = v_season_id
+       AND consumed_at IS NULL;
+    IF NOT FOUND THEN
+      RAISE EXCEPTION 'Safety Ticket is not usable (already spent, wrong season, or not yours)';
+    END IF;
+  END IF;
+
   INSERT INTO public.bets (player_id, season_id, week_id, stake, potential_payout, status,
-                           custom_line_id, custom_line_title, custom_line_description, custom_line_category)
+                           custom_line_id, custom_line_title, custom_line_description, custom_line_category,
+                           insurance_item_id)
     VALUES (v_player_id, v_season_id, v_week_id, p_stake, v_payout, 'pending',
-            v_line.id, v_line.title, v_line.description, v_line.category)
+            v_line.id, v_line.title, v_line.description, v_line.category,
+            p_insurance_item_id)
     RETURNING id INTO v_bet_id;
 
   INSERT INTO public.bet_legs (bet_id, selection_id, side, odds_at_placement, line_at_placement)
@@ -3671,7 +4248,7 @@ END;
 $function$
 ;
 
-CREATE OR REPLACE FUNCTION public.publish_activity_event(p_source_feature text, p_event_type text, p_season_id uuid, p_week_id uuid, p_actor_player_id uuid, p_subject_player_id uuid, p_secondary_player_id uuid, p_sportsbook_bet_id uuid, p_loan_id uuid, p_template_key text, p_public_payload jsonb, p_admin_payload jsonb, p_visibility text, p_occurred_at timestamp with time zone, p_pvp_challenge_id uuid DEFAULT NULL::uuid, p_bounty_post_id uuid DEFAULT NULL::uuid)
+CREATE OR REPLACE FUNCTION public.publish_activity_event(p_source_feature text, p_event_type text, p_season_id uuid, p_week_id uuid, p_actor_player_id uuid, p_subject_player_id uuid, p_secondary_player_id uuid, p_sportsbook_bet_id uuid, p_loan_id uuid, p_template_key text, p_public_payload jsonb, p_admin_payload jsonb, p_visibility text, p_occurred_at timestamp with time zone, p_pvp_challenge_id uuid DEFAULT NULL::uuid, p_bounty_post_id uuid DEFAULT NULL::uuid, p_auction_id uuid DEFAULT NULL::uuid)
  RETURNS uuid
  LANGUAGE plpgsql
  SECURITY DEFINER
@@ -3685,7 +4262,7 @@ DECLARE
   v_id         uuid;
 BEGIN
   -- 1. Validate source_feature.
-  IF p_source_feature NOT IN ('sportsbook','loan_shark','pvp','bounty_board','system','admin') THEN
+  IF p_source_feature NOT IN ('sportsbook','loan_shark','pvp','bounty_board','auction_house','system','admin') THEN
     RAISE EXCEPTION 'Unknown source_feature: %', p_source_feature;
   END IF;
 
@@ -3698,12 +4275,14 @@ BEGIN
   -- 3. Source-FK ↔ feature consistency: exactly the catalog's allowed FK is
   --    set (all others NULL); 'none' means no FK at all.
   v_n_fks := (p_sportsbook_bet_id IS NOT NULL)::int + (p_loan_id IS NOT NULL)::int
-           + (p_pvp_challenge_id IS NOT NULL)::int + (p_bounty_post_id IS NOT NULL)::int;
+           + (p_pvp_challenge_id IS NOT NULL)::int + (p_bounty_post_id IS NOT NULL)::int
+           + (p_auction_id IS NOT NULL)::int;
   v_provided := CASE
     WHEN p_sportsbook_bet_id IS NOT NULL THEN 'sportsbook_bet_id'
     WHEN p_loan_id           IS NOT NULL THEN 'loan_id'
     WHEN p_pvp_challenge_id  IS NOT NULL THEN 'pvp_challenge_id'
     WHEN p_bounty_post_id    IS NOT NULL THEN 'bounty_post_id'
+    WHEN p_auction_id        IS NOT NULL THEN 'auction_id'
     ELSE 'none' END;
   IF v_n_fks > 1 OR v_provided <> v_cat.allowed_fk THEN
     RAISE EXCEPTION 'Event % requires source FK % only (got %, % set)',
@@ -3728,13 +4307,13 @@ BEGIN
   INSERT INTO public.activity_feed_events (
     season_id, week_id, source_feature, event_type,
     actor_player_id, subject_player_id, secondary_player_id,
-    sportsbook_bet_id, loan_id, pvp_challenge_id, bounty_post_id,
+    sportsbook_bet_id, loan_id, pvp_challenge_id, bounty_post_id, auction_id,
     visibility, status,
     template_key, public_payload, admin_payload, occurred_at
   ) VALUES (
     p_season_id, p_week_id, p_source_feature, p_event_type,
     p_actor_player_id, p_subject_player_id, p_secondary_player_id,
-    p_sportsbook_bet_id, p_loan_id, p_pvp_challenge_id, p_bounty_post_id,
+    p_sportsbook_bet_id, p_loan_id, p_pvp_challenge_id, p_bounty_post_id, p_auction_id,
     v_visibility, 'published',
     v_cat.template_key, COALESCE(p_public_payload, '{}'::jsonb), COALESCE(p_admin_payload, '{}'::jsonb),
     COALESCE(p_occurred_at, now())
@@ -3985,6 +4564,46 @@ END;
 $function$
 ;
 
+CREATE OR REPLACE FUNCTION public.reverse_settled_auction(p_auction_id uuid)
+ RETURNS void
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+DECLARE
+  v_auction public.auctions;
+  v_item    public.player_inventory_items;
+BEGIN
+  PERFORM public.assert_admin();
+
+  SELECT * INTO v_auction FROM public.auctions WHERE id = p_auction_id FOR UPDATE;
+  IF v_auction.id IS NULL THEN
+    RAISE EXCEPTION 'Auction not found';
+  END IF;
+  IF v_auction.status <> 'settled' THEN
+    RAISE EXCEPTION 'Only settled auctions can be reversed';
+  END IF;
+
+  -- Revoke the granted item by its provenance FK — never by heuristics.
+  IF v_auction.winner_player_id IS NOT NULL THEN
+    SELECT * INTO v_item FROM public.player_inventory_items WHERE auction_id = p_auction_id;
+    IF v_item.id IS NOT NULL THEN
+      IF v_item.consumed_at IS NOT NULL THEN
+        RAISE EXCEPTION 'The won item has already been used — this auction cannot be reversed';
+      END IF;
+      DELETE FROM public.player_inventory_items WHERE id = v_item.id;
+    END IF;
+  END IF;
+
+  -- Claw back every pair (purchase + bounces) by the root ref.
+  DELETE FROM public.pin_ledger WHERE auction_id = p_auction_id;
+
+  -- Erase the auction; the won bid + feed rows cascade. As if it never happened.
+  DELETE FROM public.auctions WHERE id = p_auction_id;
+END;
+$function$
+;
+
 CREATE OR REPLACE FUNCTION public.scores_slot_in_game()
  RETURNS trigger
  LANGUAGE plpgsql
@@ -4011,6 +4630,172 @@ AS $function$
 BEGIN
   NEW.updated_at = now();
   RETURN NEW;
+END;
+$function$
+;
+
+CREATE OR REPLACE FUNCTION public.settle_auction(p_auction_id uuid)
+ RETURNS void
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+DECLARE
+  v_auction public.auctions;
+BEGIN
+  PERFORM public.assert_admin();
+
+  SELECT * INTO v_auction FROM public.auctions WHERE id = p_auction_id FOR UPDATE;
+  IF v_auction.id IS NULL THEN
+    RAISE EXCEPTION 'Auction not found';
+  END IF;
+  IF v_auction.status <> 'open' THEN
+    RAISE EXCEPTION 'Only open auctions can be settled';
+  END IF;
+
+  IF v_auction.closes_at > now() THEN
+    UPDATE public.auctions SET closes_at = now() WHERE id = p_auction_id;
+  END IF;
+
+  PERFORM public.settle_auction_internal(p_auction_id);
+END;
+$function$
+;
+
+CREATE OR REPLACE FUNCTION public.settle_auction_internal(p_auction_id uuid)
+ RETURNS void
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+DECLARE
+  v_auction      public.auctions;
+  v_item_name    text;
+  v_item_icon    text;
+  v_catalog_id   uuid;
+  v_week         uuid;
+  v_bid          record;
+  v_balance      integer;
+  v_fee          integer;
+  v_bidder_count integer;
+  v_bounce_count integer := 0;
+  v_won          boolean := false;
+BEGIN
+  SELECT * INTO v_auction FROM public.auctions WHERE id = p_auction_id FOR UPDATE;
+  IF v_auction.id IS NULL THEN
+    RAISE EXCEPTION 'Auction not found';
+  END IF;
+  -- Idempotent + the single timing rule (no override parameter exists).
+  IF v_auction.status <> 'open' OR v_auction.closes_at > now() THEN
+    RETURN;
+  END IF;
+
+  SELECT name, icon, id INTO v_item_name, v_item_icon, v_catalog_id
+    FROM public.item_catalog WHERE id = v_auction.catalog_item_id;
+
+  -- Week stamp: the season's open week at settlement time (accounting
+  -- accuracy; the archive engine is auction-exempt — see M3's unarchive edit).
+  SELECT id INTO v_week
+    FROM public.weeks WHERE season_id = v_auction.season_id AND is_archived = false
+    ORDER BY week_number DESC LIMIT 1;
+
+  SELECT count(*) INTO v_bidder_count
+    FROM public.auction_bids WHERE auction_id = p_auction_id AND status = 'active';
+
+  -- Rank: first-price, ties to whoever held their amount longest.
+  FOR v_bid IN
+    SELECT b.id, b.player_id,
+           public.decrypt_bid_amount(b.bid_amount_enc) AS amount,
+           b.submitted_at
+      FROM public.auction_bids b
+     WHERE b.auction_id = p_auction_id AND b.status = 'active'
+     ORDER BY amount DESC, b.submitted_at ASC
+  LOOP
+    v_balance := public.pin_balance(v_bid.player_id, v_auction.season_id);
+
+    IF v_balance >= v_bid.amount THEN
+      PERFORM public.pin_ledger_double_entry(
+        v_bid.player_id, v_auction.season_id, v_week,
+        -v_bid.amount, 'auction_purchase',
+        'Won at auction: ' || v_item_name,
+        NULL, NULL, NULL, p_auction_id);
+
+      INSERT INTO public.player_inventory_items
+          (player_id, catalog_item_id, season_id, source, auction_id)
+        VALUES (v_bid.player_id, v_catalog_id, v_auction.season_id, 'auction', p_auction_id);
+
+      UPDATE public.auction_bids
+         SET status = 'won', settled_at = now()
+       WHERE id = v_bid.id;
+
+      UPDATE public.auctions
+         SET winner_player_id = v_bid.player_id,
+             winning_bid_id   = v_bid.id,
+             winning_price    = v_bid.amount
+       WHERE id = p_auction_id;
+
+      PERFORM public.publish_activity_event(
+        'auction_house', 'auction_won',
+        v_auction.season_id, NULL, v_bid.player_id, NULL, NULL,
+        NULL, NULL,
+        'auction_house.won',
+        jsonb_build_object('item_name', v_item_name, 'item_icon', v_item_icon,
+                           'price', v_bid.amount),
+        jsonb_build_object('auction_id', p_auction_id),
+        NULL, now(),
+        NULL, NULL, p_auction_id);
+
+      v_won := true;
+      EXIT;
+    ELSE
+      -- Check bounce: ledger-silent at zero fee, feed-loud always. The event
+      -- names the player + fee — NEVER the pledged amount.
+      v_bounce_count := v_bounce_count + 1;
+      v_fee := LEAST(v_balance, v_auction.bounce_fee);
+      IF v_fee > 0 THEN
+        PERFORM public.pin_ledger_double_entry(
+          v_bid.player_id, v_auction.season_id, v_week,
+          -v_fee, 'auction_check_bounce',
+          'Bounced check at auction: ' || v_item_name,
+          NULL, NULL, NULL, p_auction_id);
+      END IF;
+
+      PERFORM public.publish_activity_event(
+        'auction_house', 'auction_check_bounce',
+        v_auction.season_id, NULL, v_bid.player_id, NULL, NULL,
+        NULL, NULL,
+        'auction_house.check_bounce',
+        jsonb_build_object('item_name', v_item_name, 'item_icon', v_item_icon,
+                           'fee', v_fee),
+        jsonb_build_object('auction_id', p_auction_id),
+        NULL, now(),
+        NULL, NULL, p_auction_id);
+    END IF;
+  END LOOP;
+
+  UPDATE public.auctions
+     SET status = 'settled', settled_at = now()
+   WHERE id = p_auction_id;
+
+  -- A rejected pledge is destroyed: every non-won row, bounced included.
+  DELETE FROM public.auction_bids
+   WHERE auction_id = p_auction_id AND status <> 'won';
+
+  IF NOT v_won THEN
+    -- No-sale. Payload carries the counts (the rows are gone) — the app
+    -- template special-cases bounce_count = bidder_count > 0 with the
+    -- "every single pledge bounced" copy.
+    PERFORM public.publish_activity_event(
+      'auction_house', 'auction_no_sale',
+      v_auction.season_id, NULL, NULL, NULL, NULL,
+      NULL, NULL,
+      'auction_house.no_sale',
+      jsonb_build_object('item_name', v_item_name, 'item_icon', v_item_icon,
+                         'bidder_count', v_bidder_count, 'bounce_count', v_bounce_count),
+      jsonb_build_object('auction_id', p_auction_id),
+      NULL, now(),
+      NULL, NULL, p_auction_id);
+  END IF;
 END;
 $function$
 ;
@@ -4932,6 +5717,44 @@ END;
 $function$
 ;
 
+CREATE OR REPLACE FUNCTION public.sweep_auctions()
+ RETURNS void
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+DECLARE
+  v_id uuid;
+BEGIN
+  -- Phase 1: open what's due.
+  FOR v_id IN
+    SELECT id FROM public.auctions
+     WHERE status = 'scheduled' AND opens_at <= now()
+     ORDER BY opens_at
+  LOOP
+    BEGIN
+      PERFORM public.open_auction_internal(v_id);
+    EXCEPTION WHEN OTHERS THEN
+      RAISE WARNING 'sweep_auctions: open failed for %: %', v_id, SQLERRM;
+    END;
+  END LOOP;
+
+  -- Phase 2: settle what's due.
+  FOR v_id IN
+    SELECT id FROM public.auctions
+     WHERE status = 'open' AND closes_at <= now()
+     ORDER BY closes_at
+  LOOP
+    BEGIN
+      PERFORM public.settle_auction_internal(v_id);
+    EXCEPTION WHEN OTHERS THEN
+      RAISE WARNING 'sweep_auctions: settle failed for %: %', v_id, SQLERRM;
+    END;
+  END LOOP;
+END;
+$function$
+;
+
 CREATE OR REPLACE FUNCTION public.sync_lanetalk_prop_markets_for_week(p_week_id uuid)
  RETURNS void
  LANGUAGE plpgsql
@@ -5714,9 +6537,12 @@ BEGIN
         WHERE run_id = v_run_id AND kind = 'preexisting_id' AND table_name = 'activity_feed_events'
      );
 
+  -- Auction exemption: auction money settles on its own clock and is reversed
+  -- only by reverse_settled_auction — the archive engine never touches it.
   DELETE FROM public.pin_ledger pl
    WHERE (pl.week_id = p_week_id
           OR pl.bet_id IN (SELECT b.id FROM public.bets b WHERE b.week_id = p_week_id))
+     AND pl.auction_id IS NULL
      AND pl.id NOT IN (
        SELECT pk FROM public.week_archive_snapshot
         WHERE run_id = v_run_id AND kind = 'preexisting_id' AND table_name = 'pin_ledger'
@@ -5815,6 +6641,86 @@ END;
 $function$
 ;
 
+CREATE OR REPLACE FUNCTION public.update_auction(p_auction_id uuid, p_catalog_key text, p_description text, p_minimum_bid integer, p_opens_at timestamp with time zone, p_closes_at timestamp with time zone)
+ RETURNS void
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+DECLARE
+  v_auction public.auctions;
+  v_cat     public.item_catalog;
+BEGIN
+  PERFORM public.assert_admin();
+
+  SELECT * INTO v_auction FROM public.auctions WHERE id = p_auction_id FOR UPDATE;
+  IF v_auction.id IS NULL THEN
+    RAISE EXCEPTION 'Auction not found';
+  END IF;
+  IF v_auction.status <> 'scheduled' THEN
+    RAISE EXCEPTION 'Auction metadata is frozen once it opens';
+  END IF;
+
+  SELECT * INTO v_cat FROM public.item_catalog WHERE key = p_catalog_key;
+  IF v_cat.id IS NULL OR NOT v_cat.is_active THEN
+    RAISE EXCEPTION 'Unknown or retired catalog item: %', p_catalog_key;
+  END IF;
+  IF p_closes_at IS NULL OR p_closes_at <= now() OR p_closes_at <= COALESCE(p_opens_at, now()) THEN
+    RAISE EXCEPTION 'Close time must be in the future and after open time';
+  END IF;
+  IF p_minimum_bid IS NULL OR p_minimum_bid <= 0 THEN
+    RAISE EXCEPTION 'Minimum bid must be at least 1';
+  END IF;
+
+  UPDATE public.auctions
+     SET catalog_item_id = v_cat.id,
+         description     = p_description,
+         minimum_bid     = p_minimum_bid,
+         opens_at        = COALESCE(p_opens_at, opens_at),
+         closes_at       = p_closes_at
+   WHERE id = p_auction_id;
+END;
+$function$
+;
+
+CREATE OR REPLACE FUNCTION public.update_catalog_item(p_catalog_item_id uuid, p_name text, p_description text, p_icon text, p_effect_type text, p_effect_params jsonb, p_activation_mode text, p_is_active boolean)
+ RETURNS void
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+DECLARE
+  v_cat public.item_catalog;
+BEGIN
+  PERFORM public.assert_admin();
+
+  SELECT * INTO v_cat FROM public.item_catalog WHERE id = p_catalog_item_id;
+  IF v_cat.id IS NULL THEN
+    RAISE EXCEPTION 'Catalog item not found';
+  END IF;
+
+  -- Functional immutability: once any instance exists, behavior is frozen.
+  -- Changed behavior = a NEW catalog row with a new key (e.g. safety_ticket_v2).
+  IF EXISTS (SELECT 1 FROM public.player_inventory_items WHERE catalog_item_id = p_catalog_item_id)
+     AND (p_effect_type      IS DISTINCT FROM v_cat.effect_type
+       OR COALESCE(p_effect_params, '{}'::jsonb) IS DISTINCT FROM v_cat.effect_params
+       OR p_activation_mode  IS DISTINCT FROM v_cat.activation_mode) THEN
+    RAISE EXCEPTION 'Catalog item % has granted instances — its functional columns are frozen. Create a new item key instead.', v_cat.key;
+  END IF;
+
+  UPDATE public.item_catalog
+     SET name            = p_name,
+         description     = p_description,
+         icon            = p_icon,
+         effect_type     = p_effect_type,
+         effect_params   = COALESCE(p_effect_params, '{}'::jsonb),
+         activation_mode = p_activation_mode,
+         is_active       = p_is_active
+   WHERE id = p_catalog_item_id;
+END;
+$function$
+;
+
 CREATE OR REPLACE FUNCTION public.void_pvp_challenge(p_challenge_id uuid, p_admin_note text)
  RETURNS void
  LANGUAGE plpgsql
@@ -5896,6 +6802,10 @@ CREATE TRIGGER set_updated_at BEFORE UPDATE ON public.activity_event_catalog FOR
 
 CREATE TRIGGER set_updated_at BEFORE UPDATE ON public.activity_feed_events FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
+CREATE TRIGGER set_updated_at BEFORE UPDATE ON public.auction_bids FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+CREATE TRIGGER set_updated_at BEFORE UPDATE ON public.auctions FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
 CREATE TRIGGER bet_legs_no_self_tank BEFORE INSERT OR UPDATE ON public.bet_legs FOR EACH ROW EXECUTE FUNCTION prevent_self_tank();
 
 CREATE TRIGGER set_updated_at BEFORE UPDATE ON public.bet_legs FOR EACH ROW EXECUTE FUNCTION set_updated_at();
@@ -5932,6 +6842,8 @@ CREATE TRIGGER games_same_week_check BEFORE INSERT OR UPDATE OF team_a_id, team_
 
 CREATE TRIGGER set_updated_at BEFORE UPDATE ON public.games FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
+CREATE TRIGGER set_updated_at BEFORE UPDATE ON public.item_catalog FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
 CREATE TRIGGER lanetalk_import_stats BEFORE INSERT OR UPDATE OF payload ON public.lanetalk_game_imports FOR EACH ROW EXECUTE FUNCTION trg_lanetalk_import_stats();
 
 CREATE TRIGGER set_updated_at BEFORE UPDATE ON public.lanetalk_game_imports FOR EACH ROW EXECUTE FUNCTION set_updated_at();
@@ -5945,6 +6857,8 @@ CREATE TRIGGER set_updated_at BEFORE UPDATE ON public.loan_products FOR EACH ROW
 CREATE TRIGGER set_updated_at BEFORE UPDATE ON public.loans FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
 CREATE TRIGGER set_updated_at BEFORE UPDATE ON public.pin_ledger FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+CREATE TRIGGER set_updated_at BEFORE UPDATE ON public.player_inventory_items FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
 CREATE TRIGGER set_updated_at BEFORE UPDATE ON public.players FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 

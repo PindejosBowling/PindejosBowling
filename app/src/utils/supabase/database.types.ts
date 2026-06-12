@@ -12,6 +12,31 @@ export type Database = {
   __InternalSupabase: {
     PostgrestVersion: "14.5"
   }
+  graphql_public: {
+    Tables: {
+      [_ in never]: never
+    }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      graphql: {
+        Args: {
+          extensions?: Json
+          operationName?: string
+          query?: string
+          variables?: Json
+        }
+        Returns: Json
+      }
+    }
+    Enums: {
+      [_ in never]: never
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
+  }
   public: {
     Tables: {
       activity_event_catalog: {
@@ -51,6 +76,7 @@ export type Database = {
         Row: {
           actor_player_id: string | null
           admin_payload: Json
+          auction_id: string | null
           bounty_post_id: string | null
           created_at: string
           event_type: string
@@ -77,6 +103,7 @@ export type Database = {
         Insert: {
           actor_player_id?: string | null
           admin_payload?: Json
+          auction_id?: string | null
           bounty_post_id?: string | null
           created_at?: string
           event_type: string
@@ -103,6 +130,7 @@ export type Database = {
         Update: {
           actor_player_id?: string | null
           admin_payload?: Json
+          auction_id?: string | null
           bounty_post_id?: string | null
           created_at?: string
           event_type?: string
@@ -132,6 +160,13 @@ export type Database = {
             columns: ["actor_player_id"]
             isOneToOne: false
             referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "activity_feed_events_auction_id_fkey"
+            columns: ["auction_id"]
+            isOneToOne: false
+            referencedRelation: "auctions"
             referencedColumns: ["id"]
           },
           {
@@ -202,6 +237,146 @@ export type Database = {
             columns: ["week_id"]
             isOneToOne: false
             referencedRelation: "weeks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      auction_bids: {
+        Row: {
+          auction_id: string
+          bid_amount_enc: string
+          created_at: string
+          id: string
+          player_id: string
+          settled_at: string | null
+          status: string
+          submitted_at: string
+          updated_at: string
+        }
+        Insert: {
+          auction_id: string
+          bid_amount_enc: string
+          created_at?: string
+          id?: string
+          player_id: string
+          settled_at?: string | null
+          status?: string
+          submitted_at?: string
+          updated_at?: string
+        }
+        Update: {
+          auction_id?: string
+          bid_amount_enc?: string
+          created_at?: string
+          id?: string
+          player_id?: string
+          settled_at?: string | null
+          status?: string
+          submitted_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "auction_bids_auction_id_fkey"
+            columns: ["auction_id"]
+            isOneToOne: false
+            referencedRelation: "auctions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "auction_bids_player_id_fkey"
+            columns: ["player_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      auctions: {
+        Row: {
+          bidder_count: number
+          bounce_fee: number
+          catalog_item_id: string
+          closes_at: string
+          created_at: string
+          description: string
+          id: string
+          minimum_bid: number
+          opens_at: string
+          quantity: number
+          season_id: string
+          settled_at: string | null
+          status: string
+          updated_at: string
+          winner_player_id: string | null
+          winning_bid_id: string | null
+          winning_price: number | null
+        }
+        Insert: {
+          bidder_count?: number
+          bounce_fee?: number
+          catalog_item_id: string
+          closes_at: string
+          created_at?: string
+          description: string
+          id?: string
+          minimum_bid: number
+          opens_at: string
+          quantity?: number
+          season_id: string
+          settled_at?: string | null
+          status?: string
+          updated_at?: string
+          winner_player_id?: string | null
+          winning_bid_id?: string | null
+          winning_price?: number | null
+        }
+        Update: {
+          bidder_count?: number
+          bounce_fee?: number
+          catalog_item_id?: string
+          closes_at?: string
+          created_at?: string
+          description?: string
+          id?: string
+          minimum_bid?: number
+          opens_at?: string
+          quantity?: number
+          season_id?: string
+          settled_at?: string | null
+          status?: string
+          updated_at?: string
+          winner_player_id?: string | null
+          winning_bid_id?: string | null
+          winning_price?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "auctions_catalog_item_id_fkey"
+            columns: ["catalog_item_id"]
+            isOneToOne: false
+            referencedRelation: "item_catalog"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "auctions_season_id_fkey"
+            columns: ["season_id"]
+            isOneToOne: false
+            referencedRelation: "seasons"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "auctions_winner_player_id_fkey"
+            columns: ["winner_player_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "auctions_winning_bid_id_fkey"
+            columns: ["winning_bid_id"]
+            isOneToOne: false
+            referencedRelation: "auction_bids"
             referencedColumns: ["id"]
           },
         ]
@@ -392,6 +567,7 @@ export type Database = {
           custom_line_id: string | null
           custom_line_title: string | null
           id: string
+          insurance_item_id: string | null
           placed_at: string
           player_id: string
           potential_payout: number
@@ -409,6 +585,7 @@ export type Database = {
           custom_line_id?: string | null
           custom_line_title?: string | null
           id?: string
+          insurance_item_id?: string | null
           placed_at?: string
           player_id: string
           potential_payout: number
@@ -426,6 +603,7 @@ export type Database = {
           custom_line_id?: string | null
           custom_line_title?: string | null
           id?: string
+          insurance_item_id?: string | null
           placed_at?: string
           player_id?: string
           potential_payout?: number
@@ -442,6 +620,13 @@ export type Database = {
             columns: ["custom_line_id"]
             isOneToOne: false
             referencedRelation: "custom_lines"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bets_insurance_item_id_fkey"
+            columns: ["insurance_item_id"]
+            isOneToOne: false
+            referencedRelation: "player_inventory_items"
             referencedColumns: ["id"]
           },
           {
@@ -848,6 +1033,48 @@ export type Database = {
           },
         ]
       }
+      item_catalog: {
+        Row: {
+          activation_mode: string
+          created_at: string
+          description: string
+          effect_params: Json
+          effect_type: string
+          icon: string
+          id: string
+          is_active: boolean
+          key: string
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          activation_mode: string
+          created_at?: string
+          description: string
+          effect_params?: Json
+          effect_type: string
+          icon: string
+          id?: string
+          is_active?: boolean
+          key: string
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          activation_mode?: string
+          created_at?: string
+          description?: string
+          effect_params?: Json
+          effect_type?: string
+          icon?: string
+          id?: string
+          is_active?: boolean
+          key?: string
+          name?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       lanetalk_game_imports: {
         Row: {
           classification: string
@@ -1137,6 +1364,7 @@ export type Database = {
       pin_ledger: {
         Row: {
           amount: number
+          auction_id: string | null
           bet_id: string | null
           bounty_post_id: string | null
           created_at: string
@@ -1153,6 +1381,7 @@ export type Database = {
         }
         Insert: {
           amount: number
+          auction_id?: string | null
           bet_id?: string | null
           bounty_post_id?: string | null
           created_at?: string
@@ -1169,6 +1398,7 @@ export type Database = {
         }
         Update: {
           amount?: number
+          auction_id?: string | null
           bet_id?: string | null
           bounty_post_id?: string | null
           created_at?: string
@@ -1184,6 +1414,13 @@ export type Database = {
           week_id?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "pin_ledger_auction_id_fkey"
+            columns: ["auction_id"]
+            isOneToOne: false
+            referencedRelation: "auctions"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "pin_ledger_bet_id_fkey"
             columns: ["bet_id"]
@@ -1231,6 +1468,74 @@ export type Database = {
             columns: ["week_id"]
             isOneToOne: false
             referencedRelation: "weeks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      player_inventory_items: {
+        Row: {
+          auction_id: string | null
+          catalog_item_id: string
+          consumed_at: string | null
+          created_at: string
+          granted_at: string
+          id: string
+          player_id: string
+          season_id: string
+          source: string
+          updated_at: string
+        }
+        Insert: {
+          auction_id?: string | null
+          catalog_item_id: string
+          consumed_at?: string | null
+          created_at?: string
+          granted_at?: string
+          id?: string
+          player_id: string
+          season_id: string
+          source: string
+          updated_at?: string
+        }
+        Update: {
+          auction_id?: string | null
+          catalog_item_id?: string
+          consumed_at?: string | null
+          created_at?: string
+          granted_at?: string
+          id?: string
+          player_id?: string
+          season_id?: string
+          source?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "player_inventory_items_auction_id_fkey"
+            columns: ["auction_id"]
+            isOneToOne: false
+            referencedRelation: "auctions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "player_inventory_items_catalog_item_id_fkey"
+            columns: ["catalog_item_id"]
+            isOneToOne: false
+            referencedRelation: "item_catalog"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "player_inventory_items_player_id_fkey"
+            columns: ["player_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "player_inventory_items_season_id_fkey"
+            columns: ["season_id"]
+            isOneToOne: false
+            referencedRelation: "seasons"
             referencedColumns: ["id"]
           },
         ]
@@ -2224,6 +2529,9 @@ export type Database = {
         Returns: string
       }
       assert_admin: { Args: never; Returns: undefined }
+      auction_bid_key: { Args: never; Returns: string }
+      cancel_auction: { Args: { p_auction_id: string }; Returns: undefined }
+      cancel_auction_bid: { Args: { p_auction_id: string }; Returns: undefined }
       cancel_bet: { Args: { p_bet_id: string }; Returns: undefined }
       cancel_bounty: { Args: { p_bounty_post_id: string }; Returns: undefined }
       cancel_loan: { Args: { p_loan_id: string }; Returns: undefined }
@@ -2248,6 +2556,28 @@ export type Database = {
           p_message: string
           p_prop_market_id: string
           p_selection: string
+        }
+        Returns: string
+      }
+      create_auction: {
+        Args: {
+          p_catalog_key: string
+          p_closes_at: string
+          p_description: string
+          p_minimum_bid: number
+          p_opens_at: string
+        }
+        Returns: string
+      }
+      create_catalog_item: {
+        Args: {
+          p_activation_mode: string
+          p_description: string
+          p_effect_params: Json
+          p_effect_type: string
+          p_icon: string
+          p_key: string
+          p_name: string
         }
         Returns: string
       }
@@ -2309,12 +2639,22 @@ export type Database = {
         Args: { p_challenge_id: string }
         Returns: undefined
       }
+      decrypt_bid_amount: { Args: { p_enc: string }; Returns: number }
+      encrypt_bid_amount: { Args: { p_amount: number }; Returns: string }
       enter_bounty_as_hunter: {
         Args: { p_bounty_post_id: string }
         Returns: string
       }
       finalize_bets_for_market: {
         Args: { p_market_id: string }
+        Returns: undefined
+      }
+      grant_inventory_item: {
+        Args: {
+          p_catalog_key: string
+          p_player_id: string
+          p_quantity?: number
+        }
         Returns: undefined
       }
       is_admin: { Args: never; Returns: boolean }
@@ -2337,6 +2677,12 @@ export type Database = {
           strikes_line: number
         }[]
       }
+      my_bid_amount: { Args: { p_auction_id: string }; Returns: number }
+      open_auction_internal: {
+        Args: { p_auction_id: string }
+        Returns: undefined
+      }
+      open_auction_now: { Args: { p_auction_id: string }; Returns: undefined }
       pin_balance: {
         Args: { p_player_id: string; p_season_id: string }
         Returns: number
@@ -2344,6 +2690,7 @@ export type Database = {
       pin_ledger_double_entry: {
         Args: {
           p_amount: number
+          p_auction_id?: string
           p_bet_id?: string
           p_bounty_post_id?: string
           p_description: string
@@ -2358,9 +2705,14 @@ export type Database = {
           player_entry_id: string
         }[]
       }
+      place_auction_bid: {
+        Args: { p_amount: number; p_auction_id: string }
+        Returns: undefined
+      }
       place_house_bet: {
         Args: {
           p_custom_line_id?: string
+          p_insurance_item_id?: string
           p_selection_ids: string[]
           p_stake: number
         }
@@ -2391,6 +2743,7 @@ export type Database = {
         Args: {
           p_actor_player_id: string
           p_admin_payload: Json
+          p_auction_id?: string
           p_bounty_post_id?: string
           p_event_type: string
           p_loan_id: string
@@ -2426,6 +2779,15 @@ export type Database = {
       }
       resync_week_markets: {
         Args: { p_moneyline?: boolean; p_week_id: string }
+        Returns: undefined
+      }
+      reverse_settled_auction: {
+        Args: { p_auction_id: string }
+        Returns: undefined
+      }
+      settle_auction: { Args: { p_auction_id: string }; Returns: undefined }
+      settle_auction_internal: {
+        Args: { p_auction_id: string }
         Returns: undefined
       }
       settle_betting_for_week: {
@@ -2482,6 +2844,7 @@ export type Database = {
         Args: { p_event_id: string; p_reason: string }
         Returns: undefined
       }
+      sweep_auctions: { Args: never; Returns: undefined }
       sync_lanetalk_prop_markets_for_week: {
         Args: { p_week_id: string }
         Returns: undefined
@@ -2497,6 +2860,30 @@ export type Database = {
       take_loan: { Args: { p_loan_product_id: string }; Returns: string }
       unarchive_week: {
         Args: { p_force?: boolean; p_week_id: string }
+        Returns: undefined
+      }
+      update_auction: {
+        Args: {
+          p_auction_id: string
+          p_catalog_key: string
+          p_closes_at: string
+          p_description: string
+          p_minimum_bid: number
+          p_opens_at: string
+        }
+        Returns: undefined
+      }
+      update_catalog_item: {
+        Args: {
+          p_activation_mode: string
+          p_catalog_item_id: string
+          p_description: string
+          p_effect_params: Json
+          p_effect_type: string
+          p_icon: string
+          p_is_active: boolean
+          p_name: string
+        }
         Returns: undefined
       }
       void_pvp_challenge: {
@@ -2631,6 +3018,9 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
+  graphql_public: {
+    Enums: {},
+  },
   public: {
     Enums: {},
   },
