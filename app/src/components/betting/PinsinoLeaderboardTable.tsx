@@ -45,7 +45,7 @@ export default function PinsinoLeaderboardTable({
           </>
         )}
         <Text style={[styles.sbHeaderCell, isSummary ? styles.sbNetSummaryCell : styles.sbNetCell]}>
-          {isSummary ? 'Current Net Worth' : 'Net'}
+          {isSummary ? 'Current Pin Worth' : 'Net'}
         </Text>
       </View>
       {rows.map((p, index) => {
