@@ -101,7 +101,11 @@ export default function AuctionDetailScreen() {
             </Text>
           </View>
           <Text style={styles.effectLine}>{a.itemEffectLine}</Text>
-          <Text style={styles.description}>{a.description}</Text>
+          {/* New auctions derive description from the catalog copy above —
+              render it only when distinct (legacy hand-written pitches). */}
+          {a.description !== a.itemEffectLine && (
+            <Text style={styles.description}>{a.description}</Text>
+          )}
         </View>
 
         {/* Live countdown / hammer */}
