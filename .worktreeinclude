@@ -1,0 +1,9 @@
+# Gitignored files Claude Code copies into every new worktree it creates
+# (--worktree flag, EnterWorktree tool, subagent worktrees).
+# Syntax: .gitignore patterns; only files that are BOTH matched and gitignored copy.
+
+# Supabase CLI token + app env — required for db query/push from a worktree
+app/.env.local
+
+# Installed dependencies — avoids npm ci in every fresh worktree
+app/node_modules/
