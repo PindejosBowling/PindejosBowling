@@ -64,7 +64,7 @@ export default function LanetalkImportAdminScreen() {
   const navigation = useNavigation<Nav>()
   const isAdmin = useAuthStore(s => s.role) === 'admin'
   const showToast = useUiStore(s => s.showToast)
-  const { loading, rawImports, unsettledProps, reload } = useLanetalkImportAdmin()
+  const { loading, rawImports, unsettledProps, settledPropWeeks, reload } = useLanetalkImportAdmin()
   const { refreshing, onRefresh } = useRefresh(reload)
 
   // Unsettled LaneTalk stat props, grouped by week — each week group with any
@@ -273,6 +273,11 @@ export default function LanetalkImportAdminScreen() {
             const title = wg.weekNumber != null
               ? `Week ${wg.weekNumber}${wg.bowledAt ? ` - ${formatDate(wg.bowledAt)}` : ''}`
               : 'No week match'
+            // Confirmation status for the week's LaneTalk props: pending props
+            // → Unconfirmed; settled with none pending → Confirmed; a week that
+            // never generated props gets no badge (nothing to confirm).
+            const propsPending = propsByWeek.has(wg.weekKey)
+            const propsConfirmed = !propsPending && settledPropWeeks.has(wg.weekKey)
             return (
               <View key={wg.weekKey} style={styles.weekCard}>
                 <TouchableOpacity
@@ -281,6 +286,13 @@ export default function LanetalkImportAdminScreen() {
                   activeOpacity={0.7}
                 >
                   <Text style={styles.weekTitle}>{title}</Text>
+                  {(propsPending || propsConfirmed) && (
+                    <View style={[styles.statusBadge, propsPending ? styles.statusBadgePending : styles.statusBadgeDone]}>
+                      <Text style={[styles.statusBadgeText, propsPending ? styles.statusBadgeTextPending : styles.statusBadgeTextDone]}>
+                        {propsPending ? 'UNCONFIRMED' : 'CONFIRMED'}
+                      </Text>
+                    </View>
+                  )}
                   <Text style={[styles.chevron, expanded && styles.chevronUp]}>›</Text>
                 </TouchableOpacity>
 
@@ -451,6 +463,18 @@ const styles = StyleSheet.create({
     color: colors.accent,
     letterSpacing: 0.4,
   },
+  statusBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 12,
+    borderWidth: 1,
+    marginRight: 10,
+  },
+  statusBadgePending: { backgroundColor: 'rgba(212,175,55,0.12)', borderColor: colors.gold },
+  statusBadgeDone: { backgroundColor: 'rgba(74,222,128,0.12)', borderColor: colors.success },
+  statusBadgeText: { fontFamily: fonts.barlowCondensed, fontSize: 11, letterSpacing: 1 },
+  statusBadgeTextPending: { color: colors.gold },
+  statusBadgeTextDone: { color: colors.success },
   weekTitle: {
     flex: 1,
     fontFamily: fonts.barlowCondensed,

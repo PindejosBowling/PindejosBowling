@@ -62,33 +62,6 @@ CREATE TABLE bet_markets (
   subject_game_id uuid
 );
 
-CREATE TABLE bet_matches (
-  id uuid NOT NULL DEFAULT gen_random_uuid(),
-  offer_id uuid,
-  back_bet_id uuid NOT NULL,
-  lay_bet_id uuid NOT NULL,
-  pool integer NOT NULL,
-  rake integer NOT NULL DEFAULT 0,
-  created_at timestamp with time zone NOT NULL DEFAULT now(),
-  updated_at timestamp with time zone NOT NULL DEFAULT now()
-);
-
-CREATE TABLE bet_offers (
-  id uuid NOT NULL DEFAULT gen_random_uuid(),
-  proposer_id uuid NOT NULL,
-  season_id uuid NOT NULL,
-  selection_id uuid NOT NULL,
-  odds numeric(8,3) NOT NULL,
-  proposer_stake integer NOT NULL,
-  target_player_id uuid,
-  status text NOT NULL DEFAULT 'open'::text,
-  accepted_by uuid,
-  accepted_at timestamp with time zone,
-  expires_at timestamp with time zone,
-  created_at timestamp with time zone NOT NULL DEFAULT now(),
-  updated_at timestamp with time zone NOT NULL DEFAULT now()
-);
-
 CREATE TABLE bet_selections (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   market_id uuid NOT NULL,
@@ -106,7 +79,6 @@ CREATE TABLE bets (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   player_id uuid NOT NULL,
   season_id uuid NOT NULL,
-  counterparty text NOT NULL,
   stake integer NOT NULL,
   potential_payout integer NOT NULL,
   status text NOT NULL DEFAULT 'pending'::text,
@@ -287,10 +259,7 @@ CREATE TABLE pin_ledger (
   week_id uuid,
   loan_ledger_id uuid,
   pvp_ledger_id uuid,
-  bounty_post_id uuid,
-  bounty_hunter_stake_id uuid,
-  bounty_settlement_id uuid,
-  bounty_payout_id uuid
+  bounty_post_id uuid
 );
 
 CREATE TABLE players (
@@ -588,40 +557,6 @@ ALTER TABLE bet_markets ADD CONSTRAINT bet_markets_subject_player_id_fkey FOREIG
 
 ALTER TABLE bet_markets ADD CONSTRAINT bet_markets_week_id_fkey FOREIGN KEY (week_id) REFERENCES weeks(id) ON DELETE CASCADE;
 
-ALTER TABLE bet_matches ADD CONSTRAINT bet_matches_back_bet_id_fkey FOREIGN KEY (back_bet_id) REFERENCES bets(id) ON DELETE CASCADE;
-
-ALTER TABLE bet_matches ADD CONSTRAINT bet_matches_back_bet_id_key UNIQUE (back_bet_id);
-
-ALTER TABLE bet_matches ADD CONSTRAINT bet_matches_lay_bet_id_fkey FOREIGN KEY (lay_bet_id) REFERENCES bets(id) ON DELETE CASCADE;
-
-ALTER TABLE bet_matches ADD CONSTRAINT bet_matches_lay_bet_id_key UNIQUE (lay_bet_id);
-
-ALTER TABLE bet_matches ADD CONSTRAINT bet_matches_offer_id_fkey FOREIGN KEY (offer_id) REFERENCES bet_offers(id) ON DELETE SET NULL;
-
-ALTER TABLE bet_matches ADD CONSTRAINT bet_matches_pkey PRIMARY KEY (id);
-
-ALTER TABLE bet_matches ADD CONSTRAINT bet_matches_pool_check CHECK ((pool >= 0));
-
-ALTER TABLE bet_matches ADD CONSTRAINT bet_matches_rake_check CHECK ((rake >= 0));
-
-ALTER TABLE bet_offers ADD CONSTRAINT bet_offers_accepted_by_fkey FOREIGN KEY (accepted_by) REFERENCES players(id) ON DELETE SET NULL;
-
-ALTER TABLE bet_offers ADD CONSTRAINT bet_offers_odds_check CHECK ((odds > 1.0));
-
-ALTER TABLE bet_offers ADD CONSTRAINT bet_offers_pkey PRIMARY KEY (id);
-
-ALTER TABLE bet_offers ADD CONSTRAINT bet_offers_proposer_id_fkey FOREIGN KEY (proposer_id) REFERENCES players(id) ON DELETE CASCADE;
-
-ALTER TABLE bet_offers ADD CONSTRAINT bet_offers_proposer_stake_check CHECK ((proposer_stake >= 10));
-
-ALTER TABLE bet_offers ADD CONSTRAINT bet_offers_season_id_fkey FOREIGN KEY (season_id) REFERENCES seasons(id) ON DELETE CASCADE;
-
-ALTER TABLE bet_offers ADD CONSTRAINT bet_offers_selection_id_fkey FOREIGN KEY (selection_id) REFERENCES bet_selections(id) ON DELETE CASCADE;
-
-ALTER TABLE bet_offers ADD CONSTRAINT bet_offers_status_check CHECK ((status = ANY (ARRAY['open'::text, 'accepted'::text, 'cancelled'::text, 'expired'::text])));
-
-ALTER TABLE bet_offers ADD CONSTRAINT bet_offers_target_player_id_fkey FOREIGN KEY (target_player_id) REFERENCES players(id) ON DELETE CASCADE;
-
 ALTER TABLE bet_selections ADD CONSTRAINT bet_selections_market_id_fkey FOREIGN KEY (market_id) REFERENCES bet_markets(id) ON DELETE CASCADE;
 
 ALTER TABLE bet_selections ADD CONSTRAINT bet_selections_market_id_key_key UNIQUE (market_id, key);
@@ -631,8 +566,6 @@ ALTER TABLE bet_selections ADD CONSTRAINT bet_selections_odds_check CHECK ((odds
 ALTER TABLE bet_selections ADD CONSTRAINT bet_selections_pkey PRIMARY KEY (id);
 
 ALTER TABLE bet_selections ADD CONSTRAINT bet_selections_result_check CHECK ((result = ANY (ARRAY['won'::text, 'lost'::text, 'push'::text, 'void'::text])));
-
-ALTER TABLE bets ADD CONSTRAINT bets_counterparty_check CHECK ((counterparty = ANY (ARRAY['house'::text, 'peer'::text])));
 
 ALTER TABLE bets ADD CONSTRAINT bets_custom_line_id_fkey FOREIGN KEY (custom_line_id) REFERENCES custom_lines(id) ON DELETE SET NULL;
 
@@ -784,13 +717,7 @@ ALTER TABLE loans ADD CONSTRAINT loans_status_check CHECK ((status = ANY (ARRAY[
 
 ALTER TABLE pin_ledger ADD CONSTRAINT pin_ledger_bet_id_fkey FOREIGN KEY (bet_id) REFERENCES bets(id) ON DELETE SET NULL;
 
-ALTER TABLE pin_ledger ADD CONSTRAINT pin_ledger_bounty_hunter_stake_id_fkey FOREIGN KEY (bounty_hunter_stake_id) REFERENCES bounty_hunter_stakes(id) ON DELETE CASCADE;
-
-ALTER TABLE pin_ledger ADD CONSTRAINT pin_ledger_bounty_payout_id_fkey FOREIGN KEY (bounty_payout_id) REFERENCES bounty_payouts(id) ON DELETE CASCADE;
-
 ALTER TABLE pin_ledger ADD CONSTRAINT pin_ledger_bounty_post_id_fkey FOREIGN KEY (bounty_post_id) REFERENCES bounty_post(id) ON DELETE CASCADE;
-
-ALTER TABLE pin_ledger ADD CONSTRAINT pin_ledger_bounty_settlement_id_fkey FOREIGN KEY (bounty_settlement_id) REFERENCES bounty_settlements(id) ON DELETE CASCADE;
 
 ALTER TABLE pin_ledger ADD CONSTRAINT pin_ledger_loan_ledger_id_fkey FOREIGN KEY (loan_ledger_id) REFERENCES loan_ledger(id) ON DELETE SET NULL;
 
@@ -1081,20 +1008,6 @@ CREATE INDEX idx_bet_markets_subject_game ON public.bet_markets USING btree (sub
 
 CREATE INDEX idx_bet_markets_week ON public.bet_markets USING btree (week_id);
 
-CREATE INDEX idx_bet_matches_offer ON public.bet_matches USING btree (offer_id);
-
-CREATE INDEX idx_bet_offers_accepted_by ON public.bet_offers USING btree (accepted_by);
-
-CREATE INDEX idx_bet_offers_proposer ON public.bet_offers USING btree (proposer_id);
-
-CREATE INDEX idx_bet_offers_season ON public.bet_offers USING btree (season_id);
-
-CREATE INDEX idx_bet_offers_selection ON public.bet_offers USING btree (selection_id);
-
-CREATE INDEX idx_bet_offers_status ON public.bet_offers USING btree (status);
-
-CREATE INDEX idx_bet_offers_target ON public.bet_offers USING btree (target_player_id);
-
 CREATE INDEX idx_bet_selections_market ON public.bet_selections USING btree (market_id);
 
 CREATE INDEX idx_bets_player_season ON public.bets USING btree (player_id, season_id);
@@ -1133,13 +1046,7 @@ CREATE INDEX loans_player_id_idx ON public.loans USING btree (player_id);
 
 CREATE INDEX loans_season_id_idx ON public.loans USING btree (season_id);
 
-CREATE INDEX pin_ledger_bounty_hunter_stake_id_idx ON public.pin_ledger USING btree (bounty_hunter_stake_id);
-
-CREATE INDEX pin_ledger_bounty_payout_id_idx ON public.pin_ledger USING btree (bounty_payout_id);
-
 CREATE INDEX pin_ledger_bounty_post_id_idx ON public.pin_ledger USING btree (bounty_post_id);
-
-CREATE INDEX pin_ledger_bounty_settlement_id_idx ON public.pin_ledger USING btree (bounty_settlement_id);
 
 CREATE INDEX pin_ledger_loan_ledger_id_idx ON public.pin_ledger USING btree (loan_ledger_id);
 
@@ -1205,20 +1112,17 @@ CREATE INDEX week_archive_snapshot_run_idx ON public.week_archive_snapshot USING
 ALTER TABLE activity_feed_events ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "admin can delete" ON activity_feed_events AS PERMISSIVE FOR DELETE TO authenticated
-  USING ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
+  USING (( SELECT is_admin() AS is_admin));
 
 CREATE POLICY "admin can insert" ON activity_feed_events AS PERMISSIVE FOR INSERT TO authenticated
-  WITH CHECK ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
+  WITH CHECK (( SELECT is_admin() AS is_admin));
 
 CREATE POLICY "admin can read all" ON activity_feed_events AS PERMISSIVE FOR SELECT TO authenticated
-  USING ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
+  USING (( SELECT is_admin() AS is_admin));
 
 CREATE POLICY "admin can update" ON activity_feed_events AS PERMISSIVE FOR UPDATE TO authenticated
-  USING ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text))
-  WITH CHECK ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
-
-CREATE POLICY "anon can read public published" ON activity_feed_events AS PERMISSIVE FOR SELECT TO anon
-  USING (((status = 'published'::text) AND (visibility = 'public'::text)));
+  USING (( SELECT is_admin() AS is_admin))
+  WITH CHECK (( SELECT is_admin() AS is_admin));
 
 CREATE POLICY "authenticated can read public published" ON activity_feed_events AS PERMISSIVE FOR SELECT TO authenticated
   USING (((status = 'published'::text) AND (visibility = 'public'::text)));
@@ -1226,17 +1130,14 @@ CREATE POLICY "authenticated can read public published" ON activity_feed_events 
 ALTER TABLE bet_legs ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "admin can delete" ON bet_legs AS PERMISSIVE FOR DELETE TO authenticated
-  USING ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
+  USING (( SELECT is_admin() AS is_admin));
 
 CREATE POLICY "admin can insert" ON bet_legs AS PERMISSIVE FOR INSERT TO authenticated
-  WITH CHECK ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
+  WITH CHECK (( SELECT is_admin() AS is_admin));
 
 CREATE POLICY "admin can update" ON bet_legs AS PERMISSIVE FOR UPDATE TO authenticated
-  USING ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text))
-  WITH CHECK ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
-
-CREATE POLICY "anon can read" ON bet_legs AS PERMISSIVE FOR SELECT TO anon
-  USING (true);
+  USING (( SELECT is_admin() AS is_admin))
+  WITH CHECK (( SELECT is_admin() AS is_admin));
 
 CREATE POLICY "authenticated can read" ON bet_legs AS PERMISSIVE FOR SELECT TO authenticated
   USING (true);
@@ -1244,71 +1145,29 @@ CREATE POLICY "authenticated can read" ON bet_legs AS PERMISSIVE FOR SELECT TO a
 ALTER TABLE bet_markets ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "admin can delete" ON bet_markets AS PERMISSIVE FOR DELETE TO authenticated
-  USING ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
+  USING (( SELECT is_admin() AS is_admin));
 
 CREATE POLICY "admin can insert" ON bet_markets AS PERMISSIVE FOR INSERT TO authenticated
-  WITH CHECK ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
+  WITH CHECK (( SELECT is_admin() AS is_admin));
 
 CREATE POLICY "admin can update" ON bet_markets AS PERMISSIVE FOR UPDATE TO authenticated
-  USING ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text))
-  WITH CHECK ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
-
-CREATE POLICY "anon can read" ON bet_markets AS PERMISSIVE FOR SELECT TO anon
-  USING (true);
+  USING (( SELECT is_admin() AS is_admin))
+  WITH CHECK (( SELECT is_admin() AS is_admin));
 
 CREATE POLICY "authenticated can read" ON bet_markets AS PERMISSIVE FOR SELECT TO authenticated
-  USING (true);
-
-ALTER TABLE bet_matches ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY "admin can delete" ON bet_matches AS PERMISSIVE FOR DELETE TO authenticated
-  USING ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
-
-CREATE POLICY "admin can insert" ON bet_matches AS PERMISSIVE FOR INSERT TO authenticated
-  WITH CHECK ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
-
-CREATE POLICY "admin can update" ON bet_matches AS PERMISSIVE FOR UPDATE TO authenticated
-  USING ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text))
-  WITH CHECK ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
-
-CREATE POLICY "anon can read" ON bet_matches AS PERMISSIVE FOR SELECT TO anon
-  USING (true);
-
-CREATE POLICY "authenticated can read" ON bet_matches AS PERMISSIVE FOR SELECT TO authenticated
-  USING (true);
-
-ALTER TABLE bet_offers ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY "admin can delete" ON bet_offers AS PERMISSIVE FOR DELETE TO authenticated
-  USING ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
-
-CREATE POLICY "admin can insert" ON bet_offers AS PERMISSIVE FOR INSERT TO authenticated
-  WITH CHECK ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
-
-CREATE POLICY "admin can update" ON bet_offers AS PERMISSIVE FOR UPDATE TO authenticated
-  USING ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text))
-  WITH CHECK ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
-
-CREATE POLICY "anon can read" ON bet_offers AS PERMISSIVE FOR SELECT TO anon
-  USING (true);
-
-CREATE POLICY "authenticated can read" ON bet_offers AS PERMISSIVE FOR SELECT TO authenticated
   USING (true);
 
 ALTER TABLE bet_selections ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "admin can delete" ON bet_selections AS PERMISSIVE FOR DELETE TO authenticated
-  USING ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
+  USING (( SELECT is_admin() AS is_admin));
 
 CREATE POLICY "admin can insert" ON bet_selections AS PERMISSIVE FOR INSERT TO authenticated
-  WITH CHECK ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
+  WITH CHECK (( SELECT is_admin() AS is_admin));
 
 CREATE POLICY "admin can update" ON bet_selections AS PERMISSIVE FOR UPDATE TO authenticated
-  USING ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text))
-  WITH CHECK ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
-
-CREATE POLICY "anon can read" ON bet_selections AS PERMISSIVE FOR SELECT TO anon
-  USING (true);
+  USING (( SELECT is_admin() AS is_admin))
+  WITH CHECK (( SELECT is_admin() AS is_admin));
 
 CREATE POLICY "authenticated can read" ON bet_selections AS PERMISSIVE FOR SELECT TO authenticated
   USING (true);
@@ -1316,17 +1175,14 @@ CREATE POLICY "authenticated can read" ON bet_selections AS PERMISSIVE FOR SELEC
 ALTER TABLE bets ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "admin can delete" ON bets AS PERMISSIVE FOR DELETE TO authenticated
-  USING ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
+  USING (( SELECT is_admin() AS is_admin));
 
 CREATE POLICY "admin can insert" ON bets AS PERMISSIVE FOR INSERT TO authenticated
-  WITH CHECK ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
+  WITH CHECK (( SELECT is_admin() AS is_admin));
 
 CREATE POLICY "admin can update" ON bets AS PERMISSIVE FOR UPDATE TO authenticated
-  USING ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text))
-  WITH CHECK ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
-
-CREATE POLICY "anon can read" ON bets AS PERMISSIVE FOR SELECT TO anon
-  USING (true);
+  USING (( SELECT is_admin() AS is_admin))
+  WITH CHECK (( SELECT is_admin() AS is_admin));
 
 CREATE POLICY "authenticated can read" ON bets AS PERMISSIVE FOR SELECT TO authenticated
   USING (true);
@@ -1336,7 +1192,7 @@ ALTER TABLE board_posts ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "authenticated can delete own" ON board_posts AS PERMISSIVE FOR DELETE TO authenticated
   USING (((player_id = ( SELECT players.id
    FROM players
-  WHERE (players.user_id = ( SELECT auth.uid() AS uid)))) OR (((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text)));
+  WHERE (players.user_id = ( SELECT auth.uid() AS uid)))) OR ( SELECT is_admin() AS is_admin)));
 
 CREATE POLICY "authenticated can insert" ON board_posts AS PERMISSIVE FOR INSERT TO authenticated
   WITH CHECK ((player_id = ( SELECT players.id
@@ -1349,17 +1205,14 @@ CREATE POLICY "authenticated can read" ON board_posts AS PERMISSIVE FOR SELECT T
 ALTER TABLE bounty_hunter_stakes ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "admin can delete" ON bounty_hunter_stakes AS PERMISSIVE FOR DELETE TO authenticated
-  USING ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
+  USING (( SELECT is_admin() AS is_admin));
 
 CREATE POLICY "admin can insert" ON bounty_hunter_stakes AS PERMISSIVE FOR INSERT TO authenticated
-  WITH CHECK ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
+  WITH CHECK (( SELECT is_admin() AS is_admin));
 
 CREATE POLICY "admin can update" ON bounty_hunter_stakes AS PERMISSIVE FOR UPDATE TO authenticated
-  USING ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text))
-  WITH CHECK ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
-
-CREATE POLICY "anon can read" ON bounty_hunter_stakes AS PERMISSIVE FOR SELECT TO anon
-  USING (true);
+  USING (( SELECT is_admin() AS is_admin))
+  WITH CHECK (( SELECT is_admin() AS is_admin));
 
 CREATE POLICY "authenticated can read" ON bounty_hunter_stakes AS PERMISSIVE FOR SELECT TO authenticated
   USING (true);
@@ -1367,17 +1220,14 @@ CREATE POLICY "authenticated can read" ON bounty_hunter_stakes AS PERMISSIVE FOR
 ALTER TABLE bounty_payouts ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "admin can delete" ON bounty_payouts AS PERMISSIVE FOR DELETE TO authenticated
-  USING ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
+  USING (( SELECT is_admin() AS is_admin));
 
 CREATE POLICY "admin can insert" ON bounty_payouts AS PERMISSIVE FOR INSERT TO authenticated
-  WITH CHECK ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
+  WITH CHECK (( SELECT is_admin() AS is_admin));
 
 CREATE POLICY "admin can update" ON bounty_payouts AS PERMISSIVE FOR UPDATE TO authenticated
-  USING ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text))
-  WITH CHECK ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
-
-CREATE POLICY "anon can read" ON bounty_payouts AS PERMISSIVE FOR SELECT TO anon
-  USING (true);
+  USING (( SELECT is_admin() AS is_admin))
+  WITH CHECK (( SELECT is_admin() AS is_admin));
 
 CREATE POLICY "authenticated can read" ON bounty_payouts AS PERMISSIVE FOR SELECT TO authenticated
   USING (true);
@@ -1385,17 +1235,14 @@ CREATE POLICY "authenticated can read" ON bounty_payouts AS PERMISSIVE FOR SELEC
 ALTER TABLE bounty_post ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "admin can delete" ON bounty_post AS PERMISSIVE FOR DELETE TO authenticated
-  USING ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
+  USING (( SELECT is_admin() AS is_admin));
 
 CREATE POLICY "admin can insert" ON bounty_post AS PERMISSIVE FOR INSERT TO authenticated
-  WITH CHECK ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
+  WITH CHECK (( SELECT is_admin() AS is_admin));
 
 CREATE POLICY "admin can update" ON bounty_post AS PERMISSIVE FOR UPDATE TO authenticated
-  USING ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text))
-  WITH CHECK ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
-
-CREATE POLICY "anon can read" ON bounty_post AS PERMISSIVE FOR SELECT TO anon
-  USING (true);
+  USING (( SELECT is_admin() AS is_admin))
+  WITH CHECK (( SELECT is_admin() AS is_admin));
 
 CREATE POLICY "authenticated can read" ON bounty_post AS PERMISSIVE FOR SELECT TO authenticated
   USING (true);
@@ -1403,17 +1250,14 @@ CREATE POLICY "authenticated can read" ON bounty_post AS PERMISSIVE FOR SELECT T
 ALTER TABLE bounty_settlements ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "admin can delete" ON bounty_settlements AS PERMISSIVE FOR DELETE TO authenticated
-  USING ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
+  USING (( SELECT is_admin() AS is_admin));
 
 CREATE POLICY "admin can insert" ON bounty_settlements AS PERMISSIVE FOR INSERT TO authenticated
-  WITH CHECK ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
+  WITH CHECK (( SELECT is_admin() AS is_admin));
 
 CREATE POLICY "admin can update" ON bounty_settlements AS PERMISSIVE FOR UPDATE TO authenticated
-  USING ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text))
-  WITH CHECK ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
-
-CREATE POLICY "anon can read" ON bounty_settlements AS PERMISSIVE FOR SELECT TO anon
-  USING (true);
+  USING (( SELECT is_admin() AS is_admin))
+  WITH CHECK (( SELECT is_admin() AS is_admin));
 
 CREATE POLICY "authenticated can read" ON bounty_settlements AS PERMISSIVE FOR SELECT TO authenticated
   USING (true);
@@ -1421,17 +1265,14 @@ CREATE POLICY "authenticated can read" ON bounty_settlements AS PERMISSIVE FOR S
 ALTER TABLE custom_lines ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "admin can delete" ON custom_lines AS PERMISSIVE FOR DELETE TO authenticated
-  USING ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
+  USING (( SELECT is_admin() AS is_admin));
 
 CREATE POLICY "admin can insert" ON custom_lines AS PERMISSIVE FOR INSERT TO authenticated
-  WITH CHECK ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
+  WITH CHECK (( SELECT is_admin() AS is_admin));
 
 CREATE POLICY "admin can update" ON custom_lines AS PERMISSIVE FOR UPDATE TO authenticated
-  USING ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text))
-  WITH CHECK ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
-
-CREATE POLICY "anon can read" ON custom_lines AS PERMISSIVE FOR SELECT TO anon
-  USING (true);
+  USING (( SELECT is_admin() AS is_admin))
+  WITH CHECK (( SELECT is_admin() AS is_admin));
 
 CREATE POLICY "authenticated can read" ON custom_lines AS PERMISSIVE FOR SELECT TO authenticated
   USING (true);
@@ -1439,37 +1280,34 @@ CREATE POLICY "authenticated can read" ON custom_lines AS PERMISSIVE FOR SELECT 
 ALTER TABLE games ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "admin can delete" ON games AS PERMISSIVE FOR DELETE TO authenticated
-  USING ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
+  USING (( SELECT is_admin() AS is_admin));
 
 CREATE POLICY "admin can insert" ON games AS PERMISSIVE FOR INSERT TO authenticated
-  WITH CHECK ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
+  WITH CHECK (( SELECT is_admin() AS is_admin));
 
 CREATE POLICY "authenticated can read" ON games AS PERMISSIVE FOR SELECT TO authenticated
   USING (true);
 
 ALTER TABLE lanetalk_game_imports ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "admin can read all" ON lanetalk_game_imports AS PERMISSIVE FOR SELECT TO authenticated
-  USING ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
-
 CREATE POLICY "admin can update" ON lanetalk_game_imports AS PERMISSIVE FOR UPDATE TO authenticated
-  USING ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text))
-  WITH CHECK ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
+  USING (( SELECT is_admin() AS is_admin))
+  WITH CHECK (( SELECT is_admin() AS is_admin));
+
+CREATE POLICY "authenticated can read" ON lanetalk_game_imports AS PERMISSIVE FOR SELECT TO authenticated
+  USING (true);
 
 ALTER TABLE loan_ledger ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "admin can delete" ON loan_ledger AS PERMISSIVE FOR DELETE TO authenticated
-  USING ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
+  USING (( SELECT is_admin() AS is_admin));
 
 CREATE POLICY "admin can insert" ON loan_ledger AS PERMISSIVE FOR INSERT TO authenticated
-  WITH CHECK ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
+  WITH CHECK (( SELECT is_admin() AS is_admin));
 
 CREATE POLICY "admin can update" ON loan_ledger AS PERMISSIVE FOR UPDATE TO authenticated
-  USING ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text))
-  WITH CHECK ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
-
-CREATE POLICY "anon can read" ON loan_ledger AS PERMISSIVE FOR SELECT TO anon
-  USING (true);
+  USING (( SELECT is_admin() AS is_admin))
+  WITH CHECK (( SELECT is_admin() AS is_admin));
 
 CREATE POLICY "authenticated can read" ON loan_ledger AS PERMISSIVE FOR SELECT TO authenticated
   USING (true);
@@ -1477,17 +1315,14 @@ CREATE POLICY "authenticated can read" ON loan_ledger AS PERMISSIVE FOR SELECT T
 ALTER TABLE loan_products ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "admin can delete" ON loan_products AS PERMISSIVE FOR DELETE TO authenticated
-  USING ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
+  USING (( SELECT is_admin() AS is_admin));
 
 CREATE POLICY "admin can insert" ON loan_products AS PERMISSIVE FOR INSERT TO authenticated
-  WITH CHECK ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
+  WITH CHECK (( SELECT is_admin() AS is_admin));
 
 CREATE POLICY "admin can update" ON loan_products AS PERMISSIVE FOR UPDATE TO authenticated
-  USING ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text))
-  WITH CHECK ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
-
-CREATE POLICY "anon can read" ON loan_products AS PERMISSIVE FOR SELECT TO anon
-  USING (true);
+  USING (( SELECT is_admin() AS is_admin))
+  WITH CHECK (( SELECT is_admin() AS is_admin));
 
 CREATE POLICY "authenticated can read" ON loan_products AS PERMISSIVE FOR SELECT TO authenticated
   USING (true);
@@ -1495,17 +1330,14 @@ CREATE POLICY "authenticated can read" ON loan_products AS PERMISSIVE FOR SELECT
 ALTER TABLE loans ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "admin can delete" ON loans AS PERMISSIVE FOR DELETE TO authenticated
-  USING ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
+  USING (( SELECT is_admin() AS is_admin));
 
 CREATE POLICY "admin can insert" ON loans AS PERMISSIVE FOR INSERT TO authenticated
-  WITH CHECK ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
+  WITH CHECK (( SELECT is_admin() AS is_admin));
 
 CREATE POLICY "admin can update" ON loans AS PERMISSIVE FOR UPDATE TO authenticated
-  USING ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text))
-  WITH CHECK ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
-
-CREATE POLICY "anon can read" ON loans AS PERMISSIVE FOR SELECT TO anon
-  USING (true);
+  USING (( SELECT is_admin() AS is_admin))
+  WITH CHECK (( SELECT is_admin() AS is_admin));
 
 CREATE POLICY "authenticated can read" ON loans AS PERMISSIVE FOR SELECT TO authenticated
   USING (true);
@@ -1513,13 +1345,10 @@ CREATE POLICY "authenticated can read" ON loans AS PERMISSIVE FOR SELECT TO auth
 ALTER TABLE pin_ledger ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "admin can delete" ON pin_ledger AS PERMISSIVE FOR DELETE TO authenticated
-  USING ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
+  USING (( SELECT is_admin() AS is_admin));
 
 CREATE POLICY "admin can insert" ON pin_ledger AS PERMISSIVE FOR INSERT TO authenticated
-  WITH CHECK ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
-
-CREATE POLICY "anon can read" ON pin_ledger AS PERMISSIVE FOR SELECT TO anon
-  USING (true);
+  WITH CHECK (( SELECT is_admin() AS is_admin));
 
 CREATE POLICY "authenticated can read" ON pin_ledger AS PERMISSIVE FOR SELECT TO authenticated
   USING (true);
@@ -1527,11 +1356,11 @@ CREATE POLICY "authenticated can read" ON pin_ledger AS PERMISSIVE FOR SELECT TO
 ALTER TABLE players ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "admin can insert" ON players AS PERMISSIVE FOR INSERT TO authenticated
-  WITH CHECK ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
+  WITH CHECK (( SELECT is_admin() AS is_admin));
 
 CREATE POLICY "admin can update" ON players AS PERMISSIVE FOR UPDATE TO authenticated
-  USING ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text))
-  WITH CHECK ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
+  USING (( SELECT is_admin() AS is_admin))
+  WITH CHECK (( SELECT is_admin() AS is_admin));
 
 CREATE POLICY "authenticated can read" ON players AS PERMISSIVE FOR SELECT TO authenticated
   USING (true);
@@ -1539,8 +1368,8 @@ CREATE POLICY "authenticated can read" ON players AS PERMISSIVE FOR SELECT TO au
 ALTER TABLE playoff_draft_captains ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "admin can write" ON playoff_draft_captains AS PERMISSIVE FOR ALL TO authenticated
-  USING ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text))
-  WITH CHECK ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
+  USING (( SELECT is_admin() AS is_admin))
+  WITH CHECK (( SELECT is_admin() AS is_admin));
 
 CREATE POLICY "authenticated can read" ON playoff_draft_captains AS PERMISSIVE FOR SELECT TO authenticated
   USING (true);
@@ -1548,8 +1377,8 @@ CREATE POLICY "authenticated can read" ON playoff_draft_captains AS PERMISSIVE F
 ALTER TABLE playoff_draft_picks ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "admin can write" ON playoff_draft_picks AS PERMISSIVE FOR ALL TO authenticated
-  USING ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text))
-  WITH CHECK ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
+  USING (( SELECT is_admin() AS is_admin))
+  WITH CHECK (( SELECT is_admin() AS is_admin));
 
 CREATE POLICY "authenticated can read" ON playoff_draft_picks AS PERMISSIVE FOR SELECT TO authenticated
   USING (true);
@@ -1557,8 +1386,8 @@ CREATE POLICY "authenticated can read" ON playoff_draft_picks AS PERMISSIVE FOR 
 ALTER TABLE playoff_draft_pool ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "admin can write" ON playoff_draft_pool AS PERMISSIVE FOR ALL TO authenticated
-  USING ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text))
-  WITH CHECK ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
+  USING (( SELECT is_admin() AS is_admin))
+  WITH CHECK (( SELECT is_admin() AS is_admin));
 
 CREATE POLICY "authenticated can read" ON playoff_draft_pool AS PERMISSIVE FOR SELECT TO authenticated
   USING (true);
@@ -1566,8 +1395,8 @@ CREATE POLICY "authenticated can read" ON playoff_draft_pool AS PERMISSIVE FOR S
 ALTER TABLE playoff_drafts ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "admin can write" ON playoff_drafts AS PERMISSIVE FOR ALL TO authenticated
-  USING ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text))
-  WITH CHECK ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
+  USING (( SELECT is_admin() AS is_admin))
+  WITH CHECK (( SELECT is_admin() AS is_admin));
 
 CREATE POLICY "authenticated can read" ON playoff_drafts AS PERMISSIVE FOR SELECT TO authenticated
   USING (true);
@@ -1575,17 +1404,14 @@ CREATE POLICY "authenticated can read" ON playoff_drafts AS PERMISSIVE FOR SELEC
 ALTER TABLE pvp_challenge_offers ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "admin can delete" ON pvp_challenge_offers AS PERMISSIVE FOR DELETE TO authenticated
-  USING ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
+  USING (( SELECT is_admin() AS is_admin));
 
 CREATE POLICY "admin can insert" ON pvp_challenge_offers AS PERMISSIVE FOR INSERT TO authenticated
-  WITH CHECK ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
+  WITH CHECK (( SELECT is_admin() AS is_admin));
 
 CREATE POLICY "admin can update" ON pvp_challenge_offers AS PERMISSIVE FOR UPDATE TO authenticated
-  USING ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text))
-  WITH CHECK ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
-
-CREATE POLICY "anon can read" ON pvp_challenge_offers AS PERMISSIVE FOR SELECT TO anon
-  USING (true);
+  USING (( SELECT is_admin() AS is_admin))
+  WITH CHECK (( SELECT is_admin() AS is_admin));
 
 CREATE POLICY "authenticated can read" ON pvp_challenge_offers AS PERMISSIVE FOR SELECT TO authenticated
   USING (true);
@@ -1593,17 +1419,14 @@ CREATE POLICY "authenticated can read" ON pvp_challenge_offers AS PERMISSIVE FOR
 ALTER TABLE pvp_challenges ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "admin can delete" ON pvp_challenges AS PERMISSIVE FOR DELETE TO authenticated
-  USING ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
+  USING (( SELECT is_admin() AS is_admin));
 
 CREATE POLICY "admin can insert" ON pvp_challenges AS PERMISSIVE FOR INSERT TO authenticated
-  WITH CHECK ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
+  WITH CHECK (( SELECT is_admin() AS is_admin));
 
 CREATE POLICY "admin can update" ON pvp_challenges AS PERMISSIVE FOR UPDATE TO authenticated
-  USING ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text))
-  WITH CHECK ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
-
-CREATE POLICY "anon can read" ON pvp_challenges AS PERMISSIVE FOR SELECT TO anon
-  USING (true);
+  USING (( SELECT is_admin() AS is_admin))
+  WITH CHECK (( SELECT is_admin() AS is_admin));
 
 CREATE POLICY "authenticated can read" ON pvp_challenges AS PERMISSIVE FOR SELECT TO authenticated
   USING (true);
@@ -1611,17 +1434,14 @@ CREATE POLICY "authenticated can read" ON pvp_challenges AS PERMISSIVE FOR SELEC
 ALTER TABLE pvp_ledger ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "admin can delete" ON pvp_ledger AS PERMISSIVE FOR DELETE TO authenticated
-  USING ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
+  USING (( SELECT is_admin() AS is_admin));
 
 CREATE POLICY "admin can insert" ON pvp_ledger AS PERMISSIVE FOR INSERT TO authenticated
-  WITH CHECK ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
+  WITH CHECK (( SELECT is_admin() AS is_admin));
 
 CREATE POLICY "admin can update" ON pvp_ledger AS PERMISSIVE FOR UPDATE TO authenticated
-  USING ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text))
-  WITH CHECK ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
-
-CREATE POLICY "anon can read" ON pvp_ledger AS PERMISSIVE FOR SELECT TO anon
-  USING (true);
+  USING (( SELECT is_admin() AS is_admin))
+  WITH CHECK (( SELECT is_admin() AS is_admin));
 
 CREATE POLICY "authenticated can read" ON pvp_ledger AS PERMISSIVE FOR SELECT TO authenticated
   USING (true);
@@ -1631,25 +1451,25 @@ ALTER TABLE registrations ENABLE ROW LEVEL SECURITY;
 CREATE POLICY registrations_delete ON registrations AS PERMISSIVE FOR DELETE TO authenticated
   USING (((player_id IN ( SELECT players.id
    FROM players
-  WHERE (players.user_id = ( SELECT auth.uid() AS uid)))) OR (((auth.jwt() -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text)));
+  WHERE (players.user_id = ( SELECT auth.uid() AS uid)))) OR ( SELECT is_admin() AS is_admin)));
 
 CREATE POLICY registrations_insert ON registrations AS PERMISSIVE FOR INSERT TO authenticated
   WITH CHECK (((player_id IN ( SELECT players.id
    FROM players
-  WHERE (players.user_id = ( SELECT auth.uid() AS uid)))) OR (((auth.jwt() -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text)));
+  WHERE (players.user_id = ( SELECT auth.uid() AS uid)))) OR ( SELECT is_admin() AS is_admin)));
 
 CREATE POLICY registrations_select ON registrations AS PERMISSIVE FOR SELECT TO authenticated
   USING (true);
 
 CREATE POLICY registrations_update ON registrations AS PERMISSIVE FOR UPDATE TO authenticated
-  USING ((((auth.jwt() -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text))
-  WITH CHECK ((((auth.jwt() -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
+  USING (( SELECT is_admin() AS is_admin))
+  WITH CHECK (( SELECT is_admin() AS is_admin));
 
 ALTER TABLE rsvp ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "admin can manage rsvp" ON rsvp AS PERMISSIVE FOR ALL TO authenticated
-  USING ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text))
-  WITH CHECK ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
+  USING (( SELECT is_admin() AS is_admin))
+  WITH CHECK (( SELECT is_admin() AS is_admin));
 
 CREATE POLICY "authenticated can read" ON rsvp AS PERMISSIVE FOR SELECT TO authenticated
   USING (true);
@@ -1665,14 +1485,14 @@ CREATE POLICY "player can manage own rsvp" ON rsvp AS PERMISSIVE FOR ALL TO auth
 ALTER TABLE scores ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "admin can delete" ON scores AS PERMISSIVE FOR DELETE TO authenticated
-  USING ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
+  USING (( SELECT is_admin() AS is_admin));
 
 CREATE POLICY "admin can insert" ON scores AS PERMISSIVE FOR INSERT TO authenticated
-  WITH CHECK ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
+  WITH CHECK (( SELECT is_admin() AS is_admin));
 
 CREATE POLICY "admin can update" ON scores AS PERMISSIVE FOR UPDATE TO authenticated
-  USING ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text))
-  WITH CHECK ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
+  USING (( SELECT is_admin() AS is_admin))
+  WITH CHECK (( SELECT is_admin() AS is_admin));
 
 CREATE POLICY "authenticated can read" ON scores AS PERMISSIVE FOR SELECT TO authenticated
   USING (true);
@@ -1680,10 +1500,10 @@ CREATE POLICY "authenticated can read" ON scores AS PERMISSIVE FOR SELECT TO aut
 ALTER TABLE season_champions ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "admin can delete" ON season_champions AS PERMISSIVE FOR DELETE TO authenticated
-  USING ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
+  USING (( SELECT is_admin() AS is_admin));
 
 CREATE POLICY "admin can insert" ON season_champions AS PERMISSIVE FOR INSERT TO authenticated
-  WITH CHECK ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
+  WITH CHECK (( SELECT is_admin() AS is_admin));
 
 CREATE POLICY "authenticated can read" ON season_champions AS PERMISSIVE FOR SELECT TO authenticated
   USING (true);
@@ -1691,14 +1511,14 @@ CREATE POLICY "authenticated can read" ON season_champions AS PERMISSIVE FOR SEL
 ALTER TABLE seasons ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "admin can delete" ON seasons AS PERMISSIVE FOR DELETE TO authenticated
-  USING ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
+  USING (( SELECT is_admin() AS is_admin));
 
 CREATE POLICY "admin can insert" ON seasons AS PERMISSIVE FOR INSERT TO authenticated
-  WITH CHECK ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
+  WITH CHECK (( SELECT is_admin() AS is_admin));
 
 CREATE POLICY "admin can update" ON seasons AS PERMISSIVE FOR UPDATE TO authenticated
-  USING ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text))
-  WITH CHECK ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
+  USING (( SELECT is_admin() AS is_admin))
+  WITH CHECK (( SELECT is_admin() AS is_admin));
 
 CREATE POLICY "authenticated can read" ON seasons AS PERMISSIVE FOR SELECT TO authenticated
   USING (true);
@@ -1706,14 +1526,14 @@ CREATE POLICY "authenticated can read" ON seasons AS PERMISSIVE FOR SELECT TO au
 ALTER TABLE team_slots ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "admin can delete" ON team_slots AS PERMISSIVE FOR DELETE TO authenticated
-  USING ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
+  USING (( SELECT is_admin() AS is_admin));
 
 CREATE POLICY "admin can insert" ON team_slots AS PERMISSIVE FOR INSERT TO authenticated
-  WITH CHECK ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
+  WITH CHECK (( SELECT is_admin() AS is_admin));
 
 CREATE POLICY "admin can update" ON team_slots AS PERMISSIVE FOR UPDATE TO authenticated
-  USING ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text))
-  WITH CHECK ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
+  USING (( SELECT is_admin() AS is_admin))
+  WITH CHECK (( SELECT is_admin() AS is_admin));
 
 CREATE POLICY "authenticated can read" ON team_slots AS PERMISSIVE FOR SELECT TO authenticated
   USING (true);
@@ -1721,14 +1541,14 @@ CREATE POLICY "authenticated can read" ON team_slots AS PERMISSIVE FOR SELECT TO
 ALTER TABLE teams ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "admin can delete" ON teams AS PERMISSIVE FOR DELETE TO authenticated
-  USING ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
+  USING (( SELECT is_admin() AS is_admin));
 
 CREATE POLICY "admin can insert" ON teams AS PERMISSIVE FOR INSERT TO authenticated
-  WITH CHECK ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
+  WITH CHECK (( SELECT is_admin() AS is_admin));
 
 CREATE POLICY "admin can update" ON teams AS PERMISSIVE FOR UPDATE TO authenticated
-  USING ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text))
-  WITH CHECK ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
+  USING (( SELECT is_admin() AS is_admin))
+  WITH CHECK (( SELECT is_admin() AS is_admin));
 
 CREATE POLICY "authenticated can read" ON teams AS PERMISSIVE FOR SELECT TO authenticated
   USING (true);
@@ -1736,21 +1556,21 @@ CREATE POLICY "authenticated can read" ON teams AS PERMISSIVE FOR SELECT TO auth
 ALTER TABLE week_archive_runs ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "admin can read runs" ON week_archive_runs AS PERMISSIVE FOR SELECT TO authenticated
-  USING ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
+  USING (( SELECT is_admin() AS is_admin));
 
 ALTER TABLE week_archive_snapshot ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "admin can read snapshot" ON week_archive_snapshot AS PERMISSIVE FOR SELECT TO authenticated
-  USING ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
+  USING (( SELECT is_admin() AS is_admin));
 
 ALTER TABLE weeks ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "admin can insert" ON weeks AS PERMISSIVE FOR INSERT TO authenticated
-  WITH CHECK ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
+  WITH CHECK (( SELECT is_admin() AS is_admin));
 
 CREATE POLICY "admin can update" ON weeks AS PERMISSIVE FOR UPDATE TO authenticated
-  USING ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text))
-  WITH CHECK ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
+  USING (( SELECT is_admin() AS is_admin))
+  WITH CHECK (( SELECT is_admin() AS is_admin));
 
 CREATE POLICY "authenticated can read" ON weeks AS PERMISSIVE FOR SELECT TO authenticated
   USING (true);
@@ -1770,8 +1590,6 @@ DECLARE
   v_caller_id      uuid;
   v_challenge      public.pvp_challenges;
   v_offer          record;
-  v_creator_bal    int;
-  v_cparty_bal     int;
   v_pin_p1_player  uuid;
   v_pin_p1_house   uuid;
   v_pin_p2_player  uuid;
@@ -1780,10 +1598,7 @@ DECLARE
   v_pvp_stake2     uuid;
   v_counterparty   uuid;
 BEGIN
-  SELECT id INTO v_caller_id FROM public.players WHERE user_id = auth.uid();
-  IF v_caller_id IS NULL THEN
-    RAISE EXCEPTION 'No player linked to the current user';
-  END IF;
+  v_caller_id := public.current_player_id();
 
   SELECT * INTO v_challenge FROM public.pvp_challenges WHERE id = p_challenge_id FOR UPDATE;
   IF v_challenge.id IS NULL THEN
@@ -1818,27 +1633,19 @@ BEGIN
     RAISE EXCEPTION 'Cannot accept a contract for an archived week';
   END IF;
 
-  SELECT COALESCE(SUM(amount), 0) INTO v_creator_bal
-    FROM public.pin_ledger WHERE player_id = v_challenge.creator_player_id AND season_id = v_challenge.season_id;
-  IF v_creator_bal < v_challenge.creator_stake THEN
+  IF public.pin_balance(v_challenge.creator_player_id, v_challenge.season_id) < v_challenge.creator_stake THEN
     RAISE EXCEPTION 'Creator has insufficient balance';
   END IF;
 
-  SELECT COALESCE(SUM(amount), 0) INTO v_cparty_bal
-    FROM public.pin_ledger WHERE player_id = v_counterparty AND season_id = v_challenge.season_id;
-  IF v_cparty_bal < v_challenge.counterparty_stake THEN
+  IF public.pin_balance(v_counterparty, v_challenge.season_id) < v_challenge.counterparty_stake THEN
     RAISE EXCEPTION 'Counterparty has insufficient balance';
   END IF;
 
   -- Escrow creator's stake (double-entry: player -stake, house +stake).
-  INSERT INTO public.pin_ledger (player_id, season_id, week_id, is_house, amount, type, description)
-    VALUES (v_challenge.creator_player_id, v_challenge.season_id, v_challenge.week_id,
-            false, -v_challenge.creator_stake, 'pvp_stake', 'PvP challenge stake escrowed')
-    RETURNING id INTO v_pin_p1_player;
-  INSERT INTO public.pin_ledger (player_id, season_id, week_id, is_house, amount, type, description)
-    VALUES (NULL, v_challenge.season_id, v_challenge.week_id,
-            true, v_challenge.creator_stake, 'pvp_stake', 'PvP challenge stake escrowed (house)')
-    RETURNING id INTO v_pin_p1_house;
+  SELECT player_entry_id, house_entry_id INTO v_pin_p1_player, v_pin_p1_house
+    FROM public.pin_ledger_double_entry(
+      v_challenge.creator_player_id, v_challenge.season_id, v_challenge.week_id,
+      -v_challenge.creator_stake, 'pvp_stake', 'PvP challenge stake escrowed');
 
   INSERT INTO public.pvp_ledger (challenge_id, player_id, season_id, week_id, amount, type, description, pin_ledger_id)
     VALUES (p_challenge_id, v_challenge.creator_player_id, v_challenge.season_id, v_challenge.week_id,
@@ -1848,14 +1655,10 @@ BEGIN
   UPDATE public.pin_ledger SET pvp_ledger_id = v_pvp_stake1 WHERE id IN (v_pin_p1_player, v_pin_p1_house);
 
   -- Escrow counterparty's stake.
-  INSERT INTO public.pin_ledger (player_id, season_id, week_id, is_house, amount, type, description)
-    VALUES (v_counterparty, v_challenge.season_id, v_challenge.week_id,
-            false, -v_challenge.counterparty_stake, 'pvp_stake', 'PvP challenge stake escrowed')
-    RETURNING id INTO v_pin_p2_player;
-  INSERT INTO public.pin_ledger (player_id, season_id, week_id, is_house, amount, type, description)
-    VALUES (NULL, v_challenge.season_id, v_challenge.week_id,
-            true, v_challenge.counterparty_stake, 'pvp_stake', 'PvP challenge stake escrowed (house)')
-    RETURNING id INTO v_pin_p2_house;
+  SELECT player_entry_id, house_entry_id INTO v_pin_p2_player, v_pin_p2_house
+    FROM public.pin_ledger_double_entry(
+      v_counterparty, v_challenge.season_id, v_challenge.week_id,
+      -v_challenge.counterparty_stake, 'pvp_stake', 'PvP challenge stake escrowed');
 
   INSERT INTO public.pvp_ledger (challenge_id, player_id, season_id, week_id, amount, type, description, pin_ledger_id)
     VALUES (p_challenge_id, v_counterparty, v_challenge.season_id, v_challenge.week_id,
@@ -2032,6 +1835,20 @@ BEGIN
     ON CONFLICT (season_id, week_number) DO NOTHING;
 
   RETURN v_run_id;
+END;
+$function$
+;
+
+CREATE OR REPLACE FUNCTION public.assert_admin()
+ RETURNS void
+ LANGUAGE plpgsql
+ STABLE SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+BEGIN
+  IF public.is_admin() IS DISTINCT FROM true THEN
+    RAISE EXCEPTION 'Admin only';
+  END IF;
 END;
 $function$
 ;
@@ -2675,20 +2492,11 @@ AS $function$
 DECLARE
   v_sponsor_id uuid;
   v_season_id  uuid;
-  v_balance    int;
   v_escrow     int;
   v_bounty_id  uuid;
 BEGIN
-  SELECT id INTO v_sponsor_id FROM public.players WHERE user_id = auth.uid();
-  IF v_sponsor_id IS NULL THEN
-    RAISE EXCEPTION 'No player linked to the current user';
-  END IF;
-
-  SELECT id INTO v_season_id
-    FROM public.seasons WHERE is_active = true AND registration_open = false;
-  IF v_season_id IS NULL THEN
-    RAISE EXCEPTION 'No active season';
-  END IF;
+  v_sponsor_id := public.current_player_id();
+  v_season_id  := public.current_season_id();
 
   IF p_week_id IS NOT NULL THEN
     IF NOT EXISTS (
@@ -2720,9 +2528,7 @@ BEGIN
 
   v_escrow := p_reward_per_hunter * p_max_hunters;
 
-  SELECT COALESCE(SUM(amount), 0) INTO v_balance
-    FROM public.pin_ledger WHERE player_id = v_sponsor_id AND season_id = v_season_id;
-  IF v_balance < v_escrow THEN
+  IF public.pin_balance(v_sponsor_id, v_season_id) < v_escrow THEN
     RAISE EXCEPTION 'Insufficient balance: sponsoring up to % hunters at % each requires % pins',
       p_max_hunters, p_reward_per_hunter, v_escrow;
   END IF;
@@ -2742,12 +2548,10 @@ BEGIN
 
   -- Escrow the full max liability (player -R*m, house +R*m). Both rows carry
   -- bounty_post_id so cancel deletes them together.
-  INSERT INTO public.pin_ledger (player_id, season_id, week_id, is_house, amount, type, description, bounty_post_id)
-    VALUES (v_sponsor_id, v_season_id, p_week_id, false, -v_escrow,
-            'bounty_sponsor_stake', 'Bounty sponsor stake escrowed', v_bounty_id);
-  INSERT INTO public.pin_ledger (player_id, season_id, week_id, is_house, amount, type, description, bounty_post_id)
-    VALUES (NULL, v_season_id, p_week_id, true, v_escrow,
-            'bounty_sponsor_stake', 'Bounty sponsor stake escrowed (house)', v_bounty_id);
+  PERFORM public.pin_ledger_double_entry(
+    v_sponsor_id, v_season_id, p_week_id,
+    -v_escrow, 'bounty_sponsor_stake', 'Bounty sponsor stake escrowed',
+    NULL, NULL, v_bounty_id);
 
   -- Activity Feed: a sponsor bounty is on the board. Actor = sponsor (leads the card).
   PERFORM public.publish_activity_event(
@@ -2799,6 +2603,41 @@ BEGIN
     v_season_id, v_week_id, NULL, NULL, NULL, NULL, NULL,
     p_template_key, p_public_payload, '{}'::jsonb,
     'public', now());
+END;
+$function$
+;
+
+CREATE OR REPLACE FUNCTION public.current_player_id()
+ RETURNS uuid
+ LANGUAGE plpgsql
+ STABLE SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+DECLARE v_id uuid;
+BEGIN
+  SELECT id INTO v_id FROM public.players WHERE user_id = (SELECT auth.uid());
+  IF v_id IS NULL THEN
+    RAISE EXCEPTION 'No player linked to the current user';
+  END IF;
+  RETURN v_id;
+END;
+$function$
+;
+
+CREATE OR REPLACE FUNCTION public.current_season_id()
+ RETURNS uuid
+ LANGUAGE plpgsql
+ STABLE SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+DECLARE v_id uuid;
+BEGIN
+  SELECT id INTO v_id
+    FROM public.seasons WHERE is_active = true AND registration_open = false;
+  IF v_id IS NULL THEN
+    RAISE EXCEPTION 'No active season';
+  END IF;
+  RETURN v_id;
 END;
 $function$
 ;
@@ -2944,15 +2783,11 @@ AS $function$
 DECLARE
   v_hunter_id    uuid;
   v_bounty       public.bounty_post;
-  v_balance      int;
   v_entry_number int;
   v_count        int;
   v_stake_id     uuid;
 BEGIN
-  SELECT id INTO v_hunter_id FROM public.players WHERE user_id = auth.uid();
-  IF v_hunter_id IS NULL THEN
-    RAISE EXCEPTION 'No player linked to the current user';
-  END IF;
+  v_hunter_id := public.current_player_id();
 
   -- Serialize concurrent entries so entry_number + capacity are deterministic.
   SELECT * INTO v_bounty FROM public.bounty_post WHERE id = p_bounty_post_id FOR UPDATE;
@@ -2984,9 +2819,7 @@ BEGIN
     RAISE EXCEPTION 'Bounty is full';
   END IF;
 
-  SELECT COALESCE(SUM(amount), 0) INTO v_balance
-    FROM public.pin_ledger WHERE player_id = v_hunter_id AND season_id = v_bounty.season_id;
-  IF v_balance < v_bounty.hunter_stake_amount THEN
+  IF public.pin_balance(v_hunter_id, v_bounty.season_id) < v_bounty.hunter_stake_amount THEN
     RAISE EXCEPTION 'Insufficient balance to enter this bounty';
   END IF;
 
@@ -3002,12 +2835,10 @@ BEGIN
   )
   RETURNING id INTO v_stake_id;
 
-  INSERT INTO public.pin_ledger (player_id, season_id, week_id, is_house, amount, type, description, bounty_post_id, bounty_hunter_stake_id)
-    VALUES (v_hunter_id, v_bounty.season_id, v_bounty.week_id, false, -v_bounty.hunter_stake_amount,
-            'bounty_hunter_stake', 'Bounty hunter stake escrowed', p_bounty_post_id, v_stake_id);
-  INSERT INTO public.pin_ledger (player_id, season_id, week_id, is_house, amount, type, description, bounty_post_id, bounty_hunter_stake_id)
-    VALUES (NULL, v_bounty.season_id, v_bounty.week_id, true, v_bounty.hunter_stake_amount,
-            'bounty_hunter_stake', 'Bounty hunter stake escrowed (house)', p_bounty_post_id, v_stake_id);
+  PERFORM public.pin_ledger_double_entry(
+    v_hunter_id, v_bounty.season_id, v_bounty.week_id,
+    -v_bounty.hunter_stake_amount, 'bounty_hunter_stake', 'Bounty hunter stake escrowed',
+    NULL, NULL, p_bounty_post_id);
 
   PERFORM public.publish_activity_event(
     'bounty_board', 'bounty_board_hunter_joined',
@@ -3071,9 +2902,9 @@ BEGIN
     ) THEN
       -- All legs push/void → refund the stake (double-entry).
       UPDATE public.bets SET status = 'push', settled_at = now() WHERE id = v_bet.id;
-      INSERT INTO public.pin_ledger (player_id, season_id, week_id, is_house, amount, type, description, bet_id) VALUES
-        (v_bet.player_id, v_bet.season_id, v_week_id, false,  v_bet.stake, 'bet_refund', 'Push refund',         v_bet.id),
-        (NULL,            v_bet.season_id, v_week_id, true,  -v_bet.stake, 'bet_refund', 'Push refund (house)', v_bet.id);
+      PERFORM public.pin_ledger_double_entry(
+        v_bet.player_id, v_bet.season_id, v_week_id,
+        v_bet.stake, 'bet_refund', 'Push refund', NULL, v_bet.id);
 
     ELSE
       -- Won: payout = floor(stake × product(won-leg odds)). Push/void legs drop out.
@@ -3088,9 +2919,9 @@ BEGIN
       UPDATE public.bets
         SET status = 'won', potential_payout = v_payout, settled_at = now()
         WHERE id = v_bet.id;
-      INSERT INTO public.pin_ledger (player_id, season_id, week_id, is_house, amount, type, description, bet_id) VALUES
-        (v_bet.player_id, v_bet.season_id, v_week_id, false,  v_payout, 'bet_payout', 'Bet won',         v_bet.id),
-        (NULL,            v_bet.season_id, v_week_id, true,  -v_payout, 'bet_payout', 'Bet won (house)', v_bet.id);
+      PERFORM public.pin_ledger_double_entry(
+        v_bet.player_id, v_bet.season_id, v_week_id,
+        v_payout, 'bet_payout', 'Bet won', NULL, v_bet.id);
     END IF;
   END LOOP;
 END;
@@ -3111,6 +2942,16 @@ BEGIN
   END IF;
   RETURN NEW;
 END;
+$function$
+;
+
+CREATE OR REPLACE FUNCTION public.is_admin()
+ RETURNS boolean
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+  SELECT ((SELECT auth.jwt()) -> 'app_metadata' ->> 'role') = 'admin';
 $function$
 ;
 
@@ -3189,6 +3030,53 @@ END;
 $function$
 ;
 
+CREATE OR REPLACE FUNCTION public.pin_balance(p_player_id uuid, p_season_id uuid)
+ RETURNS integer
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+  SELECT COALESCE(SUM(amount), 0)::integer
+  FROM public.pin_ledger
+  WHERE player_id = p_player_id AND season_id = p_season_id;
+$function$
+;
+
+CREATE OR REPLACE FUNCTION public.pin_ledger_double_entry(p_player_id uuid, p_season_id uuid, p_week_id uuid, p_amount integer, p_type text, p_description text, p_house_description text DEFAULT NULL::text, p_bet_id uuid DEFAULT NULL::uuid, p_bounty_post_id uuid DEFAULT NULL::uuid)
+ RETURNS TABLE(player_entry_id uuid, house_entry_id uuid)
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+DECLARE
+  v_player uuid;
+  v_house  uuid;
+BEGIN
+  IF p_player_id IS NULL THEN
+    RAISE EXCEPTION 'pin_ledger_double_entry: player_id is required';
+  END IF;
+  IF p_amount IS NULL OR p_amount = 0 THEN
+    RAISE EXCEPTION 'pin_ledger_double_entry: amount must be non-zero';
+  END IF;
+
+  INSERT INTO public.pin_ledger
+      (player_id, season_id, week_id, is_house, amount, type, description, bet_id, bounty_post_id)
+    VALUES
+      (p_player_id, p_season_id, p_week_id, false, p_amount, p_type, p_description, p_bet_id, p_bounty_post_id)
+    RETURNING id INTO v_player;
+
+  INSERT INTO public.pin_ledger
+      (player_id, season_id, week_id, is_house, amount, type, description, bet_id, bounty_post_id)
+    VALUES
+      (NULL, p_season_id, p_week_id, true, -p_amount, p_type,
+       COALESCE(p_house_description, p_description || ' (house)'), p_bet_id, p_bounty_post_id)
+    RETURNING id INTO v_house;
+
+  RETURN QUERY SELECT v_player, v_house;
+END;
+$function$
+;
+
 CREATE OR REPLACE FUNCTION public.place_house_bet(p_selection_ids uuid[], p_stake integer, p_custom_line_id uuid DEFAULT NULL::uuid)
  RETURNS uuid
  LANGUAGE plpgsql
@@ -3207,10 +3095,7 @@ DECLARE
   v_n         integer;
   v_line      public.custom_lines%ROWTYPE;
 BEGIN
-  SELECT id INTO v_player_id FROM public.players WHERE user_id = auth.uid();
-  IF v_player_id IS NULL THEN
-    RAISE EXCEPTION 'No player linked to the current user';
-  END IF;
+  v_player_id := public.current_player_id();
 
   IF p_selection_ids IS NULL OR array_length(p_selection_ids, 1) IS NULL THEN
     RAISE EXCEPTION 'No selections provided';
@@ -3276,16 +3161,14 @@ BEGIN
 
   v_payout := FLOOR(p_stake * v_odds);
 
-  SELECT COALESCE(SUM(amount), 0) INTO v_balance
-    FROM public.pin_ledger
-    WHERE player_id = v_player_id AND season_id = v_season_id;
+  v_balance := public.pin_balance(v_player_id, v_season_id);
   IF p_stake > v_balance THEN
     RAISE EXCEPTION 'Wager exceeds your balance';
   END IF;
 
-  INSERT INTO public.bets (player_id, season_id, counterparty, stake, potential_payout, status,
+  INSERT INTO public.bets (player_id, season_id, stake, potential_payout, status,
                            custom_line_id, custom_line_title, custom_line_description, custom_line_category)
-    VALUES (v_player_id, v_season_id, 'house', p_stake, v_payout, 'pending',
+    VALUES (v_player_id, v_season_id, p_stake, v_payout, 'pending',
             v_line.id, v_line.title, v_line.description, v_line.category)
     RETURNING id INTO v_bet_id;
 
@@ -3295,9 +3178,9 @@ BEGIN
     WHERE s.id = ANY (p_selection_ids);
 
   -- Double-entry stake: player -stake, house +stake (nets to zero).
-  INSERT INTO public.pin_ledger (player_id, season_id, week_id, is_house, amount, type, description, bet_id) VALUES
-    (v_player_id, v_season_id, v_week_id, false, -p_stake, 'bet_stake', 'Bet placed',         v_bet_id),
-    (NULL,        v_season_id, v_week_id, true,   p_stake, 'bet_stake', 'Bet placed (house)', v_bet_id);
+  PERFORM public.pin_ledger_double_entry(
+    v_player_id, v_season_id, v_week_id,
+    -p_stake, 'bet_stake', 'Bet placed', NULL, v_bet_id);
 
   -- Activity Feed: post at most ONE placement event by priority (§3, §10.3).
   -- v_balance here is the pre-bet balance; v_n is the leg count; v_payout is the
@@ -3715,9 +3598,7 @@ DECLARE
   v_pin_house   uuid;
   v_debt_id     uuid;
 BEGIN
-  IF ((SELECT auth.jwt()) -> 'app_metadata' ->> 'role') <> 'admin' THEN
-    RAISE EXCEPTION 'Admin only';
-  END IF;
+  PERFORM public.assert_admin();
 
   SELECT season_id INTO v_season_id FROM public.weeks WHERE id = p_week_id;
   IF v_season_id IS NULL THEN
@@ -3753,12 +3634,10 @@ BEGIN
 
     v_garnish := LEAST(CEIL(v_pincome * v_product.garnishment_rate)::int, v_outstanding);
     IF v_garnish > 0 THEN
-      INSERT INTO public.pin_ledger (player_id, season_id, week_id, is_house, amount, type, description)
-        VALUES (v_loan.player_id, v_loan.season_id, p_week_id, false, -v_garnish, 'loan_weekly_garnishment', 'Loan garnishment')
-        RETURNING id INTO v_pin_player;
-      INSERT INTO public.pin_ledger (player_id, season_id, week_id, is_house, amount, type, description)
-        VALUES (NULL, v_loan.season_id, p_week_id, true, v_garnish, 'loan_weekly_garnishment', 'Loan garnishment (house)')
-        RETURNING id INTO v_pin_house;
+      SELECT player_entry_id, house_entry_id INTO v_pin_player, v_pin_house
+        FROM public.pin_ledger_double_entry(
+          v_loan.player_id, v_loan.season_id, p_week_id,
+          -v_garnish, 'loan_weekly_garnishment', 'Loan garnishment');
 
       INSERT INTO public.loan_ledger (loan_id, player_id, season_id, week_id, amount, type, description, pin_ledger_id)
         VALUES (v_loan.id, v_loan.player_id, v_loan.season_id, p_week_id, -v_garnish, 'weekly_garnishment', 'Loan garnishment', v_pin_player)
@@ -4049,16 +3928,12 @@ DECLARE
   v_loan        public.loans;
   v_week_id     uuid;
   v_outstanding integer;
-  v_balance     integer;
   v_pin_player  uuid;
   v_pin_house   uuid;
   v_debt_id     uuid;
   v_risk_level  text;
 BEGIN
-  SELECT id INTO v_player_id FROM public.players WHERE user_id = auth.uid();
-  IF v_player_id IS NULL THEN
-    RAISE EXCEPTION 'No player linked to the current user';
-  END IF;
+  v_player_id := public.current_player_id();
 
   SELECT * INTO v_loan FROM public.loans WHERE id = p_loan_id;
   IF v_loan.id IS NULL THEN
@@ -4081,10 +3956,7 @@ BEGIN
     RAISE EXCEPTION 'Repayment exceeds outstanding debt';
   END IF;
 
-  SELECT COALESCE(SUM(amount), 0) INTO v_balance
-    FROM public.pin_ledger
-    WHERE player_id = v_player_id AND season_id = v_loan.season_id;
-  IF p_amount > v_balance THEN
+  IF p_amount > public.pin_balance(v_player_id, v_loan.season_id) THEN
     RAISE EXCEPTION 'Repayment exceeds your balance';
   END IF;
 
@@ -4092,12 +3964,10 @@ BEGIN
     FROM public.weeks WHERE season_id = v_loan.season_id AND is_archived = false
     ORDER BY week_number DESC LIMIT 1;
 
-  INSERT INTO public.pin_ledger (player_id, season_id, week_id, is_house, amount, type, description)
-    VALUES (v_player_id, v_loan.season_id, v_week_id, false, -p_amount, 'loan_manual_repayment', 'Loan repayment')
-    RETURNING id INTO v_pin_player;
-  INSERT INTO public.pin_ledger (player_id, season_id, week_id, is_house, amount, type, description)
-    VALUES (NULL, v_loan.season_id, v_week_id, true, p_amount, 'loan_manual_repayment', 'Loan repayment (house)')
-    RETURNING id INTO v_pin_house;
+  SELECT player_entry_id, house_entry_id INTO v_pin_player, v_pin_house
+    FROM public.pin_ledger_double_entry(
+      v_player_id, v_loan.season_id, v_week_id,
+      -p_amount, 'loan_manual_repayment', 'Loan repayment');
 
   INSERT INTO public.loan_ledger (loan_id, player_id, season_id, week_id, amount, type, description, pin_ledger_id)
     VALUES (p_loan_id, v_player_id, v_loan.season_id, v_week_id, -p_amount, 'manual_repayment', 'Loan repayment', v_pin_player)
@@ -4216,9 +4086,7 @@ DECLARE
   v_titles      text;
   v_bet         record;
 BEGIN
-  IF ((SELECT auth.jwt()) -> 'app_metadata' ->> 'role') <> 'admin' THEN
-    RAISE EXCEPTION 'Admin only';
-  END IF;
+  PERFORM public.assert_admin();
 
   SELECT season_id, week_number INTO v_season_id, v_week_number
     FROM public.weeks WHERE id = p_week_id;
@@ -4356,9 +4224,9 @@ BEGIN
     LOOP
       UPDATE public.bet_legs SET result = 'void' WHERE bet_id = v_bet.id AND result IS NULL;
       UPDATE public.bets SET status = 'void', settled_at = now() WHERE id = v_bet.id;
-      INSERT INTO public.pin_ledger (player_id, season_id, week_id, is_house, amount, type, description, bet_id) VALUES
-        (v_bet.player_id, v_bet.season_id, p_week_id, false,  v_bet.stake, 'bet_refund', 'Voided at archive — market never settled',         v_bet.id),
-        (NULL,            v_bet.season_id, p_week_id, true,  -v_bet.stake, 'bet_refund', 'Voided at archive — market never settled (house)', v_bet.id);
+      PERFORM public.pin_ledger_double_entry(
+        v_bet.player_id, v_bet.season_id, p_week_id,
+        v_bet.stake, 'bet_refund', 'Voided at archive — market never settled', NULL, v_bet.id);
     END LOOP;
   END IF;
 
@@ -4417,14 +4285,8 @@ DECLARE
   v_stake           record;
   v_payout          int;
 BEGIN
-  IF ((SELECT auth.jwt()) -> 'app_metadata' ->> 'role') <> 'admin' THEN
-    RAISE EXCEPTION 'Admin only';
-  END IF;
-
-  SELECT id INTO v_admin_id FROM public.players WHERE user_id = auth.uid();
-  IF v_admin_id IS NULL THEN
-    RAISE EXCEPTION 'No player linked to the current user';
-  END IF;
+  PERFORM public.assert_admin();
+  v_admin_id := public.current_player_id();
 
   SELECT * INTO v_bounty FROM public.bounty_post WHERE id = p_bounty_post_id FOR UPDATE;
   IF v_bounty.id IS NULL THEN
@@ -4491,14 +4353,10 @@ BEGIN
         VALUES (v_settlement_id, p_bounty_post_id, v_bounty.sponsor_player_id, false, v_total_stakes + v_escrow)
         RETURNING id INTO v_payout_id;
 
-      INSERT INTO public.pin_ledger (player_id, season_id, week_id, is_house, amount, type, description,
-                                     bounty_post_id, bounty_settlement_id, bounty_payout_id)
-        VALUES (v_bounty.sponsor_player_id, v_bounty.season_id, v_bounty.week_id, false, v_total_stakes + v_escrow,
-                'bounty_payout', 'Bounty sponsor won', p_bounty_post_id, v_settlement_id, v_payout_id);
-      INSERT INTO public.pin_ledger (player_id, season_id, week_id, is_house, amount, type, description,
-                                     bounty_post_id, bounty_settlement_id, bounty_payout_id)
-        VALUES (NULL, v_bounty.season_id, v_bounty.week_id, true, -(v_total_stakes + v_escrow),
-                'bounty_payout', 'Bounty sponsor won (house)', p_bounty_post_id, v_settlement_id, v_payout_id);
+      PERFORM public.pin_ledger_double_entry(
+        v_bounty.sponsor_player_id, v_bounty.season_id, v_bounty.week_id,
+        v_total_stakes + v_escrow, 'bounty_payout', 'Bounty sponsor won',
+        NULL, NULL, p_bounty_post_id);
     ELSE
       -- House bounty: the House keeps the hunter stakes (reporting-only payout row,
       -- no ledger movement — House-to-House is not ledgered, §22.3).
@@ -4520,26 +4378,18 @@ BEGIN
         VALUES (v_settlement_id, p_bounty_post_id, v_stake.player_id, false, v_payout)
         RETURNING id INTO v_payout_id;
 
-      INSERT INTO public.pin_ledger (player_id, season_id, week_id, is_house, amount, type, description,
-                                     bounty_post_id, bounty_settlement_id, bounty_payout_id, bounty_hunter_stake_id)
-        VALUES (v_stake.player_id, v_bounty.season_id, v_bounty.week_id, false, v_payout,
-                'bounty_payout', 'Bounty hunter won', p_bounty_post_id, v_settlement_id, v_payout_id, v_stake.id);
-      INSERT INTO public.pin_ledger (player_id, season_id, week_id, is_house, amount, type, description,
-                                     bounty_post_id, bounty_settlement_id, bounty_payout_id, bounty_hunter_stake_id)
-        VALUES (NULL, v_bounty.season_id, v_bounty.week_id, true, -v_payout,
-                'bounty_payout', 'Bounty hunter won (house)', p_bounty_post_id, v_settlement_id, v_payout_id, v_stake.id);
+      PERFORM public.pin_ledger_double_entry(
+        v_stake.player_id, v_bounty.season_id, v_bounty.week_id,
+        v_payout, 'bounty_payout', 'Bounty hunter won',
+        NULL, NULL, p_bounty_post_id);
     END LOOP;
 
     -- Return the sponsor's unused escrow ((max_hunters - n) * R) for a sponsor bounty.
     IF v_bounty.bounty_type = 'sponsor_bounty' AND v_unused_escrow > 0 THEN
-      INSERT INTO public.pin_ledger (player_id, season_id, week_id, is_house, amount, type, description,
-                                     bounty_post_id, bounty_settlement_id)
-        VALUES (v_bounty.sponsor_player_id, v_bounty.season_id, v_bounty.week_id, false, v_unused_escrow,
-                'bounty_payout', 'Bounty unused escrow returned', p_bounty_post_id, v_settlement_id);
-      INSERT INTO public.pin_ledger (player_id, season_id, week_id, is_house, amount, type, description,
-                                     bounty_post_id, bounty_settlement_id)
-        VALUES (NULL, v_bounty.season_id, v_bounty.week_id, true, -v_unused_escrow,
-                'bounty_payout', 'Bounty unused escrow returned (house)', p_bounty_post_id, v_settlement_id);
+      PERFORM public.pin_ledger_double_entry(
+        v_bounty.sponsor_player_id, v_bounty.season_id, v_bounty.week_id,
+        v_unused_escrow, 'bounty_payout', 'Bounty unused escrow returned',
+        NULL, NULL, p_bounty_post_id);
     END IF;
 
     UPDATE public.bounty_hunter_stakes
@@ -4705,15 +4555,12 @@ DECLARE
   v_loan        record;
   v_week_id     uuid;
   v_outstanding integer;
-  v_balance     integer;
   v_payment     integer;
   v_pin_player  uuid;
   v_pin_house   uuid;
   v_debt_id     uuid;
 BEGIN
-  IF ((SELECT auth.jwt()) -> 'app_metadata' ->> 'role') <> 'admin' THEN
-    RAISE EXCEPTION 'Admin only';
-  END IF;
+  PERFORM public.assert_admin();
 
   SELECT id INTO v_week_id
     FROM public.weeks WHERE season_id = p_season_id
@@ -4727,18 +4574,12 @@ BEGIN
     SELECT COALESCE(SUM(amount), 0) INTO v_outstanding
       FROM public.loan_ledger WHERE loan_id = v_loan.id;
 
-    SELECT COALESCE(SUM(amount), 0) INTO v_balance
-      FROM public.pin_ledger
-      WHERE player_id = v_loan.player_id AND season_id = v_loan.season_id;
-
-    v_payment := LEAST(v_balance, v_outstanding);
+    v_payment := LEAST(public.pin_balance(v_loan.player_id, v_loan.season_id), v_outstanding);
     IF v_payment > 0 THEN
-      INSERT INTO public.pin_ledger (player_id, season_id, week_id, is_house, amount, type, description)
-        VALUES (v_loan.player_id, v_loan.season_id, v_week_id, false, -v_payment, 'loan_season_close_settlement', 'Season-close loan settlement')
-        RETURNING id INTO v_pin_player;
-      INSERT INTO public.pin_ledger (player_id, season_id, week_id, is_house, amount, type, description)
-        VALUES (NULL, v_loan.season_id, v_week_id, true, v_payment, 'loan_season_close_settlement', 'Season-close loan settlement (house)')
-        RETURNING id INTO v_pin_house;
+      SELECT player_entry_id, house_entry_id INTO v_pin_player, v_pin_house
+        FROM public.pin_ledger_double_entry(
+          v_loan.player_id, v_loan.season_id, v_week_id,
+          -v_payment, 'loan_season_close_settlement', 'Season-close loan settlement');
 
       INSERT INTO public.loan_ledger (loan_id, player_id, season_id, week_id, amount, type, description, pin_ledger_id)
         VALUES (v_loan.id, v_loan.player_id, v_loan.season_id, v_week_id, -v_payment, 'season_close_settlement', 'Season-close loan settlement', v_pin_player)
@@ -4914,9 +4755,7 @@ DECLARE
   v_cparty_sel     record;
 BEGIN
   IF p_source = 'admin' THEN
-    IF ((SELECT auth.jwt()) -> 'app_metadata' ->> 'role') <> 'admin' THEN
-      RAISE EXCEPTION 'Admin only';
-    END IF;
+    PERFORM public.assert_admin();
   END IF;
 
   SELECT * INTO v_challenge FROM public.pvp_challenges WHERE id = p_challenge_id FOR UPDATE;
@@ -5041,14 +4880,10 @@ BEGIN
         SELECT * FROM public.pvp_ledger
         WHERE challenge_id = p_challenge_id AND type = 'stake' AND player_id IS NOT NULL
       LOOP
-        INSERT INTO public.pin_ledger (player_id, season_id, week_id, is_house, amount, type, description)
-          VALUES (v_stake_row.player_id, v_stake_row.season_id, v_stake_row.week_id,
-                  false, -v_stake_row.amount, 'pvp_refund', 'PvP push — stake refunded')
-          RETURNING id INTO v_pin_player;
-        INSERT INTO public.pin_ledger (player_id, season_id, week_id, is_house, amount, type, description)
-          VALUES (NULL, v_stake_row.season_id, v_stake_row.week_id,
-                  true, v_stake_row.amount, 'pvp_refund', 'PvP push — stake refunded (house)')
-          RETURNING id INTO v_pin_house;
+        SELECT player_entry_id, house_entry_id INTO v_pin_player, v_pin_house
+          FROM public.pin_ledger_double_entry(
+            v_stake_row.player_id, v_stake_row.season_id, v_stake_row.week_id,
+            -v_stake_row.amount, 'pvp_refund', 'PvP push — stake refunded');
 
         INSERT INTO public.pvp_ledger (challenge_id, player_id, season_id, week_id, amount, type, description, pin_ledger_id)
           VALUES (p_challenge_id, v_stake_row.player_id, v_stake_row.season_id, v_stake_row.week_id,
@@ -5082,14 +4917,10 @@ BEGIN
   END IF;
 
   -- Winner path: pay the full pot to the winner (player +pot, house -pot).
-  INSERT INTO public.pin_ledger (player_id, season_id, week_id, is_house, amount, type, description)
-    VALUES (v_winner_id, v_challenge.season_id, v_challenge.week_id,
-            false, v_challenge.total_pot, 'pvp_payout', 'PvP challenge won')
-    RETURNING id INTO v_pin_player;
-  INSERT INTO public.pin_ledger (player_id, season_id, week_id, is_house, amount, type, description)
-    VALUES (NULL, v_challenge.season_id, v_challenge.week_id,
-            true, -v_challenge.total_pot, 'pvp_payout', 'PvP challenge won (house)')
-    RETURNING id INTO v_pin_house;
+  SELECT player_entry_id, house_entry_id INTO v_pin_player, v_pin_house
+    FROM public.pin_ledger_double_entry(
+      v_winner_id, v_challenge.season_id, v_challenge.week_id,
+      v_challenge.total_pot, 'pvp_payout', 'PvP challenge won');
 
   INSERT INTO public.pvp_ledger (challenge_id, player_id, season_id, week_id, amount, type, description, pin_ledger_id)
     VALUES (p_challenge_id, v_winner_id, v_challenge.season_id, v_challenge.week_id,
@@ -5649,17 +5480,8 @@ DECLARE
   v_pin_house  uuid;
   v_debt_id    uuid;
 BEGIN
-  SELECT id INTO v_player_id FROM public.players WHERE user_id = auth.uid();
-  IF v_player_id IS NULL THEN
-    RAISE EXCEPTION 'No player linked to the current user';
-  END IF;
-
-  SELECT id INTO v_season_id
-    FROM public.seasons
-    WHERE is_active = true AND registration_open = false;
-  IF v_season_id IS NULL THEN
-    RAISE EXCEPTION 'No active season';
-  END IF;
+  v_player_id := public.current_player_id();
+  v_season_id := public.current_season_id();
 
   SELECT * INTO v_product FROM public.loan_products WHERE id = p_loan_product_id FOR UPDATE;
   IF v_product.id IS NULL THEN
@@ -5700,12 +5522,12 @@ BEGIN
     VALUES (v_player_id, v_season_id, p_loan_product_id, 'active')
     RETURNING id INTO v_loan_id;
 
-  INSERT INTO public.pin_ledger (player_id, season_id, week_id, is_house, amount, type, description)
-    VALUES (v_player_id, v_season_id, v_week_id, false, v_product.borrow_amount, 'loan_issued', 'Loan issued: ' || v_product.display_name)
-    RETURNING id INTO v_pin_player;
-  INSERT INTO public.pin_ledger (player_id, season_id, week_id, is_house, amount, type, description)
-    VALUES (NULL, v_season_id, v_week_id, true, -v_product.borrow_amount, 'loan_issued', 'Loan issued (house): ' || v_product.display_name)
-    RETURNING id INTO v_pin_house;
+  SELECT player_entry_id, house_entry_id INTO v_pin_player, v_pin_house
+    FROM public.pin_ledger_double_entry(
+      v_player_id, v_season_id, v_week_id,
+      v_product.borrow_amount, 'loan_issued',
+      'Loan issued: ' || v_product.display_name,
+      'Loan issued (house): ' || v_product.display_name);
 
   INSERT INTO public.loan_ledger (loan_id, player_id, season_id, week_id, amount, type, description, pin_ledger_id)
     VALUES (v_loan_id, v_player_id, v_season_id, v_week_id, v_product.borrow_amount, 'loan_issued',
@@ -6079,9 +5901,7 @@ DECLARE
   v_pin_house  uuid;
   v_pvp_id     uuid;
 BEGIN
-  IF ((SELECT auth.jwt()) -> 'app_metadata' ->> 'role') <> 'admin' THEN
-    RAISE EXCEPTION 'Admin only';
-  END IF;
+  PERFORM public.assert_admin();
 
   SELECT * INTO v_challenge FROM public.pvp_challenges WHERE id = p_challenge_id FOR UPDATE;
   IF v_challenge.id IS NULL THEN
@@ -6099,14 +5919,10 @@ BEGIN
         AND type = 'payout'
         AND player_id IS NOT NULL
     LOOP
-      INSERT INTO public.pin_ledger (player_id, season_id, week_id, is_house, amount, type, description)
-        VALUES (v_row.player_id, v_row.season_id, v_row.week_id,
-                false, -v_row.amount, 'pvp_refund', 'PvP void — settlement reversed')
-        RETURNING id INTO v_pin_player;
-      INSERT INTO public.pin_ledger (player_id, season_id, week_id, is_house, amount, type, description)
-        VALUES (NULL, v_row.season_id, v_row.week_id,
-                true, v_row.amount, 'pvp_refund', 'PvP void — settlement reversed (house)')
-        RETURNING id INTO v_pin_house;
+      SELECT player_entry_id, house_entry_id INTO v_pin_player, v_pin_house
+        FROM public.pin_ledger_double_entry(
+          v_row.player_id, v_row.season_id, v_row.week_id,
+          -v_row.amount, 'pvp_refund', 'PvP void — settlement reversed');
 
       INSERT INTO public.pvp_ledger (challenge_id, player_id, season_id, week_id, amount, type, description, pin_ledger_id)
         VALUES (p_challenge_id, v_row.player_id, v_row.season_id, v_row.week_id,
@@ -6122,14 +5938,10 @@ BEGIN
     SELECT * FROM public.pvp_ledger
     WHERE challenge_id = p_challenge_id AND type = 'stake' AND player_id IS NOT NULL
   LOOP
-    INSERT INTO public.pin_ledger (player_id, season_id, week_id, is_house, amount, type, description)
-      VALUES (v_row.player_id, v_row.season_id, v_row.week_id,
-              false, -v_row.amount, 'pvp_refund', 'PvP challenge voided — stake refunded')
-      RETURNING id INTO v_pin_player;
-    INSERT INTO public.pin_ledger (player_id, season_id, week_id, is_house, amount, type, description)
-      VALUES (NULL, v_row.season_id, v_row.week_id,
-              true, v_row.amount, 'pvp_refund', 'PvP challenge voided — stake refunded (house)')
-      RETURNING id INTO v_pin_house;
+    SELECT player_entry_id, house_entry_id INTO v_pin_player, v_pin_house
+      FROM public.pin_ledger_double_entry(
+        v_row.player_id, v_row.season_id, v_row.week_id,
+        -v_row.amount, 'pvp_refund', 'PvP challenge voided — stake refunded');
 
     INSERT INTO public.pvp_ledger (challenge_id, player_id, season_id, week_id, amount, type, description, pin_ledger_id)
       VALUES (p_challenge_id, v_row.player_id, v_row.season_id, v_row.week_id,
@@ -6162,10 +5974,6 @@ CREATE TRIGGER set_updated_at BEFORE UPDATE ON public.bet_legs FOR EACH ROW EXEC
 CREATE TRIGGER set_updated_at BEFORE UPDATE ON public.bet_markets FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
 CREATE TRIGGER trg_refund_bets_before_market_delete BEFORE DELETE ON public.bet_markets FOR EACH ROW EXECUTE FUNCTION refund_bets_before_market_delete();
-
-CREATE TRIGGER set_updated_at BEFORE UPDATE ON public.bet_matches FOR EACH ROW EXECUTE FUNCTION set_updated_at();
-
-CREATE TRIGGER set_updated_at BEFORE UPDATE ON public.bet_offers FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
 CREATE TRIGGER set_updated_at BEFORE UPDATE ON public.bet_selections FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 

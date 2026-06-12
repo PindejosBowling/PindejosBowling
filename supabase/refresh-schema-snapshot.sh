@@ -35,3 +35,19 @@ if [ "$LINES" -lt 50 ]; then
   exit 1
 fi
 echo "wrote supabase/schema.sql ($LINES lines)"
+
+# Anon posture assertion (anon_lockdown migration, 2026-06-12): anon may hold
+# nothing beyond EXECUTE on is_registered_player(text). Any policy, table or
+# sequence privilege, or other executable function targeting anon fails the
+# push ritual right here — regressions surface on the very push that
+# introduced them, not at the next audit.
+ANON_VIOLATIONS="$(SUPABASE_ACCESS_TOKEN="$TOKEN" \
+  supabase db query --linked --workdir "$ROOT" \
+    --file supabase/anon-posture-assert.sql -o json 2>/dev/null)"
+ANON_COUNT="$(printf '%s' "$ANON_VIOLATIONS" | jq '.rows | length')"
+if [ "$ANON_COUNT" != "0" ]; then
+  echo "error: anon posture violated ($ANON_COUNT finding(s)) — anon must hold only EXECUTE on is_registered_player(text):" >&2
+  printf '%s' "$ANON_VIOLATIONS" | jq -r '.rows[] | "  - \(.violation): \(.detail)"' >&2
+  exit 1
+fi
+echo "anon posture OK (sole anon capability: is_registered_player)"

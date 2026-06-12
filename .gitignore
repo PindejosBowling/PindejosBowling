@@ -10,3 +10,4 @@ dist/
 
 # Credential seed — contains password hashes, never commit
 supabase/seed_credentials.sql
+.verify-artifacts/

@@ -297,145 +297,6 @@ export type Database = {
           },
         ]
       }
-      bet_matches: {
-        Row: {
-          back_bet_id: string
-          created_at: string
-          id: string
-          lay_bet_id: string
-          offer_id: string | null
-          pool: number
-          rake: number
-          updated_at: string
-        }
-        Insert: {
-          back_bet_id: string
-          created_at?: string
-          id?: string
-          lay_bet_id: string
-          offer_id?: string | null
-          pool: number
-          rake?: number
-          updated_at?: string
-        }
-        Update: {
-          back_bet_id?: string
-          created_at?: string
-          id?: string
-          lay_bet_id?: string
-          offer_id?: string | null
-          pool?: number
-          rake?: number
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "bet_matches_back_bet_id_fkey"
-            columns: ["back_bet_id"]
-            isOneToOne: true
-            referencedRelation: "bets"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "bet_matches_lay_bet_id_fkey"
-            columns: ["lay_bet_id"]
-            isOneToOne: true
-            referencedRelation: "bets"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "bet_matches_offer_id_fkey"
-            columns: ["offer_id"]
-            isOneToOne: false
-            referencedRelation: "bet_offers"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      bet_offers: {
-        Row: {
-          accepted_at: string | null
-          accepted_by: string | null
-          created_at: string
-          expires_at: string | null
-          id: string
-          odds: number
-          proposer_id: string
-          proposer_stake: number
-          season_id: string
-          selection_id: string
-          status: string
-          target_player_id: string | null
-          updated_at: string
-        }
-        Insert: {
-          accepted_at?: string | null
-          accepted_by?: string | null
-          created_at?: string
-          expires_at?: string | null
-          id?: string
-          odds: number
-          proposer_id: string
-          proposer_stake: number
-          season_id: string
-          selection_id: string
-          status?: string
-          target_player_id?: string | null
-          updated_at?: string
-        }
-        Update: {
-          accepted_at?: string | null
-          accepted_by?: string | null
-          created_at?: string
-          expires_at?: string | null
-          id?: string
-          odds?: number
-          proposer_id?: string
-          proposer_stake?: number
-          season_id?: string
-          selection_id?: string
-          status?: string
-          target_player_id?: string | null
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "bet_offers_accepted_by_fkey"
-            columns: ["accepted_by"]
-            isOneToOne: false
-            referencedRelation: "players"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "bet_offers_proposer_id_fkey"
-            columns: ["proposer_id"]
-            isOneToOne: false
-            referencedRelation: "players"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "bet_offers_season_id_fkey"
-            columns: ["season_id"]
-            isOneToOne: false
-            referencedRelation: "seasons"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "bet_offers_selection_id_fkey"
-            columns: ["selection_id"]
-            isOneToOne: false
-            referencedRelation: "bet_selections"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "bet_offers_target_player_id_fkey"
-            columns: ["target_player_id"]
-            isOneToOne: false
-            referencedRelation: "players"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       bet_selections: {
         Row: {
           created_at: string
@@ -485,7 +346,6 @@ export type Database = {
       }
       bets: {
         Row: {
-          counterparty: string
           created_at: string
           custom_line_category: string | null
           custom_line_description: string | null
@@ -502,7 +362,6 @@ export type Database = {
           updated_at: string
         }
         Insert: {
-          counterparty: string
           created_at?: string
           custom_line_category?: string | null
           custom_line_description?: string | null
@@ -519,7 +378,6 @@ export type Database = {
           updated_at?: string
         }
         Update: {
-          counterparty?: string
           created_at?: string
           custom_line_category?: string | null
           custom_line_description?: string | null
@@ -1215,10 +1073,7 @@ export type Database = {
         Row: {
           amount: number
           bet_id: string | null
-          bounty_hunter_stake_id: string | null
-          bounty_payout_id: string | null
           bounty_post_id: string | null
-          bounty_settlement_id: string | null
           created_at: string
           description: string
           id: string
@@ -1234,10 +1089,7 @@ export type Database = {
         Insert: {
           amount: number
           bet_id?: string | null
-          bounty_hunter_stake_id?: string | null
-          bounty_payout_id?: string | null
           bounty_post_id?: string | null
-          bounty_settlement_id?: string | null
           created_at?: string
           description: string
           id?: string
@@ -1253,10 +1105,7 @@ export type Database = {
         Update: {
           amount?: number
           bet_id?: string | null
-          bounty_hunter_stake_id?: string | null
-          bounty_payout_id?: string | null
           bounty_post_id?: string | null
-          bounty_settlement_id?: string | null
           created_at?: string
           description?: string
           id?: string
@@ -1278,31 +1127,10 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "pin_ledger_bounty_hunter_stake_id_fkey"
-            columns: ["bounty_hunter_stake_id"]
-            isOneToOne: false
-            referencedRelation: "bounty_hunter_stakes"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pin_ledger_bounty_payout_id_fkey"
-            columns: ["bounty_payout_id"]
-            isOneToOne: false
-            referencedRelation: "bounty_payouts"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "pin_ledger_bounty_post_id_fkey"
             columns: ["bounty_post_id"]
             isOneToOne: false
             referencedRelation: "bounty_post"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pin_ledger_bounty_settlement_id_fkey"
-            columns: ["bounty_settlement_id"]
-            isOneToOne: false
-            referencedRelation: "bounty_settlements"
             referencedColumns: ["id"]
           },
           {
@@ -2330,6 +2158,7 @@ export type Database = {
         Args: { p_force?: boolean; p_week_id: string }
         Returns: string
       }
+      assert_admin: { Args: never; Returns: undefined }
       cancel_bet: { Args: { p_bet_id: string }; Returns: undefined }
       cancel_bounty: { Args: { p_bounty_post_id: string }; Returns: undefined }
       cancel_loan: { Args: { p_loan_id: string }; Returns: undefined }
@@ -2408,6 +2237,8 @@ export type Database = {
         }
         Returns: string
       }
+      current_player_id: { Args: never; Returns: string }
+      current_season_id: { Args: never; Returns: string }
       custom_access_token: { Args: { event: Json }; Returns: Json }
       decline_pvp_challenge: {
         Args: { p_challenge_id: string }
@@ -2421,6 +2252,7 @@ export type Database = {
         Args: { p_market_id: string }
         Returns: undefined
       }
+      is_admin: { Args: never; Returns: boolean }
       is_registered_player: { Args: { phone: string }; Returns: boolean }
       lanetalk_game_stats: {
         Args: { p_payload: Json }
@@ -2438,6 +2270,27 @@ export type Database = {
           first_ball_avg_line: number
           spares_line: number
           strikes_line: number
+        }[]
+      }
+      pin_balance: {
+        Args: { p_player_id: string; p_season_id: string }
+        Returns: number
+      }
+      pin_ledger_double_entry: {
+        Args: {
+          p_amount: number
+          p_bet_id?: string
+          p_bounty_post_id?: string
+          p_description: string
+          p_house_description?: string
+          p_player_id: string
+          p_season_id: string
+          p_type: string
+          p_week_id: string
+        }
+        Returns: {
+          house_entry_id: string
+          player_entry_id: string
         }[]
       }
       place_house_bet: {

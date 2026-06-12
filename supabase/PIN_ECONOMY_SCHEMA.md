@@ -7,13 +7,17 @@ tables or writing new betting flows.
 
 > **Status — single canonical model (Phase 2 complete).**
 > Over/under runs natively on the canonical model: `bet_markets`,
-> `bet_selections`, `bets`, `bet_legs` (+ the deferred peer layer `bet_offers` /
-> `bet_matches`), with funded-house **double-entry** accounting on `pin_ledger`
-> (player rows + house rows, `is_house` / `bet_id`). The legacy `bet_lines` /
-> `placed_bets` tables, the `place_bet` / `sync_bet_lines_for_week` RPCs, and the
-> `placed_bets_no_self_under` trigger were **removed** in the Phase 2 cutover (the
-> `20260605005517`–`20260605011338` migrations). All betting work now extends the
-> canonical model — see [Implementing a new bet type](#implementing-a-new-bet-type).
+> `bet_selections`, `bets`, `bet_legs`, with funded-house **double-entry**
+> accounting on `pin_ledger` (player rows + house rows, `is_house` / `bet_id`).
+> The legacy `bet_lines` / `placed_bets` tables, the `place_bet` /
+> `sync_bet_lines_for_week` RPCs, and the `placed_bets_no_self_under` trigger were
+> **removed** in the Phase 2 cutover (the `20260605005517`–`20260605011338`
+> migrations). The **deferred peer layer** (`bet_offers` / `bet_matches` +
+> `bets.counterparty`) was never built on and was **dropped** in the 2026-06 tech-debt
+> cleanup (`20260612003905_drop_deferred_peer_layer`) — peer wagering ships as the
+> **PvP Challenge Contracts** system instead ([context/economy/PvP_DB.md](../context/economy/PvP_DB.md)).
+> All betting work now extends the canonical model — see
+> [Implementing a new bet type](#implementing-a-new-bet-type).
 >
 > **House parlays are also live** (multi-leg house bets, combined odds = Π(leg
 > odds) = `×2^N` on even-money O/U legs). This required **no schema or RPC change** —
@@ -58,15 +62,15 @@ snapshot, never the current selection odds.
 ## 2. Target model (canonical)
 
 ```
-bet_markets ──< bet_selections                 bet_offers
-  (what you        (the sides; each has          (peer: propose → accept)
-   can bet on)      odds, line, result)              │
-                          ▲                           │ on accept creates
-                          │ referenced by             │ two opposing bets
-                          │                           ▼
-        bets ──< bet_legs ┘                      bet_matches
-     (the stake)   (back/lay a selection,         (links back_bet ↔ lay_bet,
-                    odds snapshotted)               holds the pooled escrow)
+bet_markets ──< bet_selections
+  (what you        (the sides; each has
+   can bet on)      odds, line, result)
+                          ▲
+                          │ referenced by
+                          │
+        bets ──< bet_legs ┘
+     (the stake)   (back/lay a selection,
+                    odds snapshotted)
 ```
 
 ### `bet_markets` — a thing you can bet on
@@ -115,7 +119,6 @@ A market is the parent of its selections (`ON DELETE CASCADE`).
 | `id` uuid PK | |
 | `player_id` uuid → players | The bettor. `ON DELETE CASCADE`. |
 | `season_id` uuid → seasons | Balance scope (matches `pin_ledger`). `ON DELETE CASCADE`. |
-| `counterparty` text | `house` \| `peer`. |
 | `stake` int | `>= 10`. |
 | `potential_payout` int | Total returned on win incl. stake — snapshot at placement. |
 | `status` text | `pending` \| `won` \| `lost` \| `push` \| `void` \| `cancelled`. |
@@ -149,39 +152,17 @@ legs is a parlay. There is no parlay table.
 A **bet** wins iff **all** its legs win. Any lost leg ⇒ bet lost. Push/void legs
 drop out of the parlay (combined odds recomputed over the remaining legs).
 
-### `bet_offers` — peer challenge / accept
+### Removed: `bet_offers` / `bet_matches` (the deferred peer layer)
 
-A proposer **backs** a selection at agreed odds for a stake; another player (or
-anyone) **accepts** the opposing **lay** side.
-
-| Column | Notes |
-|---|---|
-| `id` uuid PK | |
-| `proposer_id` uuid → players | `ON DELETE CASCADE`. |
-| `season_id` uuid → seasons | `ON DELETE CASCADE`. |
-| `selection_id` uuid → bet_selections | The side the proposer is backing. `ON DELETE CASCADE`. |
-| `odds` numeric(8,3) | Agreed decimal odds, CHECK `> 1.0`. |
-| `proposer_stake` int | `>= 10`. |
-| `target_player_id` uuid → players | **Null = open to anyone**; set = a specific challenge. `ON DELETE CASCADE`. |
-| `status` text | `open` \| `accepted` \| `cancelled` \| `expired`. |
-| `accepted_by` uuid → players | `ON DELETE SET NULL`. |
-| `accepted_at` / `expires_at` timestamptz | |
-
-**Acceptor's required stake (lay liability) = `proposer_stake × (odds − 1)`.**
-The pool the winner collects = `proposer_stake × odds`.
-
-### `bet_matches` — the matched peer position + escrow
-
-Created when an offer is accepted; links the two opposing `bets`.
-
-| Column | Notes |
-|---|---|
-| `id` uuid PK | |
-| `offer_id` uuid → bet_offers | `ON DELETE SET NULL`. |
-| `back_bet_id` uuid → bets | The proposer's back bet. `ON DELETE CASCADE`. **UNIQUE**. |
-| `lay_bet_id` uuid → bets | The acceptor's lay bet. `ON DELETE CASCADE`. **UNIQUE**. |
-| `pool` int | `back_stake + lay_stake`; winner takes it minus rake. CHECK `>= 0`. |
-| `rake` int | House commission on the pool. Default `0`, CHECK `>= 0`. |
+The back/lay peer-matching layer shipped with the canonical model but was never
+built on (no RPC, no app path, zero rows). It was **dropped** in
+`20260612003905_drop_deferred_peer_layer`, along with `bets.counterparty`
+(every bet is a house bet). Peer wagering exists as the **PvP Challenge
+Contracts** system (`pvp_challenges` / `pvp_challenge_offers`). If back/lay
+odds-matching is ever revived, the original design lives in migration
+`20260605002715_betting_target_model.sql`. `bet_legs.side` (`back`/`lay`)
+survives — only `'back'` is ever written today; the lay branch of the
+settlement truth table and `prevent_self_tank` is dormant, not dead.
 
 ---
 
@@ -195,8 +176,8 @@ Created when an offer is accepted; links the two opposing `bets`.
 | **LaneTalk stat prop (LIVE)** | `bet_markets(market_type=prop, subject_player_id, params={source:'lanetalk', stat:'strikes'\|'spares'\|'clean_frames'\|'first_ball_avg', scope:'game'\|'night'})` + over/under selections sharing a `line` (even-money). Per-game markets carry `game_number`; night markets `game_number=null`. Auto-generated by `sync_lanetalk_prop_markets_for_week` (RSVP-coupled via `resync_week_markets`); settled post-archive by `settle_lanetalk_props_for_week` off `lanetalk_game_imports.payload` (**separate clock from archive** — the backstop exempts pending prop-leg bets). Full doc: [context/lanetalk-stat-bets.md](../context/lanetalk-stat-bets.md). |
 | **Single bet** | one `bets` row + one `bet_legs` row (`side=back`). |
 | **Parlay** | one `bets` row + N `bet_legs` rows; combined odds = Π(leg odds). |
-| **House bet** | `bets.counterparty=house`; legs all `back`; house is the implicit lay. |
-| **Peer bet** | `bet_offers` → accept → two `bets` (`back`/`lay`) + `bet_matches` with pooled escrow. |
+| **House bet** | Every `bets` row (the only kind); legs all `back`; house is the implicit lay. |
+| **Peer wager** | **Not a `bets` row** — the PvP Challenge Contracts system (`pvp_challenges`, [context/economy/PvP_DB.md](../context/economy/PvP_DB.md)). |
 | **Non-even odds** | `bet_selections.odds` (any value > 1.0), snapshotted per leg. |
 | **Custom line / "Special" (LIVE)** | **Not a market.** A `custom_lines` row (title/description/category + abstract leg-spec jsonb + `week_ids`/permanent lifecycle) is an admin presentation template over existing selections; the app resolves it weekly — leg specs may be **bettor-relative** (`player_id` null = whoever takes it, resolved per-viewer) — and taking it calls `place_house_bet` with the underlying selection ids + the line id: the bet is an ordinary single/parlay (zero bespoke accounting or settlement) carrying a `custom_line_id` link + title/description/category **snapshot** on `bets` for durable display branding. Full doc: [context/betting-line-board.md](../context/betting-line-board.md). |
 
@@ -272,8 +253,28 @@ counter-rows, by design.)
 - **House single back:** win → house pays `stake × odds`; loss → house keeps the
   stake. Zero-sum vs the house account.
 - **House parlay:** same, with `odds = Π(won-leg odds)` (push/void legs drop out).
-- **Peer (deferred):** both stakes escrow into `bet_matches.pool`; winner collects
-  `pool − rake`; rake (if any) → house.
+- **Peer wagers** settle in the PvP system (stake escrow ↔ house, winner takes
+  the pot) — see [context/economy/PvP_DB.md](../context/economy/PvP_DB.md).
+
+### `pin_ledger_double_entry()` — the only sanctioned way to move pins
+
+Every player↔house transfer goes through
+`pin_ledger_double_entry(player, season, week, amount, type, description,
+house_description?, bet_id?, bounty_post_id?)` — it inserts the player row
+(signed `amount`) and the house mirror (`-amount`) and returns both ids, making
+the nets-to-zero invariant structural. EXECUTE is revoked from all client
+roles; only the SECURITY DEFINER RPCs (running as owner) may call it. Callers
+that maintain a domain ledger (`loan_ledger` / `pvp_ledger`) insert their
+domain row referencing `player_entry_id`, then back-link both pin rows in one
+`UPDATE … SET <x>_ledger_id`. The only non-helper writes are the two
+single-sided mints: `score_credit` and (one side of) season-open `bonus`.
+
+**Ref-column policy:** a new economy feature gets **exactly one** root-entity
+ref column on `pin_ledger` — the one its cancel/refund path deletes by
+(`bet_id`, `bounty_post_id`, or a `<x>_ledger_id` back-link). The granular
+bounty refs (`bounty_hunter_stake_id`, `bounty_settlement_id`,
+`bounty_payout_id`) were dropped 2026-06-12 (`bets_bounty_adopt_helpers`);
+payout-level granularity lives in `bounty_payouts`.
 
 ---
 
@@ -281,9 +282,11 @@ counter-rows, by design.)
 
 Follows the project-wide pattern (see `supabase/AUTH.md`).
 
-- **Reads:** open to `anon` + `authenticated` on all betting tables.
-- **Direct writes:** **admin-only** (RLS gated on
-  `auth.jwt() -> 'app_metadata' ->> 'role' = 'admin'`). Used by admin flows
+- **Reads:** `authenticated` only. Anon was locked out of every table on
+  2026-06-12 (`anon_lockdown` — see AUTH.md "Anon posture"); its sole
+  capability is the pre-login `is_registered_player` RPC.
+- **Direct writes:** **admin-only** (RLS gated on `(SELECT public.is_admin())`
+  — the shared helper that wraps the JWT role claim). Used by admin flows
   (line/market creation, settlement, cancellation).
 - **Player write paths go through `SECURITY DEFINER` RPCs**, never direct table
   writes. The RPC resolves the caller from `auth.uid()` (never trusts a
@@ -466,13 +469,11 @@ bets shipped as a pure-UI addition on top of the existing model:
 
 **Next (schema already supports it):**
 
-1. **Peer bets** (`bet_offers` / `bet_matches`): `create_bet_offer`,
-   `accept_bet_offer` RPCs + escrow settlement — all `SECURITY DEFINER`,
-   integrity-checked, double-entry (peer is zero-sum between players, rake → house).
+1. **Peer bets — superseded.** The back/lay offer/match layer was dropped
+   (2026-06 cleanup); peer wagering shipped as PvP Challenge Contracts instead.
 2. **Moneyline — DONE.** Game moneylines are live: even-money, auto-generated per matchup, auto-settled by combined team score (`subject_game_id`, `sync_moneyline_markets_for_week`, `settle_moneyline_market`). **Props** remain (new `bet_markets.market_type` + selections, §7).
 
 ### Open product decisions (do not block the schema)
-- Peer **rake** percentage (`bet_matches.rake` defaults to 0).
 - House **vig** (sub-fair odds as a sink) vs fair odds + manual top-ups (Phase 2
   ships fair `2.000`). Pricing parlay legs below `2.000` (e.g. `1.90` → `×1.9^N`)
   is the lever that turns the compounding parlay margin in the house's favor, the
@@ -480,7 +481,6 @@ bets shipped as a pure-UI addition on top of the existing model:
 - **Parlay correlation guard:** whether to forbid multiple legs with the same
   `subject_player_id` in one bet (kills the same-player-across-games +EV play). Not
   yet enforced — parlays currently allow any distinct selections.
-- Offer **expiry / cancellation refund** rules.
 
 ---
 

@@ -25,7 +25,7 @@ This file is an **index**. The detailed reference is split across [context/](con
 | File | Read it when you need… |
 |---|---|
 | [context/tech-stack.md](context/tech-stack.md) | Project overview, tech stack / versions, how to run, the Supabase client + data-layer file locations |
-| [context/database-schema.md](context/database-schema.md) | The 21-table schema, column lists, and the key invariants/distinctions (teams/weeks ownership, season lifecycle, cascades, betting + loan tables) |
+| [context/database-schema.md](context/database-schema.md) | The 35-table schema, column lists, and the key invariants/distinctions (teams/weeks ownership, season lifecycle, cascades, betting + loan tables) |
 | [context/db-queries.md](context/db-queries.md) | The `db.ts` typed query objects — every method per table (always query through these, never raw client joins) |
 | [context/data-architecture.md](context/data-architecture.md) | The hook + compute-function pattern, archived-vs-live data, standings computation, the full hooks table, and pure utilities (`helpers.ts`) |
 | [context/ui-system.md](context/ui-system.md) | Player badges, the four Zustand stores, navigation architecture (tabs + stacks + routes), and the component inventory (incl. betting display components) |

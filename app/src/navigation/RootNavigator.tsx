@@ -4,6 +4,7 @@ import { Text } from 'react-native'
 import { colors, fonts } from '../theme'
 import { useNotificationStore } from '../stores/notificationStore'
 import { totalCount } from '../utils/notifications'
+import { SHOW_PINSINO } from '../utils/featureFlags'
 
 import MatchupsScreen from '../screens/MatchupsScreen'
 import RsvpScreen from '../screens/RsvpScreen'
@@ -57,7 +58,11 @@ export default function RootNavigator() {
         options={{
           tabBarLabel: 'Pinsino',
           tabBarIcon: tabIcon('🏦'),
-          tabBarBadge: pinsinoBadge > 0 ? (pinsinoBadge > 99 ? '99+' : pinsinoBadge) : undefined,
+          // Hidden (not unregistered) while SHOW_PINSINO is off — the route
+          // and all Pinsino functionality remain intact.
+          tabBarItemStyle: SHOW_PINSINO ? undefined : { display: 'none' },
+          tabBarBadge:
+            SHOW_PINSINO && pinsinoBadge > 0 ? (pinsinoBadge > 99 ? '99+' : pinsinoBadge) : undefined,
           tabBarBadgeStyle: {
             backgroundColor: colors.danger,
             color: colors.bg,

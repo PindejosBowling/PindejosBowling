@@ -425,6 +425,16 @@ export const betMarkets = {
       .eq('market_type', 'prop')
       .eq('params->>source', 'lanetalk')
       .in('status', ['open', 'closed']),
+  // Week ids that have settled LaneTalk props — pairs with
+  // listUnsettledLanetalkProps so the import screen can mark a week Confirmed
+  // (settled, none pending) vs Unconfirmed (some pending) vs no badge (no props).
+  listSettledLanetalkPropWeeks: () =>
+    supabase
+      .from('bet_markets')
+      .select('week_id')
+      .eq('market_type', 'prop')
+      .eq('params->>source', 'lanetalk')
+      .eq('status', 'settled'),
   // Start/reopen a game's betting: flip every O/U market for a week+game between
   // 'open' and 'closed' in one admin write. Closing blocks new bets (place_house_bet
   // rejects non-open selections) but leaves settlement intact (settle_betting_for_week
@@ -1227,8 +1237,6 @@ export const lanetalkImports = {
       .eq('source_url', url)
       .order('game_number'),
   // Every imported game for one player, oldest first — frame-level game details.
-  // Note: lanetalk_game_imports RLS is admin-read-only, so non-admins get zero
-  // rows (which also hides the "Game Details" entry point on PlayerDetail).
   listByPlayer: (playerId: string) =>
     supabase
       .from('lanetalk_game_imports')
@@ -1250,6 +1258,19 @@ export const lanetalkImports = {
       .select('player_id, game_number, payload')
       .eq('week_id', weekId)
       .eq('classification', 'official'),
+  // Every official import on an archived week, with its frame payload — the
+  // frame-data League Records (strikes / spares / frames closed, game + night).
+  listForLeagueRecords: () =>
+    supabase
+      .from('lanetalk_game_imports')
+      .select(
+        'player_id, week_id, game_number, score, payload,' +
+        'players(name),' +
+        'weeks!inner(week_number, season_id, is_archived, seasons!inner(number))'
+      )
+      .eq('classification', 'official')
+      .eq('weeks.is_archived', true)
+      .not('player_id', 'is', null),
   // Admin re-classification of a single imported game (Official ⇄ Recreational).
   setClassification: (id: string, classification: 'official' | 'recreational') =>
     supabase
