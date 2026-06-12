@@ -113,7 +113,9 @@ was removed from the migration; future CREATE TABLE migrations must omit it.
    in PvP_DB.md (optional drift guard deliberately not built).
 3. ~~**TODO status sweep**~~ ✅ done 2026-06-12 (session 3) for FUNCTION_HYGIENE
    §2/§3/§4/§5/§6 + PERFORMANCE §1–4; CONSOLIDATION §5 block pending its push.
-4. **Checkpoint PR to main** (commits `4027aaf`…HEAD). Ask the user first.
+4. ~~**Checkpoint PR to main**~~ ✅ opened 2026-06-12 (session 3, user-approved):
+   [PR #42](https://github.com/jordanreticker/PindejosBowling/pull/42),
+   commits `4027aaf`…`714c95f`. Merge timing is the user's call.
 5. **Ask the user to OTP-login once** (JWT-hook verification, see d51a834).
 6. Deferred by design (do NOT do without a new decision): `bet_legs.side` drop
    (CONSOLIDATION §1B), bounty 4→2 (§6), resync debounce (PERF §5).
