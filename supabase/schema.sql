@@ -1853,9 +1853,7 @@ DECLARE
   v_market_ids uuid[];
   v_mid        uuid;
 BEGIN
-  IF ((SELECT auth.jwt()) -> 'app_metadata' ->> 'role') <> 'admin' THEN
-    RAISE EXCEPTION 'Admin only';
-  END IF;
+  PERFORM public.assert_admin();
 
   -- Markets this bet touched (captured before the bet is deleted).
   SELECT ARRAY_AGG(DISTINCT s.market_id) INTO v_market_ids
@@ -1896,9 +1894,7 @@ AS $function$
 DECLARE
   v_bounty public.bounty_post;
 BEGIN
-  IF ((SELECT auth.jwt()) -> 'app_metadata' ->> 'role') <> 'admin' THEN
-    RAISE EXCEPTION 'Admin only';
-  END IF;
+  PERFORM public.assert_admin();
 
   SELECT * INTO v_bounty FROM public.bounty_post WHERE id = p_bounty_post_id;
   IF v_bounty.id IS NULL THEN
@@ -1924,9 +1920,7 @@ CREATE OR REPLACE FUNCTION public.cancel_loan(p_loan_id uuid)
  SET search_path TO ''
 AS $function$
 BEGIN
-  IF ((SELECT auth.jwt()) -> 'app_metadata' ->> 'role') <> 'admin' THEN
-    RAISE EXCEPTION 'Admin only';
-  END IF;
+  PERFORM public.assert_admin();
 
   DELETE FROM public.pin_ledger
    WHERE loan_ledger_id IN (SELECT id FROM public.loan_ledger WHERE loan_id = p_loan_id);
@@ -1953,7 +1947,7 @@ BEGIN
     RAISE EXCEPTION 'Challenge not found';
   END IF;
 
-  v_is_admin := ((SELECT auth.jwt()) -> 'app_metadata' ->> 'role') = 'admin';
+  v_is_admin := public.is_admin();
 
   -- Player path: must be the author, and the contract must still be open. Admins
   -- bypass both checks (they can cancel pending/countered/locked contracts).
@@ -1990,9 +1984,7 @@ AS $function$
 DECLARE
   v_bounty public.bounty_post;
 BEGIN
-  IF ((SELECT auth.jwt()) -> 'app_metadata' ->> 'role') <> 'admin' THEN
-    RAISE EXCEPTION 'Admin only';
-  END IF;
+  PERFORM public.assert_admin();
 
   SELECT * INTO v_bounty FROM public.bounty_post WHERE id = p_bounty_post_id FOR UPDATE;
   IF v_bounty.id IS NULL THEN
@@ -2026,9 +2018,7 @@ CREATE OR REPLACE FUNCTION public.close_open_pvp_challenges(p_week_id uuid, p_ga
  SET search_path TO ''
 AS $function$
 BEGIN
-  IF ((SELECT auth.jwt()) -> 'app_metadata' ->> 'role') <> 'admin' THEN
-    RAISE EXCEPTION 'Admin only';
-  END IF;
+  PERFORM public.assert_admin();
 
   -- Stamp the live offer for each in-scope challenge as declined.
   UPDATE public.pvp_challenge_offers o
@@ -2232,9 +2222,7 @@ DECLARE
   v_season_id uuid;
   v_bounty_id uuid;
 BEGIN
-  IF ((SELECT auth.jwt()) -> 'app_metadata' ->> 'role') <> 'admin' THEN
-    RAISE EXCEPTION 'Admin only';
-  END IF;
+  PERFORM public.assert_admin();
 
   SELECT id INTO v_season_id
     FROM public.seasons WHERE is_active = true AND registration_open = false;
@@ -2572,9 +2560,7 @@ DECLARE
   v_season_id uuid;
   v_week_id   uuid;
 BEGIN
-  IF ((SELECT auth.jwt()) -> 'app_metadata' ->> 'role') <> 'admin' THEN
-    RAISE EXCEPTION 'Admin only';
-  END IF;
+  PERFORM public.assert_admin();
 
   SELECT id INTO v_season_id
     FROM public.seasons
@@ -2636,7 +2622,7 @@ CREATE OR REPLACE FUNCTION public.custom_access_token(event jsonb)
  RETURNS jsonb
  LANGUAGE plpgsql
  SECURITY DEFINER
- SET search_path TO 'public'
+ SET search_path TO 'public', 'pg_temp'
 AS $function$
 DECLARE
   claims     jsonb;
@@ -3006,7 +2992,7 @@ CREATE OR REPLACE FUNCTION public.link_auth_user_to_player()
  RETURNS trigger
  LANGUAGE plpgsql
  SECURITY DEFINER
- SET search_path TO 'public'
+ SET search_path TO 'public', 'pg_temp'
 AS $function$
 BEGIN
   IF NEW.phone IS NOT NULL THEN
@@ -3211,14 +3197,14 @@ CREATE OR REPLACE FUNCTION public.playoff_create_draft(p_season_id uuid, p_week_
  RETURNS uuid
  LANGUAGE plpgsql
  SECURITY DEFINER
- SET search_path TO 'public'
+ SET search_path TO 'public', 'pg_temp'
 AS $function$
 DECLARE
   v_is_admin boolean;
   v_draft_id uuid;
   v_i        integer;
 BEGIN
-  v_is_admin := ((SELECT auth.jwt()) -> 'app_metadata' ->> 'role') = 'admin';
+  v_is_admin := public.is_admin();
   IF NOT v_is_admin THEN
     RAISE EXCEPTION 'Only admins can create a playoff draft';
   END IF;
@@ -3262,7 +3248,7 @@ CREATE OR REPLACE FUNCTION public.playoff_current_turn(p_draft_id uuid)
  RETURNS uuid
  LANGUAGE plpgsql
  STABLE SECURITY DEFINER
- SET search_path TO 'public'
+ SET search_path TO 'public', 'pg_temp'
 AS $function$
 DECLARE
   v_draft      public.playoff_drafts;
@@ -3311,7 +3297,7 @@ CREATE OR REPLACE FUNCTION public.playoff_make_pick(p_draft_id uuid, p_player_id
  RETURNS void
  LANGUAGE plpgsql
  SECURITY DEFINER
- SET search_path TO 'public'
+ SET search_path TO 'public', 'pg_temp'
 AS $function$
 DECLARE
   v_caller_id  uuid;
@@ -3321,7 +3307,7 @@ DECLARE
   v_picks      integer;
   v_remaining  integer;
 BEGIN
-  v_is_admin := ((SELECT auth.jwt()) -> 'app_metadata' ->> 'role') = 'admin';
+  v_is_admin := public.is_admin();
   SELECT id INTO v_caller_id FROM players WHERE user_id = auth.uid();
   IF v_caller_id IS NULL AND NOT v_is_admin THEN
     RAISE EXCEPTION 'No player linked to the current user';
@@ -3374,7 +3360,7 @@ CREATE OR REPLACE FUNCTION public.playoff_materialize_teams(p_draft_id uuid)
  RETURNS void
  LANGUAGE plpgsql
  SECURITY DEFINER
- SET search_path TO 'public'
+ SET search_path TO 'public', 'pg_temp'
 AS $function$
 DECLARE
   v_is_admin boolean;
@@ -3384,7 +3370,7 @@ DECLARE
   v_slot     integer;
   v_pick     record;
 BEGIN
-  v_is_admin := ((SELECT auth.jwt()) -> 'app_metadata' ->> 'role') = 'admin';
+  v_is_admin := public.is_admin();
   IF NOT v_is_admin THEN
     RAISE EXCEPTION 'Only admins can materialize playoff teams';
   END IF;
@@ -3436,13 +3422,13 @@ CREATE OR REPLACE FUNCTION public.playoff_reset_draft(p_draft_id uuid)
  RETURNS void
  LANGUAGE plpgsql
  SECURITY DEFINER
- SET search_path TO 'public'
+ SET search_path TO 'public', 'pg_temp'
 AS $function$
 DECLARE
   v_is_admin boolean;
   v_draft    public.playoff_drafts;
 BEGIN
-  v_is_admin := ((SELECT auth.jwt()) -> 'app_metadata' ->> 'role') = 'admin';
+  v_is_admin := public.is_admin();
   IF NOT v_is_admin THEN
     RAISE EXCEPTION 'Only admins can reset a playoff draft';
   END IF;
@@ -3472,14 +3458,14 @@ CREATE OR REPLACE FUNCTION public.playoff_undo_pick(p_draft_id uuid)
  RETURNS void
  LANGUAGE plpgsql
  SECURITY DEFINER
- SET search_path TO 'public'
+ SET search_path TO 'public', 'pg_temp'
 AS $function$
 DECLARE
   v_is_admin boolean;
   v_draft    public.playoff_drafts;
   v_last     uuid;
 BEGIN
-  v_is_admin := ((SELECT auth.jwt()) -> 'app_metadata' ->> 'role') = 'admin';
+  v_is_admin := public.is_admin();
   IF NOT v_is_admin THEN
     RAISE EXCEPTION 'Only admins can undo a pick';
   END IF;
@@ -3531,6 +3517,7 @@ $function$
 CREATE OR REPLACE FUNCTION public.prevent_non_open_season_delete()
  RETURNS trigger
  LANGUAGE plpgsql
+ SET search_path TO 'public', 'pg_temp'
 AS $function$
 begin
   if old.registration_open is not true then
@@ -3877,9 +3864,7 @@ CREATE OR REPLACE FUNCTION public.remove_over_under_markets_for_game(p_week_id u
  SET search_path TO ''
 AS $function$
 BEGIN
-  IF ((SELECT auth.jwt()) -> 'app_metadata' ->> 'role') <> 'admin' THEN
-    RAISE EXCEPTION 'Admin only';
-  END IF;
+  PERFORM public.assert_admin();
 
   -- Refund (delete both ledger rows of) every bet with a leg on this game's markets.
   DELETE FROM public.pin_ledger
@@ -3998,9 +3983,7 @@ CREATE OR REPLACE FUNCTION public.restore_activity_event(p_event_id uuid)
  SET search_path TO ''
 AS $function$
 BEGIN
-  IF ((SELECT auth.jwt()) -> 'app_metadata' ->> 'role') <> 'admin' THEN
-    RAISE EXCEPTION 'Admin only';
-  END IF;
+  PERFORM public.assert_admin();
 
   UPDATE public.activity_feed_events
     SET status = 'published',
@@ -4426,9 +4409,7 @@ DECLARE
   v_voided     integer := 0;
   v_pending    integer := 0;
 BEGIN
-  IF ((SELECT auth.jwt()) -> 'app_metadata' ->> 'role') <> 'admin' THEN
-    RAISE EXCEPTION 'Admin only';
-  END IF;
+  PERFORM public.assert_admin();
 
   IF NOT EXISTS (SELECT 1 FROM public.weeks WHERE id = p_week_id) THEN
     RAISE EXCEPTION 'Week not found';
@@ -4582,9 +4563,7 @@ CREATE OR REPLACE FUNCTION public.settle_market(p_market_id uuid, p_result_value
  SET search_path TO ''
 AS $function$
 BEGIN
-  IF ((SELECT auth.jwt()) -> 'app_metadata' ->> 'role') <> 'admin' THEN
-    RAISE EXCEPTION 'Admin only';
-  END IF;
+  PERFORM public.assert_admin();
   PERFORM public.settle_market_internal(p_market_id, p_result_value);
 END;
 $function$
@@ -4637,9 +4616,7 @@ CREATE OR REPLACE FUNCTION public.settle_moneyline_market(p_market_id uuid)
  SET search_path TO ''
 AS $function$
 BEGIN
-  IF ((SELECT auth.jwt()) -> 'app_metadata' ->> 'role') <> 'admin' THEN
-    RAISE EXCEPTION 'Admin only';
-  END IF;
+  PERFORM public.assert_admin();
   PERFORM public.settle_moneyline_market_internal(p_market_id);
 END;
 $function$
@@ -4946,9 +4923,7 @@ AS $function$
 DECLARE
   v_contract record;
 BEGIN
-  IF ((SELECT auth.jwt()) -> 'app_metadata' ->> 'role') <> 'admin' THEN
-    RAISE EXCEPTION 'Admin only';
-  END IF;
+  PERFORM public.assert_admin();
 
   -- Close any still-open negotiations for the whole week (the clock-based expiry
   -- sweep is gone; nothing else closes stale pending/countered contracts now).
@@ -4976,9 +4951,7 @@ AS $function$
 DECLARE
   v_admin_id uuid;
 BEGIN
-  IF ((SELECT auth.jwt()) -> 'app_metadata' ->> 'role') <> 'admin' THEN
-    RAISE EXCEPTION 'Admin only';
-  END IF;
+  PERFORM public.assert_admin();
 
   SELECT id INTO v_admin_id FROM public.players WHERE user_id = auth.uid();
 
