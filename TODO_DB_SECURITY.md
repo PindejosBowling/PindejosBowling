@@ -16,6 +16,17 @@ migrations don't change the types; item 4 does.
 
 ## 1. Anon lockdown — `is_registered_player` is the only anon surface
 
+**Status: ✅ DONE 2026-06-12** — migrations `20260612120954_anon_lockdown` +
+`20260612125943_anon_lockdown_public_execute` (follow-up: 14 functions inherited
+EXECUTE from PUBLIC, so the anon revoke alone was a no-op for them — PUBLIC
+revoked instead, incl. the future-functions default ACL). Hardened beyond the
+plan: anon's table/sequence grants + default privileges also revoked (a stray
+future `TO anon` policy is now inert), and `refresh-schema-snapshot.sh` runs
+[supabase/anon-posture-assert.sql](supabase/anon-posture-assert.sql) after every
+push — any anon regression fails the ritual that introduced it. Curl-verified:
+table reads 42501, `place_house_bet` permission-denied, `is_registered_player`
+answers. Item 3 (oracle docs) also done — see AUTH.md "Anon posture".
+
 Today anon has `USING (true)` SELECT on **19 tables** — the entire economy
 (every balance, bet, loan, debt, contract, bounty) is dumpable with the anon key,
 while `players` itself is authenticated-only. The app's only pre-login DB call is
@@ -109,6 +120,8 @@ caller to execute it: `GRANT EXECUTE ON FUNCTION public.is_admin() TO authentica
 
 ## 3. Document the `is_registered_player` phone oracle (accepted trade-off)
 
+**Status: ✅ DONE 2026-06-12** — AUTH.md "Anon posture" section.
+
 The function lets anyone with the anon key confirm whether a phone number is in
 the league — inherent to the pre-login UX ("is this phone registered?"). After
 item 1 it is the *entire* anon attack surface, which is the right shape; we accept
@@ -154,9 +167,9 @@ Pre-checks (read-only):
 ---
 
 ## Done when
-- [ ] Anon: one callable function, zero readable rows (curl-verified)
+- [x] Anon: one callable function, zero readable rows (curl-verified 2026-06-12)
 - [ ] All admin policies route through `(SELECT public.is_admin())`; registrations
       wrapped; behavior diff clean
-- [ ] AUTH.md documents the anon posture + phone-oracle trade-off
+- [x] AUTH.md documents the anon posture + phone-oracle trade-off (2026-06-12)
 - [ ] `players.name` is generated; app no longer writes it
 - [ ] Snapshot + types regenerated

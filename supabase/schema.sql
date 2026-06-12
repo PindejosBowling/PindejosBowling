@@ -1139,9 +1139,6 @@ CREATE POLICY "admin can update" ON activity_feed_events AS PERMISSIVE FOR UPDAT
   USING ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text))
   WITH CHECK ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
 
-CREATE POLICY "anon can read public published" ON activity_feed_events AS PERMISSIVE FOR SELECT TO anon
-  USING (((status = 'published'::text) AND (visibility = 'public'::text)));
-
 CREATE POLICY "authenticated can read public published" ON activity_feed_events AS PERMISSIVE FOR SELECT TO authenticated
   USING (((status = 'published'::text) AND (visibility = 'public'::text)));
 
@@ -1156,9 +1153,6 @@ CREATE POLICY "admin can insert" ON bet_legs AS PERMISSIVE FOR INSERT TO authent
 CREATE POLICY "admin can update" ON bet_legs AS PERMISSIVE FOR UPDATE TO authenticated
   USING ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text))
   WITH CHECK ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
-
-CREATE POLICY "anon can read" ON bet_legs AS PERMISSIVE FOR SELECT TO anon
-  USING (true);
 
 CREATE POLICY "authenticated can read" ON bet_legs AS PERMISSIVE FOR SELECT TO authenticated
   USING (true);
@@ -1175,9 +1169,6 @@ CREATE POLICY "admin can update" ON bet_markets AS PERMISSIVE FOR UPDATE TO auth
   USING ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text))
   WITH CHECK ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
 
-CREATE POLICY "anon can read" ON bet_markets AS PERMISSIVE FOR SELECT TO anon
-  USING (true);
-
 CREATE POLICY "authenticated can read" ON bet_markets AS PERMISSIVE FOR SELECT TO authenticated
   USING (true);
 
@@ -1193,9 +1184,6 @@ CREATE POLICY "admin can update" ON bet_selections AS PERMISSIVE FOR UPDATE TO a
   USING ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text))
   WITH CHECK ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
 
-CREATE POLICY "anon can read" ON bet_selections AS PERMISSIVE FOR SELECT TO anon
-  USING (true);
-
 CREATE POLICY "authenticated can read" ON bet_selections AS PERMISSIVE FOR SELECT TO authenticated
   USING (true);
 
@@ -1210,9 +1198,6 @@ CREATE POLICY "admin can insert" ON bets AS PERMISSIVE FOR INSERT TO authenticat
 CREATE POLICY "admin can update" ON bets AS PERMISSIVE FOR UPDATE TO authenticated
   USING ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text))
   WITH CHECK ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
-
-CREATE POLICY "anon can read" ON bets AS PERMISSIVE FOR SELECT TO anon
-  USING (true);
 
 CREATE POLICY "authenticated can read" ON bets AS PERMISSIVE FOR SELECT TO authenticated
   USING (true);
@@ -1244,9 +1229,6 @@ CREATE POLICY "admin can update" ON bounty_hunter_stakes AS PERMISSIVE FOR UPDAT
   USING ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text))
   WITH CHECK ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
 
-CREATE POLICY "anon can read" ON bounty_hunter_stakes AS PERMISSIVE FOR SELECT TO anon
-  USING (true);
-
 CREATE POLICY "authenticated can read" ON bounty_hunter_stakes AS PERMISSIVE FOR SELECT TO authenticated
   USING (true);
 
@@ -1261,9 +1243,6 @@ CREATE POLICY "admin can insert" ON bounty_payouts AS PERMISSIVE FOR INSERT TO a
 CREATE POLICY "admin can update" ON bounty_payouts AS PERMISSIVE FOR UPDATE TO authenticated
   USING ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text))
   WITH CHECK ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
-
-CREATE POLICY "anon can read" ON bounty_payouts AS PERMISSIVE FOR SELECT TO anon
-  USING (true);
 
 CREATE POLICY "authenticated can read" ON bounty_payouts AS PERMISSIVE FOR SELECT TO authenticated
   USING (true);
@@ -1280,9 +1259,6 @@ CREATE POLICY "admin can update" ON bounty_post AS PERMISSIVE FOR UPDATE TO auth
   USING ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text))
   WITH CHECK ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
 
-CREATE POLICY "anon can read" ON bounty_post AS PERMISSIVE FOR SELECT TO anon
-  USING (true);
-
 CREATE POLICY "authenticated can read" ON bounty_post AS PERMISSIVE FOR SELECT TO authenticated
   USING (true);
 
@@ -1298,9 +1274,6 @@ CREATE POLICY "admin can update" ON bounty_settlements AS PERMISSIVE FOR UPDATE 
   USING ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text))
   WITH CHECK ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
 
-CREATE POLICY "anon can read" ON bounty_settlements AS PERMISSIVE FOR SELECT TO anon
-  USING (true);
-
 CREATE POLICY "authenticated can read" ON bounty_settlements AS PERMISSIVE FOR SELECT TO authenticated
   USING (true);
 
@@ -1315,9 +1288,6 @@ CREATE POLICY "admin can insert" ON custom_lines AS PERMISSIVE FOR INSERT TO aut
 CREATE POLICY "admin can update" ON custom_lines AS PERMISSIVE FOR UPDATE TO authenticated
   USING ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text))
   WITH CHECK ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
-
-CREATE POLICY "anon can read" ON custom_lines AS PERMISSIVE FOR SELECT TO anon
-  USING (true);
 
 CREATE POLICY "authenticated can read" ON custom_lines AS PERMISSIVE FOR SELECT TO authenticated
   USING (true);
@@ -1354,9 +1324,6 @@ CREATE POLICY "admin can update" ON loan_ledger AS PERMISSIVE FOR UPDATE TO auth
   USING ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text))
   WITH CHECK ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
 
-CREATE POLICY "anon can read" ON loan_ledger AS PERMISSIVE FOR SELECT TO anon
-  USING (true);
-
 CREATE POLICY "authenticated can read" ON loan_ledger AS PERMISSIVE FOR SELECT TO authenticated
   USING (true);
 
@@ -1371,9 +1338,6 @@ CREATE POLICY "admin can insert" ON loan_products AS PERMISSIVE FOR INSERT TO au
 CREATE POLICY "admin can update" ON loan_products AS PERMISSIVE FOR UPDATE TO authenticated
   USING ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text))
   WITH CHECK ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
-
-CREATE POLICY "anon can read" ON loan_products AS PERMISSIVE FOR SELECT TO anon
-  USING (true);
 
 CREATE POLICY "authenticated can read" ON loan_products AS PERMISSIVE FOR SELECT TO authenticated
   USING (true);
@@ -1390,9 +1354,6 @@ CREATE POLICY "admin can update" ON loans AS PERMISSIVE FOR UPDATE TO authentica
   USING ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text))
   WITH CHECK ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
 
-CREATE POLICY "anon can read" ON loans AS PERMISSIVE FOR SELECT TO anon
-  USING (true);
-
 CREATE POLICY "authenticated can read" ON loans AS PERMISSIVE FOR SELECT TO authenticated
   USING (true);
 
@@ -1403,9 +1364,6 @@ CREATE POLICY "admin can delete" ON pin_ledger AS PERMISSIVE FOR DELETE TO authe
 
 CREATE POLICY "admin can insert" ON pin_ledger AS PERMISSIVE FOR INSERT TO authenticated
   WITH CHECK ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
-
-CREATE POLICY "anon can read" ON pin_ledger AS PERMISSIVE FOR SELECT TO anon
-  USING (true);
 
 CREATE POLICY "authenticated can read" ON pin_ledger AS PERMISSIVE FOR SELECT TO authenticated
   USING (true);
@@ -1470,9 +1428,6 @@ CREATE POLICY "admin can update" ON pvp_challenge_offers AS PERMISSIVE FOR UPDAT
   USING ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text))
   WITH CHECK ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
 
-CREATE POLICY "anon can read" ON pvp_challenge_offers AS PERMISSIVE FOR SELECT TO anon
-  USING (true);
-
 CREATE POLICY "authenticated can read" ON pvp_challenge_offers AS PERMISSIVE FOR SELECT TO authenticated
   USING (true);
 
@@ -1488,9 +1443,6 @@ CREATE POLICY "admin can update" ON pvp_challenges AS PERMISSIVE FOR UPDATE TO a
   USING ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text))
   WITH CHECK ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
 
-CREATE POLICY "anon can read" ON pvp_challenges AS PERMISSIVE FOR SELECT TO anon
-  USING (true);
-
 CREATE POLICY "authenticated can read" ON pvp_challenges AS PERMISSIVE FOR SELECT TO authenticated
   USING (true);
 
@@ -1505,9 +1457,6 @@ CREATE POLICY "admin can insert" ON pvp_ledger AS PERMISSIVE FOR INSERT TO authe
 CREATE POLICY "admin can update" ON pvp_ledger AS PERMISSIVE FOR UPDATE TO authenticated
   USING ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text))
   WITH CHECK ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
-
-CREATE POLICY "anon can read" ON pvp_ledger AS PERMISSIVE FOR SELECT TO anon
-  USING (true);
 
 CREATE POLICY "authenticated can read" ON pvp_ledger AS PERMISSIVE FOR SELECT TO authenticated
   USING (true);

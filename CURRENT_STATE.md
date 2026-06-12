@@ -15,7 +15,7 @@ with an execution-plan doc:
 | [TODO_DB_CONSOLIDATION.md](TODO_DB_CONSOLIDATION.md) | Drop dead peer layer; `pin_ledger_double_entry()` helper; `bets.week_id`; cap `pin_ledger` ref columns; event catalog; bounty 4→2 | **§1 done**, rest not started |
 | [TODO_DB_FUNCTION_HYGIENE.md](TODO_DB_FUNCTION_HYGIENE.md) | Shared helpers (`assert_admin`, `current_player_id`, `current_season_id`, `pin_balance`, `is_admin`); `score_credit` guard fix; reversal rule docs; `search_path` normalization; PvP status cleanup | Not started |
 | [TODO_DB_PERFORMANCE.md](TODO_DB_PERFORMANCE.md) | Persist LaneTalk per-import stats; balance covering index; redundant/missing indexes; resync amplification (measure-first) | Not started |
-| [TODO_DB_SECURITY.md](TODO_DB_SECURITY.md) | **Anon lockdown (confirmed directive)**; `is_admin()` RLS dedup; phone-oracle docs; `players.name` → GENERATED | Not started |
+| [TODO_DB_SECURITY.md](TODO_DB_SECURITY.md) | **Anon lockdown (confirmed directive)**; `is_admin()` RLS dedup; phone-oracle docs; `players.name` → GENERATED | **§1 + §3 done 2026-06-12**, rest not started |
 
 **Agreed sequencing:** anon lockdown → shared helpers → consolidation RPC
 rewrites (which consume the helpers) → everything else.
@@ -33,6 +33,16 @@ rewrites (which consume the helpers) → everything else.
 - **Docs updated:** [supabase/PIN_ECONOMY_SCHEMA.md](supabase/PIN_ECONOMY_SCHEMA.md)
   (peer-layer sections → removal record), [context/database-schema.md](context/database-schema.md),
   [AGENTS.md](AGENTS.md) (real table count — the old "22" had drifted).
+
+- **Anon lockdown (SECURITY §1 + §3) — applied to the live DB 2026-06-12.**
+  Migrations `20260612120954_anon_lockdown` + `20260612125943_anon_lockdown_public_execute`:
+  17 anon policies dropped; anon table/sequence grants + PUBLIC function EXECUTE
+  revoked (current + default privileges) — anon's sole capability is
+  `is_registered_player(text)`, and a stray future `TO anon` policy is inert
+  without a grant. `refresh-schema-snapshot.sh` now runs an inheritance-aware
+  posture assertion ([supabase/anon-posture-assert.sql](supabase/anon-posture-assert.sql))
+  after every push; it already caught the PUBLIC-inheritance gap that motivated
+  the follow-up migration. Curl-verified; AUTH.md documents posture + phone oracle.
 
 ## ⚠️ Incident found during the push (resolved, watch for recurrence)
 
