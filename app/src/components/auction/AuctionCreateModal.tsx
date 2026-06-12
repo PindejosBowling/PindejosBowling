@@ -25,7 +25,6 @@ export default function AuctionCreateModal({ initial, onClose, onDone }: Props) 
 
   const [catalog, setCatalog] = useState<CatalogItemView[]>([])
   const [itemKey, setItemKey] = useState(initial?.itemKey ?? '')
-  const [description, setDescription] = useState(initial?.description ?? '')
   const [minimumBid, setMinimumBid] = useState(initial ? String(initial.minimumBid) : '')
   const [opensAt, setOpensAt] = useState<Date>(() => (initial ? new Date(initial.opensAt) : new Date()))
   const [closesAt, setClosesAt] = useState<Date>(() =>
@@ -52,22 +51,25 @@ export default function AuctionCreateModal({ initial, onClose, onDone }: Props) 
 
   const minBid = Number(minimumBid) || 0
 
+  // The auction's description is the item's catalog copy — derived, never
+  // typed. The card and detail page pitch the item in its own voice.
+  const selectedItem = useMemo(() => catalog.find(c => c.key === itemKey) ?? null, [catalog, itemKey])
+
   const error = useMemo<string | null>(() => {
     if (!itemKey) return 'Pick an item'
-    if (!description.trim()) return 'Add a description'
     if (minBid <= 0) return 'Minimum bid must be at least 1'
     if (closesAt.getTime() <= Date.now()) return 'Close time must be in the future'
     if (closesAt.getTime() <= opensAt.getTime()) return 'Close time must be after open time'
     return null
-  }, [itemKey, description, minBid, opensAt, closesAt])
+  }, [itemKey, minBid, opensAt, closesAt])
 
   async function submit() {
-    if (saving || error) return
+    if (saving || error || !selectedItem) return
     setSaving(true)
     try {
       const input = {
         catalogKey: itemKey,
-        description: description.trim(),
+        description: selectedItem.effectLine,
         minimumBid: minBid,
         opensAt: opensAt.toISOString(),
         closesAt: closesAt.toISOString(),
@@ -130,16 +132,9 @@ export default function AuctionCreateModal({ initial, onClose, onDone }: Props) 
         ))}
       </View>
 
-      <Text style={styles.label}>DESCRIPTION</Text>
-      <TextInput
-        style={[styles.input, styles.multiline]}
-        value={description}
-        onChangeText={setDescription}
-        placeholder="The pitch — shown on the card and detail page."
-        placeholderTextColor={colors.muted2}
-        multiline
-        maxLength={300}
-      />
+      {selectedItem && (
+        <Text style={styles.itemCopy}>{selectedItem.effectLine}</Text>
+      )}
 
       <Text style={styles.label}>MINIMUM BID</Text>
       <TextInput
@@ -197,7 +192,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface2, borderRadius: radius.cardSm, borderWidth: 1, borderColor: colors.border2,
     paddingHorizontal: 14, paddingVertical: 12, fontFamily: fonts.barlow, fontSize: 15, color: colors.text,
   },
-  multiline: { minHeight: 70, textAlignVertical: 'top' },
+  itemCopy: { fontFamily: fonts.barlow, fontSize: 13, color: colors.muted, marginTop: 10, lineHeight: 18 },
   dateBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     backgroundColor: colors.surface2, borderRadius: radius.cardSm, borderWidth: 1, borderColor: colors.border2,
