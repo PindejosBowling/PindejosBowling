@@ -31,6 +31,23 @@ Note: `auth.users` stores phone without the leading `+` (e.g. `17703552520`), wh
 
 The `players.isRegistered()` RPC (`is_registered_player`) is called before sending the OTP to reject phone numbers that aren't in the league roster. This is a `SECURITY DEFINER` function callable by `anon` — it returns only a boolean and exposes no PII.
 
+## Anon posture (locked down 2026-06-12)
+
+**Anon may execute exactly one function — `is_registered_player(text)` — and nothing else. All table reads require `authenticated`.** The pre-login phone check is the app's only unauthenticated DB call, and the function is `SECURITY DEFINER`, so anon needs no table access at all.
+
+Enforced in layers (migrations `anon_lockdown` + `anon_lockdown_public_execute`):
+
+1. **No anon policies** — every `TO anon` RLS policy was dropped.
+2. **No anon grants** — all table/sequence privileges revoked from `anon`, and EXECUTE revoked from **`PUBLIC`** (not just anon — anon inherits from PUBLIC) on every public function. A stray future `TO anon` policy is therefore inert: RLS only filters what GRANTs allow.
+3. **Future objects covered** — default privileges for tables/sequences/functions created by `postgres` (i.e. every migration) no longer include anon or PUBLIC. New RPCs default to `postgres` + `authenticated` + `service_role`.
+4. **Posture assertion** — [refresh-schema-snapshot.sh](refresh-schema-snapshot.sh) runs [anon-posture-assert.sql](anon-posture-assert.sql) after every push (privilege checks are inheritance-aware via `has_*_privilege`). Any regression fails the push ritual that introduced it, naming the offending policy/grant/function.
+
+Known residual, accepted: `supabase_admin`'s default ACL still names anon for public-schema objects it creates (platform-managed; `postgres` cannot alter another role's default privileges). The assertion catches any concrete object that ever materializes that way.
+
+### The phone-number oracle (accepted trade-off)
+
+`is_registered_player` lets anyone holding the anon key confirm whether a phone number belongs to the league — inherent to the pre-login UX ("is this phone registered?"). After the lockdown this oracle is the *entire* anon attack surface, which is the right shape. Accepted because the league is ~dozens of known members whose numbers are not secret within the league; it returns only a boolean. Revisit only if registration ever opens to strangers.
+
 ## JWT Hook — `public.custom_access_token`
 
 A `custom_access_token` hook is registered in the Supabase dashboard under **Authentication → Hooks**. It points to `pg-functions://postgres/public/custom_access_token`.
