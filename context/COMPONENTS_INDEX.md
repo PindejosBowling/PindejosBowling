@@ -125,8 +125,8 @@ All sheets **mounted conditionally**. Components bind to the view types in `util
 | `AuctionBidSheet` | `{ auction, balance, onClose, onDone }` | Place/edit the sealed bid on `BottomSheet`: balance row, amount input (prefilled min bid or current bid), free re-pricing (no increment), §18.3 pledge copy always, large-bid warning at ≥50% of balance, CTA `Pledge X pins`. |
 | `AuctionCreateModal` | `{ initial?, onClose, onDone }` | Admin create/edit: catalog item chips, description, min bid, opens/closes pickers (close defaults next Mon 7 PM ET), bounce fee shown read-only. No drafts — creates straight into scheduled/open. Pass `initial` for Edit (scheduled only). |
 | `AuctionAdminActionModal` | `{ auction, onClose, onDone, onEdit }` | Admin actions by status via `useAdminAction`: Edit / Open Now (scheduled), Settle Now (open), Cancel-erase or Reverse-settlement (destructive). **No bid inspection — sealed means sealed, even for admins.** |
-| `MyItemRow` | `{ item: InventoryItemView, onPress }` | One inventory row: icon, name, effect line, charges cell. Consumed items stay visible greyed-out with an **EXPIRED** tag. |
-| `ItemInfoSheet` | `{ item, onClose }` | Info-only sheet: what it does / how to use it / provenance. No actions — activation lives at the point of use. |
+| `MyItemRow` | `{ group: InventoryGroupView, onPress }` | One grouped inventory row — items are **atomic single-use**, identical ones display as ×N (`groupInventory`). Consumed groups stay visible greyed-out with an **EXPIRED** tag. |
+| `ItemInfoSheet` | `{ group, onClose }` | Info-only sheet: what it does / how to use it / per-item provenance lines. No actions — activation lives at the point of use. |
 | `SafetyTicketToggle` | `{ ticketCount, enabled, onToggle, disabled? }` | The "use Safety Ticket" row for `WagerSheet`'s children slot. Default OFF; renders nothing at 0 tickets; ON-state copy states the ticket is spent at placement win or lose. **Not yet mounted** — wires into SportsbookScreen when `placeHouseBet` gains the insurance arg. |
 
 ## Activity Feed ("Market Moves") (`components/economy/`)

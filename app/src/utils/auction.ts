@@ -51,6 +51,8 @@ export interface CatalogItemView {
   howToUse: string
 }
 
+// One atomic, single-use item row (no charge counter — quantity is row count;
+// AUCTION_FINDINGS.md item-framework doctrine).
 export interface InventoryItemView {
   id: string
   itemKey: string
@@ -60,8 +62,19 @@ export interface InventoryItemView {
   howToUse: string
   source: InventoryItemSource
   grantedAt: string
-  remainingCharges: number
   consumedAt: string | null
+}
+
+// Display grouping: identical items collapse to one row with ×count.
+export interface InventoryGroupView {
+  itemKey: string
+  icon: string
+  name: string
+  effectLine: string
+  howToUse: string
+  expired: boolean
+  count: number
+  items: InventoryItemView[]
 }
 
 export const SOURCE_LABEL: Record<InventoryItemSource, string> = {
@@ -106,19 +119,37 @@ export function auctionSections(auctions: AuctionView[]): AuctionSections {
   return { open, scheduled, settled }
 }
 
-// Active items first (newest grant first), consumed/expired greyed out below.
-export function sortInventory(items: InventoryItemView[]): InventoryItemView[] {
-  const active = items
-    .filter(i => i.consumedAt == null && i.remainingCharges > 0)
-    .sort((a, b) => b.grantedAt.localeCompare(a.grantedAt))
-  const expired = items
-    .filter(i => i.consumedAt != null || i.remainingCharges <= 0)
-    .sort((a, b) => b.grantedAt.localeCompare(a.grantedAt))
-  return [...active, ...expired]
+export function isItemExpired(item: InventoryItemView): boolean {
+  return item.consumedAt != null
 }
 
-export function isItemExpired(item: InventoryItemView): boolean {
-  return item.consumedAt != null || item.remainingCharges <= 0
+// Group identical items (same catalog key + consumed state) into ×N display
+// rows: active groups first (newest grant first), expired greyed out below.
+export function groupInventory(items: InventoryItemView[]): InventoryGroupView[] {
+  const groups = new Map<string, InventoryGroupView>()
+  const sorted = [...items].sort((a, b) => b.grantedAt.localeCompare(a.grantedAt))
+  for (const item of sorted) {
+    const expired = isItemExpired(item)
+    const key = `${item.itemKey}:${expired ? 'expired' : 'active'}`
+    const g = groups.get(key)
+    if (g) {
+      g.count += 1
+      g.items.push(item)
+    } else {
+      groups.set(key, {
+        itemKey: item.itemKey,
+        icon: item.icon,
+        name: item.name,
+        effectLine: item.effectLine,
+        howToUse: item.howToUse,
+        expired,
+        count: 1,
+        items: [item],
+      })
+    }
+  }
+  const all = [...groups.values()]
+  return [...all.filter(g => !g.expired), ...all.filter(g => g.expired)]
 }
 
 // Static minute-granularity remaining time for list cards ("3h 12m", "4d 2h").

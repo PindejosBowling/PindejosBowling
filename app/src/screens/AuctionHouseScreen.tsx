@@ -14,7 +14,7 @@ import AuctionCreateModal from '../components/auction/AuctionCreateModal'
 import { useAuctionHouseData } from '../hooks/useAuctionHouseData'
 import { useRefresh } from '../hooks/useRefresh'
 import { useAuthStore } from '../stores/authStore'
-import { AuctionView, InventoryItemView, auctionSections, sortInventory } from '../utils/auction'
+import { AuctionView, InventoryGroupView, auctionSections, groupInventory } from '../utils/auction'
 import { PinsinoStackParamList } from '../navigation/types'
 
 type Nav = NativeStackNavigationProp<PinsinoStackParamList>
@@ -28,13 +28,13 @@ export default function AuctionHouseScreen() {
   const { refreshing, onRefresh } = useRefresh(reload)
 
   const [createOpen, setCreateOpen] = useState(false)
-  const [infoItem, setInfoItem] = useState<InventoryItemView | null>(null)
+  const [infoGroup, setInfoGroup] = useState<InventoryGroupView | null>(null)
 
   // Refresh on return (e.g. after bidding on detail). Silent after first load.
   useFocusEffect(useCallback(() => { reload() }, [reload]))
 
   const sections = useMemo(() => auctionSections(auctions), [auctions])
-  const items = useMemo(() => sortInventory(myItems), [myItems])
+  const itemGroups = useMemo(() => groupInventory(myItems), [myItems])
 
   if (loading) return <LoadingView label="Loading…" />
 
@@ -81,11 +81,11 @@ export default function AuctionHouseScreen() {
           </>
         )}
 
-        {items.length > 0 && (
+        {itemGroups.length > 0 && (
           <>
-            <Text style={styles.sectionLabel}>MY ITEMS ({items.length})</Text>
-            {items.map(item => (
-              <MyItemRow key={item.id} item={item} onPress={() => setInfoItem(item)} />
+            <Text style={styles.sectionLabel}>MY ITEMS ({myItems.length})</Text>
+            {itemGroups.map(g => (
+              <MyItemRow key={`${g.itemKey}:${g.expired}`} group={g} onPress={() => setInfoGroup(g)} />
             ))}
           </>
         )}
@@ -96,8 +96,8 @@ export default function AuctionHouseScreen() {
       {createOpen && (
         <AuctionCreateModal onClose={() => setCreateOpen(false)} onDone={reload} />
       )}
-      {infoItem && (
-        <ItemInfoSheet item={infoItem} onClose={() => setInfoItem(null)} />
+      {infoGroup && (
+        <ItemInfoSheet group={infoGroup} onClose={() => setInfoGroup(null)} />
       )}
     </SafeAreaView>
   )

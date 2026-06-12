@@ -120,9 +120,10 @@ let auctions: AuctionView[] = [
   },
 ]
 
+// Atomic single-use items — "two tickets" is two rows (×2 in the UI).
 let items: InventoryItemView[] = [
   {
-    id: 'mock-item-active',
+    id: 'mock-item-active-1',
     itemKey: 'safety_ticket',
     icon: '🎟️',
     name: 'Safety Ticket',
@@ -130,7 +131,17 @@ let items: InventoryItemView[] = [
     howToUse: 'Toggle it on when placing a bet in the Sportsbook. The ticket is spent at placement, win or lose.',
     source: 'auction',
     grantedAt: iso(-6 * 24 * HOURS),
-    remainingCharges: 1,
+    consumedAt: null,
+  },
+  {
+    id: 'mock-item-active-2',
+    itemKey: 'safety_ticket',
+    icon: '🎟️',
+    name: 'Safety Ticket',
+    effectLine: 'If an insured bet loses, your full stake comes back.',
+    howToUse: 'Toggle it on when placing a bet in the Sportsbook. The ticket is spent at placement, win or lose.',
+    source: 'admin_grant',
+    grantedAt: iso(-9 * 24 * HOURS),
     consumedAt: null,
   },
   {
@@ -142,7 +153,6 @@ let items: InventoryItemView[] = [
     howToUse: 'Toggle it on when placing a bet in the Sportsbook. The ticket is spent at placement, win or lose.',
     source: 'admin_grant',
     grantedAt: iso(-20 * 24 * HOURS),
-    remainingCharges: 0,
     consumedAt: iso(-12 * 24 * HOURS),
   },
 ]
