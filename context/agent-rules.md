@@ -24,7 +24,15 @@ It contains hook patterns, screen skeleton, navigation wiring, database migratio
 
 7. **All source files are TypeScript.** Screens, hooks, and utilities are fully typed `.ts`/`.tsx`.
 
-8. **No test suite.** Verify behavior manually via the Expo dev server (`expo start`).
+8. **App layer has no test suite** — verify manually via the Expo dev server
+   (`expo start`). **The DB layer DOES have one:** the rollback-probe suite,
+   `./supabase/verify/run-all-probes.sh` — real RPC flows executed against the
+   live DB inside always-aborting transactions (zero persistence), with
+   assertions on balances, statuses, back-links, and the double-entry
+   invariant. Run it before AND after pushing any migration that touches
+   economy RPCs (`loan_*`/`pvp_*`/`bet_*`/`bounty_*`/settlement); for pure
+   refactors also diff the PROBE_RESULT captures (byte-identical = behavior
+   preserved). Full reference: [db-verification.md](db-verification.md).
 
 9. **Auth layer is active.** Phone OTP login is required. User identity is derived from `auth.users` and linked to `players` via `players.user_id`. The `useAuthStore` exposes `userId`, `playerId`, `playerName`, and `role`. See [supabase/AUTH.md](../supabase/AUTH.md) for the full architecture — JWT hook, trigger, RLS patterns, and role management.
 
