@@ -13,6 +13,14 @@ TOKEN="$(grep '^SUPABASE_ACCESS_TOKEN=' app/.env.local | cut -d'=' -f2)"
 RAW="$(SUPABASE_ACCESS_TOKEN="$TOKEN" supabase db query --linked --workdir "$ROOT" \
   --file "$1" -o json 2>&1 || true)"
 
+# Assertion-grade probes raise PROBE_FAIL / PROBE_SETUP_FAILED instead of a
+# result — surface those as hard failures.
+if printf '%s' "$RAW" | grep -q 'PROBE_FAIL\|PROBE_SETUP_FAILED'; then
+  echo "PROBE FAILED ($1):" >&2
+  printf '%s\n' "$RAW" | grep -o 'PROBE_\(FAIL\|SETUP_FAILED\)[^"\\]*' | head -3 >&2
+  exit 1
+fi
+
 python3 - "$2" <<PYEOF
 import re, json, sys
 raw = '''$(printf '%s' "$RAW" | sed "s/'/\\\\'/g")'''

@@ -1,83 +1,142 @@
--- Rollback-probe for the PvP flow (CONSOLIDATION §2 batch C verification).
+-- PvP probe — self-contained, assertion-grade (see context/db-verification.md).
 --
--- Two custom-contract lifecycles:
---   #1 create → accept (escrow ×2) → admin settle w/ winner (payout) → void
---      (settled path: payout reversal + stake refunds)
---   #2 create → accept → void (locked path: stake refunds only)
--- Captures all rows written, normalized; raises to abort — nothing persists.
+-- Fixtures: 2 synthetic players seeded 1000 pins each. Live anchors: active
+-- season + one open week.
 --
--- Inputs (live data, re-check before reuse):
---   player1 c985c0ad… (user c811c7df…), player2 3bf2c262… (user fef642dc…),
---   week b78cfe24… (current non-archived), stakes 50/50.
+-- Flow: two custom-contract lifecycles —
+--   #1 create → accept → admin settle (winner p1) → void (payout reversal +
+--      stake refunds)
+--   #2 create → accept → void from locked (stake refunds)
+-- Asserts escrow/payout/refund arithmetic at each stage, final zero deltas,
+-- statuses, back-links, net-zero; raises PROBE_RESULT (always aborts).
 DO $$
 DECLARE
-  v_ch1 uuid;
-  v_ch2 uuid;
+  v_u1 uuid := gen_random_uuid();
+  v_u2 uuid := gen_random_uuid();
+  v_p1 uuid; v_p2 uuid;
+  v_season uuid; v_week uuid;
+  v_ch1 uuid; v_ch2 uuid;
+  c_seed constant int := 1000;
+  c_stake constant int := 50;
+  v_got int;
   v_result jsonb;
 BEGIN
-  -- #1: player1 creates, player2 accepts, admin settles + voids.
-  PERFORM set_config('request.jwt.claims',
-    '{"sub":"c811c7df-be32-418a-b992-76c819148437","role":"authenticated","app_metadata":{"role":"player"}}', true);
-  SELECT public.create_pvp_challenge('custom', '3bf2c262-2524-4c7b-b5cb-d6e73c0d0689',
-    'b78cfe24-f931-45d1-81ab-65fad9c7135d', NULL, 50, 50, NULL, NULL,
-    'probe', 'Probe duel', 'probe description', NULL, NULL) INTO v_ch1;
+  ------------------------------------------------------------------ fixtures
+  INSERT INTO auth.users (id, instance_id, aud, role, phone) VALUES
+    (v_u1, '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', '10000000001'),
+    (v_u2, '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', '10000000002');
+  INSERT INTO public.players (first_name, last_name, phone, user_id)
+    VALUES ('Probe', 'One', '+10000000001', v_u1) RETURNING id INTO v_p1;
+  INSERT INTO public.players (first_name, last_name, phone, user_id)
+    VALUES ('Probe', 'Two', '+10000000002', v_u2) RETURNING id INTO v_p2;
 
-  PERFORM set_config('request.jwt.claims',
-    '{"sub":"fef642dc-49ad-445c-b2ad-a2a6b8108283","role":"authenticated","app_metadata":{"role":"player"}}', true);
+  v_season := public.current_season_id();
+  SELECT id INTO v_week FROM public.weeks
+    WHERE season_id = v_season AND is_archived = false
+    ORDER BY week_number DESC LIMIT 1;
+  IF v_week IS NULL THEN
+    RAISE EXCEPTION 'PROBE_SETUP_FAILED: no open week in the active season';
+  END IF;
+
+  INSERT INTO public.pin_ledger (player_id, season_id, week_id, amount, type, description) VALUES
+    (v_p1, v_season, v_week, c_seed, 'score_credit', 'PROBE FIXTURE seed'),
+    (v_p2, v_season, v_week, c_seed, 'score_credit', 'PROBE FIXTURE seed');
+
+  ------------------------------------------------------------------ lifecycle #1
+  PERFORM set_config('request.jwt.claims', json_build_object(
+    'sub', v_u1, 'role', 'authenticated', 'app_metadata', json_build_object('role', 'player'))::text, true);
+  SELECT public.create_pvp_challenge('custom', v_p2, v_week, NULL, c_stake, c_stake,
+    NULL, NULL, 'probe', 'Probe duel', 'probe', NULL, NULL) INTO v_ch1;
+
+  PERFORM set_config('request.jwt.claims', json_build_object(
+    'sub', v_u2, 'role', 'authenticated', 'app_metadata', json_build_object('role', 'player'))::text, true);
   PERFORM public.accept_pvp_challenge(v_ch1);
 
-  PERFORM set_config('request.jwt.claims',
-    '{"sub":"c811c7df-be32-418a-b992-76c819148437","role":"authenticated","app_metadata":{"role":"admin"}}', true);
-  PERFORM public.settle_pvp_challenge(v_ch1, 'admin', 'c985c0ad-5fd1-407b-bbd8-fe62d7d0e127', 'probe settle');
+  -- escrow: both stakes held by the house
+  SELECT COALESCE(SUM(amount), 0) - c_seed INTO v_got
+    FROM public.pin_ledger WHERE player_id = v_p1 AND created_at = now();
+  IF v_got <> -c_stake THEN
+    RAISE EXCEPTION 'PROBE_FAIL: p1 delta % after escrow (expected %)', v_got, -c_stake;
+  END IF;
+
+  PERFORM set_config('request.jwt.claims', json_build_object(
+    'sub', v_u1, 'role', 'authenticated', 'app_metadata', json_build_object('role', 'admin'))::text, true);
+  PERFORM public.settle_pvp_challenge(v_ch1, 'admin', v_p1, 'probe settle');
+
+  -- winner paid the full pot
+  SELECT COALESCE(SUM(amount), 0) - c_seed INTO v_got
+    FROM public.pin_ledger WHERE player_id = v_p1 AND created_at = now();
+  IF v_got <> c_stake THEN
+    RAISE EXCEPTION 'PROBE_FAIL: p1 delta % after win (expected +%)', v_got, c_stake;
+  END IF;
+  IF (SELECT winner_player_id FROM public.pvp_challenges WHERE id = v_ch1) <> v_p1 THEN
+    RAISE EXCEPTION 'PROBE_FAIL: winner not recorded on challenge 1';
+  END IF;
+
   PERFORM public.void_pvp_challenge(v_ch1, 'probe void after settle');
 
-  -- #2: locked → void.
-  PERFORM set_config('request.jwt.claims',
-    '{"sub":"c811c7df-be32-418a-b992-76c819148437","role":"authenticated","app_metadata":{"role":"player"}}', true);
-  SELECT public.create_pvp_challenge('custom', '3bf2c262-2524-4c7b-b5cb-d6e73c0d0689',
-    'b78cfe24-f931-45d1-81ab-65fad9c7135d', NULL, 50, 50, NULL, NULL,
-    'probe', 'Probe duel 2', 'probe description', NULL, NULL) INTO v_ch2;
-
-  PERFORM set_config('request.jwt.claims',
-    '{"sub":"fef642dc-49ad-445c-b2ad-a2a6b8108283","role":"authenticated","app_metadata":{"role":"player"}}', true);
+  ------------------------------------------------------------------ lifecycle #2
+  PERFORM set_config('request.jwt.claims', json_build_object(
+    'sub', v_u1, 'role', 'authenticated', 'app_metadata', json_build_object('role', 'player'))::text, true);
+  SELECT public.create_pvp_challenge('custom', v_p2, v_week, NULL, c_stake, c_stake,
+    NULL, NULL, 'probe', 'Probe duel 2', 'probe', NULL, NULL) INTO v_ch2;
+  PERFORM set_config('request.jwt.claims', json_build_object(
+    'sub', v_u2, 'role', 'authenticated', 'app_metadata', json_build_object('role', 'player'))::text, true);
   PERFORM public.accept_pvp_challenge(v_ch2);
-
-  PERFORM set_config('request.jwt.claims',
-    '{"sub":"c811c7df-be32-418a-b992-76c819148437","role":"authenticated","app_metadata":{"role":"admin"}}', true);
+  PERFORM set_config('request.jwt.claims', json_build_object(
+    'sub', v_u1, 'role', 'authenticated', 'app_metadata', json_build_object('role', 'admin'))::text, true);
   PERFORM public.void_pvp_challenge(v_ch2, 'probe void from locked');
 
+  ------------------------------------------------------------------ assertions
+  -- both contracts fully unwound: every fixture player back to seed
+  SELECT COALESCE(SUM(amount), 0) - c_seed INTO v_got
+    FROM public.pin_ledger WHERE player_id = v_p1 AND created_at = now();
+  IF v_got <> 0 THEN
+    RAISE EXCEPTION 'PROBE_FAIL: p1 final delta % (expected 0 after voids)', v_got;
+  END IF;
+  SELECT COALESCE(SUM(amount), 0) - c_seed INTO v_got
+    FROM public.pin_ledger WHERE player_id = v_p2 AND created_at = now();
+  IF v_got <> 0 THEN
+    RAISE EXCEPTION 'PROBE_FAIL: p2 final delta % (expected 0 after voids)', v_got;
+  END IF;
+
+  IF (SELECT count(*) FROM public.pvp_challenges
+      WHERE created_at = now() AND status = 'voided') <> 2 THEN
+    RAISE EXCEPTION 'PROBE_FAIL: expected both challenges voided';
+  END IF;
+
+  SELECT COALESCE(SUM(amount), 0) INTO v_got
+    FROM public.pin_ledger WHERE created_at = now() AND type LIKE 'pvp_%';
+  IF v_got <> 0 THEN
+    RAISE EXCEPTION 'PROBE_FAIL: pvp movements net to % (expected 0)', v_got;
+  END IF;
+
+  IF EXISTS (
+    SELECT 1 FROM public.pvp_ledger pl
+    JOIN LATERAL (SELECT count(*) AS n FROM public.pin_ledger x
+                  WHERE x.pvp_ledger_id = pl.id) c ON true
+    WHERE pl.created_at = now() AND pl.pin_ledger_id IS NOT NULL AND c.n <> 2
+  ) THEN
+    RAISE EXCEPTION 'PROBE_FAIL: a pvp_ledger row is not back-linked by exactly 2 pin rows';
+  END IF;
+
+  IF (SELECT count(*) FROM public.activity_feed_events
+      WHERE created_at = now() AND event_type LIKE 'pvp_%') <> 3 THEN
+    RAISE EXCEPTION 'PROBE_FAIL: expected 3 pvp events (2 accepted + 1 settled)';
+  END IF;
+
+  ------------------------------------------------------------------ capture
   SELECT jsonb_build_object(
     'pin_ledger', (
       SELECT jsonb_agg(jsonb_build_object(
-        'player_id', player_id, 'season_id', season_id, 'week_id', week_id,
-        'is_house', is_house, 'amount', amount, 'type', type,
-        'description', description,
-        'linked_to_pvp_ledger', pvp_ledger_id IS NOT NULL,
-        'other_refs', (bet_id IS NOT NULL OR loan_ledger_id IS NOT NULL OR bounty_post_id IS NOT NULL))
-        ORDER BY type, description, is_house, amount, player_id)
-      FROM public.pin_ledger WHERE created_at = now()),
+        'is_house', is_house, 'amount', amount, 'type', type, 'description', description,
+        'linked', pvp_ledger_id IS NOT NULL)
+        ORDER BY type, description, is_house, amount)
+      FROM public.pin_ledger WHERE created_at = now() AND type LIKE 'pvp_%'),
     'pvp_ledger', (
-      SELECT jsonb_agg(jsonb_build_object(
-        'player_id', player_id, 'amount', amount, 'type', type,
-        'description', description, 'pin_ledger_linked', pin_ledger_id IS NOT NULL)
-        ORDER BY type, description, amount, player_id)
-      FROM public.pvp_ledger WHERE created_at = now()),
-    'backlink_integrity', (
-      SELECT jsonb_agg(jsonb_build_object('pvp_type', pl.type, 'pvp_desc', pl.description, 'pin_rows', c.cnt)
-                       ORDER BY pl.type, pl.description, pl.amount)
-      FROM public.pvp_ledger pl
-      JOIN LATERAL (SELECT count(*) AS cnt FROM public.pin_ledger x
-                    WHERE x.pvp_ledger_id = pl.id AND x.created_at = now()) c ON true
-      WHERE pl.created_at = now()),
-    'challenge_status', (
-      SELECT jsonb_agg(jsonb_build_object(
-        'status', status, 'winner_set', winner_player_id IS NOT NULL,
-        'pot', total_pot, 'admin_note', admin_note) ORDER BY admin_note)
-      FROM public.pvp_challenges WHERE created_at = now()),
-    'events', (
-      SELECT jsonb_agg(jsonb_build_object('event_type', event_type, 'public_payload', public_payload)
-                       ORDER BY event_type, public_payload::text)
-      FROM public.activity_feed_events WHERE created_at = now())
+      SELECT jsonb_agg(jsonb_build_object('amount', amount, 'type', type, 'description', description)
+        ORDER BY type, description, amount)
+      FROM public.pvp_ledger WHERE created_at = now())
   ) INTO v_result;
 
   RAISE EXCEPTION 'PROBE_RESULT %', v_result;

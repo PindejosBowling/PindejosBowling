@@ -6,6 +6,17 @@
 -- TABLES
 -- =====================================================
 
+CREATE TABLE activity_event_catalog (
+  event_type text NOT NULL,
+  source_feature text NOT NULL,
+  template_key text NOT NULL,
+  requires_actor boolean NOT NULL,
+  allowed_fk text NOT NULL,
+  default_visibility text NOT NULL,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now()
+);
+
 CREATE TABLE activity_feed_events (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   season_id uuid NOT NULL,
@@ -89,7 +100,8 @@ CREATE TABLE bets (
   custom_line_id uuid,
   custom_line_title text,
   custom_line_description text,
-  custom_line_category text
+  custom_line_category text,
+  week_id uuid
 );
 
 CREATE TABLE board_posts (
@@ -196,7 +208,12 @@ CREATE TABLE lanetalk_game_imports (
   played_at timestamp with time zone,
   payload jsonb NOT NULL,
   created_at timestamp with time zone NOT NULL DEFAULT now(),
-  updated_at timestamp with time zone NOT NULL DEFAULT now()
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  frames integer,
+  strikes integer,
+  spares integer,
+  clean_pct numeric,
+  first_ball_avg numeric
 );
 
 CREATE TABLE loan_ledger (
@@ -269,16 +286,16 @@ CREATE TABLE players (
   created_at timestamp with time zone NOT NULL DEFAULT now(),
   first_name text NOT NULL,
   last_name text NOT NULL,
-  name text DEFAULT 
-CASE
-    WHEN (last_name = ''::text) THEN first_name
-    ELSE ((first_name || ' '::text) || last_name)
-END,
   user_id uuid,
   role text NOT NULL DEFAULT 'player'::text,
   updated_at timestamp with time zone NOT NULL DEFAULT now(),
   avatar_path text,
-  jersey_purchased boolean NOT NULL DEFAULT false
+  jersey_purchased boolean NOT NULL DEFAULT false,
+  name text DEFAULT 
+CASE
+    WHEN (last_name = ''::text) THEN first_name
+    ELSE ((first_name || ' '::text) || last_name)
+END
 );
 
 CREATE TABLE playoff_draft_captains (
@@ -495,11 +512,15 @@ CREATE TABLE weeks (
 -- CONSTRAINTS
 -- =====================================================
 
+ALTER TABLE activity_event_catalog ADD CONSTRAINT activity_event_catalog_allowed_fk_check CHECK ((allowed_fk = ANY (ARRAY['sportsbook_bet_id'::text, 'loan_id'::text, 'pvp_challenge_id'::text, 'bounty_post_id'::text, 'none'::text])));
+
+ALTER TABLE activity_event_catalog ADD CONSTRAINT activity_event_catalog_pkey PRIMARY KEY (event_type);
+
 ALTER TABLE activity_feed_events ADD CONSTRAINT activity_feed_events_actor_player_id_fkey FOREIGN KEY (actor_player_id) REFERENCES players(id) ON DELETE SET NULL;
 
 ALTER TABLE activity_feed_events ADD CONSTRAINT activity_feed_events_bounty_post_id_fkey FOREIGN KEY (bounty_post_id) REFERENCES bounty_post(id) ON DELETE CASCADE;
 
-ALTER TABLE activity_feed_events ADD CONSTRAINT activity_feed_events_event_type_check CHECK ((event_type = ANY (ARRAY['sportsbook_bet_placed'::text, 'sportsbook_parlay_placed'::text, 'sportsbook_big_ticket_placed'::text, 'sportsbook_big_win'::text, 'sportsbook_parlay_hit'::text, 'sportsbook_weekly_house_result'::text, 'loan_shark_loan_taken'::text, 'loan_shark_loan_repaid'::text, 'loan_shark_special_offer'::text, 'pvp_challenge_accepted'::text, 'pvp_challenge_settled'::text, 'bounty_board_bounty_posted'::text, 'bounty_board_hunter_joined'::text, 'bounty_board_bounty_closed'::text, 'bounty_board_sponsor_won'::text, 'bounty_board_hunters_won'::text])));
+ALTER TABLE activity_feed_events ADD CONSTRAINT activity_feed_events_event_type_fkey FOREIGN KEY (event_type) REFERENCES activity_event_catalog(event_type);
 
 ALTER TABLE activity_feed_events ADD CONSTRAINT activity_feed_events_loan_id_fkey FOREIGN KEY (loan_id) REFERENCES loans(id) ON DELETE CASCADE;
 
@@ -578,6 +599,8 @@ ALTER TABLE bets ADD CONSTRAINT bets_season_id_fkey FOREIGN KEY (season_id) REFE
 ALTER TABLE bets ADD CONSTRAINT bets_stake_check CHECK ((stake >= 10));
 
 ALTER TABLE bets ADD CONSTRAINT bets_status_check CHECK ((status = ANY (ARRAY['pending'::text, 'won'::text, 'lost'::text, 'push'::text, 'void'::text, 'cancelled'::text])));
+
+ALTER TABLE bets ADD CONSTRAINT bets_week_id_fkey FOREIGN KEY (week_id) REFERENCES weeks(id) ON DELETE SET NULL;
 
 ALTER TABLE board_posts ADD CONSTRAINT board_posts_pkey PRIMARY KEY (id);
 
@@ -976,13 +999,9 @@ CREATE INDEX bounty_payouts_settlement_idx ON public.bounty_payouts USING btree 
 
 CREATE INDEX bounty_post_board_idx ON public.bounty_post USING btree (season_id, status, closes_at, created_at DESC);
 
-CREATE INDEX bounty_post_season_id_idx ON public.bounty_post USING btree (season_id);
-
 CREATE INDEX bounty_post_sponsor_idx ON public.bounty_post USING btree (sponsor_player_id) WHERE (sponsor_player_id IS NOT NULL);
 
 CREATE INDEX bounty_post_week_board_idx ON public.bounty_post USING btree (week_id, status, closes_at);
-
-CREATE INDEX bounty_post_week_id_idx ON public.bounty_post USING btree (week_id);
 
 CREATE INDEX bounty_settlements_admin_idx ON public.bounty_settlements USING btree (settled_by_admin_id);
 
@@ -1016,11 +1035,13 @@ CREATE INDEX idx_bets_season ON public.bets USING btree (season_id);
 
 CREATE INDEX idx_bets_status ON public.bets USING btree (status);
 
+CREATE INDEX idx_bets_week ON public.bets USING btree (week_id);
+
 CREATE INDEX idx_pin_ledger_bet ON public.pin_ledger USING btree (bet_id);
 
 CREATE INDEX idx_pin_ledger_house ON public.pin_ledger USING btree (season_id) WHERE is_house;
 
-CREATE INDEX idx_pin_ledger_player_season ON public.pin_ledger USING btree (player_id, season_id);
+CREATE INDEX idx_pin_ledger_player_season ON public.pin_ledger USING btree (player_id, season_id) INCLUDE (amount);
 
 CREATE INDEX idx_pin_ledger_season ON public.pin_ledger USING btree (season_id);
 
@@ -1096,7 +1117,13 @@ CREATE INDEX registrations_player_id_idx ON public.registrations USING btree (pl
 
 CREATE INDEX registrations_season_id_idx ON public.registrations USING btree (season_id);
 
+CREATE INDEX rsvp_player_id_idx ON public.rsvp USING btree (player_id);
+
+CREATE INDEX scores_game_id_idx ON public.scores USING btree (game_id);
+
 CREATE UNIQUE INDEX seasons_single_active ON public.seasons USING btree (is_active) WHERE is_active;
+
+CREATE INDEX team_slots_player_id_idx ON public.team_slots USING btree (player_id);
 
 CREATE INDEX team_slots_team_id_idx ON public.team_slots USING btree (team_id);
 
@@ -1108,6 +1135,15 @@ CREATE INDEX week_archive_snapshot_run_idx ON public.week_archive_snapshot USING
 -- =====================================================
 -- ROW LEVEL SECURITY
 -- =====================================================
+
+ALTER TABLE activity_event_catalog ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "admin can write" ON activity_event_catalog AS PERMISSIVE FOR ALL TO authenticated
+  USING (( SELECT is_admin() AS is_admin))
+  WITH CHECK (( SELECT is_admin() AS is_admin));
+
+CREATE POLICY "authenticated can read" ON activity_event_catalog AS PERMISSIVE FOR SELECT TO authenticated
+  USING (true);
 
 ALTER TABLE activity_feed_events ENABLE ROW LEVEL SECURITY;
 
@@ -1714,9 +1750,7 @@ DECLARE
   v_actor_id     uuid;
   v_run_id       uuid;
 BEGIN
-  IF ((SELECT auth.jwt()) -> 'app_metadata' ->> 'role') <> 'admin' THEN
-    RAISE EXCEPTION 'Admin only';
-  END IF;
+  PERFORM public.assert_admin();
 
   SELECT season_id, week_number INTO v_season_id, v_week_number
     FROM public.weeks WHERE id = p_week_id;
@@ -1739,19 +1773,13 @@ BEGIN
 
   -- --------------------------------------------------------------------------
   -- 2a. Capture pre-existing append-row ids (everything settlement will INSERT).
-  --     pin_ledger needs the bet_id branch (bet_payout/refund have week_id NULL).
+  --     pin_ledger needs the bet_id branch — bet money is keyed by the bet.
   -- --------------------------------------------------------------------------
   INSERT INTO public.week_archive_snapshot (run_id, kind, table_name, pk)
   SELECT v_run_id, 'preexisting_id', 'pin_ledger', pl.id
     FROM public.pin_ledger pl
    WHERE pl.week_id = p_week_id
-      OR pl.bet_id IN (
-           SELECT b.id FROM public.bets b
-             JOIN public.bet_legs l       ON l.bet_id = b.id
-             JOIN public.bet_selections s ON s.id = l.selection_id
-             JOIN public.bet_markets m    ON m.id = s.market_id
-            WHERE m.week_id = p_week_id
-         );
+      OR pl.bet_id IN (SELECT b.id FROM public.bets b WHERE b.week_id = p_week_id);
 
   INSERT INTO public.week_archive_snapshot (run_id, kind, table_name, pk)
   SELECT v_run_id, 'preexisting_id', 'loan_ledger', ll.id
@@ -1784,21 +1812,14 @@ BEGIN
   SELECT v_run_id, 'preimage_row', 'bets', b.id,
          jsonb_build_object('status', b.status, 'potential_payout', b.potential_payout, 'settled_at', b.settled_at)
     FROM public.bets b
-   WHERE b.id IN (
-           SELECT b2.id FROM public.bets b2
-             JOIN public.bet_legs l       ON l.bet_id = b2.id
-             JOIN public.bet_selections s ON s.id = l.selection_id
-             JOIN public.bet_markets m    ON m.id = s.market_id
-            WHERE m.week_id = p_week_id
-         );
+   WHERE b.week_id = p_week_id;
 
   INSERT INTO public.week_archive_snapshot (run_id, kind, table_name, pk, payload)
   SELECT v_run_id, 'preimage_row', 'bet_legs', l.id,
          jsonb_build_object('result', l.result)
     FROM public.bet_legs l
-    JOIN public.bet_selections s ON s.id = l.selection_id
-    JOIN public.bet_markets m    ON m.id = s.market_id
-   WHERE m.week_id = p_week_id;
+    JOIN public.bets b ON b.id = l.bet_id
+   WHERE b.week_id = p_week_id;
 
   INSERT INTO public.week_archive_snapshot (run_id, kind, table_name, pk, payload)
   SELECT v_run_id, 'preimage_row', 'pvp_challenges', c.id,
@@ -1863,9 +1884,7 @@ DECLARE
   v_market_ids uuid[];
   v_mid        uuid;
 BEGIN
-  IF ((SELECT auth.jwt()) -> 'app_metadata' ->> 'role') <> 'admin' THEN
-    RAISE EXCEPTION 'Admin only';
-  END IF;
+  PERFORM public.assert_admin();
 
   -- Markets this bet touched (captured before the bet is deleted).
   SELECT ARRAY_AGG(DISTINCT s.market_id) INTO v_market_ids
@@ -1906,9 +1925,7 @@ AS $function$
 DECLARE
   v_bounty public.bounty_post;
 BEGIN
-  IF ((SELECT auth.jwt()) -> 'app_metadata' ->> 'role') <> 'admin' THEN
-    RAISE EXCEPTION 'Admin only';
-  END IF;
+  PERFORM public.assert_admin();
 
   SELECT * INTO v_bounty FROM public.bounty_post WHERE id = p_bounty_post_id;
   IF v_bounty.id IS NULL THEN
@@ -1934,9 +1951,7 @@ CREATE OR REPLACE FUNCTION public.cancel_loan(p_loan_id uuid)
  SET search_path TO ''
 AS $function$
 BEGIN
-  IF ((SELECT auth.jwt()) -> 'app_metadata' ->> 'role') <> 'admin' THEN
-    RAISE EXCEPTION 'Admin only';
-  END IF;
+  PERFORM public.assert_admin();
 
   DELETE FROM public.pin_ledger
    WHERE loan_ledger_id IN (SELECT id FROM public.loan_ledger WHERE loan_id = p_loan_id);
@@ -1963,7 +1978,7 @@ BEGIN
     RAISE EXCEPTION 'Challenge not found';
   END IF;
 
-  v_is_admin := ((SELECT auth.jwt()) -> 'app_metadata' ->> 'role') = 'admin';
+  v_is_admin := public.is_admin();
 
   -- Player path: must be the author, and the contract must still be open. Admins
   -- bypass both checks (they can cancel pending/countered/locked contracts).
@@ -2000,9 +2015,7 @@ AS $function$
 DECLARE
   v_bounty public.bounty_post;
 BEGIN
-  IF ((SELECT auth.jwt()) -> 'app_metadata' ->> 'role') <> 'admin' THEN
-    RAISE EXCEPTION 'Admin only';
-  END IF;
+  PERFORM public.assert_admin();
 
   SELECT * INTO v_bounty FROM public.bounty_post WHERE id = p_bounty_post_id FOR UPDATE;
   IF v_bounty.id IS NULL THEN
@@ -2036,9 +2049,7 @@ CREATE OR REPLACE FUNCTION public.close_open_pvp_challenges(p_week_id uuid, p_ga
  SET search_path TO ''
 AS $function$
 BEGIN
-  IF ((SELECT auth.jwt()) -> 'app_metadata' ->> 'role') <> 'admin' THEN
-    RAISE EXCEPTION 'Admin only';
-  END IF;
+  PERFORM public.assert_admin();
 
   -- Stamp the live offer for each in-scope challenge as declined.
   UPDATE public.pvp_challenge_offers o
@@ -2053,7 +2064,7 @@ BEGIN
 
   -- Close the challenges themselves.
   UPDATE public.pvp_challenges c
-    SET status = 'cancelled'
+    SET status = 'expired'
     WHERE c.week_id = p_week_id
       AND c.status IN ('pending', 'countered')
       AND (p_game_number IS NULL OR c.game_number = p_game_number);
@@ -2242,9 +2253,7 @@ DECLARE
   v_season_id uuid;
   v_bounty_id uuid;
 BEGIN
-  IF ((SELECT auth.jwt()) -> 'app_metadata' ->> 'role') <> 'admin' THEN
-    RAISE EXCEPTION 'Admin only';
-  END IF;
+  PERFORM public.assert_admin();
 
   SELECT id INTO v_season_id
     FROM public.seasons WHERE is_active = true AND registration_open = false;
@@ -2582,9 +2591,7 @@ DECLARE
   v_season_id uuid;
   v_week_id   uuid;
 BEGIN
-  IF ((SELECT auth.jwt()) -> 'app_metadata' ->> 'role') <> 'admin' THEN
-    RAISE EXCEPTION 'Admin only';
-  END IF;
+  PERFORM public.assert_admin();
 
   SELECT id INTO v_season_id
     FROM public.seasons
@@ -2646,7 +2653,7 @@ CREATE OR REPLACE FUNCTION public.custom_access_token(event jsonb)
  RETURNS jsonb
  LANGUAGE plpgsql
  SECURITY DEFINER
- SET search_path TO 'public'
+ SET search_path TO 'public', 'pg_temp'
 AS $function$
 DECLARE
   claims     jsonb;
@@ -2996,18 +3003,14 @@ CREATE OR REPLACE FUNCTION public.lanetalk_seed_lines(p_player_id uuid)
  SET search_path TO ''
 AS $function$
   SELECT
-    LEAST(9.5, GREATEST(0.5, floor(avg(st.strikes)) + 0.5))      AS strikes_line,
-    LEAST(9.5, GREATEST(0.5, floor(avg(st.spares)) + 0.5))       AS spares_line,
-    avg(st.strikes + st.spares)                                  AS clean_frames_per_game,
-    round(sum(st.first_ball_avg * f.n) / sum(f.n), 1)            AS first_ball_avg_line
+    LEAST(9.5, GREATEST(0.5, floor(avg(i.strikes)) + 0.5))       AS strikes_line,
+    LEAST(9.5, GREATEST(0.5, floor(avg(i.spares)) + 0.5))        AS spares_line,
+    avg(i.strikes + i.spares)                                    AS clean_frames_per_game,
+    round(sum(i.first_ball_avg * i.frames) / sum(i.frames), 1)   AS first_ball_avg_line
   FROM public.lanetalk_game_imports i
-  CROSS JOIN LATERAL (
-    SELECT jsonb_array_length(COALESCE(i.payload -> 'frames', '[]'::jsonb)) AS n
-  ) f
-  CROSS JOIN LATERAL public.lanetalk_game_stats(i.payload) st
   WHERE i.player_id = p_player_id
     AND i.classification = 'official'
-    AND f.n > 0
+    AND i.frames > 0
   HAVING count(*) > 0;
 $function$
 ;
@@ -3016,7 +3019,7 @@ CREATE OR REPLACE FUNCTION public.link_auth_user_to_player()
  RETURNS trigger
  LANGUAGE plpgsql
  SECURITY DEFINER
- SET search_path TO 'public'
+ SET search_path TO 'public', 'pg_temp'
 AS $function$
 BEGIN
   IF NEW.phone IS NOT NULL THEN
@@ -3114,8 +3117,9 @@ BEGIN
     END IF;
   END IF;
 
-  -- Validate every selection, gather odds, resolve + assert a single season, and
-  -- enforce anti-tanking. Each selection must belong to a distinct open market.
+  -- Validate every selection, gather odds, resolve + assert a single season AND
+  -- a single week, and enforce anti-tanking. Each selection must belong to a
+  -- distinct open market.
   v_n := 0;
   FOR v_sel IN
     SELECT s.id AS selection_id, s.key, s.odds, s.line,
@@ -3142,9 +3146,12 @@ BEGIN
       END IF;
     END;
 
-    -- Capture week_id from the first selection (all O/U legs share the same week).
+    -- Single-week invariant: bets.week_id is single-valued, so every leg must
+    -- share the first leg's week.
     IF v_week_id IS NULL THEN
       v_week_id := v_sel.week_id;
+    ELSIF v_week_id <> v_sel.week_id THEN
+      RAISE EXCEPTION 'All selections must be in the same week';
     END IF;
 
     -- Anti-tank (trigger is the backstop): no backing 'under' on your own market.
@@ -3166,9 +3173,9 @@ BEGIN
     RAISE EXCEPTION 'Wager exceeds your balance';
   END IF;
 
-  INSERT INTO public.bets (player_id, season_id, stake, potential_payout, status,
+  INSERT INTO public.bets (player_id, season_id, week_id, stake, potential_payout, status,
                            custom_line_id, custom_line_title, custom_line_description, custom_line_category)
-    VALUES (v_player_id, v_season_id, p_stake, v_payout, 'pending',
+    VALUES (v_player_id, v_season_id, v_week_id, p_stake, v_payout, 'pending',
             v_line.id, v_line.title, v_line.description, v_line.category)
     RETURNING id INTO v_bet_id;
 
@@ -3217,14 +3224,14 @@ CREATE OR REPLACE FUNCTION public.playoff_create_draft(p_season_id uuid, p_week_
  RETURNS uuid
  LANGUAGE plpgsql
  SECURITY DEFINER
- SET search_path TO 'public'
+ SET search_path TO 'public', 'pg_temp'
 AS $function$
 DECLARE
   v_is_admin boolean;
   v_draft_id uuid;
   v_i        integer;
 BEGIN
-  v_is_admin := ((SELECT auth.jwt()) -> 'app_metadata' ->> 'role') = 'admin';
+  v_is_admin := public.is_admin();
   IF NOT v_is_admin THEN
     RAISE EXCEPTION 'Only admins can create a playoff draft';
   END IF;
@@ -3268,7 +3275,7 @@ CREATE OR REPLACE FUNCTION public.playoff_current_turn(p_draft_id uuid)
  RETURNS uuid
  LANGUAGE plpgsql
  STABLE SECURITY DEFINER
- SET search_path TO 'public'
+ SET search_path TO 'public', 'pg_temp'
 AS $function$
 DECLARE
   v_draft      public.playoff_drafts;
@@ -3317,7 +3324,7 @@ CREATE OR REPLACE FUNCTION public.playoff_make_pick(p_draft_id uuid, p_player_id
  RETURNS void
  LANGUAGE plpgsql
  SECURITY DEFINER
- SET search_path TO 'public'
+ SET search_path TO 'public', 'pg_temp'
 AS $function$
 DECLARE
   v_caller_id  uuid;
@@ -3327,7 +3334,7 @@ DECLARE
   v_picks      integer;
   v_remaining  integer;
 BEGIN
-  v_is_admin := ((SELECT auth.jwt()) -> 'app_metadata' ->> 'role') = 'admin';
+  v_is_admin := public.is_admin();
   SELECT id INTO v_caller_id FROM players WHERE user_id = auth.uid();
   IF v_caller_id IS NULL AND NOT v_is_admin THEN
     RAISE EXCEPTION 'No player linked to the current user';
@@ -3380,7 +3387,7 @@ CREATE OR REPLACE FUNCTION public.playoff_materialize_teams(p_draft_id uuid)
  RETURNS void
  LANGUAGE plpgsql
  SECURITY DEFINER
- SET search_path TO 'public'
+ SET search_path TO 'public', 'pg_temp'
 AS $function$
 DECLARE
   v_is_admin boolean;
@@ -3390,7 +3397,7 @@ DECLARE
   v_slot     integer;
   v_pick     record;
 BEGIN
-  v_is_admin := ((SELECT auth.jwt()) -> 'app_metadata' ->> 'role') = 'admin';
+  v_is_admin := public.is_admin();
   IF NOT v_is_admin THEN
     RAISE EXCEPTION 'Only admins can materialize playoff teams';
   END IF;
@@ -3442,13 +3449,13 @@ CREATE OR REPLACE FUNCTION public.playoff_reset_draft(p_draft_id uuid)
  RETURNS void
  LANGUAGE plpgsql
  SECURITY DEFINER
- SET search_path TO 'public'
+ SET search_path TO 'public', 'pg_temp'
 AS $function$
 DECLARE
   v_is_admin boolean;
   v_draft    public.playoff_drafts;
 BEGIN
-  v_is_admin := ((SELECT auth.jwt()) -> 'app_metadata' ->> 'role') = 'admin';
+  v_is_admin := public.is_admin();
   IF NOT v_is_admin THEN
     RAISE EXCEPTION 'Only admins can reset a playoff draft';
   END IF;
@@ -3478,14 +3485,14 @@ CREATE OR REPLACE FUNCTION public.playoff_undo_pick(p_draft_id uuid)
  RETURNS void
  LANGUAGE plpgsql
  SECURITY DEFINER
- SET search_path TO 'public'
+ SET search_path TO 'public', 'pg_temp'
 AS $function$
 DECLARE
   v_is_admin boolean;
   v_draft    public.playoff_drafts;
   v_last     uuid;
 BEGIN
-  v_is_admin := ((SELECT auth.jwt()) -> 'app_metadata' ->> 'role') = 'admin';
+  v_is_admin := public.is_admin();
   IF NOT v_is_admin THEN
     RAISE EXCEPTION 'Only admins can undo a pick';
   END IF;
@@ -3537,6 +3544,7 @@ $function$
 CREATE OR REPLACE FUNCTION public.prevent_non_open_season_delete()
  RETURNS trigger
  LANGUAGE plpgsql
+ SET search_path TO 'public', 'pg_temp'
 AS $function$
 begin
   if old.registration_open is not true then
@@ -3670,110 +3678,51 @@ CREATE OR REPLACE FUNCTION public.publish_activity_event(p_source_feature text, 
  SET search_path TO ''
 AS $function$
 DECLARE
-  v_def_visibility text;
-  v_requires_actor boolean;
-  v_allowed_fk     text;   -- 'sportsbook_bet_id' | 'loan_id' | 'pvp_challenge_id' | 'bounty_post_id' | 'none'
-  v_template       text;
-  v_visibility     text;
-  v_id             uuid;
+  v_cat        public.activity_event_catalog;
+  v_n_fks      integer;
+  v_provided   text;
+  v_visibility text;
+  v_id         uuid;
 BEGIN
   -- 1. Validate source_feature.
   IF p_source_feature NOT IN ('sportsbook','loan_shark','pvp','bounty_board','system','admin') THEN
     RAISE EXCEPTION 'Unknown source_feature: %', p_source_feature;
   END IF;
 
-  -- 2. Event catalog lookup. RAISE on unknown event_type. (Importance is no longer
-  --    set here — it is derived in the app from event_type.)
-  CASE p_event_type
-    WHEN 'sportsbook_bet_placed' THEN
-      v_def_visibility := 'public'; v_requires_actor := true;
-      v_allowed_fk := 'sportsbook_bet_id'; v_template := 'sportsbook.bet_placed';
-    WHEN 'sportsbook_parlay_placed' THEN
-      v_def_visibility := 'public'; v_requires_actor := true;
-      v_allowed_fk := 'sportsbook_bet_id'; v_template := 'sportsbook.parlay_placed';
-    WHEN 'sportsbook_big_ticket_placed' THEN
-      v_def_visibility := 'public'; v_requires_actor := true;
-      v_allowed_fk := 'sportsbook_bet_id'; v_template := 'sportsbook.big_ticket_placed';
-    WHEN 'sportsbook_big_win' THEN
-      v_def_visibility := 'public'; v_requires_actor := true;
-      v_allowed_fk := 'sportsbook_bet_id'; v_template := 'sportsbook.big_win';
-    WHEN 'sportsbook_parlay_hit' THEN
-      v_def_visibility := 'public'; v_requires_actor := true;
-      v_allowed_fk := 'sportsbook_bet_id'; v_template := 'sportsbook.parlay_hit';
-    WHEN 'sportsbook_weekly_house_result' THEN
-      v_def_visibility := 'public'; v_requires_actor := false;
-      v_allowed_fk := 'none';              v_template := 'sportsbook.weekly_house_result';
-    WHEN 'loan_shark_loan_taken' THEN
-      v_def_visibility := 'public'; v_requires_actor := true;
-      v_allowed_fk := 'loan_id';           v_template := 'loan_shark.loan_taken';
-    WHEN 'loan_shark_loan_repaid' THEN
-      v_def_visibility := 'public'; v_requires_actor := true;
-      v_allowed_fk := 'loan_id';           v_template := 'loan_shark.loan_repaid';
-    WHEN 'loan_shark_special_offer' THEN
-      v_def_visibility := 'public'; v_requires_actor := false;
-      v_allowed_fk := 'none';              v_template := 'loan_shark.special_offer';
-    WHEN 'pvp_challenge_accepted' THEN
-      v_def_visibility := 'public'; v_requires_actor := true;
-      v_allowed_fk := 'pvp_challenge_id';  v_template := 'pvp.challenge_accepted';
-    WHEN 'pvp_challenge_settled' THEN
-      v_def_visibility := 'public'; v_requires_actor := true;
-      v_allowed_fk := 'pvp_challenge_id';  v_template := 'pvp.challenge_settled';
-    WHEN 'bounty_board_bounty_posted' THEN
-      v_def_visibility := 'public'; v_requires_actor := false;
-      v_allowed_fk := 'bounty_post_id';    v_template := 'bounty_board.bounty_posted';
-    WHEN 'bounty_board_hunter_joined' THEN
-      v_def_visibility := 'public'; v_requires_actor := true;
-      v_allowed_fk := 'bounty_post_id';    v_template := 'bounty_board.hunter_joined';
-    WHEN 'bounty_board_bounty_closed' THEN
-      v_def_visibility := 'public'; v_requires_actor := false;
-      v_allowed_fk := 'bounty_post_id';    v_template := 'bounty_board.bounty_closed';
-    WHEN 'bounty_board_sponsor_won' THEN
-      v_def_visibility := 'public'; v_requires_actor := false;
-      v_allowed_fk := 'bounty_post_id';    v_template := 'bounty_board.sponsor_won';
-    WHEN 'bounty_board_hunters_won' THEN
-      v_def_visibility := 'public'; v_requires_actor := false;
-      v_allowed_fk := 'bounty_post_id';    v_template := 'bounty_board.hunters_won';
-    ELSE
-      RAISE EXCEPTION 'Unknown event_type: %', p_event_type;
-  END CASE;
+  -- 2. Catalog lookup. RAISE on unknown event_type.
+  SELECT * INTO v_cat FROM public.activity_event_catalog WHERE event_type = p_event_type;
+  IF v_cat.event_type IS NULL THEN
+    RAISE EXCEPTION 'Unknown event_type: %', p_event_type;
+  END IF;
 
-  -- 3. Source-FK ↔ feature consistency. The catalog's allowed_source_fk must match
-  --    exactly which FK arg is non-NULL (all others must be NULL).
-  IF v_allowed_fk = 'sportsbook_bet_id' THEN
-    IF p_sportsbook_bet_id IS NULL OR p_loan_id IS NOT NULL OR p_pvp_challenge_id IS NOT NULL OR p_bounty_post_id IS NOT NULL THEN
-      RAISE EXCEPTION 'Event % requires sportsbook_bet_id only', p_event_type;
-    END IF;
-  ELSIF v_allowed_fk = 'loan_id' THEN
-    IF p_loan_id IS NULL OR p_sportsbook_bet_id IS NOT NULL OR p_pvp_challenge_id IS NOT NULL OR p_bounty_post_id IS NOT NULL THEN
-      RAISE EXCEPTION 'Event % requires loan_id only', p_event_type;
-    END IF;
-  ELSIF v_allowed_fk = 'pvp_challenge_id' THEN
-    IF p_pvp_challenge_id IS NULL OR p_sportsbook_bet_id IS NOT NULL OR p_loan_id IS NOT NULL OR p_bounty_post_id IS NOT NULL THEN
-      RAISE EXCEPTION 'Event % requires pvp_challenge_id only', p_event_type;
-    END IF;
-  ELSIF v_allowed_fk = 'bounty_post_id' THEN
-    IF p_bounty_post_id IS NULL OR p_sportsbook_bet_id IS NOT NULL OR p_loan_id IS NOT NULL OR p_pvp_challenge_id IS NOT NULL THEN
-      RAISE EXCEPTION 'Event % requires bounty_post_id only', p_event_type;
-    END IF;
-  ELSE  -- 'none' → no source FK permitted
-    IF p_sportsbook_bet_id IS NOT NULL OR p_loan_id IS NOT NULL OR p_pvp_challenge_id IS NOT NULL OR p_bounty_post_id IS NOT NULL THEN
-      RAISE EXCEPTION 'Event % must not carry a source FK', p_event_type;
-    END IF;
+  -- 3. Source-FK ↔ feature consistency: exactly the catalog's allowed FK is
+  --    set (all others NULL); 'none' means no FK at all.
+  v_n_fks := (p_sportsbook_bet_id IS NOT NULL)::int + (p_loan_id IS NOT NULL)::int
+           + (p_pvp_challenge_id IS NOT NULL)::int + (p_bounty_post_id IS NOT NULL)::int;
+  v_provided := CASE
+    WHEN p_sportsbook_bet_id IS NOT NULL THEN 'sportsbook_bet_id'
+    WHEN p_loan_id           IS NOT NULL THEN 'loan_id'
+    WHEN p_pvp_challenge_id  IS NOT NULL THEN 'pvp_challenge_id'
+    WHEN p_bounty_post_id    IS NOT NULL THEN 'bounty_post_id'
+    ELSE 'none' END;
+  IF v_n_fks > 1 OR v_provided <> v_cat.allowed_fk THEN
+    RAISE EXCEPTION 'Event % requires source FK % only (got %, % set)',
+      p_event_type, v_cat.allowed_fk, v_provided, v_n_fks;
   END IF;
 
   -- 4. Actor requirement.
-  IF v_requires_actor AND p_actor_player_id IS NULL THEN
+  IF v_cat.requires_actor AND p_actor_player_id IS NULL THEN
     RAISE EXCEPTION 'Event % requires an actor_player_id', p_event_type;
   END IF;
 
   -- 5. template_key must match the catalog (keeps copy controlled).
-  IF p_template_key IS DISTINCT FROM v_template THEN
+  IF p_template_key IS DISTINCT FROM v_cat.template_key THEN
     RAISE EXCEPTION 'template_key % does not match catalog template % for event %',
-      p_template_key, v_template, p_event_type;
+      p_template_key, v_cat.template_key, p_event_type;
   END IF;
 
   -- 6. Apply catalog default visibility.
-  v_visibility := COALESCE(p_visibility, v_def_visibility);
+  v_visibility := COALESCE(p_visibility, v_cat.default_visibility);
 
   -- 7. Insert (idempotent via the partial unique dedup indexes).
   INSERT INTO public.activity_feed_events (
@@ -3787,7 +3736,7 @@ BEGIN
     p_actor_player_id, p_subject_player_id, p_secondary_player_id,
     p_sportsbook_bet_id, p_loan_id, p_pvp_challenge_id, p_bounty_post_id,
     v_visibility, 'published',
-    v_template, COALESCE(p_public_payload, '{}'::jsonb), COALESCE(p_admin_payload, '{}'::jsonb),
+    v_cat.template_key, COALESCE(p_public_payload, '{}'::jsonb), COALESCE(p_admin_payload, '{}'::jsonb),
     COALESCE(p_occurred_at, now())
   )
   ON CONFLICT DO NOTHING
@@ -3883,9 +3832,7 @@ CREATE OR REPLACE FUNCTION public.remove_over_under_markets_for_game(p_week_id u
  SET search_path TO ''
 AS $function$
 BEGIN
-  IF ((SELECT auth.jwt()) -> 'app_metadata' ->> 'role') <> 'admin' THEN
-    RAISE EXCEPTION 'Admin only';
-  END IF;
+  PERFORM public.assert_admin();
 
   -- Refund (delete both ledger rows of) every bet with a leg on this game's markets.
   DELETE FROM public.pin_ledger
@@ -4004,9 +3951,7 @@ CREATE OR REPLACE FUNCTION public.restore_activity_event(p_event_id uuid)
  SET search_path TO ''
 AS $function$
 BEGIN
-  IF ((SELECT auth.jwt()) -> 'app_metadata' ->> 'role') <> 'admin' THEN
-    RAISE EXCEPTION 'Admin only';
-  END IF;
+  PERFORM public.assert_admin();
 
   UPDATE public.activity_feed_events
     SET status = 'published',
@@ -4098,8 +4043,7 @@ BEGIN
   -- groups under the correct week in the per-player ledger.
   IF NOT EXISTS (
     SELECT 1 FROM public.pin_ledger
-    WHERE season_id = v_season_id AND type = 'score_credit'
-      AND description LIKE 'Week ' || v_week_number || ' %'
+    WHERE week_id = p_week_id AND type = 'score_credit'
   ) THEN
     INSERT INTO public.pin_ledger (player_id, season_id, week_id, amount, type, description)
     SELECT ts.player_id, v_season_id, p_week_id, s.score, 'score_credit',
@@ -4175,12 +4119,9 @@ BEGIN
   -- bets) are deliberately left pending — their data lands after archive and
   -- settle_lanetalk_props_for_week settles them on the Confirm clock.
   -- --------------------------------------------------------------------------
-  SELECT count(DISTINCT b.id) INTO v_n_pending
+  SELECT count(*) INTO v_n_pending
   FROM public.bets b
-  JOIN public.bet_legs l       ON l.bet_id = b.id
-  JOIN public.bet_selections s ON s.id = l.selection_id
-  JOIN public.bet_markets m    ON m.id = s.market_id
-  WHERE m.week_id = p_week_id AND b.status = 'pending'
+  WHERE b.week_id = p_week_id AND b.status = 'pending'
     AND NOT EXISTS (
       SELECT 1 FROM public.bet_legs l2
       JOIN public.bet_selections s2 ON s2.id = l2.selection_id
@@ -4195,7 +4136,7 @@ BEGIN
       JOIN public.bet_legs l       ON l.bet_id = b.id
       JOIN public.bet_selections s ON s.id = l.selection_id
       JOIN public.bet_markets m    ON m.id = s.market_id
-      WHERE m.week_id = p_week_id AND b.status = 'pending' AND m.status <> 'settled'
+      WHERE b.week_id = p_week_id AND b.status = 'pending' AND m.status <> 'settled'
         AND m.market_type <> 'prop'
         AND NOT EXISTS (
           SELECT 1 FROM public.bet_legs l2
@@ -4209,12 +4150,9 @@ BEGIN
     END IF;
 
     FOR v_bet IN
-      SELECT DISTINCT b.id, b.player_id, b.season_id, b.stake
+      SELECT b.id, b.player_id, b.season_id, b.stake
       FROM public.bets b
-      JOIN public.bet_legs l       ON l.bet_id = b.id
-      JOIN public.bet_selections s ON s.id = l.selection_id
-      JOIN public.bet_markets m    ON m.id = s.market_id
-      WHERE m.week_id = p_week_id AND b.status = 'pending'
+      WHERE b.week_id = p_week_id AND b.status = 'pending'
         AND NOT EXISTS (
           SELECT 1 FROM public.bet_legs l2
           JOIN public.bet_selections s2 ON s2.id = l2.selection_id
@@ -4232,19 +4170,12 @@ BEGIN
 
   -- Activity Feed: post the House's weekly sportsbook P&L (aggregate, no source FK).
   -- house_net > 0 = House won the week; < 0 = players beat the House (§10.3 copy).
-  -- Summed via bet_id through the week's markets: payout/refund rows are now also
-  -- week-stamped, but bet_id remains the authoritative link for bet money.
+  -- bet_id remains the authoritative link for bet money; bets.week_id scopes the week.
   SELECT COALESCE(SUM(pl.amount), 0) INTO v_house_net
     FROM public.pin_ledger pl
     WHERE pl.is_house = true
       AND pl.type IN ('bet_stake','bet_payout','bet_refund')
-      AND pl.bet_id IN (
-        SELECT DISTINCT l.bet_id
-        FROM public.bet_legs l
-        JOIN public.bet_selections s ON s.id = l.selection_id
-        JOIN public.bet_markets m    ON m.id = s.market_id
-        WHERE m.week_id = p_week_id
-      );
+      AND pl.bet_id IN (SELECT b.id FROM public.bets b WHERE b.week_id = p_week_id);
 
   -- Idempotency: no source FK exists, so guard on (season, week, event_type).
   IF NOT EXISTS (
@@ -4445,9 +4376,7 @@ DECLARE
   v_voided     integer := 0;
   v_pending    integer := 0;
 BEGIN
-  IF ((SELECT auth.jwt()) -> 'app_metadata' ->> 'role') <> 'admin' THEN
-    RAISE EXCEPTION 'Admin only';
-  END IF;
+  PERFORM public.assert_admin();
 
   IF NOT EXISTS (SELECT 1 FROM public.weeks WHERE id = p_week_id) THEN
     RAISE EXCEPTION 'Week not found';
@@ -4479,7 +4408,9 @@ BEGIN
              END
         INTO v_value
       FROM public.lanetalk_game_imports i
-      CROSS JOIN LATERAL public.lanetalk_game_stats(i.payload) st
+      CROSS JOIN LATERAL (
+        SELECT i.strikes, i.spares, i.clean_pct, i.first_ball_avg
+      ) st
       WHERE i.week_id = p_week_id
         AND i.player_id = v_mkt.subject_player_id
         AND i.game_number = v_mkt.game_number
@@ -4516,9 +4447,7 @@ BEGIN
           INTO v_value
         FROM public.lanetalk_game_imports i
         CROSS JOIN LATERAL (
-          SELECT g.strikes, g.spares, g.clean_pct, g.first_ball_avg,
-                 jsonb_array_length(COALESCE(i.payload -> 'frames', '[]'::jsonb)) AS frames
-          FROM public.lanetalk_game_stats(i.payload) g
+          SELECT i.strikes, i.spares, i.clean_pct, i.first_ball_avg, i.frames
         ) st
         WHERE i.week_id = p_week_id
           AND i.player_id = v_mkt.subject_player_id
@@ -4601,9 +4530,7 @@ CREATE OR REPLACE FUNCTION public.settle_market(p_market_id uuid, p_result_value
  SET search_path TO ''
 AS $function$
 BEGIN
-  IF ((SELECT auth.jwt()) -> 'app_metadata' ->> 'role') <> 'admin' THEN
-    RAISE EXCEPTION 'Admin only';
-  END IF;
+  PERFORM public.assert_admin();
   PERFORM public.settle_market_internal(p_market_id, p_result_value);
 END;
 $function$
@@ -4656,9 +4583,7 @@ CREATE OR REPLACE FUNCTION public.settle_moneyline_market(p_market_id uuid)
  SET search_path TO ''
 AS $function$
 BEGIN
-  IF ((SELECT auth.jwt()) -> 'app_metadata' ->> 'role') <> 'admin' THEN
-    RAISE EXCEPTION 'Admin only';
-  END IF;
+  PERFORM public.assert_admin();
   PERFORM public.settle_moneyline_market_internal(p_market_id);
 END;
 $function$
@@ -4965,9 +4890,7 @@ AS $function$
 DECLARE
   v_contract record;
 BEGIN
-  IF ((SELECT auth.jwt()) -> 'app_metadata' ->> 'role') <> 'admin' THEN
-    RAISE EXCEPTION 'Admin only';
-  END IF;
+  PERFORM public.assert_admin();
 
   -- Close any still-open negotiations for the whole week (the clock-based expiry
   -- sweep is gone; nothing else closes stale pending/countered contracts now).
@@ -4995,9 +4918,7 @@ AS $function$
 DECLARE
   v_admin_id uuid;
 BEGIN
-  IF ((SELECT auth.jwt()) -> 'app_metadata' ->> 'role') <> 'admin' THEN
-    RAISE EXCEPTION 'Admin only';
-  END IF;
+  PERFORM public.assert_admin();
 
   SELECT id INTO v_admin_id FROM public.players WHERE user_id = auth.uid();
 
@@ -5077,7 +4998,7 @@ BEGIN
          SELECT 1 FROM public.lanetalk_game_imports i
          WHERE i.player_id = m.subject_player_id
            AND i.classification = 'official'
-           AND jsonb_array_length(COALESCE(i.payload -> 'frames', '[]'::jsonb)) > 0)
+           AND i.frames > 0)
        OR (m.game_number IS NOT NULL AND m.game_number <> ALL (v_target_games))
        OR (m.game_number IS NOT NULL AND v_has_games AND NOT EXISTS (
              SELECT 1 FROM public.scores s
@@ -5553,6 +5474,24 @@ END;
 $function$
 ;
 
+CREATE OR REPLACE FUNCTION public.trg_lanetalk_import_stats()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SET search_path TO ''
+AS $function$
+DECLARE st record;
+BEGIN
+  SELECT * INTO st FROM public.lanetalk_game_stats(NEW.payload);
+  NEW.frames         := jsonb_array_length(COALESCE(NEW.payload -> 'frames', '[]'::jsonb));
+  NEW.strikes        := st.strikes;
+  NEW.spares         := st.spares;
+  NEW.clean_pct      := st.clean_pct;
+  NEW.first_ball_avg := st.first_ball_avg;
+  RETURN NEW;
+END;
+$function$
+;
+
 CREATE OR REPLACE FUNCTION public.trg_resync_markets_games()
  RETURNS trigger
  LANGUAGE plpgsql
@@ -5716,9 +5655,7 @@ DECLARE
   v_n_rsvp        integer := 0;
   v_n_ledger      integer := 0;
 BEGIN
-  IF ((SELECT auth.jwt()) -> 'app_metadata' ->> 'role') <> 'admin' THEN
-    RAISE EXCEPTION 'Admin only';
-  END IF;
+  PERFORM public.assert_admin();
 
   SELECT season_id, week_number INTO v_season_id, v_week_number
     FROM public.weeks WHERE id = p_week_id;
@@ -5753,12 +5690,8 @@ BEGIN
       JOIN public.teams t       ON t.id = ts.team_id
      WHERE t.week_id = v_next_week_id AND sc.score IS NOT NULL;
 
-    SELECT count(DISTINCT b.id) INTO v_n_bets
-      FROM public.bets b
-      JOIN public.bet_legs l       ON l.bet_id = b.id
-      JOIN public.bet_selections s ON s.id = l.selection_id
-      JOIN public.bet_markets m    ON m.id = s.market_id
-     WHERE m.week_id = v_next_week_id;
+    SELECT count(*) INTO v_n_bets
+      FROM public.bets b WHERE b.week_id = v_next_week_id;
 
     SELECT count(*) INTO v_n_pvp  FROM public.pvp_challenges WHERE week_id = v_next_week_id;
     SELECT count(*) INTO v_n_rsvp FROM public.rsvp           WHERE week_id = v_next_week_id;
@@ -5783,13 +5716,7 @@ BEGIN
 
   DELETE FROM public.pin_ledger pl
    WHERE (pl.week_id = p_week_id
-          OR pl.bet_id IN (
-               SELECT b.id FROM public.bets b
-                 JOIN public.bet_legs l       ON l.bet_id = b.id
-                 JOIN public.bet_selections s ON s.id = l.selection_id
-                 JOIN public.bet_markets m    ON m.id = s.market_id
-                WHERE m.week_id = p_week_id
-             ))
+          OR pl.bet_id IN (SELECT b.id FROM public.bets b WHERE b.week_id = p_week_id))
      AND pl.id NOT IN (
        SELECT pk FROM public.week_archive_snapshot
         WHERE run_id = v_run_id AND kind = 'preexisting_id' AND table_name = 'pin_ledger'
@@ -5965,6 +5892,8 @@ $function$
 -- TRIGGERS
 -- =====================================================
 
+CREATE TRIGGER set_updated_at BEFORE UPDATE ON public.activity_event_catalog FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
 CREATE TRIGGER set_updated_at BEFORE UPDATE ON public.activity_feed_events FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
 CREATE TRIGGER bet_legs_no_self_tank BEFORE INSERT OR UPDATE ON public.bet_legs FOR EACH ROW EXECUTE FUNCTION prevent_self_tank();
@@ -6002,6 +5931,8 @@ CREATE TRIGGER games_resync_markets_upd AFTER UPDATE ON public.games REFERENCING
 CREATE TRIGGER games_same_week_check BEFORE INSERT OR UPDATE OF team_a_id, team_b_id ON public.games FOR EACH ROW EXECUTE FUNCTION games_same_week();
 
 CREATE TRIGGER set_updated_at BEFORE UPDATE ON public.games FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+CREATE TRIGGER lanetalk_import_stats BEFORE INSERT OR UPDATE OF payload ON public.lanetalk_game_imports FOR EACH ROW EXECUTE FUNCTION trg_lanetalk_import_stats();
 
 CREATE TRIGGER set_updated_at BEFORE UPDATE ON public.lanetalk_game_imports FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 

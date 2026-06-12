@@ -212,6 +212,18 @@ Indexes: `challenge_id`, `offered_by_player_id`. Consider a partial index
 `(challenge_id) WHERE superseded_at IS NULL AND accepted_at IS NULL AND declined_at IS NULL`
 to fetch the live offer fast.
 
+**⚠️ The challenge ↔ live-offer mirror (dual-write invariant).** The
+`pvp_challenges` row is a **denormalized snapshot of the live offer**: every
+negotiable term (`contract_type`, both stakes, `game_number`,
+`prop_market_id`, selections, …) is duplicated from the latest acceptable
+`pvp_challenge_offers` row, because the app reads challenge columns directly
+(including realtime payloads). This mirror is maintained **only** by
+`create_pvp_challenge` (writes both rows) and `counter_pvp_challenge`
+(supersedes the old offer, inserts the counter, and hand-copies ~12 columns
+back onto the challenge). Never update the negotiable terms on either side
+anywhere else — a one-sided write silently desynchronizes what the
+counterparty sees from what `accept_pvp_challenge` escrows.
+
 ### `pvp_ledger` (mirrors `loan_ledger`)
 Append-only PvP economic event log. Every pin movement for a contract has a row here,
 linked to the player-side `pin_ledger` row. **Held escrow / payouts are all

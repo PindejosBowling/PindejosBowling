@@ -14,6 +14,39 @@ export type Database = {
   }
   public: {
     Tables: {
+      activity_event_catalog: {
+        Row: {
+          allowed_fk: string
+          created_at: string
+          default_visibility: string
+          event_type: string
+          requires_actor: boolean
+          source_feature: string
+          template_key: string
+          updated_at: string
+        }
+        Insert: {
+          allowed_fk: string
+          created_at?: string
+          default_visibility: string
+          event_type: string
+          requires_actor: boolean
+          source_feature: string
+          template_key: string
+          updated_at?: string
+        }
+        Update: {
+          allowed_fk?: string
+          created_at?: string
+          default_visibility?: string
+          event_type?: string
+          requires_actor?: boolean
+          source_feature?: string
+          template_key?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       activity_feed_events: {
         Row: {
           actor_player_id: string | null
@@ -107,6 +140,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "bounty_post"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "activity_feed_events_event_type_fkey"
+            columns: ["event_type"]
+            isOneToOne: false
+            referencedRelation: "activity_event_catalog"
+            referencedColumns: ["event_type"]
           },
           {
             foreignKeyName: "activity_feed_events_loan_id_fkey"
@@ -360,6 +400,7 @@ export type Database = {
           stake: number
           status: string
           updated_at: string
+          week_id: string | null
         }
         Insert: {
           created_at?: string
@@ -376,6 +417,7 @@ export type Database = {
           stake: number
           status?: string
           updated_at?: string
+          week_id?: string | null
         }
         Update: {
           created_at?: string
@@ -392,6 +434,7 @@ export type Database = {
           stake?: number
           status?: string
           updated_at?: string
+          week_id?: string | null
         }
         Relationships: [
           {
@@ -413,6 +456,13 @@ export type Database = {
             columns: ["season_id"]
             isOneToOne: false
             referencedRelation: "seasons"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bets_week_id_fkey"
+            columns: ["week_id"]
+            isOneToOne: false
+            referencedRelation: "weeks"
             referencedColumns: ["id"]
           },
         ]
@@ -801,7 +851,10 @@ export type Database = {
       lanetalk_game_imports: {
         Row: {
           classification: string
+          clean_pct: number | null
           created_at: string
+          first_ball_avg: number | null
+          frames: number | null
           game_number: number
           id: string
           payload: Json
@@ -809,13 +862,18 @@ export type Database = {
           player_id: string | null
           score: number | null
           source_url: string
+          spares: number | null
+          strikes: number | null
           team_slot_id: string | null
           updated_at: string
           week_id: string | null
         }
         Insert: {
           classification: string
+          clean_pct?: number | null
           created_at?: string
+          first_ball_avg?: number | null
+          frames?: number | null
           game_number: number
           id?: string
           payload: Json
@@ -823,13 +881,18 @@ export type Database = {
           player_id?: string | null
           score?: number | null
           source_url: string
+          spares?: number | null
+          strikes?: number | null
           team_slot_id?: string | null
           updated_at?: string
           week_id?: string | null
         }
         Update: {
           classification?: string
+          clean_pct?: number | null
           created_at?: string
+          first_ball_avg?: number | null
+          frames?: number | null
           game_number?: number
           id?: string
           payload?: Json
@@ -837,6 +900,8 @@ export type Database = {
           player_id?: string | null
           score?: number | null
           source_url?: string
+          spares?: number | null
+          strikes?: number | null
           team_slot_id?: string | null
           updated_at?: string
           week_id?: string | null

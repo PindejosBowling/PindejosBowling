@@ -1,118 +1,183 @@
--- Rollback-probe for the bets + bounty flows (CONSOLIDATION §2 batch D + §4).
+-- Bets + bounty probe — self-contained, assertion-grade
+-- (see context/db-verification.md).
 --
---   bounty #1: house bounty → 2 hunters enter → settle hunter_win (payout pairs)
---   bounty #2: house bounty → 1 hunter  → settle sponsor_win (house keeps stakes)
---   bet #1: placed on open O/U market, settled as WON (payout pair)
---   bet #2: placed on second open market, settled as LOST (no ledger)
---   sweep:  settle_betting_for_week(force) — score-credit mint, loans tick,
---           PvP sweep, force-void of remaining pending bets, house P&L event
--- Captures normalized rows; raises to abort — nothing persists.
+-- Fixtures: 2 synthetic players seeded 1000 pins each, 2 synthetic open
+-- over_under markets (odds 2.000). Live anchors: active season + open week.
 --
--- NOTE: deliberately does NOT capture the granular bounty ref columns
--- (bounty_hunter_stake_id / settlement / payout) — §4 removes them by design;
--- the capture proves amounts/types/descriptions/pairs are unchanged.
---
--- Inputs: player1 c985c0ad…/c811c7df…, player2 3bf2c262…/fef642dc…,
---         week b78cfe24…, season fe73b724….
+-- Flow:
+--   bounty #1 (house, reward 30 / stake 30): both players enter → hunter_win
+--   bounty #2 (house): p2 enters → sponsor_win (house keeps stake)
+--   bet #1: p1 stakes 50 on over @2.0, market settles over  → won (+50 net)
+--   bet #2: p2 stakes 50 on over @2.0, market settles under → lost (−50 net)
+--   sweep:  settle_betting_for_week(force) — the archive-time settlement path
+-- Asserts per-player deltas, statuses, payouts, net-zero; raises PROBE_RESULT.
 DO $$
 DECLARE
-  v_week constant uuid := 'b78cfe24-f931-45d1-81ab-65fad9c7135d';
-  v_mkt1 uuid; v_sel1 uuid; v_line1 numeric;
-  v_mkt2 uuid; v_sel2 uuid; v_line2 numeric;
+  v_u1 uuid := gen_random_uuid();
+  v_u2 uuid := gen_random_uuid();
+  v_p1 uuid; v_p2 uuid;
+  v_season uuid; v_week uuid;
+  v_mkt1 uuid; v_sel1 uuid;
+  v_mkt2 uuid; v_sel2 uuid;
   v_bet1 uuid; v_bet2 uuid;
   v_bounty1 uuid; v_bounty2 uuid;
+  c_seed constant int := 1000;
+  v_got int;
   v_result jsonb;
 BEGIN
-  -- Two open O/U markets, deterministically chosen.
-  SELECT m.id, s.id, s.line INTO v_mkt1, v_sel1, v_line1
-    FROM public.bet_markets m JOIN public.bet_selections s ON s.market_id = m.id AND s.key = 'over'
-    WHERE m.week_id = v_week AND m.market_type = 'over_under' AND m.status = 'open'
-    ORDER BY m.created_at, m.id LIMIT 1;
-  SELECT m.id, s.id, s.line INTO v_mkt2, v_sel2, v_line2
-    FROM public.bet_markets m JOIN public.bet_selections s ON s.market_id = m.id AND s.key = 'over'
-    WHERE m.week_id = v_week AND m.market_type = 'over_under' AND m.status = 'open'
-    ORDER BY m.created_at, m.id OFFSET 1 LIMIT 1;
-  IF v_mkt1 IS NULL OR v_mkt2 IS NULL THEN
-    RAISE EXCEPTION 'PROBE_SETUP_FAILED: need two open over_under markets in week %', v_week;
+  ------------------------------------------------------------------ fixtures
+  INSERT INTO auth.users (id, instance_id, aud, role, phone) VALUES
+    (v_u1, '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', '10000000001'),
+    (v_u2, '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', '10000000002');
+  INSERT INTO public.players (first_name, last_name, phone, user_id)
+    VALUES ('Probe', 'One', '+10000000001', v_u1) RETURNING id INTO v_p1;
+  INSERT INTO public.players (first_name, last_name, phone, user_id)
+    VALUES ('Probe', 'Two', '+10000000002', v_u2) RETURNING id INTO v_p2;
+
+  v_season := public.current_season_id();
+  SELECT id INTO v_week FROM public.weeks
+    WHERE season_id = v_season AND is_archived = false
+    ORDER BY week_number DESC LIMIT 1;
+  IF v_week IS NULL THEN
+    RAISE EXCEPTION 'PROBE_SETUP_FAILED: no open week in the active season';
   END IF;
 
-  -- Bounty #1: hunter_win.
-  PERFORM set_config('request.jwt.claims',
-    '{"sub":"c811c7df-be32-418a-b992-76c819148437","role":"authenticated","app_metadata":{"role":"admin"}}', true);
+  INSERT INTO public.pin_ledger (player_id, season_id, week_id, amount, type, description) VALUES
+    (v_p1, v_season, v_week, c_seed, 'score_credit', 'PROBE FIXTURE seed'),
+    (v_p2, v_season, v_week, c_seed, 'score_credit', 'PROBE FIXTURE seed');
+
+  INSERT INTO public.bet_markets (market_type, title, week_id, game_number, status)
+    VALUES ('over_under', 'PROBE market 1', v_week, 1, 'open') RETURNING id INTO v_mkt1;
+  INSERT INTO public.bet_selections (market_id, key, label, odds, line)
+    VALUES (v_mkt1, 'over', 'Over', 2.000, 100.5) RETURNING id INTO v_sel1;
+  INSERT INTO public.bet_selections (market_id, key, label, odds, line)
+    VALUES (v_mkt1, 'under', 'Under', 2.000, 100.5);
+  INSERT INTO public.bet_markets (market_type, title, week_id, game_number, status)
+    VALUES ('over_under', 'PROBE market 2', v_week, 2, 'open') RETURNING id INTO v_mkt2;
+  INSERT INTO public.bet_selections (market_id, key, label, odds, line)
+    VALUES (v_mkt2, 'over', 'Over', 2.000, 100.5) RETURNING id INTO v_sel2;
+  INSERT INTO public.bet_selections (market_id, key, label, odds, line)
+    VALUES (v_mkt2, 'under', 'Under', 2.000, 100.5);
+
+  ------------------------------------------------------------------ bounties
+  PERFORM set_config('request.jwt.claims', json_build_object(
+    'sub', v_u1, 'role', 'authenticated', 'app_metadata', json_build_object('role', 'admin'))::text, true);
   SELECT public.create_house_bounty(v_week, 'Probe bounty 1', 'probe', 30, 30, 2, now() + interval '1 hour')
     INTO v_bounty1;
 
-  PERFORM set_config('request.jwt.claims',
-    '{"sub":"c811c7df-be32-418a-b992-76c819148437","role":"authenticated","app_metadata":{"role":"player"}}', true);
+  PERFORM set_config('request.jwt.claims', json_build_object(
+    'sub', v_u1, 'role', 'authenticated', 'app_metadata', json_build_object('role', 'player'))::text, true);
   PERFORM public.enter_bounty_as_hunter(v_bounty1);
-  PERFORM set_config('request.jwt.claims',
-    '{"sub":"fef642dc-49ad-445c-b2ad-a2a6b8108283","role":"authenticated","app_metadata":{"role":"player"}}', true);
+  PERFORM set_config('request.jwt.claims', json_build_object(
+    'sub', v_u2, 'role', 'authenticated', 'app_metadata', json_build_object('role', 'player'))::text, true);
   PERFORM public.enter_bounty_as_hunter(v_bounty1);
 
-  PERFORM set_config('request.jwt.claims',
-    '{"sub":"c811c7df-be32-418a-b992-76c819148437","role":"authenticated","app_metadata":{"role":"admin"}}', true);
+  PERFORM set_config('request.jwt.claims', json_build_object(
+    'sub', v_u1, 'role', 'authenticated', 'app_metadata', json_build_object('role', 'admin'))::text, true);
   PERFORM public.settle_bounty(v_bounty1, 'hunter_win', 'probe settle 1');
 
-  -- Bounty #2: sponsor_win (House keeps stakes; reporting-only payout row).
   SELECT public.create_house_bounty(v_week, 'Probe bounty 2', 'probe', 30, 30, 2, now() + interval '1 hour')
     INTO v_bounty2;
-  PERFORM set_config('request.jwt.claims',
-    '{"sub":"fef642dc-49ad-445c-b2ad-a2a6b8108283","role":"authenticated","app_metadata":{"role":"player"}}', true);
+  PERFORM set_config('request.jwt.claims', json_build_object(
+    'sub', v_u2, 'role', 'authenticated', 'app_metadata', json_build_object('role', 'player'))::text, true);
   PERFORM public.enter_bounty_as_hunter(v_bounty2);
-  PERFORM set_config('request.jwt.claims',
-    '{"sub":"c811c7df-be32-418a-b992-76c819148437","role":"authenticated","app_metadata":{"role":"admin"}}', true);
+  PERFORM set_config('request.jwt.claims', json_build_object(
+    'sub', v_u1, 'role', 'authenticated', 'app_metadata', json_build_object('role', 'admin'))::text, true);
   PERFORM public.settle_bounty(v_bounty2, 'sponsor_win', 'probe settle 2');
 
-  -- Bets: one winner, one loser.
-  PERFORM set_config('request.jwt.claims',
-    '{"sub":"c811c7df-be32-418a-b992-76c819148437","role":"authenticated","app_metadata":{"role":"player"}}', true);
+  -- hunter_win pays stake+reward back (+30 net each); sponsor_win keeps p2's stake
+  SELECT COALESCE(SUM(amount), 0) - c_seed INTO v_got
+    FROM public.pin_ledger WHERE player_id = v_p1 AND created_at = now();
+  IF v_got <> 30 THEN
+    RAISE EXCEPTION 'PROBE_FAIL: p1 delta % after bounties (expected +30)', v_got;
+  END IF;
+  SELECT COALESCE(SUM(amount), 0) - c_seed INTO v_got
+    FROM public.pin_ledger WHERE player_id = v_p2 AND created_at = now();
+  IF v_got <> 0 THEN
+    RAISE EXCEPTION 'PROBE_FAIL: p2 delta % after bounties (expected 0 = +30 won − 30 lost)', v_got;
+  END IF;
+
+  ------------------------------------------------------------------ bets
+  PERFORM set_config('request.jwt.claims', json_build_object(
+    'sub', v_u1, 'role', 'authenticated', 'app_metadata', json_build_object('role', 'player'))::text, true);
   SELECT public.place_house_bet(ARRAY[v_sel1], 50) INTO v_bet1;
-  PERFORM set_config('request.jwt.claims',
-    '{"sub":"fef642dc-49ad-445c-b2ad-a2a6b8108283","role":"authenticated","app_metadata":{"role":"player"}}', true);
+  PERFORM set_config('request.jwt.claims', json_build_object(
+    'sub', v_u2, 'role', 'authenticated', 'app_metadata', json_build_object('role', 'player'))::text, true);
   SELECT public.place_house_bet(ARRAY[v_sel2], 50) INTO v_bet2;
 
-  PERFORM set_config('request.jwt.claims',
-    '{"sub":"c811c7df-be32-418a-b992-76c819148437","role":"authenticated","app_metadata":{"role":"admin"}}', true);
-  PERFORM public.settle_market(v_mkt1, v_line1 + 1);
-  PERFORM public.settle_market(v_mkt2, v_line2 - 1);
+  PERFORM set_config('request.jwt.claims', json_build_object(
+    'sub', v_u1, 'role', 'authenticated', 'app_metadata', json_build_object('role', 'admin'))::text, true);
+  PERFORM public.settle_market(v_mkt1, 101.5);  -- over wins → bet1 won
+  PERFORM public.settle_market(v_mkt2, 99.5);   -- under wins → bet2 lost
 
-  -- The archive-time settlement sweep, force mode.
+  IF (SELECT status FROM public.bets WHERE id = v_bet1) <> 'won' THEN
+    RAISE EXCEPTION 'PROBE_FAIL: bet1 not won';
+  END IF;
+  IF (SELECT potential_payout FROM public.bets WHERE id = v_bet1) <> 100 THEN
+    RAISE EXCEPTION 'PROBE_FAIL: bet1 payout <> 100 (50 @ 2.000)';
+  END IF;
+  IF (SELECT status FROM public.bets WHERE id = v_bet2) <> 'lost' THEN
+    RAISE EXCEPTION 'PROBE_FAIL: bet2 not lost';
+  END IF;
+
+  ------------------------------------------------------------------ sweep
   PERFORM public.settle_betting_for_week(v_week, true);
 
+  -- score_credit mint idempotency: a second sweep must mint nothing
+  DECLARE v_mints int;
+  BEGIN
+    SELECT count(*) INTO v_mints FROM public.pin_ledger
+      WHERE week_id = v_week AND type = 'score_credit';
+    PERFORM public.settle_betting_for_week(v_week, true);
+    IF (SELECT count(*) FROM public.pin_ledger
+        WHERE week_id = v_week AND type = 'score_credit') <> v_mints THEN
+      RAISE EXCEPTION 'PROBE_FAIL: double sweep re-minted score credits';
+    END IF;
+  END;
+
+  ------------------------------------------------------------------ assertions
+  SELECT COALESCE(SUM(amount), 0) - c_seed INTO v_got
+    FROM public.pin_ledger WHERE player_id = v_p1 AND created_at = now();
+  IF v_got <> 80 THEN
+    RAISE EXCEPTION 'PROBE_FAIL: p1 final delta % (expected +80 = +30 bounty +50 bet)', v_got;
+  END IF;
+  SELECT COALESCE(SUM(amount), 0) - c_seed INTO v_got
+    FROM public.pin_ledger WHERE player_id = v_p2 AND created_at = now();
+  IF v_got <> -50 THEN
+    RAISE EXCEPTION 'PROBE_FAIL: p2 final delta % (expected −50 = 0 bounty −50 bet)', v_got;
+  END IF;
+
+  -- double-entry: every transfer type in this tx nets to zero (the sweep's
+  -- score_credit mint is the only sanctioned single-sided type)
+  SELECT COALESCE(SUM(amount), 0) INTO v_got
+    FROM public.pin_ledger WHERE created_at = now() AND type <> 'score_credit';
+  IF v_got <> 0 THEN
+    RAISE EXCEPTION 'PROBE_FAIL: non-mint movements net to % (expected 0)', v_got;
+  END IF;
+
+  IF (SELECT count(*) FROM public.bounty_post WHERE created_at = now() AND status = 'settled') <> 2 THEN
+    RAISE EXCEPTION 'PROBE_FAIL: expected both bounties settled';
+  END IF;
+  IF (SELECT count(*) FROM public.bounty_hunter_stakes WHERE created_at = now() AND status = 'won') <> 2
+     OR (SELECT count(*) FROM public.bounty_hunter_stakes WHERE created_at = now() AND status = 'lost') <> 1 THEN
+    RAISE EXCEPTION 'PROBE_FAIL: hunter stake statuses wrong (expected 2 won + 1 lost)';
+  END IF;
+  IF (SELECT count(*) FROM public.bounty_payouts WHERE created_at = now()) <> 3 THEN
+    RAISE EXCEPTION 'PROBE_FAIL: expected 3 bounty payout rows (2 hunter + 1 house reporting)';
+  END IF;
+
+  ------------------------------------------------------------------ capture
   SELECT jsonb_build_object(
-    'pin_ledger', (
+    'fixture_pin_rows', (
       SELECT jsonb_agg(jsonb_build_object(
-        'player_id', player_id, 'season_id', season_id, 'week_id', week_id,
         'is_house', is_house, 'amount', amount, 'type', type, 'description', description,
-        'bet_ref', bet_id IS NOT NULL, 'bounty_ref', bounty_post_id IS NOT NULL,
-        'loan_ref', loan_ledger_id IS NOT NULL, 'pvp_ref', pvp_ledger_id IS NOT NULL)
-        ORDER BY type, description, is_house, amount, player_id)
-      FROM public.pin_ledger WHERE created_at = now() AND type <> 'score_credit'),
-    'score_credit_agg', (
-      SELECT jsonb_build_object('n', count(*), 'sum', COALESCE(SUM(amount), 0))
-      FROM public.pin_ledger WHERE created_at = now() AND type = 'score_credit'),
-    'bets', (
-      SELECT jsonb_agg(jsonb_build_object('stake', stake, 'status', status, 'payout', potential_payout)
-                       ORDER BY stake, status)
-      FROM public.bets WHERE created_at = now()),
-    'bounty_settlements', (
-      SELECT jsonb_agg(jsonb_build_object(
-        'outcome', settlement_outcome, 'total_pot', total_pot, 'house_seed', total_house_seed,
-        'stakes', total_hunter_stakes, 'reward', total_protected_hunter_profit, 'winners', winner_count)
-        ORDER BY settlement_outcome)
-      FROM public.bounty_settlements WHERE created_at = now()),
-    'bounty_payouts', (
-      SELECT jsonb_agg(jsonb_build_object('is_house', is_house, 'amount', payout_amount, 'player_set', player_id IS NOT NULL)
-                       ORDER BY payout_amount, is_house)
-      FROM public.bounty_payouts WHERE created_at = now()),
-    'hunter_stakes', (
-      SELECT jsonb_agg(jsonb_build_object('stake', stake_amount, 'status', status, 'reward', protected_hunter_profit)
-                       ORDER BY status, stake_amount)
-      FROM public.bounty_hunter_stakes WHERE created_at = now()),
-    'events', (
-      SELECT jsonb_agg(jsonb_build_object('event_type', event_type, 'public_payload', public_payload)
-                       ORDER BY event_type, public_payload::text)
-      FROM public.activity_feed_events WHERE created_at = now())
+        'bet_ref', bet_id IS NOT NULL, 'bounty_ref', bounty_post_id IS NOT NULL)
+        ORDER BY type, description, is_house, amount)
+      FROM public.pin_ledger
+      WHERE created_at = now() AND type <> 'score_credit'
+        AND (player_id IN (v_p1, v_p2)
+             OR bet_id IN (v_bet1, v_bet2)
+             OR bounty_post_id IN (v_bounty1, v_bounty2)))
   ) INTO v_result;
 
   RAISE EXCEPTION 'PROBE_RESULT %', v_result;

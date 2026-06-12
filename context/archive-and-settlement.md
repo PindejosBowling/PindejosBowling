@@ -180,6 +180,13 @@ or ledger rows (the app surfaces the message and arms **Force Unarchive**).
 4. **Reopen week N** — `is_archived = false, bowled_at = NULL`.
 5. Mark the run `reversed` (re-archive allowed).
 
+Step 1's deletion of settlement-era ledger rows is the **single sanctioned
+exception** to the ledger reversal rule (delete-refund only for unsettled
+escrow, always by root ref; post-settlement money reverses by appending
+offsetting rows) — see the "Reversal rule" subsection in
+[supabase/PIN_ECONOMY_SCHEMA.md](../supabase/PIN_ECONOMY_SCHEMA.md) §4. It is
+safe here only because the snapshot guarantees exact restoration.
+
 **Known sharp edges (by design, verify in acceptance vectors U6/I13):**
 - Unarchive cannot resurrect anything **erased before** the archive (bets
   cancelled by roster pruning are gone for good — they're not in the snapshot).

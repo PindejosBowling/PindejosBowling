@@ -122,6 +122,15 @@ Each batch is one migration that `CREATE OR REPLACE`s the functions:
 
 ## 3. Stamp `bets.week_id` — kill the four-table "bets in week" join
 
+**Status: ✅ DONE 2026-06-12** — migrations `20260612172127_bets_week_id` +
+`…172200_bets_week_id_consumers`. place_house_bet stamps + enforces
+single-week parlays; archive_week / settle_betting_for_week / unarchive_week
+predicates rewritten (the leg→market join survives only for market-type facts:
+prop exemption + error titles); archive/unarchive also adopted assert_admin().
+Verified by the new `probe-archive-roundtrip.sql` (force-void → surgical
+restore, ledger sum + row count exact) plus the full probe suite green
+before and after. Types regenerated; tsc clean.
+
 The join `bets → bet_legs → bet_selections → bet_markets` appears 7+ times
 (archive snapshot, settle backstop ×3, weekly house P&L, unarchive delete,
 downstream guard). `place_house_bet` already computes `v_week_id`.
@@ -189,6 +198,16 @@ semantics. `bounty_payouts` already preserves payout-level granularity.
 `event_type` CHECK. Every new event = function edit + constraint edit.
 
 ### Migration — `activity_event_catalog`
+
+**Status: ✅ DONE 2026-06-12** — migration `20260612183555_activity_event_catalog`,
+pushed after the pre-push probe suite passed; post-push probes, snapshot + anon
+posture, types regen, and `tsc` all green. 16 rows seeded; CHECK → FK; helper
+rewritten (success paths verbatim). One push-time correction: the explicit
+`CREATE TRIGGER set_updated_at` collided with the `enforce_audit_columns` event
+trigger, which auto-attaches it to every new public table (42710) — the
+statement was removed; the event trigger provides it. `context/activity-feed.md`
+updated: adding an event = 1 catalog INSERT + app template.
+
 1. `CREATE TABLE activity_event_catalog (event_type text PRIMARY KEY, source_feature text NOT NULL, template_key text NOT NULL, requires_actor boolean NOT NULL, allowed_fk text NOT NULL CHECK (allowed_fk IN ('sportsbook_bet_id','loan_id','pvp_challenge_id','bounty_post_id','none')), default_visibility text NOT NULL)` + seed the 16 rows (+ `created_at`/`updated_at` — the audit-columns event trigger requires them).
 2. Rewrite `publish_activity_event`: one catalog lookup replaces the CASE; the
    FK-exclusivity check becomes a single comparison against `allowed_fk`.
