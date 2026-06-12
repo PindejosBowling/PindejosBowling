@@ -3259,7 +3259,7 @@ BEGIN
       -- Lost: stake already debited / house already holds it. No ledger…
       UPDATE public.bets SET status = 'lost', settled_at = now() WHERE id = v_bet.id;
 
-      -- …unless insured. Safety Ticket: House-funded stake refund of
+      -- …unless insured. Golden Ticket: House-funded stake refund of
       -- floor(stake × refund_share), read from the item's catalog params.
       -- Bet-linked AND week-stamped → captured/reversed by the archive engine
       -- exactly like every other bet movement. NOT-EXISTS guard makes
@@ -3280,7 +3280,7 @@ BEGIN
         ) THEN
           PERFORM public.pin_ledger_double_entry(
             v_bet.player_id, v_bet.season_id, v_week_id,
-            v_refund, 'bet_insurance_refund', 'Safety Ticket refund', NULL, v_bet.id);
+            v_refund, 'bet_insurance_refund', 'Golden Ticket refund', NULL, v_bet.id);
         END IF;
       END IF;
 
@@ -3727,7 +3727,7 @@ BEGIN
     RAISE EXCEPTION 'Wager exceeds your balance';
   END IF;
 
-  -- Safety Ticket: validate the catalog contract, then consume the atomic item
+  -- Golden Ticket: validate the catalog contract, then consume the atomic item
   -- in one guarded UPDATE (owner + unconsumed + current season — rowcount 0
   -- means one of those failed). Spent at placement, win or lose; deliberately
   -- NO is_active check (retirement stops grants, never confiscates).
@@ -3750,7 +3750,7 @@ BEGIN
        AND season_id = v_season_id
        AND consumed_at IS NULL;
     IF NOT FOUND THEN
-      RAISE EXCEPTION 'Safety Ticket is not usable (already spent, wrong season, or not yours)';
+      RAISE EXCEPTION 'Golden Ticket is not usable (already spent, wrong season, or not yours)';
     END IF;
   END IF;
 
