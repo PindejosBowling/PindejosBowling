@@ -90,20 +90,6 @@ function building(w: number, h: number): Sprite {
   )
 }
 
-const SCOREBOARD: Sprite = [
-  '.......f........',
-  '.......f........',
-  'ffffffffffffffff',
-  'f..............f',
-  'f.yy.yy...w.ww.f',
-  'f..............f',
-  'f.ww.w....yy.y.f',
-  'f..............f',
-  'ffffffffffffffff',
-  '....f......f....',
-  '....f......f....',
-]
-
 const WANTED_POSTER: Sprite = [
   'pppppppppppp',
   'p..........p',
@@ -196,20 +182,8 @@ const marketmoves: SceneDef = {
   },
 }
 
-// Sportsbook: a dot-matrix scoreboard on legs. Quietest — the screen is dense.
-const sportsbook: SceneDef = {
-  anchor: 'bottomRight',
-  pixelSize: 6,
-  opacity: BACKDROP_OPACITY.sceneDense,
-  grid: {
-    rows: SCOREBOARD,
-    palette: {
-      f: colors.muted,
-      y: colors.gold,
-      w: colors.text,
-    },
-  },
-}
+// Sportsbook uses SportsbookMenuBoardBackdrop (a scroll-length marquee frame
+// sized to the header panel) instead of a fixed scene.
 
 // PvP: a Texas shootout at midnight — two gunslinger pins drawn down on each
 // other across an empty desert street, tumbleweed mid-roll, eyes on the ridge.
@@ -306,7 +280,6 @@ const auction: SceneDef = {
 
 export const SCENES = {
   marketmoves,
-  sportsbook,
   pvp,
   bounty,
   auction,
