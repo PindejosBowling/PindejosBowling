@@ -9,6 +9,7 @@ import AppHeader from '../components/league/AppHeader'
 import AdminEndSeasonModal from '../components/admin/AdminEndSeasonModal'
 import { useAuthStore } from '../stores/authStore'
 import { useIsPlayoffCaptain } from '../hooks/usePlayoffDraftData'
+import { SHOW_PINSINO } from '../utils/featureFlags'
 
 type Nav = NativeStackNavigationProp<MoreStackParamList>
 
@@ -56,7 +57,9 @@ export default function MoreHomeScreen() {
 
   // Profile Pictures lives inside the Registration Admin menu, not here.
   const adminTiles: Tile[] = [
-    { icon: '🏦', label: 'Pinsino Admin',  onPress: () => navigation.navigate('PinsinoAdmin') },
+    ...(SHOW_PINSINO
+      ? [{ icon: '🏦', label: 'Pinsino Admin', onPress: () => navigation.navigate('PinsinoAdmin') }]
+      : []),
     { icon: '🎳', label: 'Lanetalk Import', onPress: () => navigation.navigate('LanetalkImportAdmin') },
     { icon: '🗄️', label: 'Archives',       onPress: () => navigation.navigate('Archives') },
     { icon: '🏁', label: 'Playoffs',       onPress: () => navigation.navigate('Playoffs') },
