@@ -39,6 +39,7 @@ export interface FeedEventView {
   loanId: string | null
   pvpChallengeId: string | null
   bountySourceId: string | null
+  auctionSourceId: string | null
   // Admin moderation metadata.
   suppressionReason: string | null
 }
@@ -65,6 +66,9 @@ const EVENT_IMPORTANCE: Record<string, Importance> = {
   bounty_board_bounty_posted: 'highlight',
   bounty_board_sponsor_won: 'highlight',
   bounty_board_hunters_won: 'highlight',
+  auction_opened: 'highlight',
+  auction_won: 'highlight',
+  auction_check_bounce: 'highlight',
 
   sportsbook_weekly_house_result: 'major',
 }
@@ -98,6 +102,7 @@ const FEATURE_META: Record<string, { icon: string; sourceLabel: string }> = {
   loan_shark: { icon: '🦈', sourceLabel: 'Loan Shark' },
   pvp: { icon: '⚔️', sourceLabel: 'PvP' },
   bounty_board: { icon: '🎯', sourceLabel: 'Bounty Board' },
+  auction_house: { icon: '🔨', sourceLabel: 'Auction House' },
   system: { icon: '🏛️', sourceLabel: 'The House' },
   admin: { icon: '📊', sourceLabel: 'The House' },
 }
@@ -269,6 +274,51 @@ export function renderFeedEvent(row: FeedEventView): FeedRenderParts {
           : 'The hunters got paid.',
         amount: num(p.total_pot) ? { value: num(p.total_pot), tone: 'positive', label: 'POT' } : undefined,
       }
+
+    case 'auction_house.opened': {
+      const item = p.item_name ? `${p.item_icon ?? ''} ${p.item_name}`.trim() : 'something rare'
+      return {
+        ...meta,
+        line: `The House put ${item} on the block. Sealed bids only.`,
+        amount: num(p.minimum_bid) ? { value: num(p.minimum_bid), tone: 'neutral', label: 'MIN BID' } : undefined,
+      }
+    }
+
+    case 'auction_house.won':
+      return {
+        ...meta,
+        line: p.item_name
+          ? `${actorOf(row)} won the ${p.item_name} at auction.`
+          : `${actorOf(row)} won at auction.`,
+        amount: num(p.price) ? { value: num(p.price), tone: 'neutral', label: 'PAID' } : undefined,
+        winner: { name: actorOf(row) },
+      }
+
+    case 'auction_house.check_bounce':
+      // Fee, never the pledged amount (the pledge was destroyed at settlement).
+      // fee 0 = they couldn't even cover the penalty — say so.
+      return {
+        ...meta,
+        line: num(p.fee) > 0
+          ? `${actorOf(row)}'s check BOUNCED at the auction house. 💸`
+          : `${actorOf(row)}'s check bounced — and there was nothing left to collect.`,
+        amount: num(p.fee) ? { value: num(p.fee), tone: 'neutral', label: 'FEE' } : undefined,
+      }
+
+    case 'auction_house.no_sale': {
+      const item = p.item_name ? `the ${p.item_name}` : 'the item'
+      // The ironic all-bounce special case: bids existed and every single one
+      // bounced (FINDINGS §11 — counts snapshotted at settlement).
+      const allBounced = num(p.bounce_count) > 0 && num(p.bounce_count) === num(p.bidder_count)
+      return {
+        ...meta,
+        line: allBounced
+          ? `Every single pledge for ${item} bounced. The House keeps it — and the fees.`
+          : num(p.bidder_count) === 0
+            ? `No takers — ${item} goes unsold. Cowards.`
+            : `No valid bids survived — ${item} goes unsold.`,
+      }
+    }
 
     case 'loan_shark.special_offer':
       // Posted as a system/admin event, but it reads as a Loan Shark move — force
