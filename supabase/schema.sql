@@ -1605,8 +1605,6 @@ DECLARE
   v_caller_id      uuid;
   v_challenge      public.pvp_challenges;
   v_offer          record;
-  v_creator_bal    int;
-  v_cparty_bal     int;
   v_pin_p1_player  uuid;
   v_pin_p1_house   uuid;
   v_pin_p2_player  uuid;
@@ -1615,10 +1613,7 @@ DECLARE
   v_pvp_stake2     uuid;
   v_counterparty   uuid;
 BEGIN
-  SELECT id INTO v_caller_id FROM public.players WHERE user_id = auth.uid();
-  IF v_caller_id IS NULL THEN
-    RAISE EXCEPTION 'No player linked to the current user';
-  END IF;
+  v_caller_id := public.current_player_id();
 
   SELECT * INTO v_challenge FROM public.pvp_challenges WHERE id = p_challenge_id FOR UPDATE;
   IF v_challenge.id IS NULL THEN
@@ -1653,27 +1648,19 @@ BEGIN
     RAISE EXCEPTION 'Cannot accept a contract for an archived week';
   END IF;
 
-  SELECT COALESCE(SUM(amount), 0) INTO v_creator_bal
-    FROM public.pin_ledger WHERE player_id = v_challenge.creator_player_id AND season_id = v_challenge.season_id;
-  IF v_creator_bal < v_challenge.creator_stake THEN
+  IF public.pin_balance(v_challenge.creator_player_id, v_challenge.season_id) < v_challenge.creator_stake THEN
     RAISE EXCEPTION 'Creator has insufficient balance';
   END IF;
 
-  SELECT COALESCE(SUM(amount), 0) INTO v_cparty_bal
-    FROM public.pin_ledger WHERE player_id = v_counterparty AND season_id = v_challenge.season_id;
-  IF v_cparty_bal < v_challenge.counterparty_stake THEN
+  IF public.pin_balance(v_counterparty, v_challenge.season_id) < v_challenge.counterparty_stake THEN
     RAISE EXCEPTION 'Counterparty has insufficient balance';
   END IF;
 
   -- Escrow creator's stake (double-entry: player -stake, house +stake).
-  INSERT INTO public.pin_ledger (player_id, season_id, week_id, is_house, amount, type, description)
-    VALUES (v_challenge.creator_player_id, v_challenge.season_id, v_challenge.week_id,
-            false, -v_challenge.creator_stake, 'pvp_stake', 'PvP challenge stake escrowed')
-    RETURNING id INTO v_pin_p1_player;
-  INSERT INTO public.pin_ledger (player_id, season_id, week_id, is_house, amount, type, description)
-    VALUES (NULL, v_challenge.season_id, v_challenge.week_id,
-            true, v_challenge.creator_stake, 'pvp_stake', 'PvP challenge stake escrowed (house)')
-    RETURNING id INTO v_pin_p1_house;
+  SELECT player_entry_id, house_entry_id INTO v_pin_p1_player, v_pin_p1_house
+    FROM public.pin_ledger_double_entry(
+      v_challenge.creator_player_id, v_challenge.season_id, v_challenge.week_id,
+      -v_challenge.creator_stake, 'pvp_stake', 'PvP challenge stake escrowed');
 
   INSERT INTO public.pvp_ledger (challenge_id, player_id, season_id, week_id, amount, type, description, pin_ledger_id)
     VALUES (p_challenge_id, v_challenge.creator_player_id, v_challenge.season_id, v_challenge.week_id,
@@ -1683,14 +1670,10 @@ BEGIN
   UPDATE public.pin_ledger SET pvp_ledger_id = v_pvp_stake1 WHERE id IN (v_pin_p1_player, v_pin_p1_house);
 
   -- Escrow counterparty's stake.
-  INSERT INTO public.pin_ledger (player_id, season_id, week_id, is_house, amount, type, description)
-    VALUES (v_counterparty, v_challenge.season_id, v_challenge.week_id,
-            false, -v_challenge.counterparty_stake, 'pvp_stake', 'PvP challenge stake escrowed')
-    RETURNING id INTO v_pin_p2_player;
-  INSERT INTO public.pin_ledger (player_id, season_id, week_id, is_house, amount, type, description)
-    VALUES (NULL, v_challenge.season_id, v_challenge.week_id,
-            true, v_challenge.counterparty_stake, 'pvp_stake', 'PvP challenge stake escrowed (house)')
-    RETURNING id INTO v_pin_p2_house;
+  SELECT player_entry_id, house_entry_id INTO v_pin_p2_player, v_pin_p2_house
+    FROM public.pin_ledger_double_entry(
+      v_counterparty, v_challenge.season_id, v_challenge.week_id,
+      -v_challenge.counterparty_stake, 'pvp_stake', 'PvP challenge stake escrowed');
 
   INSERT INTO public.pvp_ledger (challenge_id, player_id, season_id, week_id, amount, type, description, pin_ledger_id)
     VALUES (p_challenge_id, v_counterparty, v_challenge.season_id, v_challenge.week_id,
@@ -4833,9 +4816,7 @@ DECLARE
   v_cparty_sel     record;
 BEGIN
   IF p_source = 'admin' THEN
-    IF ((SELECT auth.jwt()) -> 'app_metadata' ->> 'role') <> 'admin' THEN
-      RAISE EXCEPTION 'Admin only';
-    END IF;
+    PERFORM public.assert_admin();
   END IF;
 
   SELECT * INTO v_challenge FROM public.pvp_challenges WHERE id = p_challenge_id FOR UPDATE;
@@ -4960,14 +4941,10 @@ BEGIN
         SELECT * FROM public.pvp_ledger
         WHERE challenge_id = p_challenge_id AND type = 'stake' AND player_id IS NOT NULL
       LOOP
-        INSERT INTO public.pin_ledger (player_id, season_id, week_id, is_house, amount, type, description)
-          VALUES (v_stake_row.player_id, v_stake_row.season_id, v_stake_row.week_id,
-                  false, -v_stake_row.amount, 'pvp_refund', 'PvP push — stake refunded')
-          RETURNING id INTO v_pin_player;
-        INSERT INTO public.pin_ledger (player_id, season_id, week_id, is_house, amount, type, description)
-          VALUES (NULL, v_stake_row.season_id, v_stake_row.week_id,
-                  true, v_stake_row.amount, 'pvp_refund', 'PvP push — stake refunded (house)')
-          RETURNING id INTO v_pin_house;
+        SELECT player_entry_id, house_entry_id INTO v_pin_player, v_pin_house
+          FROM public.pin_ledger_double_entry(
+            v_stake_row.player_id, v_stake_row.season_id, v_stake_row.week_id,
+            -v_stake_row.amount, 'pvp_refund', 'PvP push — stake refunded');
 
         INSERT INTO public.pvp_ledger (challenge_id, player_id, season_id, week_id, amount, type, description, pin_ledger_id)
           VALUES (p_challenge_id, v_stake_row.player_id, v_stake_row.season_id, v_stake_row.week_id,
@@ -5001,14 +4978,10 @@ BEGIN
   END IF;
 
   -- Winner path: pay the full pot to the winner (player +pot, house -pot).
-  INSERT INTO public.pin_ledger (player_id, season_id, week_id, is_house, amount, type, description)
-    VALUES (v_winner_id, v_challenge.season_id, v_challenge.week_id,
-            false, v_challenge.total_pot, 'pvp_payout', 'PvP challenge won')
-    RETURNING id INTO v_pin_player;
-  INSERT INTO public.pin_ledger (player_id, season_id, week_id, is_house, amount, type, description)
-    VALUES (NULL, v_challenge.season_id, v_challenge.week_id,
-            true, -v_challenge.total_pot, 'pvp_payout', 'PvP challenge won (house)')
-    RETURNING id INTO v_pin_house;
+  SELECT player_entry_id, house_entry_id INTO v_pin_player, v_pin_house
+    FROM public.pin_ledger_double_entry(
+      v_winner_id, v_challenge.season_id, v_challenge.week_id,
+      v_challenge.total_pot, 'pvp_payout', 'PvP challenge won');
 
   INSERT INTO public.pvp_ledger (challenge_id, player_id, season_id, week_id, amount, type, description, pin_ledger_id)
     VALUES (p_challenge_id, v_winner_id, v_challenge.season_id, v_challenge.week_id,
@@ -5989,9 +5962,7 @@ DECLARE
   v_pin_house  uuid;
   v_pvp_id     uuid;
 BEGIN
-  IF ((SELECT auth.jwt()) -> 'app_metadata' ->> 'role') <> 'admin' THEN
-    RAISE EXCEPTION 'Admin only';
-  END IF;
+  PERFORM public.assert_admin();
 
   SELECT * INTO v_challenge FROM public.pvp_challenges WHERE id = p_challenge_id FOR UPDATE;
   IF v_challenge.id IS NULL THEN
@@ -6009,14 +5980,10 @@ BEGIN
         AND type = 'payout'
         AND player_id IS NOT NULL
     LOOP
-      INSERT INTO public.pin_ledger (player_id, season_id, week_id, is_house, amount, type, description)
-        VALUES (v_row.player_id, v_row.season_id, v_row.week_id,
-                false, -v_row.amount, 'pvp_refund', 'PvP void — settlement reversed')
-        RETURNING id INTO v_pin_player;
-      INSERT INTO public.pin_ledger (player_id, season_id, week_id, is_house, amount, type, description)
-        VALUES (NULL, v_row.season_id, v_row.week_id,
-                true, v_row.amount, 'pvp_refund', 'PvP void — settlement reversed (house)')
-        RETURNING id INTO v_pin_house;
+      SELECT player_entry_id, house_entry_id INTO v_pin_player, v_pin_house
+        FROM public.pin_ledger_double_entry(
+          v_row.player_id, v_row.season_id, v_row.week_id,
+          -v_row.amount, 'pvp_refund', 'PvP void — settlement reversed');
 
       INSERT INTO public.pvp_ledger (challenge_id, player_id, season_id, week_id, amount, type, description, pin_ledger_id)
         VALUES (p_challenge_id, v_row.player_id, v_row.season_id, v_row.week_id,
@@ -6032,14 +5999,10 @@ BEGIN
     SELECT * FROM public.pvp_ledger
     WHERE challenge_id = p_challenge_id AND type = 'stake' AND player_id IS NOT NULL
   LOOP
-    INSERT INTO public.pin_ledger (player_id, season_id, week_id, is_house, amount, type, description)
-      VALUES (v_row.player_id, v_row.season_id, v_row.week_id,
-              false, -v_row.amount, 'pvp_refund', 'PvP challenge voided — stake refunded')
-      RETURNING id INTO v_pin_player;
-    INSERT INTO public.pin_ledger (player_id, season_id, week_id, is_house, amount, type, description)
-      VALUES (NULL, v_row.season_id, v_row.week_id,
-              true, v_row.amount, 'pvp_refund', 'PvP challenge voided — stake refunded (house)')
-      RETURNING id INTO v_pin_house;
+    SELECT player_entry_id, house_entry_id INTO v_pin_player, v_pin_house
+      FROM public.pin_ledger_double_entry(
+        v_row.player_id, v_row.season_id, v_row.week_id,
+        -v_row.amount, 'pvp_refund', 'PvP challenge voided — stake refunded');
 
     INSERT INTO public.pvp_ledger (challenge_id, player_id, season_id, week_id, amount, type, description, pin_ledger_id)
       VALUES (p_challenge_id, v_row.player_id, v_row.season_id, v_row.week_id,
