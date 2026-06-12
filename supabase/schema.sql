@@ -984,13 +984,9 @@ CREATE INDEX bounty_payouts_settlement_idx ON public.bounty_payouts USING btree 
 
 CREATE INDEX bounty_post_board_idx ON public.bounty_post USING btree (season_id, status, closes_at, created_at DESC);
 
-CREATE INDEX bounty_post_season_id_idx ON public.bounty_post USING btree (season_id);
-
 CREATE INDEX bounty_post_sponsor_idx ON public.bounty_post USING btree (sponsor_player_id) WHERE (sponsor_player_id IS NOT NULL);
 
 CREATE INDEX bounty_post_week_board_idx ON public.bounty_post USING btree (week_id, status, closes_at);
-
-CREATE INDEX bounty_post_week_id_idx ON public.bounty_post USING btree (week_id);
 
 CREATE INDEX bounty_settlements_admin_idx ON public.bounty_settlements USING btree (settled_by_admin_id);
 
@@ -1030,7 +1026,7 @@ CREATE INDEX idx_pin_ledger_bet ON public.pin_ledger USING btree (bet_id);
 
 CREATE INDEX idx_pin_ledger_house ON public.pin_ledger USING btree (season_id) WHERE is_house;
 
-CREATE INDEX idx_pin_ledger_player_season ON public.pin_ledger USING btree (player_id, season_id);
+CREATE INDEX idx_pin_ledger_player_season ON public.pin_ledger USING btree (player_id, season_id) INCLUDE (amount);
 
 CREATE INDEX idx_pin_ledger_season ON public.pin_ledger USING btree (season_id);
 
@@ -1106,7 +1102,13 @@ CREATE INDEX registrations_player_id_idx ON public.registrations USING btree (pl
 
 CREATE INDEX registrations_season_id_idx ON public.registrations USING btree (season_id);
 
+CREATE INDEX rsvp_player_id_idx ON public.rsvp USING btree (player_id);
+
+CREATE INDEX scores_game_id_idx ON public.scores USING btree (game_id);
+
 CREATE UNIQUE INDEX seasons_single_active ON public.seasons USING btree (is_active) WHERE is_active;
+
+CREATE INDEX team_slots_player_id_idx ON public.team_slots USING btree (player_id);
 
 CREATE INDEX team_slots_team_id_idx ON public.team_slots USING btree (team_id);
 
