@@ -270,16 +270,16 @@ CREATE TABLE players (
   created_at timestamp with time zone NOT NULL DEFAULT now(),
   first_name text NOT NULL,
   last_name text NOT NULL,
-  name text DEFAULT 
-CASE
-    WHEN (last_name = ''::text) THEN first_name
-    ELSE ((first_name || ' '::text) || last_name)
-END,
   user_id uuid,
   role text NOT NULL DEFAULT 'player'::text,
   updated_at timestamp with time zone NOT NULL DEFAULT now(),
   avatar_path text,
-  jersey_purchased boolean NOT NULL DEFAULT false
+  jersey_purchased boolean NOT NULL DEFAULT false,
+  name text DEFAULT 
+CASE
+    WHEN (last_name = ''::text) THEN first_name
+    ELSE ((first_name || ' '::text) || last_name)
+END
 );
 
 CREATE TABLE playoff_draft_captains (
