@@ -27,6 +27,11 @@ again at settlement.
 The fix: compute each import's stats **once at insert**, store them as plain
 columns, and make every consumer read columns.
 
+**Status: ✅ DONE 2026-06-12** — migrations `20260612180513_lanetalk_import_stats_columns`
++ `20260612180553_lanetalk_consumers_read_columns` (commit `b16deee`). Five stat
+columns + recompute trigger; seed/settle/sync read columns; seed lines for all
+6 players verified byte-identical to the JSONB-parsing originals.
+
 ### Migration A — `lanetalk_import_stats_columns`
 1. ```sql
    ALTER TABLE public.lanetalk_game_imports
@@ -76,6 +81,10 @@ existing `idx_pin_ledger_player_season` doesn't carry `amount`, so each check
 heap-fetches. One covering index makes the hottest query in the schema
 index-only.
 
+**Status: ✅ DONE 2026-06-12** — migration `20260612181842_index_tuning`
+(commit `cc0fe25`). `EXPLAIN (ANALYZE)` confirmed Index Only Scan on the
+balance query.
+
 ### Migration — `pin_ledger_balance_covering_index`
 ```sql
 DROP INDEX public.idx_pin_ledger_player_season;
@@ -96,6 +105,12 @@ WHERE indexrelname IN ('bounty_post_season_id_idx','bounty_post_week_id_idx',
                        'idx_bets_status','idx_bet_markets_status',
                        'idx_pin_ledger_house','idx_pin_ledger_season');
 ```
+
+**Status: ✅ DONE 2026-06-12** — migration `20260612181842_index_tuning`
+(commit `cc0fe25`). Evidence-gated: dropped only the two zero-scan
+prefix-redundant bounty indexes; **kept** `idx_bets_status`,
+`idx_bet_markets_status`, `idx_pin_ledger_house`, `idx_pin_ledger_season` on
+`idx_scan` evidence.
 
 ### Migration — `drop_redundant_indexes`
 - `bounty_post_season_id_idx` — prefix-redundant with
@@ -118,6 +133,9 @@ WHERE indexrelname IN ('bounty_post_season_id_idx','bounty_post_week_id_idx',
 index with that leading column. They matter when the referenced side deletes
 (week teardown cascades through `games → scores`; player merges/deletes scan
 `team_slots`/`rsvp`).
+
+**Status: ✅ DONE 2026-06-12** — migration `20260612181842_index_tuning`
+(commit `cc0fe25`). All three FK indexes created.
 
 ### Migration — `fk_indexes`
 ```sql
@@ -151,8 +169,8 @@ Decide only with timings from the dev server. **Do not build B speculatively.**
 ---
 
 ## Done when
-- [ ] LaneTalk stats are columnar; consumers read columns; lines + settlement
+- [x] LaneTalk stats are columnar; consumers read columns; lines + settlement
       verified identical on a dev week
-- [ ] Balance query plans as Index Only Scan
-- [ ] Redundant indexes dropped (with `idx_scan` evidence), FK indexes added
-- [ ] Snapshot + types regenerated; lanetalk-stat-bets.md updated
+- [x] Balance query plans as Index Only Scan
+- [x] Redundant indexes dropped (with `idx_scan` evidence), FK indexes added
+- [x] Snapshot + types regenerated; lanetalk-stat-bets.md updated

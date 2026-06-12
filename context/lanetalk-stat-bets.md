@@ -42,6 +42,15 @@ and display only. If the two ever drift, **the SQL wins** — a client bug
 mis-prices a line (visible before settlement), never mis-pays a bet. Night
 aggregates are **frame-level totals**, not per-game means.
 
+**Stats are columnar since 2026-06-12** (`lanetalk_import_stats_columns`):
+each import's `frames`/`strikes`/`spares`/`clean_pct`/`first_ball_avg` are
+plain columns on `lanetalk_game_imports`, computed once by a
+`BEFORE INSERT OR UPDATE OF payload` trigger that calls
+`lanetalk_game_stats()` — which remains the single (still SQL-side, still
+money-authoritative) stat definition. `lanetalk_seed_lines`, the settle RPC,
+and the sync prune predicate read the columns; nothing re-parses payload
+JSONB per resync anymore.
+
 ## The two-clock settlement model
 
 1. **Archive (night-of).** `settle_betting_for_week` settles score O/U +

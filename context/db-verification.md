@@ -76,3 +76,8 @@ Related, separate instruments:
   the capture's sweep content can vary with live data between runs — diff
   captures within minutes of each other when using differential mode.
 - The suite needs an active season with at least one open week.
+- Fixture seeds are week-stamped `score_credit` rows, so inside a probe
+  transaction the sweep's once-per-week mint guard (keyed on
+  `week_id + type` since HYGIENE §2) sees them and skips the real mint.
+  Deterministic and assertion-neutral — just don't expect probe captures to
+  contain the week's real score credits.

@@ -123,6 +123,18 @@ BEGIN
   ------------------------------------------------------------------ sweep
   PERFORM public.settle_betting_for_week(v_week, true);
 
+  -- score_credit mint idempotency: a second sweep must mint nothing
+  DECLARE v_mints int;
+  BEGIN
+    SELECT count(*) INTO v_mints FROM public.pin_ledger
+      WHERE week_id = v_week AND type = 'score_credit';
+    PERFORM public.settle_betting_for_week(v_week, true);
+    IF (SELECT count(*) FROM public.pin_ledger
+        WHERE week_id = v_week AND type = 'score_credit') <> v_mints THEN
+      RAISE EXCEPTION 'PROBE_FAIL: double sweep re-minted score credits';
+    END IF;
+  END;
+
   ------------------------------------------------------------------ assertions
   SELECT COALESCE(SUM(amount), 0) - c_seed INTO v_got
     FROM public.pin_ledger WHERE player_id = v_p1 AND created_at = now();
