@@ -60,6 +60,11 @@ export default function PlayoffsScreen() {
     standings.forEach((r, i) => m.set(r.playerId, i + 1))
     return m
   }, [standings])
+  const avgByPlayer = useMemo(() => {
+    const m = new Map<string, number>()
+    standings.forEach(r => m.set(r.playerId, r.avg))
+    return m
+  }, [standings])
 
   // Draftable players (registered + active), standings-ordered for the setup list.
   const candidates = useMemo(
@@ -357,6 +362,7 @@ export default function PlayoffsScreen() {
                     >
                       <Text style={styles.rowRank}>#{rankByPlayer.get(e.playerId) ?? '—'}</Text>
                       <Text style={styles.rowName}>{e.name}</Text>
+                      <Text style={styles.rowAvg}>{avgByPlayer.get(e.playerId)?.toFixed(1) ?? '—'}</Text>
                       {draft.status === 'drafting' && canPick && <Text style={styles.rowAction}>DRAFT</Text>}
                       {draft.status === 'setup' && isAdmin && <Text style={styles.rowRemove}>✕</Text>}
                     </TouchableOpacity>
@@ -543,6 +549,11 @@ const styles = StyleSheet.create({
     fontFamily: fonts.barlowSemiBold,
     fontSize: 15,
     color: colors.accent,
+  },
+  rowAvg: {
+    fontFamily: fonts.barlowCondensed,
+    fontSize: 13,
+    color: colors.muted,
   },
   rowAction: {
     fontFamily: fonts.barlowCondensed,

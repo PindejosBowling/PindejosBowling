@@ -12,10 +12,12 @@ type Nav = NativeStackNavigationProp<MoreStackParamList>
 
 const TILE_WIDTH = (Dimensions.get('window').width - 48) / 3
 
-// Two related "registration" concerns: joining the league vs. enrolling in a season.
-const MENU_TILES: { icon: string; label: string; route: 'PlayerManagement' | 'SeasonRegistration' }[] = [
+// Related "registration" concerns: joining the league, enrolling in a season,
+// and the member profile pictures.
+const MENU_TILES: { icon: string; label: string; route: 'PlayerManagement' | 'SeasonRegistration' | 'ProfilePictures' }[] = [
   { icon: '👥', label: 'League Members', route: 'PlayerManagement' },
   { icon: '🗓️', label: 'Season Registration', route: 'SeasonRegistration' },
+  { icon: '🖼️', label: 'Profile Pictures', route: 'ProfilePictures' },
 ]
 
 export default function RegistrationAdminScreen() {

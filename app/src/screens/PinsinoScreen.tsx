@@ -24,7 +24,8 @@ import { PinsinoStackParamList } from '../navigation/types'
 
 type PinsinoNav = NativeStackNavigationProp<PinsinoStackParamList>
 
-const TILE_WIDTH = (Dimensions.get('window').width - 48) / 3
+const TILE_GAP = 16
+const TILE_WIDTH = (Dimensions.get('window').width - 32 - TILE_GAP * 2) / 3
 
 // Subpage menu tiles (groundwork for more Pinsino subpages — add one line each)
 const MENU_TILES: { icon: string; label: string; route: 'PinsinoLeaderboard' | 'Sportsbook' | 'LoanShark' | 'PvP' | 'MarketMoves' | 'BountyBoard' }[] = [
@@ -141,7 +142,7 @@ export default function PinsinoScreen() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.bg },
-  content: { paddingHorizontal: 16, paddingBottom: 40 },
+  content: { flexGrow: 1, paddingHorizontal: 16, paddingBottom: 32 },
 
   balanceCard: {
     backgroundColor: colors.surface,
@@ -221,19 +222,21 @@ const styles = StyleSheet.create({
 
   // Subpage menu tiles (mirrors MoreHomeScreen)
   grid: {
+    flex: 1,
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
-    marginBottom: 24,
+    alignContent: 'space-evenly',
+    gap: TILE_GAP,
+    marginBottom: 0,
   },
   tile: {
     width: TILE_WIDTH,
+    height: TILE_WIDTH,
     backgroundColor: colors.surface,
     borderRadius: radius.cardMd,
     padding: 14,
     alignItems: 'center',
     justifyContent: 'center',
-    minHeight: 84,
     position: 'relative',
   },
   badge: {
@@ -254,7 +257,7 @@ const styles = StyleSheet.create({
     color: colors.bg,
     lineHeight: 14,
   },
-  tileIcon: { fontSize: 26, marginBottom: 6 },
+  tileIcon: { fontSize: 40, marginBottom: 10 },
   tileLabel: {
     fontFamily: fonts.barlowCondensed,
     fontSize: 13,

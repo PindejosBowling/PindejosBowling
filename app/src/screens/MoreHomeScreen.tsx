@@ -12,7 +12,9 @@ import { useIsPlayoffCaptain } from '../hooks/usePlayoffDraftData'
 
 type Nav = NativeStackNavigationProp<MoreStackParamList>
 
-const TILE_WIDTH = (Dimensions.get('window').width - 48) / 3
+const TILE_GAP = 16
+const TILE_WIDTH = (Dimensions.get('window').width - 32 - TILE_GAP * 2) / 3
+const TILE_WIDTH_LG = (Dimensions.get('window').width - 32 - TILE_GAP) / 2
 
 interface Tile {
   icon: string
@@ -34,65 +36,89 @@ export default function MoreHomeScreen() {
     { icon: '⚔️',  label: 'Head to Head', onPress: () => navigation.navigate('HeadToHead') },
     { icon: '🧪', label: 'Chemistry',    onPress: () => navigation.navigate('Chemistry') },
     { icon: '📜', label: 'History',      onPress: () => navigation.navigate('History') },
-    { icon: '📝', label: 'Registration', onPress: () => navigation.navigate('Registration') },
     { icon: '🗑️', label: 'Trash Board',  onPress: () => navigation.navigate('TrashBoard') },
+    { icon: '📝', label: 'Registration', onPress: () => navigation.navigate('Registration') },
     ...(!isAdmin && isPlayoffCaptain
       ? [{ icon: '🏁', label: 'Playoffs', onPress: () => navigation.navigate('Playoffs') }]
       : []),
   ]
 
+  // Fit-to-screen sizing for the non-admin grid: measure the grid's available
+  // height and split it across however many rows the tile count produces
+  // (capped at square), so an extra tile — e.g. the captain's Playoffs tile —
+  // shrinks the rows instead of pushing the page into a scroll.
+  const [gridH, setGridH] = useState(0)
+  const tileRows = Math.ceil(leagueToolsTiles.length / 2)
+  const tileHeight =
+    gridH > 0
+      ? Math.min(TILE_WIDTH_LG, Math.floor((gridH - (tileRows - 1) * TILE_GAP) / tileRows))
+      : TILE_WIDTH_LG
+
+  // Profile Pictures lives inside the Registration Admin menu, not here.
   const adminTiles: Tile[] = [
     { icon: '🏦', label: 'Pinsino Admin',  onPress: () => navigation.navigate('PinsinoAdmin') },
-    { icon: '📝', label: 'Registration',    onPress: () => navigation.navigate('RegistrationAdmin') },
-    { icon: '🖼️', label: 'Profile Pictures', onPress: () => navigation.navigate('ProfilePictures') },
-    { icon: '🥇', label: 'End Season',     onPress: () => setShowEndSeason(true) },
-    { icon: '🏁', label: 'Playoffs',       onPress: () => navigation.navigate('Playoffs') },
-    { icon: '🗄️', label: 'Archives',       onPress: () => navigation.navigate('Archives') },
     { icon: '🎳', label: 'Lanetalk Import', onPress: () => navigation.navigate('LanetalkImportAdmin') },
+    { icon: '🗄️', label: 'Archives',       onPress: () => navigation.navigate('Archives') },
+    { icon: '🏁', label: 'Playoffs',       onPress: () => navigation.navigate('Playoffs') },
+    { icon: '🥇', label: 'End Season',     onPress: () => setShowEndSeason(true) },
+    { icon: '📝', label: 'Registration',    onPress: () => navigation.navigate('RegistrationAdmin') },
   ]
+
+  const body = (
+    <>
+      <Text style={styles.tabTitle}>More</Text>
+
+      <Text style={styles.sectionHeader}>LEAGUE TOOLS</Text>
+      <View
+        style={[styles.grid, !isAdmin && styles.gridFill]}
+        onLayout={isAdmin ? undefined : e => setGridH(e.nativeEvent.layout.height)}
+      >
+        {leagueToolsTiles.map((tile) => (
+          <TouchableOpacity
+            key={tile.label}
+            style={[styles.tile, !isAdmin && [styles.tileLarge, { height: tileHeight }]]}
+            onPress={tile.onPress}
+            activeOpacity={0.7}
+          >
+            <Text style={[styles.tileIcon, !isAdmin && styles.tileIconLarge]}>{tile.icon}</Text>
+            <Text style={[styles.tileLabel, !isAdmin && styles.tileLabelLarge]}>{tile.label}</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+
+      {isAdmin && (
+        <>
+          <Text style={styles.sectionHeader}>LEAGUE ADMIN</Text>
+          <View style={styles.grid}>
+            {adminTiles.map((tile) => (
+              <TouchableOpacity
+                key={tile.label}
+                style={[styles.tile, !tile.onPress && styles.tileDisabled]}
+                onPress={tile.onPress}
+                activeOpacity={tile.onPress ? 0.7 : 1}
+              >
+                <Text style={styles.tileIcon}>{tile.icon}</Text>
+                <Text style={[styles.tileLabel, !tile.onPress && styles.tileLabelDisabled]}>
+                  {tile.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </>
+      )}
+    </>
+  )
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <AppHeader />
-      <ScrollView contentContainerStyle={styles.content}>
-        <Text style={styles.tabTitle}>More</Text>
-
-        <Text style={styles.sectionHeader}>LEAGUE TOOLS</Text>
-        <View style={styles.grid}>
-          {leagueToolsTiles.map((tile) => (
-            <TouchableOpacity
-              key={tile.label}
-              style={styles.tile}
-              onPress={tile.onPress}
-              activeOpacity={0.7}
-            >
-              <Text style={styles.tileIcon}>{tile.icon}</Text>
-              <Text style={styles.tileLabel}>{tile.label}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-
-        {isAdmin && (
-          <>
-            <Text style={styles.sectionHeader}>LEAGUE ADMIN</Text>
-            <View style={styles.grid}>
-              {adminTiles.map((tile) => (
-                <TouchableOpacity
-                  key={tile.label}
-                  style={[styles.tile, !tile.onPress && styles.tileDisabled]}
-                  onPress={tile.onPress}
-                  activeOpacity={tile.onPress ? 0.7 : 1}
-                >
-                  <Text style={styles.tileIcon}>{tile.icon}</Text>
-                  <Text style={[styles.tileLabel, !tile.onPress && styles.tileLabelDisabled]}>
-                    {tile.label}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </>
-        )}
-      </ScrollView>
+      {/* Non-admins get a fixed, fit-to-screen layout (the grid sizes itself to
+          the space); admins keep the scrolling two-section list. */}
+      {isAdmin ? (
+        <ScrollView contentContainerStyle={styles.content}>{body}</ScrollView>
+      ) : (
+        <View style={styles.contentFixed}>{body}</View>
+      )}
 
       {isAdmin && (
         <>
@@ -105,15 +131,16 @@ export default function MoreHomeScreen() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.bg },
-  content: { paddingHorizontal: 16, paddingBottom: 32 },
+  content: { flexGrow: 1, paddingHorizontal: 16, paddingBottom: 32 },
+  contentFixed: { flex: 1, paddingHorizontal: 16, paddingBottom: 16 },
 
   tabTitle: {
     fontFamily: fonts.barlowCondensed,
     fontSize: 28,
     color: colors.text,
     letterSpacing: 0.5,
-    marginBottom: 20,
-    marginTop: 4,
+    marginBottom: 8,
+    marginTop: 0,
   },
 
   sectionHeader: {
@@ -121,27 +148,36 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: colors.muted,
     letterSpacing: 1.5,
-    marginBottom: 10,
+    marginBottom: 6,
   },
 
   grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
+    gap: TILE_GAP,
     marginBottom: 24,
+  },
+  gridFill: {
+    flex: 1,
+    alignContent: 'space-evenly',
+    marginBottom: 0,
   },
 
   tile: {
     width: TILE_WIDTH,
+    height: TILE_WIDTH,
     backgroundColor: colors.surface,
     borderRadius: radius.cardMd,
     padding: 14,
     alignItems: 'center',
     justifyContent: 'center',
-    minHeight: 84,
+  },
+  tileLarge: {
+    width: TILE_WIDTH_LG,
   },
   tileDisabled: { opacity: 0.35 },
-  tileIcon: { fontSize: 26, marginBottom: 6 },
+  tileIcon: { fontSize: 40, marginBottom: 10 },
+  tileIconLarge: { fontSize: 52, marginBottom: 12 },
   tileLabel: {
     fontFamily: fonts.barlowCondensed,
     fontSize: 13,
@@ -149,5 +185,6 @@ const styles = StyleSheet.create({
     letterSpacing: 0.3,
     textAlign: 'center',
   },
+  tileLabelLarge: { fontSize: 16 },
   tileLabelDisabled: { color: colors.muted },
 })
