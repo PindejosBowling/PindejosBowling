@@ -1871,6 +1871,20 @@ END;
 $function$
 ;
 
+CREATE OR REPLACE FUNCTION public.assert_admin()
+ RETURNS void
+ LANGUAGE plpgsql
+ STABLE SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+BEGIN
+  IF ((SELECT auth.jwt()) -> 'app_metadata' ->> 'role') IS DISTINCT FROM 'admin' THEN
+    RAISE EXCEPTION 'Admin only';
+  END IF;
+END;
+$function$
+;
+
 CREATE OR REPLACE FUNCTION public.cancel_bet(p_bet_id uuid)
  RETURNS void
  LANGUAGE plpgsql
@@ -2638,6 +2652,41 @@ END;
 $function$
 ;
 
+CREATE OR REPLACE FUNCTION public.current_player_id()
+ RETURNS uuid
+ LANGUAGE plpgsql
+ STABLE SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+DECLARE v_id uuid;
+BEGIN
+  SELECT id INTO v_id FROM public.players WHERE user_id = (SELECT auth.uid());
+  IF v_id IS NULL THEN
+    RAISE EXCEPTION 'No player linked to the current user';
+  END IF;
+  RETURN v_id;
+END;
+$function$
+;
+
+CREATE OR REPLACE FUNCTION public.current_season_id()
+ RETURNS uuid
+ LANGUAGE plpgsql
+ STABLE SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+DECLARE v_id uuid;
+BEGIN
+  SELECT id INTO v_id
+    FROM public.seasons WHERE is_active = true AND registration_open = false;
+  IF v_id IS NULL THEN
+    RAISE EXCEPTION 'No active season';
+  END IF;
+  RETURN v_id;
+END;
+$function$
+;
+
 CREATE OR REPLACE FUNCTION public.custom_access_token(event jsonb)
  RETURNS jsonb
  LANGUAGE plpgsql
@@ -2949,6 +2998,16 @@ END;
 $function$
 ;
 
+CREATE OR REPLACE FUNCTION public.is_admin()
+ RETURNS boolean
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+  SELECT ((SELECT auth.jwt()) -> 'app_metadata' ->> 'role') = 'admin';
+$function$
+;
+
 CREATE OR REPLACE FUNCTION public.is_registered_player(phone text)
  RETURNS boolean
  LANGUAGE sql
@@ -3021,6 +3080,18 @@ BEGIN
   END IF;
   RETURN NEW;
 END;
+$function$
+;
+
+CREATE OR REPLACE FUNCTION public.pin_balance(p_player_id uuid, p_season_id uuid)
+ RETURNS integer
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+  SELECT COALESCE(SUM(amount), 0)::integer
+  FROM public.pin_ledger
+  WHERE player_id = p_player_id AND season_id = p_season_id;
 $function$
 ;
 

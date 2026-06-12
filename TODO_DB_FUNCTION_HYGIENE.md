@@ -25,6 +25,12 @@ Four snippets are copy-pasted across the function layer:
 | `SELECT COALESCE(SUM(amount),0) FROM pin_ledger WHERE player_id=… AND season_id=…` | ~8 | `pin_balance(p_player uuid, p_season uuid)` |
 
 ### Migration A — `db_assert_helpers`
+
+**Status: ✅ DONE 2026-06-12** — migration `20260612130855_db_assert_helpers`,
+additive only (adoption pending in Migrations B+). Grants verified on live:
+anon=false everywhere, authenticated only on `is_admin()`. One hardening:
+`assert_admin()` uses `IS DISTINCT FROM` (the inline `<> 'admin'` snippet
+passes silently on a missing role claim).
 - All four as `LANGUAGE sql`/`plpgsql`, `SECURITY DEFINER`, `SET search_path TO ''`,
   `STABLE` where applicable.
 - `is_admin() RETURNS boolean` as the policy-friendly sibling of `assert_admin()`
