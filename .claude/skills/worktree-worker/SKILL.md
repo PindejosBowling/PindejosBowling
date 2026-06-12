@@ -36,7 +36,9 @@ Iterate until the requirements are unambiguous. If the brief already answers eve
 
 ## Phase 3 — Enter the worktree
 
-Once requirements are confirmed, call `EnterWorktree` with a descriptive kebab-case `name` derived from the task (e.g. `bounty-claim-cooldown`). The default `worktree.baseRef` branches from `origin/main`, which is exactly the base the eventual PR needs.
+Once requirements are confirmed, call `EnterWorktree` with a descriptive kebab-case `name` derived from the task, **always ending in a unique suffix**: the date plus a few random hex characters, e.g. `bounty-claim-cooldown-20260612-3f9a` (generate it with `date +%Y%m%d` and `openssl rand -hex 2`, or equivalent). The default `worktree.baseRef` branches from `origin/main`, which is exactly the base the eventual PR needs.
+
+The suffix is not optional ceremony: this workflow never cleans up local or remote branches (the `/pr` skill's merge step deliberately keeps them so merged work can be re-landed), so a plain task-derived name like `bounty-claim-cooldown` would collide with the stale branch the moment the same task — or a follow-up to it — runs a second time. Unique-by-construction names make that collision impossible by design.
 
 - If the session is **already inside** a worktree, say so and ask whether to continue there or switch — `EnterWorktree` cannot create a nested worktree with `name` from within one.
 - From this point on you operate autonomously: no further questions unless you hit something that genuinely contradicts the confirmed requirements or requires an irreversible decision the user must own.
