@@ -2,7 +2,7 @@
 
 Outcome of the 2026-06-11 design-grilling session on `ECONOMIC_DESIGN_SILENT_AUCTIONS.md`, plus the codebase facts that shaped each decision. This is the decision record feeding the implementation plan; the eventual as-built specs are `SILENT_AUCTIONS_DB.md` / `SILENT_AUCTIONS_APP.md`.
 
-> **Revised 2026-06-12** after merging the DB tech-debt work (`CURRENT_STATE.md`), in two waves. Wave 1 (main): shared helpers (`assert_admin`/`is_admin`/`current_player_id`/`current_season_id`/`pin_balance`), `pin_ledger_double_entry()` as the only sanctioned pin movement, deny-by-default function grants (anon lockdown), and the `(SELECT public.is_admin())` RLS pattern. Wave 2 (`db-changes`): `bets.week_id` (single-week parlays; all "bets in week" predicates rewritten onto it) and the **rollback-probe suite formalized as the DB layer's test suite** (`context/db-verification.md`; AGENTS.md rule 8 now scopes "no test suite" to the app layer only). The build-on-new-primitives details live in the implementation plan.
+> **Revised 2026-06-12** after merging the DB tech-debt work (`CURRENT_STATE.md`), in two waves. Wave 1 (main): shared helpers (`assert_admin`/`is_admin`/`current_player_id`/`current_season_id`/`pin_balance`), `pin_ledger_double_entry()` as the only sanctioned pin movement, deny-by-default function grants (anon lockdown), and the `(SELECT public.is_admin())` RLS pattern. Wave 2 (`db-changes`): `bets.week_id` (single-week parlays; all "bets in week" predicates rewritten onto it) and the **rollback-probe suite formalized as the DB layer's test suite** (`context/db-verification.md`; AGENTS.md rule 8 now scopes "no test suite" to the app layer only). Wave 3 (PR #42): **`activity_event_catalog`** (new feed events = catalog `INSERT`s + Recipe B; no CASE/CHECK edits), universal `assert_admin()` adoption, normalized `search_path`, hardened global default ACL — the tech-debt backlog is closed. The build-on-new-primitives details live in the implementation plan.
 
 ## Codebase ground truth (verified)
 
@@ -52,7 +52,7 @@ Losing bids stay private **forever** — the doc's full post-settlement bid tabl
 
 ### 6. Feed events: core four
 
-`auction_opened` (published by the sweep), `auction_won`, `auction_check_bounce`, `auction_no_sale`. No final-warning or closed events in v1. Requires `auction_id` FK on `activity_feed_events`, a 17th `p_auction_id` arg on `publish_activity_event`, and **split dedup indexes** — `(auction_id, event_type)` excluding bounces, plus `(auction_id, event_type, actor_player_id)` for bounces, since multiple bouncers per auction are legitimate.
+`auction_opened` (published by the sweep), `auction_won`, `auction_check_bounce`, `auction_no_sale`. No final-warning or closed events in v1. Built per `context/activity-feed.md` **Recipe B** (post-`activity_event_catalog`): `auction_id` FK on `activity_feed_events` + one-source/source-feature CHECK extensions, **4 catalog `INSERT`s** (`allowed_fk='auction_id'`, extending the catalog's `allowed_fk` CHECK — no event_type CHECK exists anymore, it's an FK), and a 17th `p_auction_id` arg on `publish_activity_event`. **Split dedup indexes** (deviation from the recipe's single standard index): `(auction_id, event_type)` excluding bounces, plus `(auction_id, event_type, actor_player_id)` for bounces, since multiple bouncers per auction are legitimate.
 
 ### 7. Notification badge
 
