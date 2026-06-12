@@ -120,6 +120,10 @@ informational (the publisher's own source list remains the validation).
 | `loan_shark_special_offer` | `loan_shark.special_offer` | normal | none | `create_system_activity_event` | `{}` |
 | `pvp_challenge_accepted` | `pvp.challenge_accepted` | normal | pvp | `accept_pvp_challenge` | `{pot, …}` |
 | `pvp_challenge_settled` | `pvp.challenge_settled` | highlight | pvp | `settle_pvp_challenge` | `{outcome, pot, …}` |
+| `auction_opened` | `auction_house.opened` | highlight | auction | `open_auction_internal` (sweep/create/Open Now) | `{item_name, item_icon, minimum_bid, closes_at}` |
+| `auction_won` | `auction_house.won` | highlight | auction | `settle_auction_internal` | `{item_name, item_icon, price}` |
+| `auction_check_bounce` | `auction_house.check_bounce` | highlight | auction | `settle_auction_internal` (per bouncer — split dedup index keyed by actor) | `{item_name, item_icon, fee}` — fee, **never the pledged amount** |
+| `auction_no_sale` | `auction_house.no_sale` | normal | auction | `settle_auction_internal` | `{item_name, item_icon, bidder_count, bounce_count}` — the all-bounce case gets ironic special copy |
 
 > **`importance` is app-owned, not a DB column** (as of
 > `20260607230000_feed_importance_to_app.sql`). The table no longer has an `importance`
@@ -136,6 +140,14 @@ informational (the publisher's own source list remains the validation).
 > product name, or debt (a tier is a vague category, not a number; §11). The renderer
 > still falls back to a generic vague line if `risk_level` is absent (older rows).
 > Sportsbook placement cards surface `payout` (the "to win" figure), not the stake.
+>
+> **Auction House** was added by `20260612200006_activity_feed_auction.sql` (Recipe B,
+> post-catalog): an `auction_id` source FK with **split dedup indexes** — the standard
+> `(auction_id, event_type)` unique excludes `auction_check_bounce`, which dedups on
+> `(auction_id, event_type, actor_player_id)` instead, because multiple bouncers per
+> auction are legitimate. Auction events carry **`week_id = NULL`** (week-agnostic
+> entities — they group under Market Moves' "Other Moves"), and a reversed auction's
+> feed rows CASCADE away with it.
 >
 > **PvP** was added by `20260607180200_activity_feed_pvp.sql`: a `pvp_challenge_id` source
 > FK column, the `pvp` `source_feature`, the two events above, and publish calls in

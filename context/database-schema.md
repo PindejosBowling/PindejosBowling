@@ -1,4 +1,4 @@
-# Database Schema (35 tables)
+# Database Schema (39 tables)
 
 > **Betting / pin economy is documented separately.** [supabase/PIN_ECONOMY_SCHEMA.md](../supabase/PIN_ECONOMY_SCHEMA.md) is the **source of truth** for `pin_ledger` and the canonical betting tables (`bet_markets`, `bet_selections`, `bets`, `bet_legs`), the accounting model, the RPCs, and how to add a bet type. Read it before touching any `bet_*` / `pin_ledger` code. The rows below are a pointer only.
 >
@@ -23,6 +23,7 @@
 | `loan_products` | `id`, `display_name`, `description`, `special_warning_text`, `risk_level`, `borrow_amount`, `weekly_interest_rate`, `garnishment_rate`, `is_active`, `season_id` (NULL = global), `sort_order`, `available_from`, `available_until`, `max_uses` — immutable financial terms enforced by trigger |
 | `loans` | `id`, `player_id`, `season_id`, `loan_product_id`, `status` (`active`/`paid_off`/`season_closed`), `issued_at`, `paid_off_at`, `season_closed_at` — lifecycle only; balance derived from `loan_ledger` |
 | `loan_ledger` | `id`, `loan_id`, `player_id`, `season_id`, `week_id`, `amount` (signed), `type` (`loan_issued`/`manual_repayment`/`weekly_garnishment`/`weekly_interest`/`season_close_settlement`), `description`, `pin_ledger_id` — append-only debt log; `SUM(amount)` per loan = outstanding |
+| **auction house + items** | `auctions`, `auction_bids` (amounts **encrypted at rest**), `item_catalog`, `player_inventory_items` (**atomic single-use** — quantity is row count) — columns + invariants in [economy/SILENT_AUCTIONS_DB.md](economy/SILENT_AUCTIONS_DB.md). `pin_ledger` gained `auction_id` (root ref) |
 
 **Key distinctions:**
 - `weeks.is_archived` — `true` once the week has been bowled and scores are final. All historical queries filter to archived weeks.

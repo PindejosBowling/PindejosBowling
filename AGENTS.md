@@ -69,6 +69,10 @@ Product/design references and per-feature implementation specs for the pin econo
 | [context/economy/ACTIVITY_FEED_APP.md](context/economy/ACTIVITY_FEED_APP.md) | Activity Feed **app-layer** implementation spec (the "Market Moves" Pinsino tile) |
 | [context/economy/BOUNTIES_DB.md](context/economy/BOUNTIES_DB.md) | Bounty Board **database** implementation spec (the four `bounty_*` tables + `pin_ledger` extension + RPCs + Activity Feed wiring) — read before touching any `bounty_*` DB code. **As-built mechanic = All Comers** (migration `…220000_bounty_all_comers`); **v1 House-only** (`create_sponsor_bounty` revoked, migration `…221500_bounty_house_only_v1`) |
 | [context/economy/BOUNTIES_APP.md](context/economy/BOUNTIES_APP.md) | Bounty Board **app-layer** implementation spec (the "Bounties" Pinsino tile) — All Comers payouts; **player "Post a Bounty" CTA hidden in v1** (route/screen/`createSponsor` kept for later) |
+| [context/economy/ECONOMIC_DESIGN_SILENT_AUCTIONS.md](context/economy/ECONOMIC_DESIGN_SILENT_AUCTIONS.md) | Silent Auctions feature design — sealed pledge bids, check-bounce settlement, the auctionable-asset taxonomy |
+| [context/economy/AUCTION_FINDINGS.md](context/economy/AUCTION_FINDINGS.md) | Silent Auctions **decision record** (grilling sessions) — bid mechanics overrides, item-framework doctrine (atomic single-use items), week-stamping + archive exemption, encryption posture, all-RPC writes |
+| [context/economy/SILENT_AUCTIONS_DB.md](context/economy/SILENT_AUCTIONS_DB.md) | Silent Auctions + item framework **database** spec (as built) — `auctions`/`auction_bids`/`item_catalog`/`player_inventory_items`, encrypted bids, pg_cron sweep, Safety Ticket hooks. Read before touching any `auction_*` / `item_*` DB code |
+| [context/economy/SILENT_AUCTIONS_APP.md](context/economy/SILENT_AUCTIONS_APP.md) | Silent Auctions **app-layer** spec (the "Auction House" Pinsino tile) — sealed-bid display contract, Safety Ticket toggle, badge + feed wiring |
 
 ## External source-of-truth docs
 
