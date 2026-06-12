@@ -1,9 +1,7 @@
--- RECONSTRUCTED FILE — this migration was already applied to the remote DB
--- (supabase_migrations.schema_migrations version 20260612000000) but its .sql
--- file was never committed to this repo (pushed from an uncommitted worktree).
--- Content recovered 2026-06-12 from the live pg_policy state so local history
--- matches remote: lanetalk_game_imports SELECT opened from admin-only to all
--- authenticated users ("admin can read all" → "authenticated can read").
+-- Frame data is league-visible, not admin-only: every authenticated player can
+-- read imported LaneTalk games (same posture as `games`/`scores`). The screen
+-- entry point on PlayerDetail gates purely on row existence, so non-admins were
+-- locked out solely by the old admin-only SELECT policy. Writes stay admin-only.
 
 DROP POLICY "admin can read all" ON public.lanetalk_game_imports;
 

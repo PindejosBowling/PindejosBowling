@@ -74,6 +74,8 @@ export interface WeekRow {
   weekNumber: number
   teamNumber: number
   scores: number[]
+  /** Game ids this slot actually scored in, in game-number order. */
+  gameIds: string[]
   wins: number
   losses: number
   present: boolean
@@ -302,9 +304,11 @@ export function computeWeekRows(
 
     const slotScores = scoresBySlotId.get(slot.id)
     const present = !!slotScores?.size
-    const scores = slotScores
-      ? Array.from(slotScores.entries()).sort(([a], [b]) => (gameNumberById.get(a) ?? 0) - (gameNumberById.get(b) ?? 0)).map(([, s]) => s)
+    const sortedEntries = slotScores
+      ? Array.from(slotScores.entries()).sort(([a], [b]) => (gameNumberById.get(a) ?? 0) - (gameNumberById.get(b) ?? 0))
       : []
+    const scores = sortedEntries.map(([, s]) => s)
+    const gameIds = sortedEntries.map(([g]) => g)
 
     let wins = 0, losses = 0
     if (slotScores) {
@@ -325,7 +329,7 @@ export function computeWeekRows(
       seasonNumber: slot.teams.weeks.seasons.number,
       weekNumber: slot.teams.weeks.week_number,
       teamNumber: slot.teams?.team_number ?? 0,
-      scores, wins, losses, present,
+      scores, gameIds, wins, losses, present,
     })
   }
 
@@ -366,10 +370,14 @@ export function computeExpandedMatchups(
   weekId: string,
   allScores: DetailScore[],
   allSchedule: RawSchedule[],
+  // When a player holds slots on two teams in one week, each log row passes its
+  // slot's gameIds so the expansion shows only the games bowled for that team.
+  onlyGameIds?: string[],
 ): ExpandedMatchup[] {
   const weekScores = allScores.filter(r => r.team_slots.teams.week_id === weekId)
   const gameNumberById = buildGameNumberById(allSchedule)
   const gameIds = [...new Set(weekScores.map(r => r.game_id))]
+    .filter(id => !onlyGameIds || onlyGameIds.includes(id))
     .sort((a, b) => (gameNumberById.get(a) ?? 0) - (gameNumberById.get(b) ?? 0))
 
   const pairingsByGame = new Map<string, { teamA: string; teamB: string }>()

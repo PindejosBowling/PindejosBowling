@@ -14,6 +14,7 @@ interface UiStore {
   standingsSeason: string | null
   playerSeason: string | null
   recordsSeason: string
+  recordsScope: string
   chemMode: string
   chemExpanded: boolean
   h2hP1: string | null
@@ -36,6 +37,7 @@ export const useUiStore = create<UiStore>((set, get) => ({
   standingsSeason: null,
   playerSeason: null,
   recordsSeason: 'all',
+  recordsScope: 'game',
   chemMode: 'pairs',
   chemExpanded: false,
   h2hP1: null,

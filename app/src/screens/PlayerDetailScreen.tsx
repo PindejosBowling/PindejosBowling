@@ -19,8 +19,7 @@ import {
   computeChartPoints,
   computeExpandedMatchups,
 } from '../hooks/usePlayerDetailData'
-import { initials } from '../utils/helpers'
-import { useHasFrameStats } from '../hooks/useFrameStatsData'
+import { useFrameStatsData, computeFrameRecords } from '../hooks/useFrameStatsData'
 import LoadingView from '../components/ui/LoadingView'
 import PillFilter from '../components/ui/PillFilter'
 import ScreenHeader from '../components/ui/ScreenHeader'
@@ -41,7 +40,8 @@ export default function PlayerDetailScreen() {
   } = usePlayerDetailData(name)
 
   const { playerSeason, expandedWeek, set } = useUiStore()
-  const { refreshing, onRefresh } = useRefresh(reload)
+  const { session: frameSession, reload: reloadFrames } = useFrameStatsData(playerId)
+  const { refreshing, onRefresh } = useRefresh(async () => { await Promise.all([reload(), reloadFrames()]) })
   const { width: screenWidth } = useWindowDimensions()
 
   const playerSeasons = useMemo(
@@ -87,14 +87,26 @@ export default function PlayerDetailScreen() {
 
   const chartData = useMemo(() => {
     if (!playerId) return null
-    const points = computeChartPoints(playerId, allScores, allSchedule, activeSeasonId)
-    if (!points.length) return null
+    const rawPoints = computeChartPoints(playerId, allScores, allSchedule, activeSeasonId)
+    if (!rawPoints.length) return null
+    // Every game carries its week label, so weeks repeat 2–3× and all-time
+    // becomes an unreadable wall — keep at most ~6 labels at evenly spaced
+    // points (week boundaries give uneven gaps since weeks have 2–3 games).
+    const weekCount = new Set(rawPoints.map(p => p.label)).size
+    const labelCount = Math.min(6, weekCount)
+    const labeledIdx = new Set(
+      labelCount > 1
+        ? Array.from({ length: labelCount }, (_, j) => Math.round(j * (rawPoints.length - 1) / (labelCount - 1)))
+        : [0],
+    )
+    const points = rawPoints.map((p, i) => (labeledIdx.has(i) ? p : { ...p, label: '' }))
     const avg = profile?.avg ?? 0
     const chartWidth = screenWidth - 32 - 4 - 12 - 35
     return { points, avg, chartWidth }
-  }, [playerId, allScores, activeSeasonId, profile, screenWidth])
+  }, [playerId, allScores, allSchedule, activeSeasonId, profile, screenWidth])
 
-  const hasFrameStats = useHasFrameStats(playerId)
+  const hasFrameStats = !!frameSession
+  const frameRecords = useMemo(() => computeFrameRecords(frameSession), [frameSession])
 
   function toggleWeek(key: string) {
     set({ expandedWeek: expandedWeek === key ? null : key })
@@ -131,10 +143,10 @@ export default function PlayerDetailScreen() {
           <View style={styles.statGrid}>
             <StatTile label="Avg" value={profile.avg > 0 ? profile.avg.toFixed(1) : '—'} />
             <StatTile label="High Game" value={profile.highGame || '—'} />
-            <StatTile label="W—L" value={`${profile.totalWins}–${profile.totalLosses}`} />
-            <StatTile label="Last 5 Avg" value={profile.last5Avg > 0 ? profile.last5Avg.toFixed(1) : '—'} />
             <StatTile label="Season Avg" value={profile.seasonAvg > 0 ? profile.seasonAvg.toFixed(1) : '—'} />
+            <StatTile label="Last 5 Avg" value={profile.last5Avg > 0 ? profile.last5Avg.toFixed(1) : '—'} />
             <StatTile label="Games" value={String(profile.totalGames)} />
+            <StatTile label="W—L" value={`${profile.totalWins}–${profile.totalLosses}`} />
           </View>
         ) : null}
 
@@ -160,16 +172,29 @@ export default function PlayerDetailScreen() {
         {records ? (
           <>
             <Text style={styles.sectionHeader}>Personal Records</Text>
-            <RecordCard icon="🎳" label="High Game" value={records.highGame || '—'} />
             <RecordCard icon="📈" label="High Series" value={records.highSeries || '—'} />
-            <RecordCard
-              icon="🔥"
-              label="Best Streak"
-              value={`${records.bestStreak} ${records.bestStreak === 1 ? 'night' : 'nights'}`}
-              sub={records.currentStreak > 0
-                ? `Current: ${records.currentStreak} ${records.currentStreakType === 'W' ? 'win' : 'loss'}${records.currentStreak > 1 ? (records.currentStreakType === 'W' ? 's' : 'es') : ''}`
-                : undefined}
-            />
+            {frameRecords ? (
+              <>
+                <RecordCard
+                  icon="💥"
+                  label="High Strikes"
+                  value={`${frameRecords.strikesGame} / ${frameRecords.strikesNight}`}
+                  sub="Game / Week"
+                />
+                <RecordCard
+                  icon="🎯"
+                  label="High Spares"
+                  value={`${frameRecords.sparesGame} / ${frameRecords.sparesNight}`}
+                  sub="Game / Week"
+                />
+                <RecordCard
+                  icon="✅"
+                  label="High Closed Frames"
+                  value={`${frameRecords.closedGame} / ${frameRecords.closedNight}`}
+                  sub="Game / Week"
+                />
+              </>
+            ) : null}
           </>
         ) : null}
 
@@ -200,7 +225,7 @@ export default function PlayerDetailScreen() {
                 yAxisColor="transparent"
                 xAxisColor="transparent"
                 yAxisTextStyle={{ color: colors.muted, fontSize: 10, fontFamily: fonts.barlowCondensed }}
-                xAxisLabelTextStyle={{ color: colors.muted, fontSize: 9, fontFamily: fonts.barlowCondensed }}
+                xAxisLabelTextStyle={{ color: colors.muted, fontSize: 11, fontFamily: fonts.barlowCondensed, width: 40, textAlign: 'center' }}
                 hideDataPoints={false}
                 showXAxisIndices={false}
                 hideYAxisText={false}
@@ -210,7 +235,6 @@ export default function PlayerDetailScreen() {
                 endSpacing={0}
                 backgroundColor={colors.surface}
                 xAxisLabelsVerticalShift={4}
-                rotateLabel
               />
             </View>
           </View>
@@ -223,6 +247,8 @@ export default function PlayerDetailScreen() {
           <View style={styles.logCard}>
             {(() => {
               const maxGames = weekRows.reduce((max, r) => Math.max(max, r.scores.length), 2)
+              const weekRowCounts = new Map<string, number>()
+              for (const r of weekRows) weekRowCounts.set(r.weekId, (weekRowCounts.get(r.weekId) ?? 0) + 1)
               return (
                 <>
                   <View style={styles.logRow}>
@@ -236,16 +262,22 @@ export default function PlayerDetailScreen() {
                   </View>
 
                   {weekRows.map((row) => {
-                    const expanded = expandedWeek === row.weekId
+                    // A player can hold slots on two teams in one week (e.g. mid-week
+                    // team move), so the row key must include the team.
+                    const rowKey = `${row.weekId}:${row.teamNumber}`
+                    const expanded = expandedWeek === rowKey
+                    // Multi-team week: limit each row's expansion to the games
+                    // this slot bowled. Single-team weeks keep the full week.
+                    const multiTeamWeek = (weekRowCounts.get(row.weekId) ?? 0) > 1
                     const matchups = expanded
-                      ? computeExpandedMatchups(row.weekId, allScores, allSchedule)
+                      ? computeExpandedMatchups(row.weekId, allScores, allSchedule, multiTeamWeek ? row.gameIds : undefined)
                       : []
 
                     return (
-                      <View key={row.weekId}>
+                      <View key={rowKey}>
                         <TouchableOpacity
                           style={[styles.logRow, styles.logRowBorder]}
-                          onPress={() => toggleWeek(row.weekId)}
+                          onPress={() => toggleWeek(rowKey)}
                           activeOpacity={0.7}
                         >
                           <Text style={[styles.logCell, styles.logWeekCell, styles.logText]}>
@@ -280,15 +312,23 @@ export default function PlayerDetailScreen() {
                               matchups.map((m) => (
                                 <View key={`${m.gameNum}-${m.a.team}`} style={styles.expandedMatchup}>
                                   <Text style={styles.expandedGameLabel}>Game {m.gameNum}</Text>
-                                  <ExpandedTeam team={m.a} />
-                                  {m.b ? (
-                                    <>
-                                      <View style={styles.vsRow}>
-                                        <Text style={styles.vsText}>VS</Text>
-                                      </View>
-                                      <ExpandedTeam team={m.b} />
-                                    </>
-                                  ) : null}
+                                  <View style={styles.matchupRow}>
+                                    <MatchupTeamCol
+                                      team={m.a}
+                                      highlightName={name}
+                                      winner={m.b ? m.a.total > m.b.total : false}
+                                    />
+                                    {m.b ? (
+                                      <>
+                                        <View style={styles.matchupDivider} />
+                                        <MatchupTeamCol
+                                          team={m.b}
+                                          highlightName={name}
+                                          winner={m.b.total > m.a.total}
+                                        />
+                                      </>
+                                    ) : null}
+                                  </View>
                                 </View>
                               ))
                             ) : (
@@ -335,24 +375,33 @@ function RecordCard({ icon, label, value, sub }: { icon: string; label: string; 
   )
 }
 
-function ExpandedTeam({ team }: { team: { team: string; players: { name: string; score: number; present: boolean }[]; total: number } }) {
+function MatchupTeamCol({ team, highlightName, winner }: {
+  team: { team: string; players: { name: string; score: number; present: boolean }[]; total: number }
+  highlightName: string
+  winner: boolean
+}) {
+  const players = [...team.players].sort((a, b) => b.score - a.score)
   return (
-    <View style={expandStyles.teamBlock}>
-      <Text style={expandStyles.teamName}>{team.team}</Text>
-      {team.players.map((p, i) => (
-        <View key={`${p.name}-${i}`} style={expandStyles.playerRow}>
-          <View style={expandStyles.avatar}>
-            <Text style={expandStyles.avatarText}>{initials(p.name)}</Text>
-          </View>
-          <Text style={[expandStyles.playerName, !p.present && expandStyles.absent]} numberOfLines={1}>
+    <View style={expandStyles.col}>
+      <Text style={expandStyles.colHeader} numberOfLines={1}>{team.team}</Text>
+      {players.map((p, i) => (
+        <View key={`${p.name}-${i}`} style={expandStyles.rosterRow}>
+          <Text
+            style={[
+              expandStyles.rosterName,
+              p.name === highlightName && expandStyles.rosterNameLead,
+              !p.present && expandStyles.absent,
+            ]}
+            numberOfLines={1}
+          >
             {p.name}{!p.present ? ' OUT' : ''}
           </Text>
-          <Text style={expandStyles.score}>{p.score || '—'}</Text>
+          <Text style={expandStyles.rosterScore}>{p.score || '—'}</Text>
         </View>
       ))}
       <View style={expandStyles.totalRow}>
-        <Text style={expandStyles.totalLabel}>Total</Text>
-        <Text style={expandStyles.totalVal}>{team.total}</Text>
+        <Text style={expandStyles.totalLabel}>TOTAL</Text>
+        <Text style={[expandStyles.totalVal, winner && expandStyles.totalLead]}>{team.total}</Text>
       </View>
     </View>
   )
@@ -429,9 +478,11 @@ const styles = StyleSheet.create({
   logLoss: { color: colors.danger },
 
   expandedBlock: {
-    backgroundColor: colors.surface2,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
+    backgroundColor: colors.bg,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
   },
   expandedMatchup: { marginBottom: 12 },
   expandedGameLabel: {
@@ -441,8 +492,8 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
     marginBottom: 6,
   },
-  vsRow: { alignItems: 'center', paddingVertical: 4 },
-  vsText: { fontFamily: fonts.barlowCondensed, fontSize: 13, color: colors.muted },
+  matchupRow: { flexDirection: 'row', gap: 12 },
+  matchupDivider: { width: 1, backgroundColor: colors.border },
   emptyExpand: { fontFamily: fonts.barlow, fontSize: 13, color: colors.muted, padding: 8 },
 
   empty: {
@@ -553,46 +604,54 @@ const recordStyles = StyleSheet.create({
 })
 
 const expandStyles = StyleSheet.create({
-  teamBlock: {
-    backgroundColor: colors.surface3,
-    borderRadius: radius.cardSm,
-    padding: 10,
-    marginBottom: 4,
-  },
-  teamName: {
+  col: { flex: 1 },
+  colHeader: {
     fontFamily: fonts.barlowCondensed,
-    fontSize: 13,
+    fontSize: 10,
     color: colors.muted,
     textTransform: 'uppercase',
     letterSpacing: 1,
     marginBottom: 6,
   },
-  playerRow: {
+  rosterRow: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 4,
+    paddingVertical: 2,
+    gap: 8,
   },
-  avatar: {
-    width: 24,
-    height: 24,
-    borderRadius: 6,
-    backgroundColor: colors.surface2,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 8,
+  rosterName: {
+    fontFamily: fonts.barlow,
+    fontSize: 12,
+    color: colors.muted,
+    flexShrink: 1,
   },
-  avatarText: { fontFamily: fonts.barlowCondensed, fontSize: 11, color: colors.muted },
-  playerName: { flex: 1, fontFamily: fonts.barlow, fontSize: 13, color: colors.text },
+  rosterNameLead: { color: colors.accent },
   absent: { color: colors.muted2 },
-  score: { fontFamily: fonts.barlowCondensed, fontSize: 14, color: colors.accent },
+  rosterScore: {
+    fontFamily: fonts.barlow,
+    fontSize: 12,
+    color: colors.text,
+  },
   totalRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 4,
+    paddingTop: 4,
     borderTopWidth: 1,
     borderTopColor: colors.border,
-    marginTop: 4,
-    paddingTop: 6,
   },
-  totalLabel: { fontFamily: fonts.barlowCondensed, fontSize: 12, color: colors.muted },
-  totalVal: { fontFamily: fonts.barlowCondensed, fontSize: 16, color: colors.text },
+  totalLabel: {
+    fontFamily: fonts.barlowCondensed,
+    fontSize: 10,
+    color: colors.muted,
+    letterSpacing: 1,
+  },
+  totalVal: {
+    fontFamily: fonts.barlowCondensed,
+    fontSize: 14,
+    color: colors.text,
+  },
+  totalLead: { color: colors.accent },
 })

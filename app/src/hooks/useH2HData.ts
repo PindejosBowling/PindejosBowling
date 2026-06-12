@@ -5,6 +5,9 @@ export interface H2HGame {
   season: number
   week: number
   gameNum: number
+  gameId: string
+  p1TeamId: string
+  p2TeamId: string
   t1Total: number
   t2Total: number
   p1Score: number
@@ -96,7 +99,7 @@ export function computeH2HFromSupabase(
       else if (p2Score > p1Score) result.pinP2Wins++
       else if (p1Score && p2Score) result.pinTies++
 
-      result.games.push({ season: p1Week.seasonNum, week: p1Week.weekNum, gameNum: gameNumberById.get(gameId) ?? 0, t1Total, t2Total, p1Score, p2Score })
+      result.games.push({ season: p1Week.seasonNum, week: p1Week.weekNum, gameNum: gameNumberById.get(gameId) ?? 0, gameId, p1TeamId: p1Week.team, p2TeamId: p2Week.team, t1Total, t2Total, p1Score, p2Score })
     }
   }
 
