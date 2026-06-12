@@ -122,6 +122,15 @@ Each batch is one migration that `CREATE OR REPLACE`s the functions:
 
 ## 3. Stamp `bets.week_id` — kill the four-table "bets in week" join
 
+**Status: ✅ DONE 2026-06-12** — migrations `20260612172127_bets_week_id` +
+`…172200_bets_week_id_consumers`. place_house_bet stamps + enforces
+single-week parlays; archive_week / settle_betting_for_week / unarchive_week
+predicates rewritten (the leg→market join survives only for market-type facts:
+prop exemption + error titles); archive/unarchive also adopted assert_admin().
+Verified by the new `probe-archive-roundtrip.sql` (force-void → surgical
+restore, ledger sum + row count exact) plus the full probe suite green
+before and after. Types regenerated; tsc clean.
+
 The join `bets → bet_legs → bet_selections → bet_markets` appears 7+ times
 (archive snapshot, settle backstop ×3, weekly house P&L, unarchive delete,
 downstream guard). `place_house_bet` already computes `v_week_id`.

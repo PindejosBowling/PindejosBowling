@@ -360,6 +360,7 @@ export type Database = {
           stake: number
           status: string
           updated_at: string
+          week_id: string | null
         }
         Insert: {
           created_at?: string
@@ -376,6 +377,7 @@ export type Database = {
           stake: number
           status?: string
           updated_at?: string
+          week_id?: string | null
         }
         Update: {
           created_at?: string
@@ -392,6 +394,7 @@ export type Database = {
           stake?: number
           status?: string
           updated_at?: string
+          week_id?: string | null
         }
         Relationships: [
           {
@@ -413,6 +416,13 @@ export type Database = {
             columns: ["season_id"]
             isOneToOne: false
             referencedRelation: "seasons"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bets_week_id_fkey"
+            columns: ["week_id"]
+            isOneToOne: false
+            referencedRelation: "weeks"
             referencedColumns: ["id"]
           },
         ]
