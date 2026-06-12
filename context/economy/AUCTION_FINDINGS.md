@@ -2,7 +2,7 @@
 
 Outcome of the 2026-06-11 design-grilling session on `ECONOMIC_DESIGN_SILENT_AUCTIONS.md`, plus the codebase facts that shaped each decision. This is the decision record feeding the implementation plan; the eventual as-built specs are `SILENT_AUCTIONS_DB.md` / `SILENT_AUCTIONS_APP.md`.
 
-> **Revised 2026-06-12** after merging main's DB tech-debt batch (`CURRENT_STATE.md`): shared helpers (`assert_admin`/`is_admin`/`current_player_id`/`current_season_id`/`pin_balance`), `pin_ledger_double_entry()` as the only sanctioned pin movement, deny-by-default function grants (anon lockdown), and the `(SELECT public.is_admin())` RLS pattern. The build-on-new-primitives details live in the implementation plan.
+> **Revised 2026-06-12** after merging the DB tech-debt work (`CURRENT_STATE.md`), in two waves. Wave 1 (main): shared helpers (`assert_admin`/`is_admin`/`current_player_id`/`current_season_id`/`pin_balance`), `pin_ledger_double_entry()` as the only sanctioned pin movement, deny-by-default function grants (anon lockdown), and the `(SELECT public.is_admin())` RLS pattern. Wave 2 (`db-changes`): `bets.week_id` (single-week parlays; all "bets in week" predicates rewritten onto it) and the **rollback-probe suite formalized as the DB layer's test suite** (`context/db-verification.md`; AGENTS.md rule 8 now scopes "no test suite" to the app layer only). The build-on-new-primitives details live in the implementation plan.
 
 ## Codebase ground truth (verified)
 
@@ -11,6 +11,8 @@ Outcome of the 2026-06-11 design-grilling session on `ECONOMIC_DESIGN_SILENT_AUC
 - **No inventory/merchant system exists** — nothing in the live schema could be delivered to a winner.
 - **No hidden-row RLS precedent** — every table is fully readable; sealed bids need the codebase's first ownership-filtered policy.
 - **No pg_cron / scheduled jobs** — all transitions today are admin-RPC or archive-tick driven.
+- **The DB layer has a test suite** — the rollback-probe framework (`supabase/verify/`, `context/db-verification.md`): self-contained probes that synthesize fixtures in an always-aborting transaction, impersonate player/admin JWT claims, drive real RPC lifecycles, and assert exact deltas + the double-entry net-zero invariant. Economy-RPC migrations must run `run-all-probes.sh` before and after; a new economy feature ships its own probe.
+- **Bets are single-week** — `bets.week_id` is stamped at placement (`place_house_bet` enforces same-week legs); archive/settle/unarchive scope bet money by `pl.bet_id IN (SELECT id FROM bets WHERE week_id = …)`, so `bet_id` is the authoritative link for bet-domain ledger rows.
 
 ## Decisions
 
@@ -25,7 +27,7 @@ Designed so the future Traveling Merchant reuses it unchanged. **Framework + one
 
 ### 2. First wired effect: Safety Ticket (bet insurance)
 
-Explicit activation with charges: the player attaches a charge at bet placement (`place_house_bet` gains a trailing `p_insurance_item_id`), and if the bet loses, the stake is refunded House-funded inside `finalize_bets_for_market` (one edit covers O/U, moneyline, and LaneTalk props). The refund pair must be **bet-linked AND week-stamped** so it is idempotent on re-archive and reversed for free by `unarchive_week`. The consumed charge does not revert on unarchive. Force-voided insured bets get only `bet_refund` (the hook lives in the lost branch only). `cancel_bet` restores the charge.
+Explicit activation with charges: the player attaches a charge at bet placement (`place_house_bet` gains a trailing `p_insurance_item_id`), and if the bet loses, the stake is refunded House-funded inside `finalize_bets_for_market` (one edit covers O/U, moneyline, and LaneTalk props). The refund pair must be **bet-linked** (`bet_id` is what the rewritten archive snapshot / `unarchive_week` predicates key bet money by — `pl.bet_id IN (bets WHERE week_id = …)`) **and week-stamped** (read directly from `bets.week_id`; no join needed) so it is idempotent on re-archive and reversed for free by `unarchive_week`. The consumed charge does not revert on unarchive. Force-voided insured bets get only `bet_refund` (the hook lives in the lost branch only). `cancel_bet` restores the charge.
 
 ### 3. Settlement clock: pg_cron, not admin-pressed and not archive-coupled
 
@@ -72,4 +74,6 @@ One active bid per player; raises only (prior bid marked `superseded`); `>= mini
 
 ## Implementation shape (summary)
 
-Six migrations: (1) item framework tables + Safety Ticket seed, (2) auctions/auction_bids + pin_ledger/bets extensions + RLS, (3) auction RPCs, (4) pg_cron enable + schedule, (5) Safety Ticket hooks (`place_house_bet`, `finalize_bets_for_market`, `cancel_bet`), (6) activity-feed extension. App layer: `auctions` + `inventoryItems` objects in `db.ts`, two hooks, two screens, four auction components, navigation/tile/badge/feed-template wiring. Full sequencing, verified schema line anchors, risk flags, and the verification script live in the implementation plan (`~/.claude/plans/start-a-new-worktree-smooth-wolf.md`).
+Six migrations: (1) item framework tables + Safety Ticket seed, (2) auctions/auction_bids + pin_ledger/bets extensions + RLS, (3) auction RPCs, (4) pg_cron enable + schedule, (5) Safety Ticket hooks (`place_house_bet`, `finalize_bets_for_market`, `cancel_bet`), (6) activity-feed extension. App layer: `auctions` + `inventoryItems` objects in `db.ts`, two hooks, two screens, four auction components, navigation/tile/badge/feed-template wiring.
+
+Verification follows `context/db-verification.md`: `run-all-probes.sh` green before the first migration and after every push; a new `probe-auctions.sql` (full create→bid→settle/bounce→reverse lifecycle + Safety Ticket consume/refund, net-zero asserted) wired into the suite; the auction admin RPCs added to `probe-admin-guards.sql`; differential captures for the M5 rewrites of `place_house_bet`/`finalize_bets_for_market` (byte-identical for uninsured bets); the archive round-trip for an insured bet follows `probe-archive-roundtrip.sql`. Full sequencing, schema line anchors, and risk flags live in the implementation plan (`~/.claude/plans/start-a-new-worktree-smooth-wolf.md`).
