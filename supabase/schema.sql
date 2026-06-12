@@ -89,7 +89,8 @@ CREATE TABLE bets (
   custom_line_id uuid,
   custom_line_title text,
   custom_line_description text,
-  custom_line_category text
+  custom_line_category text,
+  week_id uuid
 );
 
 CREATE TABLE board_posts (
@@ -579,6 +580,8 @@ ALTER TABLE bets ADD CONSTRAINT bets_stake_check CHECK ((stake >= 10));
 
 ALTER TABLE bets ADD CONSTRAINT bets_status_check CHECK ((status = ANY (ARRAY['pending'::text, 'won'::text, 'lost'::text, 'push'::text, 'void'::text, 'cancelled'::text])));
 
+ALTER TABLE bets ADD CONSTRAINT bets_week_id_fkey FOREIGN KEY (week_id) REFERENCES weeks(id) ON DELETE SET NULL;
+
 ALTER TABLE board_posts ADD CONSTRAINT board_posts_pkey PRIMARY KEY (id);
 
 ALTER TABLE board_posts ADD CONSTRAINT board_posts_player_id_fkey FOREIGN KEY (player_id) REFERENCES players(id);
@@ -1015,6 +1018,8 @@ CREATE INDEX idx_bets_player_season ON public.bets USING btree (player_id, seaso
 CREATE INDEX idx_bets_season ON public.bets USING btree (season_id);
 
 CREATE INDEX idx_bets_status ON public.bets USING btree (status);
+
+CREATE INDEX idx_bets_week ON public.bets USING btree (week_id);
 
 CREATE INDEX idx_pin_ledger_bet ON public.pin_ledger USING btree (bet_id);
 
@@ -1714,9 +1719,7 @@ DECLARE
   v_actor_id     uuid;
   v_run_id       uuid;
 BEGIN
-  IF ((SELECT auth.jwt()) -> 'app_metadata' ->> 'role') <> 'admin' THEN
-    RAISE EXCEPTION 'Admin only';
-  END IF;
+  PERFORM public.assert_admin();
 
   SELECT season_id, week_number INTO v_season_id, v_week_number
     FROM public.weeks WHERE id = p_week_id;
@@ -1739,19 +1742,13 @@ BEGIN
 
   -- --------------------------------------------------------------------------
   -- 2a. Capture pre-existing append-row ids (everything settlement will INSERT).
-  --     pin_ledger needs the bet_id branch (bet_payout/refund have week_id NULL).
+  --     pin_ledger needs the bet_id branch — bet money is keyed by the bet.
   -- --------------------------------------------------------------------------
   INSERT INTO public.week_archive_snapshot (run_id, kind, table_name, pk)
   SELECT v_run_id, 'preexisting_id', 'pin_ledger', pl.id
     FROM public.pin_ledger pl
    WHERE pl.week_id = p_week_id
-      OR pl.bet_id IN (
-           SELECT b.id FROM public.bets b
-             JOIN public.bet_legs l       ON l.bet_id = b.id
-             JOIN public.bet_selections s ON s.id = l.selection_id
-             JOIN public.bet_markets m    ON m.id = s.market_id
-            WHERE m.week_id = p_week_id
-         );
+      OR pl.bet_id IN (SELECT b.id FROM public.bets b WHERE b.week_id = p_week_id);
 
   INSERT INTO public.week_archive_snapshot (run_id, kind, table_name, pk)
   SELECT v_run_id, 'preexisting_id', 'loan_ledger', ll.id
@@ -1784,21 +1781,14 @@ BEGIN
   SELECT v_run_id, 'preimage_row', 'bets', b.id,
          jsonb_build_object('status', b.status, 'potential_payout', b.potential_payout, 'settled_at', b.settled_at)
     FROM public.bets b
-   WHERE b.id IN (
-           SELECT b2.id FROM public.bets b2
-             JOIN public.bet_legs l       ON l.bet_id = b2.id
-             JOIN public.bet_selections s ON s.id = l.selection_id
-             JOIN public.bet_markets m    ON m.id = s.market_id
-            WHERE m.week_id = p_week_id
-         );
+   WHERE b.week_id = p_week_id;
 
   INSERT INTO public.week_archive_snapshot (run_id, kind, table_name, pk, payload)
   SELECT v_run_id, 'preimage_row', 'bet_legs', l.id,
          jsonb_build_object('result', l.result)
     FROM public.bet_legs l
-    JOIN public.bet_selections s ON s.id = l.selection_id
-    JOIN public.bet_markets m    ON m.id = s.market_id
-   WHERE m.week_id = p_week_id;
+    JOIN public.bets b ON b.id = l.bet_id
+   WHERE b.week_id = p_week_id;
 
   INSERT INTO public.week_archive_snapshot (run_id, kind, table_name, pk, payload)
   SELECT v_run_id, 'preimage_row', 'pvp_challenges', c.id,
@@ -3114,8 +3104,9 @@ BEGIN
     END IF;
   END IF;
 
-  -- Validate every selection, gather odds, resolve + assert a single season, and
-  -- enforce anti-tanking. Each selection must belong to a distinct open market.
+  -- Validate every selection, gather odds, resolve + assert a single season AND
+  -- a single week, and enforce anti-tanking. Each selection must belong to a
+  -- distinct open market.
   v_n := 0;
   FOR v_sel IN
     SELECT s.id AS selection_id, s.key, s.odds, s.line,
@@ -3142,9 +3133,12 @@ BEGIN
       END IF;
     END;
 
-    -- Capture week_id from the first selection (all O/U legs share the same week).
+    -- Single-week invariant: bets.week_id is single-valued, so every leg must
+    -- share the first leg's week.
     IF v_week_id IS NULL THEN
       v_week_id := v_sel.week_id;
+    ELSIF v_week_id <> v_sel.week_id THEN
+      RAISE EXCEPTION 'All selections must be in the same week';
     END IF;
 
     -- Anti-tank (trigger is the backstop): no backing 'under' on your own market.
@@ -3166,9 +3160,9 @@ BEGIN
     RAISE EXCEPTION 'Wager exceeds your balance';
   END IF;
 
-  INSERT INTO public.bets (player_id, season_id, stake, potential_payout, status,
+  INSERT INTO public.bets (player_id, season_id, week_id, stake, potential_payout, status,
                            custom_line_id, custom_line_title, custom_line_description, custom_line_category)
-    VALUES (v_player_id, v_season_id, p_stake, v_payout, 'pending',
+    VALUES (v_player_id, v_season_id, v_week_id, p_stake, v_payout, 'pending',
             v_line.id, v_line.title, v_line.description, v_line.category)
     RETURNING id INTO v_bet_id;
 
@@ -4175,12 +4169,9 @@ BEGIN
   -- bets) are deliberately left pending — their data lands after archive and
   -- settle_lanetalk_props_for_week settles them on the Confirm clock.
   -- --------------------------------------------------------------------------
-  SELECT count(DISTINCT b.id) INTO v_n_pending
+  SELECT count(*) INTO v_n_pending
   FROM public.bets b
-  JOIN public.bet_legs l       ON l.bet_id = b.id
-  JOIN public.bet_selections s ON s.id = l.selection_id
-  JOIN public.bet_markets m    ON m.id = s.market_id
-  WHERE m.week_id = p_week_id AND b.status = 'pending'
+  WHERE b.week_id = p_week_id AND b.status = 'pending'
     AND NOT EXISTS (
       SELECT 1 FROM public.bet_legs l2
       JOIN public.bet_selections s2 ON s2.id = l2.selection_id
@@ -4195,7 +4186,7 @@ BEGIN
       JOIN public.bet_legs l       ON l.bet_id = b.id
       JOIN public.bet_selections s ON s.id = l.selection_id
       JOIN public.bet_markets m    ON m.id = s.market_id
-      WHERE m.week_id = p_week_id AND b.status = 'pending' AND m.status <> 'settled'
+      WHERE b.week_id = p_week_id AND b.status = 'pending' AND m.status <> 'settled'
         AND m.market_type <> 'prop'
         AND NOT EXISTS (
           SELECT 1 FROM public.bet_legs l2
@@ -4209,12 +4200,9 @@ BEGIN
     END IF;
 
     FOR v_bet IN
-      SELECT DISTINCT b.id, b.player_id, b.season_id, b.stake
+      SELECT b.id, b.player_id, b.season_id, b.stake
       FROM public.bets b
-      JOIN public.bet_legs l       ON l.bet_id = b.id
-      JOIN public.bet_selections s ON s.id = l.selection_id
-      JOIN public.bet_markets m    ON m.id = s.market_id
-      WHERE m.week_id = p_week_id AND b.status = 'pending'
+      WHERE b.week_id = p_week_id AND b.status = 'pending'
         AND NOT EXISTS (
           SELECT 1 FROM public.bet_legs l2
           JOIN public.bet_selections s2 ON s2.id = l2.selection_id
@@ -4232,19 +4220,12 @@ BEGIN
 
   -- Activity Feed: post the House's weekly sportsbook P&L (aggregate, no source FK).
   -- house_net > 0 = House won the week; < 0 = players beat the House (§10.3 copy).
-  -- Summed via bet_id through the week's markets: payout/refund rows are now also
-  -- week-stamped, but bet_id remains the authoritative link for bet money.
+  -- bet_id remains the authoritative link for bet money; bets.week_id scopes the week.
   SELECT COALESCE(SUM(pl.amount), 0) INTO v_house_net
     FROM public.pin_ledger pl
     WHERE pl.is_house = true
       AND pl.type IN ('bet_stake','bet_payout','bet_refund')
-      AND pl.bet_id IN (
-        SELECT DISTINCT l.bet_id
-        FROM public.bet_legs l
-        JOIN public.bet_selections s ON s.id = l.selection_id
-        JOIN public.bet_markets m    ON m.id = s.market_id
-        WHERE m.week_id = p_week_id
-      );
+      AND pl.bet_id IN (SELECT b.id FROM public.bets b WHERE b.week_id = p_week_id);
 
   -- Idempotency: no source FK exists, so guard on (season, week, event_type).
   IF NOT EXISTS (
@@ -5716,9 +5697,7 @@ DECLARE
   v_n_rsvp        integer := 0;
   v_n_ledger      integer := 0;
 BEGIN
-  IF ((SELECT auth.jwt()) -> 'app_metadata' ->> 'role') <> 'admin' THEN
-    RAISE EXCEPTION 'Admin only';
-  END IF;
+  PERFORM public.assert_admin();
 
   SELECT season_id, week_number INTO v_season_id, v_week_number
     FROM public.weeks WHERE id = p_week_id;
@@ -5753,12 +5732,8 @@ BEGIN
       JOIN public.teams t       ON t.id = ts.team_id
      WHERE t.week_id = v_next_week_id AND sc.score IS NOT NULL;
 
-    SELECT count(DISTINCT b.id) INTO v_n_bets
-      FROM public.bets b
-      JOIN public.bet_legs l       ON l.bet_id = b.id
-      JOIN public.bet_selections s ON s.id = l.selection_id
-      JOIN public.bet_markets m    ON m.id = s.market_id
-     WHERE m.week_id = v_next_week_id;
+    SELECT count(*) INTO v_n_bets
+      FROM public.bets b WHERE b.week_id = v_next_week_id;
 
     SELECT count(*) INTO v_n_pvp  FROM public.pvp_challenges WHERE week_id = v_next_week_id;
     SELECT count(*) INTO v_n_rsvp FROM public.rsvp           WHERE week_id = v_next_week_id;
@@ -5783,13 +5758,7 @@ BEGIN
 
   DELETE FROM public.pin_ledger pl
    WHERE (pl.week_id = p_week_id
-          OR pl.bet_id IN (
-               SELECT b.id FROM public.bets b
-                 JOIN public.bet_legs l       ON l.bet_id = b.id
-                 JOIN public.bet_selections s ON s.id = l.selection_id
-                 JOIN public.bet_markets m    ON m.id = s.market_id
-                WHERE m.week_id = p_week_id
-             ))
+          OR pl.bet_id IN (SELECT b.id FROM public.bets b WHERE b.week_id = p_week_id))
      AND pl.id NOT IN (
        SELECT pk FROM public.week_archive_snapshot
         WHERE run_id = v_run_id AND kind = 'preexisting_id' AND table_name = 'pin_ledger'
