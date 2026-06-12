@@ -2033,7 +2033,7 @@ BEGIN
 
   -- Close the challenges themselves.
   UPDATE public.pvp_challenges c
-    SET status = 'cancelled'
+    SET status = 'expired'
     WHERE c.week_id = p_week_id
       AND c.status IN ('pending', 'countered')
       AND (p_game_number IS NULL OR c.game_number = p_game_number);
@@ -4075,8 +4075,7 @@ BEGIN
   -- groups under the correct week in the per-player ledger.
   IF NOT EXISTS (
     SELECT 1 FROM public.pin_ledger
-    WHERE season_id = v_season_id AND type = 'score_credit'
-      AND description LIKE 'Week ' || v_week_number || ' %'
+    WHERE week_id = p_week_id AND type = 'score_credit'
   ) THEN
     INSERT INTO public.pin_ledger (player_id, season_id, week_id, amount, type, description)
     SELECT ts.player_id, v_season_id, p_week_id, s.score, 'score_credit',
