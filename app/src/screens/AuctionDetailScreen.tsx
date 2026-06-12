@@ -7,8 +7,6 @@ import ScreenHeader from '../components/ui/ScreenHeader'
 import LoadingView from '../components/ui/LoadingView'
 import Button from '../components/ui/Button'
 import AuctionBidSheet from '../components/auction/AuctionBidSheet'
-import AuctionCreateModal from '../components/auction/AuctionCreateModal'
-import AuctionAdminActionModal from '../components/auction/AuctionAdminActionModal'
 import { useAuctionDetailData } from '../hooks/useAuctionDetailData'
 import { useRefresh } from '../hooks/useRefresh'
 import { useAuthStore } from '../stores/authStore'
@@ -24,15 +22,13 @@ export default function AuctionDetailScreen() {
   const navigation = useNavigation()
   const { params } = useRoute<Route>()
   const playerId = useAuthStore(s => s.playerId)
-  const isAdmin = useAuthStore(s => s.role) === 'admin'
   const { showToast } = useUiStore()
 
+  // Admin management lives on AuctionHouseAdmin (Pinsino Admin → Auction House).
   const { loading, balance, auction, reload } = useAuctionDetailData(params.auctionId, playerId)
   const { refreshing, onRefresh } = useRefresh(reload)
 
   const [bidOpen, setBidOpen] = useState(false)
-  const [adminOpen, setAdminOpen] = useState(false)
-  const [editOpen, setEditOpen] = useState(false)
   const [bidRevealed, setBidRevealed] = useState(false)
   // Ticking clock for the live countdown (detail screen only; cards are static).
   const [now, setNow] = useState(() => new Date())
@@ -190,25 +186,10 @@ export default function AuctionDetailScreen() {
             )}
           </>
         )}
-
-        {isAdmin && (
-          <Button variant="outline" label="Manage (admin)" onPress={() => setAdminOpen(true)} style={styles.adminCta} />
-        )}
       </ScrollView>
 
       {bidOpen && (
         <AuctionBidSheet auction={a} balance={balance} onClose={() => setBidOpen(false)} onDone={reload} />
-      )}
-      {adminOpen && (
-        <AuctionAdminActionModal
-          auction={a}
-          onClose={() => setAdminOpen(false)}
-          onDone={reload}
-          onEdit={() => { setAdminOpen(false); setEditOpen(true) }}
-        />
-      )}
-      {editOpen && (
-        <AuctionCreateModal initial={a} onClose={() => setEditOpen(false)} onDone={reload} />
       )}
     </SafeAreaView>
   )
@@ -263,7 +244,6 @@ const styles = StyleSheet.create({
 
   cta: { marginTop: 6 },
   cancelCta: { marginTop: 8 },
-  adminCta: { marginTop: 16 },
 
   emptyCard: {
     backgroundColor: colors.surface,

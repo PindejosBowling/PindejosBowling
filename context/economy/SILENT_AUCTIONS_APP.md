@@ -11,7 +11,7 @@
 | db.ts objects | `auctions`, `auctionLedger`, `itemCatalog`, `inventoryItems`; `bets.place` gained the 4th `insuranceItemId` arg |
 | View types + pure helpers | `utils/auction.ts` — `AuctionView` / `InventoryItemView` / `InventoryGroupView` / `CatalogItemView`; `auctionSections`, `groupInventory`, `formatTimeRemaining`/`formatCountdown`, `isLargeBid` (≥50% of balance), `itemHowToUse`, `defaultAuctionCloseAt` (= bounties' next-Mon-7PM-ET) |
 | Hooks | `useAuctionHouseData` (list + My Items + balance), `useAuctionDetailData` (one auction + decoded own bid); normalizers exported from the house hook |
-| Screens | `AuctionHouseScreen` (OPEN → SCHEDULED → MY ITEMS → RECENTLY SETTLED, admin `+ Create Auction`), `AuctionDetailScreen` (ticking countdown, owner tap-to-reveal, bid/cancel CTAs, settlement reveal, admin Manage) |
+| Screens | `AuctionHouseScreen` (OPEN → SCHEDULED → MY ITEMS → RECENTLY SETTLED), `AuctionDetailScreen` (ticking countdown, owner tap-to-reveal, bid/cancel CTAs, settlement reveal), `AuctionHouseAdminScreen` (More stack — all admin: auctions, catalog, grants) |
 | Components | `components/auction/` — see [COMPONENTS_INDEX.md](../COMPONENTS_INDEX.md) |
 | Cross-cutting | `GoldenTicketToggle` in all three Sportsbook wager flows; `auction` notification source; `auction_house` feed templates + filter pill + tap-through |
 | Flags | `SHOW_AUCTION_HOUSE` gates the Pinsino tile independently of `SHOW_PINSINO` |
@@ -58,8 +58,16 @@
 
 ## Admin
 
-Create/edit modal (all fields, live catalog chips, close defaults next Monday
-7 PM ET, bounce fee read-only); action modal by status (Edit / Open Now →
-Settle Now → Reverse) — **no bid inspection surface exists, deliberately**.
-Item grants go through `inventoryItems.grant` (no UI in v1 — `db query` or a
-future admin screen).
+Create/edit modal (live catalog chips with the item's copy shown read-only and
+submitted as the description, close defaults next Monday 7 PM ET, bounce fee
+read-only); action modal by status (Edit / Open Now → Settle Now → Reverse) —
+**no bid inspection surface exists, deliberately**.
+
+**All admin functionality lives on `AuctionHouseAdminScreen`** (`More` stack,
+Pinsino Admin 🔨 tile): auction create/manage (the modals above mount there),
+item-catalog curation (`CatalogItemModal` — functional columns shown frozen
+once instances exist, mirroring the DB guard), and item grants
+(`GrantItemSheet` → `inventoryItems.grant`). The player-facing
+`AuctionHouseScreen` / `AuctionDetailScreen` carry **no admin controls**; data
+comes from `useAuctionAdminData` (auctions without bid decoding, catalog with
+instance counts, active players).

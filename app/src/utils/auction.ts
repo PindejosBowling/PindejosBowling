@@ -78,6 +78,26 @@ export interface InventoryGroupView {
   items: InventoryItemView[]
 }
 
+// A full catalog row as the admin screen sees it. instanceCount > 0 means the
+// functional columns (effectType/effectParams/activationMode) are frozen —
+// the DB update RPC enforces it; the UI mirrors the guard.
+export interface CatalogItemAdminView {
+  id: string
+  key: string
+  icon: string
+  name: string
+  description: string
+  effectType: string
+  effectParams: Record<string, unknown>
+  activationMode: string
+  isActive: boolean
+  instanceCount: number
+}
+
+// The DB check constraints on item_catalog, mirrored for the admin form chips.
+export const CATALOG_EFFECT_TYPES = ['bet_insurance', 'cosmetic', 'access_pass', 'custom'] as const
+export const CATALOG_ACTIVATION_MODES = ['attach_to_bet', 'passive', 'admin_honored'] as const
+
 export const SOURCE_LABEL: Record<InventoryItemSource, string> = {
   auction: 'Won at auction',
   merchant: 'Bought from the Merchant',
