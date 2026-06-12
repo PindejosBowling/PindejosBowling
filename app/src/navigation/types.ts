@@ -41,4 +41,6 @@ export type PinsinoStackParamList = {
   BountyBoard: undefined
   BountyCreate: undefined
   BountyDetail: { bountyId: string }
+  AuctionHouse: undefined
+  AuctionDetail: { auctionId: string }
 }

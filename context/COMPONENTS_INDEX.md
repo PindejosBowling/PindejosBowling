@@ -115,6 +115,20 @@ All bounty modals **mounted conditionally**; All-Comers model (see [economy/BOUN
 | `BountyHouseCreateModal` | `{ weekId, onClose, onDone }` | Admin creates a House bounty (title, description, reward, hunter stake, max hunters — defaults to season player count — close time). Validates against `utils/bounty` min/max constants. |
 | `BountyAdminActionModal` | `{ bounty, onClose, onDone }` | Admin close / settle (sponsor-win or hunter-win, **reasoning required**, amounts computed by `bountyEconomics` — never entered) / cancel-with-clawback. |
 
+## Auction House (`components/auction/`)
+
+All sheets **mounted conditionally**. Components bind to the view types in `utils/auction.ts` — currently fed by the MOCK fixture store (`utils/auctionMockStore.ts`) until the auction DB layer lands (see [economy/AUCTION_FINDINGS.md](economy/AUCTION_FINDINGS.md) §8). Sealed-bid contract: bid amounts render only for their owner.
+
+| Component | Props | Purpose |
+|---|---|---|
+| `AuctionCard` | `{ auction: AuctionView, onPress }` | One auction row: item + status, description, min-bid / bidder-count / time cells. Carries a **BID PLACED tag only — never the amount**. Scheduled cards dim + show OPENS IN; settled cards show winner + price (or NO SALE) + bounce count. |
+| `AuctionBidSheet` | `{ auction, balance, onClose, onDone }` | Place/edit the sealed bid on `BottomSheet`: balance row, amount input (prefilled min bid or current bid), free re-pricing (no increment), §18.3 pledge copy always, large-bid warning at ≥50% of balance, CTA `Pledge X pins`. |
+| `AuctionCreateModal` | `{ initial?, onClose, onDone }` | Admin create/edit: catalog item chips, description, min bid, opens/closes pickers (close defaults next Mon 7 PM ET), bounce fee shown read-only. No drafts — creates straight into scheduled/open. Pass `initial` for Edit (scheduled only). |
+| `AuctionAdminActionModal` | `{ auction, onClose, onDone, onEdit }` | Admin actions by status via `useAdminAction`: Edit / Open Now (scheduled), Settle Now (open), Cancel-erase or Reverse-settlement (destructive). **No bid inspection — sealed means sealed, even for admins.** |
+| `MyItemRow` | `{ item: InventoryItemView, onPress }` | One inventory row: icon, name, effect line, charges cell. Consumed items stay visible greyed-out with an **EXPIRED** tag. |
+| `ItemInfoSheet` | `{ item, onClose }` | Info-only sheet: what it does / how to use it / provenance. No actions — activation lives at the point of use. |
+| `SafetyTicketToggle` | `{ ticketCount, enabled, onToggle, disabled? }` | The "use Safety Ticket" row for `WagerSheet`'s children slot. Default OFF; renders nothing at 0 tickets; ON-state copy states the ticket is spent at placement win or lose. **Not yet mounted** — wires into SportsbookScreen when `placeHouseBet` gains the insurance arg. |
+
 ## Activity Feed ("Market Moves") (`components/economy/`)
 
 | Component | Props | Purpose |

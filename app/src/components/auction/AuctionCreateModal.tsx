@@ -1,0 +1,196 @@
+import { useMemo, useState } from 'react'
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, Platform } from 'react-native'
+import DateTimePicker from '@react-native-community/datetimepicker'
+import { colors, fonts, radius } from '../../theme'
+import BottomSheet from '../ui/BottomSheet'
+import Button from '../ui/Button'
+import { useUiStore } from '../../stores/uiStore'
+import { AuctionView, defaultAuctionCloseAt } from '../../utils/auction'
+import { formatCloseTime } from '../../utils/bounty'
+// MOCK: swap for the db.ts auctions object when the DB layer lands.
+import { AuctionInput, createAuction, mockCatalog, updateAuction, MOCK_BOUNCE_FEE } from '../../utils/auctionMockStore'
+
+interface Props {
+  // Admin create/edit. All fields editable at create; metadata frozen once the
+  // auction opens (edit is offered for scheduled auctions only). No drafts —
+  // creating lands directly in scheduled/open. Mount conditionally; pass
+  // `initial` for Edit.
+  initial?: AuctionView
+  onClose: () => void
+  onDone: () => void
+}
+
+export default function AuctionCreateModal({ initial, onClose, onDone }: Props) {
+  const { showToast } = useUiStore()
+  const editing = initial != null
+
+  const [itemKey, setItemKey] = useState(() =>
+    editing
+      ? mockCatalog.find(c => c.name === initial.itemName)?.key ?? mockCatalog[0].key
+      : mockCatalog[0].key)
+  const [description, setDescription] = useState(initial?.description ?? '')
+  const [minimumBid, setMinimumBid] = useState(initial ? String(initial.minimumBid) : '')
+  const [opensAt, setOpensAt] = useState<Date>(() => (initial ? new Date(initial.opensAt) : new Date()))
+  const [closesAt, setClosesAt] = useState<Date>(() =>
+    initial ? new Date(initial.closesAt) : defaultAuctionCloseAt())
+  const [pickerFor, setPickerFor] = useState<'opens' | 'closes' | null>(null)
+  const [saving, setSaving] = useState(false)
+
+  const minBid = Number(minimumBid) || 0
+
+  const error = useMemo<string | null>(() => {
+    if (!description.trim()) return 'Add a description'
+    if (minBid <= 0) return 'Minimum bid must be at least 1'
+    if (closesAt.getTime() <= Date.now()) return 'Close time must be in the future'
+    if (closesAt.getTime() <= opensAt.getTime()) return 'Close time must be after open time'
+    return null
+  }, [description, minBid, opensAt, closesAt])
+
+  async function submit() {
+    if (saving || error) return
+    setSaving(true)
+    try {
+      const input: AuctionInput = {
+        itemKey,
+        description: description.trim(),
+        minimumBid: minBid,
+        opensAt: opensAt.toISOString(),
+        closesAt: closesAt.toISOString(),
+      }
+      const { error: rpcErr } = editing ? await updateAuction(initial.id, input) : await createAuction(input)
+      if (rpcErr) { showToast(rpcErr.message, 'error'); return }
+      showToast(editing ? 'Auction updated' : 'Auction created', 'success')
+      onDone()
+      onClose()
+    } catch {
+      showToast(editing ? 'Failed to update auction' : 'Failed to create auction', 'error')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  function onPickerValue(_e: unknown, selected?: Date) {
+    const target = pickerFor
+    if (Platform.OS === 'android') setPickerFor(null)
+    if (!selected || !target) return
+    if (target === 'opens') setOpensAt(selected)
+    else setClosesAt(selected)
+  }
+
+  return (
+    <BottomSheet
+      title={editing ? 'Edit Auction' : 'New Auction'}
+      subtitle="The House puts an item on the block"
+      onClose={onClose}
+      busy={saving}
+      keyboardAvoiding
+      bodyMaxHeight={460}
+      footer={
+        <>
+          <Button
+            label={editing ? 'Save Auction' : 'Create Auction'}
+            size="lg"
+            onPress={submit}
+            loading={saving}
+            disabled={!!error || saving}
+            style={styles.submitBtn}
+          />
+          <Button label="Cancel" variant="ghost" onPress={() => !saving && onClose()} />
+        </>
+      }
+    >
+      <Text style={styles.label}>ITEM</Text>
+      <View style={styles.itemRow}>
+        {mockCatalog.map(c => (
+          <TouchableOpacity
+            key={c.key}
+            style={[styles.itemChip, itemKey === c.key && styles.itemChipActive]}
+            onPress={() => setItemKey(c.key)}
+            activeOpacity={0.8}
+          >
+            <Text style={[styles.itemChipText, itemKey === c.key && styles.itemChipTextActive]}>
+              {c.icon} {c.name}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+
+      <Text style={styles.label}>DESCRIPTION</Text>
+      <TextInput
+        style={[styles.input, styles.multiline]}
+        value={description}
+        onChangeText={setDescription}
+        placeholder="The pitch — shown on the card and detail page."
+        placeholderTextColor={colors.muted2}
+        multiline
+        maxLength={300}
+      />
+
+      <Text style={styles.label}>MINIMUM BID</Text>
+      <TextInput
+        style={styles.input}
+        value={minimumBid}
+        onChangeText={t => setMinimumBid(t.replace(/[^0-9]/g, ''))}
+        placeholder="e.g. 100"
+        placeholderTextColor={colors.muted2}
+        keyboardType="number-pad"
+      />
+
+      <Text style={styles.label}>OPENS</Text>
+      <TouchableOpacity style={styles.dateBtn} onPress={() => setPickerFor(p => (p === 'opens' ? null : 'opens'))} activeOpacity={0.8}>
+        <Text style={styles.dateBtnText}>{formatCloseTime(opensAt.toISOString())}</Text>
+        <Text style={styles.dateBtnChevron}>›</Text>
+      </TouchableOpacity>
+
+      <Text style={styles.label}>CLOSES (SETTLES IMMEDIATELY)</Text>
+      <TouchableOpacity style={styles.dateBtn} onPress={() => setPickerFor(p => (p === 'closes' ? null : 'closes'))} activeOpacity={0.8}>
+        <Text style={styles.dateBtnText}>{formatCloseTime(closesAt.toISOString())}</Text>
+        <Text style={styles.dateBtnChevron}>›</Text>
+      </TouchableOpacity>
+
+      {pickerFor && (
+        <DateTimePicker
+          value={pickerFor === 'opens' ? opensAt : closesAt}
+          mode="datetime"
+          display={Platform.OS === 'ios' ? 'inline' : 'default'}
+          minimumDate={pickerFor === 'closes' ? new Date() : undefined}
+          onChange={onPickerValue}
+          themeVariant="dark"
+        />
+      )}
+
+      {/* The bounce fee is a rule, not a knob — shown so the admin knows the terms. */}
+      <Text style={styles.bounceNote}>Bounce penalty: min(balance, {MOCK_BOUNCE_FEE}) pins — fixed by the House.</Text>
+
+      {error && <Text style={styles.errorText}>{error}</Text>}
+    </BottomSheet>
+  )
+}
+
+const styles = StyleSheet.create({
+  label: { fontFamily: fonts.barlowCondensed, fontSize: 12, letterSpacing: 1.5, color: colors.muted, marginTop: 12, marginBottom: 8 },
+  itemRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  itemChip: {
+    backgroundColor: colors.surface2, borderRadius: radius.cardSm, borderWidth: 1, borderColor: colors.border2,
+    paddingHorizontal: 12, paddingVertical: 9,
+  },
+  itemChipActive: { borderColor: colors.accent, backgroundColor: colors.accentDim },
+  itemChipText: { fontFamily: fonts.barlowCondensed, fontSize: 14, color: colors.muted },
+  itemChipTextActive: { color: colors.accent },
+
+  input: {
+    backgroundColor: colors.surface2, borderRadius: radius.cardSm, borderWidth: 1, borderColor: colors.border2,
+    paddingHorizontal: 14, paddingVertical: 12, fontFamily: fonts.barlow, fontSize: 15, color: colors.text,
+  },
+  multiline: { minHeight: 70, textAlignVertical: 'top' },
+  dateBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    backgroundColor: colors.surface2, borderRadius: radius.cardSm, borderWidth: 1, borderColor: colors.border2,
+    paddingHorizontal: 14, paddingVertical: 13,
+  },
+  dateBtnText: { fontFamily: fonts.barlowCondensed, fontSize: 15, color: colors.text },
+  dateBtnChevron: { fontFamily: fonts.barlowCondensed, fontSize: 18, color: colors.muted },
+  bounceNote: { fontFamily: fonts.barlow, fontSize: 12, color: colors.muted, marginTop: 14, lineHeight: 17 },
+  errorText: { fontFamily: fonts.barlow, fontSize: 13, color: colors.danger, marginTop: 10 },
+  submitBtn: { marginTop: 14 },
+})
