@@ -11,7 +11,9 @@ import { useAuthStore } from '../stores/authStore'
 
 type Nav = NativeStackNavigationProp<MoreStackParamList>
 
-const TILE_WIDTH = (Dimensions.get('window').width - 48) / 3
+const TILE_GAP = 16
+const TILE_WIDTH = (Dimensions.get('window').width - 32 - TILE_GAP * 2) / 3
+const TILE_WIDTH_LG = (Dimensions.get('window').width - 32 - TILE_GAP) / 2
 
 interface Tile {
   icon: string
@@ -46,20 +48,20 @@ export default function MoreHomeScreen() {
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <AppHeader />
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView contentContainerStyle={styles.content} bounces={false}>
         <Text style={styles.tabTitle}>More</Text>
 
         <Text style={styles.sectionHeader}>LEAGUE TOOLS</Text>
-        <View style={styles.grid}>
+        <View style={[styles.grid, !isAdmin && styles.gridFill]}>
           {leagueToolsTiles.map((tile) => (
             <TouchableOpacity
               key={tile.label}
-              style={styles.tile}
+              style={[styles.tile, !isAdmin && styles.tileLarge]}
               onPress={tile.onPress}
               activeOpacity={0.7}
             >
-              <Text style={styles.tileIcon}>{tile.icon}</Text>
-              <Text style={styles.tileLabel}>{tile.label}</Text>
+              <Text style={[styles.tileIcon, !isAdmin && styles.tileIconLarge]}>{tile.icon}</Text>
+              <Text style={[styles.tileLabel, !isAdmin && styles.tileLabelLarge]}>{tile.label}</Text>
             </TouchableOpacity>
           ))}
         </View>
@@ -97,15 +99,15 @@ export default function MoreHomeScreen() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.bg },
-  content: { paddingHorizontal: 16, paddingBottom: 32 },
+  content: { flexGrow: 1, paddingHorizontal: 16, paddingBottom: 32 },
 
   tabTitle: {
     fontFamily: fonts.barlowCondensed,
     fontSize: 28,
     color: colors.text,
     letterSpacing: 0.5,
-    marginBottom: 20,
-    marginTop: 4,
+    marginBottom: 8,
+    marginTop: 0,
   },
 
   sectionHeader: {
@@ -113,27 +115,37 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: colors.muted,
     letterSpacing: 1.5,
-    marginBottom: 10,
+    marginBottom: 6,
   },
 
   grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
+    gap: TILE_GAP,
     marginBottom: 24,
+  },
+  gridFill: {
+    flex: 1,
+    alignContent: 'space-evenly',
+    marginBottom: 0,
   },
 
   tile: {
     width: TILE_WIDTH,
+    height: TILE_WIDTH,
     backgroundColor: colors.surface,
     borderRadius: radius.cardMd,
     padding: 14,
     alignItems: 'center',
     justifyContent: 'center',
-    minHeight: 84,
+  },
+  tileLarge: {
+    width: TILE_WIDTH_LG,
+    height: TILE_WIDTH_LG,
   },
   tileDisabled: { opacity: 0.35 },
-  tileIcon: { fontSize: 26, marginBottom: 6 },
+  tileIcon: { fontSize: 40, marginBottom: 10 },
+  tileIconLarge: { fontSize: 52, marginBottom: 12 },
   tileLabel: {
     fontFamily: fonts.barlowCondensed,
     fontSize: 13,
@@ -141,5 +153,6 @@ const styles = StyleSheet.create({
     letterSpacing: 0.3,
     textAlign: 'center',
   },
+  tileLabelLarge: { fontSize: 16 },
   tileLabelDisabled: { color: colors.muted },
 })
