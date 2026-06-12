@@ -3095,6 +3095,41 @@ AS $function$
 $function$
 ;
 
+CREATE OR REPLACE FUNCTION public.pin_ledger_double_entry(p_player_id uuid, p_season_id uuid, p_week_id uuid, p_amount integer, p_type text, p_description text, p_house_description text DEFAULT NULL::text, p_bet_id uuid DEFAULT NULL::uuid, p_bounty_post_id uuid DEFAULT NULL::uuid)
+ RETURNS TABLE(player_entry_id uuid, house_entry_id uuid)
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+DECLARE
+  v_player uuid;
+  v_house  uuid;
+BEGIN
+  IF p_player_id IS NULL THEN
+    RAISE EXCEPTION 'pin_ledger_double_entry: player_id is required';
+  END IF;
+  IF p_amount IS NULL OR p_amount = 0 THEN
+    RAISE EXCEPTION 'pin_ledger_double_entry: amount must be non-zero';
+  END IF;
+
+  INSERT INTO public.pin_ledger
+      (player_id, season_id, week_id, is_house, amount, type, description, bet_id, bounty_post_id)
+    VALUES
+      (p_player_id, p_season_id, p_week_id, false, p_amount, p_type, p_description, p_bet_id, p_bounty_post_id)
+    RETURNING id INTO v_player;
+
+  INSERT INTO public.pin_ledger
+      (player_id, season_id, week_id, is_house, amount, type, description, bet_id, bounty_post_id)
+    VALUES
+      (NULL, p_season_id, p_week_id, true, -p_amount, p_type,
+       COALESCE(p_house_description, p_description || ' (house)'), p_bet_id, p_bounty_post_id)
+    RETURNING id INTO v_house;
+
+  RETURN QUERY SELECT v_player, v_house;
+END;
+$function$
+;
+
 CREATE OR REPLACE FUNCTION public.place_house_bet(p_selection_ids uuid[], p_stake integer, p_custom_line_id uuid DEFAULT NULL::uuid)
  RETURNS uuid
  LANGUAGE plpgsql
@@ -3621,9 +3656,7 @@ DECLARE
   v_pin_house   uuid;
   v_debt_id     uuid;
 BEGIN
-  IF ((SELECT auth.jwt()) -> 'app_metadata' ->> 'role') <> 'admin' THEN
-    RAISE EXCEPTION 'Admin only';
-  END IF;
+  PERFORM public.assert_admin();
 
   SELECT season_id INTO v_season_id FROM public.weeks WHERE id = p_week_id;
   IF v_season_id IS NULL THEN
@@ -3659,12 +3692,10 @@ BEGIN
 
     v_garnish := LEAST(CEIL(v_pincome * v_product.garnishment_rate)::int, v_outstanding);
     IF v_garnish > 0 THEN
-      INSERT INTO public.pin_ledger (player_id, season_id, week_id, is_house, amount, type, description)
-        VALUES (v_loan.player_id, v_loan.season_id, p_week_id, false, -v_garnish, 'loan_weekly_garnishment', 'Loan garnishment')
-        RETURNING id INTO v_pin_player;
-      INSERT INTO public.pin_ledger (player_id, season_id, week_id, is_house, amount, type, description)
-        VALUES (NULL, v_loan.season_id, p_week_id, true, v_garnish, 'loan_weekly_garnishment', 'Loan garnishment (house)')
-        RETURNING id INTO v_pin_house;
+      SELECT player_entry_id, house_entry_id INTO v_pin_player, v_pin_house
+        FROM public.pin_ledger_double_entry(
+          v_loan.player_id, v_loan.season_id, p_week_id,
+          -v_garnish, 'loan_weekly_garnishment', 'Loan garnishment');
 
       INSERT INTO public.loan_ledger (loan_id, player_id, season_id, week_id, amount, type, description, pin_ledger_id)
         VALUES (v_loan.id, v_loan.player_id, v_loan.season_id, p_week_id, -v_garnish, 'weekly_garnishment', 'Loan garnishment', v_pin_player)
@@ -3955,16 +3986,12 @@ DECLARE
   v_loan        public.loans;
   v_week_id     uuid;
   v_outstanding integer;
-  v_balance     integer;
   v_pin_player  uuid;
   v_pin_house   uuid;
   v_debt_id     uuid;
   v_risk_level  text;
 BEGIN
-  SELECT id INTO v_player_id FROM public.players WHERE user_id = auth.uid();
-  IF v_player_id IS NULL THEN
-    RAISE EXCEPTION 'No player linked to the current user';
-  END IF;
+  v_player_id := public.current_player_id();
 
   SELECT * INTO v_loan FROM public.loans WHERE id = p_loan_id;
   IF v_loan.id IS NULL THEN
@@ -3987,10 +4014,7 @@ BEGIN
     RAISE EXCEPTION 'Repayment exceeds outstanding debt';
   END IF;
 
-  SELECT COALESCE(SUM(amount), 0) INTO v_balance
-    FROM public.pin_ledger
-    WHERE player_id = v_player_id AND season_id = v_loan.season_id;
-  IF p_amount > v_balance THEN
+  IF p_amount > public.pin_balance(v_player_id, v_loan.season_id) THEN
     RAISE EXCEPTION 'Repayment exceeds your balance';
   END IF;
 
@@ -3998,12 +4022,10 @@ BEGIN
     FROM public.weeks WHERE season_id = v_loan.season_id AND is_archived = false
     ORDER BY week_number DESC LIMIT 1;
 
-  INSERT INTO public.pin_ledger (player_id, season_id, week_id, is_house, amount, type, description)
-    VALUES (v_player_id, v_loan.season_id, v_week_id, false, -p_amount, 'loan_manual_repayment', 'Loan repayment')
-    RETURNING id INTO v_pin_player;
-  INSERT INTO public.pin_ledger (player_id, season_id, week_id, is_house, amount, type, description)
-    VALUES (NULL, v_loan.season_id, v_week_id, true, p_amount, 'loan_manual_repayment', 'Loan repayment (house)')
-    RETURNING id INTO v_pin_house;
+  SELECT player_entry_id, house_entry_id INTO v_pin_player, v_pin_house
+    FROM public.pin_ledger_double_entry(
+      v_player_id, v_loan.season_id, v_week_id,
+      -p_amount, 'loan_manual_repayment', 'Loan repayment');
 
   INSERT INTO public.loan_ledger (loan_id, player_id, season_id, week_id, amount, type, description, pin_ledger_id)
     VALUES (p_loan_id, v_player_id, v_loan.season_id, v_week_id, -p_amount, 'manual_repayment', 'Loan repayment', v_pin_player)
@@ -4611,15 +4633,12 @@ DECLARE
   v_loan        record;
   v_week_id     uuid;
   v_outstanding integer;
-  v_balance     integer;
   v_payment     integer;
   v_pin_player  uuid;
   v_pin_house   uuid;
   v_debt_id     uuid;
 BEGIN
-  IF ((SELECT auth.jwt()) -> 'app_metadata' ->> 'role') <> 'admin' THEN
-    RAISE EXCEPTION 'Admin only';
-  END IF;
+  PERFORM public.assert_admin();
 
   SELECT id INTO v_week_id
     FROM public.weeks WHERE season_id = p_season_id
@@ -4633,18 +4652,12 @@ BEGIN
     SELECT COALESCE(SUM(amount), 0) INTO v_outstanding
       FROM public.loan_ledger WHERE loan_id = v_loan.id;
 
-    SELECT COALESCE(SUM(amount), 0) INTO v_balance
-      FROM public.pin_ledger
-      WHERE player_id = v_loan.player_id AND season_id = v_loan.season_id;
-
-    v_payment := LEAST(v_balance, v_outstanding);
+    v_payment := LEAST(public.pin_balance(v_loan.player_id, v_loan.season_id), v_outstanding);
     IF v_payment > 0 THEN
-      INSERT INTO public.pin_ledger (player_id, season_id, week_id, is_house, amount, type, description)
-        VALUES (v_loan.player_id, v_loan.season_id, v_week_id, false, -v_payment, 'loan_season_close_settlement', 'Season-close loan settlement')
-        RETURNING id INTO v_pin_player;
-      INSERT INTO public.pin_ledger (player_id, season_id, week_id, is_house, amount, type, description)
-        VALUES (NULL, v_loan.season_id, v_week_id, true, v_payment, 'loan_season_close_settlement', 'Season-close loan settlement (house)')
-        RETURNING id INTO v_pin_house;
+      SELECT player_entry_id, house_entry_id INTO v_pin_player, v_pin_house
+        FROM public.pin_ledger_double_entry(
+          v_loan.player_id, v_loan.season_id, v_week_id,
+          -v_payment, 'loan_season_close_settlement', 'Season-close loan settlement');
 
       INSERT INTO public.loan_ledger (loan_id, player_id, season_id, week_id, amount, type, description, pin_ledger_id)
         VALUES (v_loan.id, v_loan.player_id, v_loan.season_id, v_week_id, -v_payment, 'season_close_settlement', 'Season-close loan settlement', v_pin_player)
@@ -5555,17 +5568,8 @@ DECLARE
   v_pin_house  uuid;
   v_debt_id    uuid;
 BEGIN
-  SELECT id INTO v_player_id FROM public.players WHERE user_id = auth.uid();
-  IF v_player_id IS NULL THEN
-    RAISE EXCEPTION 'No player linked to the current user';
-  END IF;
-
-  SELECT id INTO v_season_id
-    FROM public.seasons
-    WHERE is_active = true AND registration_open = false;
-  IF v_season_id IS NULL THEN
-    RAISE EXCEPTION 'No active season';
-  END IF;
+  v_player_id := public.current_player_id();
+  v_season_id := public.current_season_id();
 
   SELECT * INTO v_product FROM public.loan_products WHERE id = p_loan_product_id FOR UPDATE;
   IF v_product.id IS NULL THEN
@@ -5606,12 +5610,12 @@ BEGIN
     VALUES (v_player_id, v_season_id, p_loan_product_id, 'active')
     RETURNING id INTO v_loan_id;
 
-  INSERT INTO public.pin_ledger (player_id, season_id, week_id, is_house, amount, type, description)
-    VALUES (v_player_id, v_season_id, v_week_id, false, v_product.borrow_amount, 'loan_issued', 'Loan issued: ' || v_product.display_name)
-    RETURNING id INTO v_pin_player;
-  INSERT INTO public.pin_ledger (player_id, season_id, week_id, is_house, amount, type, description)
-    VALUES (NULL, v_season_id, v_week_id, true, -v_product.borrow_amount, 'loan_issued', 'Loan issued (house): ' || v_product.display_name)
-    RETURNING id INTO v_pin_house;
+  SELECT player_entry_id, house_entry_id INTO v_pin_player, v_pin_house
+    FROM public.pin_ledger_double_entry(
+      v_player_id, v_season_id, v_week_id,
+      v_product.borrow_amount, 'loan_issued',
+      'Loan issued: ' || v_product.display_name,
+      'Loan issued (house): ' || v_product.display_name);
 
   INSERT INTO public.loan_ledger (loan_id, player_id, season_id, week_id, amount, type, description, pin_ledger_id)
     VALUES (v_loan_id, v_player_id, v_season_id, v_week_id, v_product.borrow_amount, 'loan_issued',
