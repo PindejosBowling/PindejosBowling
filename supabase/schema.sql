@@ -62,33 +62,6 @@ CREATE TABLE bet_markets (
   subject_game_id uuid
 );
 
-CREATE TABLE bet_matches (
-  id uuid NOT NULL DEFAULT gen_random_uuid(),
-  offer_id uuid,
-  back_bet_id uuid NOT NULL,
-  lay_bet_id uuid NOT NULL,
-  pool integer NOT NULL,
-  rake integer NOT NULL DEFAULT 0,
-  created_at timestamp with time zone NOT NULL DEFAULT now(),
-  updated_at timestamp with time zone NOT NULL DEFAULT now()
-);
-
-CREATE TABLE bet_offers (
-  id uuid NOT NULL DEFAULT gen_random_uuid(),
-  proposer_id uuid NOT NULL,
-  season_id uuid NOT NULL,
-  selection_id uuid NOT NULL,
-  odds numeric(8,3) NOT NULL,
-  proposer_stake integer NOT NULL,
-  target_player_id uuid,
-  status text NOT NULL DEFAULT 'open'::text,
-  accepted_by uuid,
-  accepted_at timestamp with time zone,
-  expires_at timestamp with time zone,
-  created_at timestamp with time zone NOT NULL DEFAULT now(),
-  updated_at timestamp with time zone NOT NULL DEFAULT now()
-);
-
 CREATE TABLE bet_selections (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   market_id uuid NOT NULL,
@@ -106,7 +79,6 @@ CREATE TABLE bets (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   player_id uuid NOT NULL,
   season_id uuid NOT NULL,
-  counterparty text NOT NULL,
   stake integer NOT NULL,
   potential_payout integer NOT NULL,
   status text NOT NULL DEFAULT 'pending'::text,
@@ -588,40 +560,6 @@ ALTER TABLE bet_markets ADD CONSTRAINT bet_markets_subject_player_id_fkey FOREIG
 
 ALTER TABLE bet_markets ADD CONSTRAINT bet_markets_week_id_fkey FOREIGN KEY (week_id) REFERENCES weeks(id) ON DELETE CASCADE;
 
-ALTER TABLE bet_matches ADD CONSTRAINT bet_matches_back_bet_id_fkey FOREIGN KEY (back_bet_id) REFERENCES bets(id) ON DELETE CASCADE;
-
-ALTER TABLE bet_matches ADD CONSTRAINT bet_matches_back_bet_id_key UNIQUE (back_bet_id);
-
-ALTER TABLE bet_matches ADD CONSTRAINT bet_matches_lay_bet_id_fkey FOREIGN KEY (lay_bet_id) REFERENCES bets(id) ON DELETE CASCADE;
-
-ALTER TABLE bet_matches ADD CONSTRAINT bet_matches_lay_bet_id_key UNIQUE (lay_bet_id);
-
-ALTER TABLE bet_matches ADD CONSTRAINT bet_matches_offer_id_fkey FOREIGN KEY (offer_id) REFERENCES bet_offers(id) ON DELETE SET NULL;
-
-ALTER TABLE bet_matches ADD CONSTRAINT bet_matches_pkey PRIMARY KEY (id);
-
-ALTER TABLE bet_matches ADD CONSTRAINT bet_matches_pool_check CHECK ((pool >= 0));
-
-ALTER TABLE bet_matches ADD CONSTRAINT bet_matches_rake_check CHECK ((rake >= 0));
-
-ALTER TABLE bet_offers ADD CONSTRAINT bet_offers_accepted_by_fkey FOREIGN KEY (accepted_by) REFERENCES players(id) ON DELETE SET NULL;
-
-ALTER TABLE bet_offers ADD CONSTRAINT bet_offers_odds_check CHECK ((odds > 1.0));
-
-ALTER TABLE bet_offers ADD CONSTRAINT bet_offers_pkey PRIMARY KEY (id);
-
-ALTER TABLE bet_offers ADD CONSTRAINT bet_offers_proposer_id_fkey FOREIGN KEY (proposer_id) REFERENCES players(id) ON DELETE CASCADE;
-
-ALTER TABLE bet_offers ADD CONSTRAINT bet_offers_proposer_stake_check CHECK ((proposer_stake >= 10));
-
-ALTER TABLE bet_offers ADD CONSTRAINT bet_offers_season_id_fkey FOREIGN KEY (season_id) REFERENCES seasons(id) ON DELETE CASCADE;
-
-ALTER TABLE bet_offers ADD CONSTRAINT bet_offers_selection_id_fkey FOREIGN KEY (selection_id) REFERENCES bet_selections(id) ON DELETE CASCADE;
-
-ALTER TABLE bet_offers ADD CONSTRAINT bet_offers_status_check CHECK ((status = ANY (ARRAY['open'::text, 'accepted'::text, 'cancelled'::text, 'expired'::text])));
-
-ALTER TABLE bet_offers ADD CONSTRAINT bet_offers_target_player_id_fkey FOREIGN KEY (target_player_id) REFERENCES players(id) ON DELETE CASCADE;
-
 ALTER TABLE bet_selections ADD CONSTRAINT bet_selections_market_id_fkey FOREIGN KEY (market_id) REFERENCES bet_markets(id) ON DELETE CASCADE;
 
 ALTER TABLE bet_selections ADD CONSTRAINT bet_selections_market_id_key_key UNIQUE (market_id, key);
@@ -631,8 +569,6 @@ ALTER TABLE bet_selections ADD CONSTRAINT bet_selections_odds_check CHECK ((odds
 ALTER TABLE bet_selections ADD CONSTRAINT bet_selections_pkey PRIMARY KEY (id);
 
 ALTER TABLE bet_selections ADD CONSTRAINT bet_selections_result_check CHECK ((result = ANY (ARRAY['won'::text, 'lost'::text, 'push'::text, 'void'::text])));
-
-ALTER TABLE bets ADD CONSTRAINT bets_counterparty_check CHECK ((counterparty = ANY (ARRAY['house'::text, 'peer'::text])));
 
 ALTER TABLE bets ADD CONSTRAINT bets_custom_line_id_fkey FOREIGN KEY (custom_line_id) REFERENCES custom_lines(id) ON DELETE SET NULL;
 
@@ -1081,20 +1017,6 @@ CREATE INDEX idx_bet_markets_subject_game ON public.bet_markets USING btree (sub
 
 CREATE INDEX idx_bet_markets_week ON public.bet_markets USING btree (week_id);
 
-CREATE INDEX idx_bet_matches_offer ON public.bet_matches USING btree (offer_id);
-
-CREATE INDEX idx_bet_offers_accepted_by ON public.bet_offers USING btree (accepted_by);
-
-CREATE INDEX idx_bet_offers_proposer ON public.bet_offers USING btree (proposer_id);
-
-CREATE INDEX idx_bet_offers_season ON public.bet_offers USING btree (season_id);
-
-CREATE INDEX idx_bet_offers_selection ON public.bet_offers USING btree (selection_id);
-
-CREATE INDEX idx_bet_offers_status ON public.bet_offers USING btree (status);
-
-CREATE INDEX idx_bet_offers_target ON public.bet_offers USING btree (target_player_id);
-
 CREATE INDEX idx_bet_selections_market ON public.bet_selections USING btree (market_id);
 
 CREATE INDEX idx_bets_player_season ON public.bets USING btree (player_id, season_id);
@@ -1259,42 +1181,6 @@ CREATE POLICY "anon can read" ON bet_markets AS PERMISSIVE FOR SELECT TO anon
 CREATE POLICY "authenticated can read" ON bet_markets AS PERMISSIVE FOR SELECT TO authenticated
   USING (true);
 
-ALTER TABLE bet_matches ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY "admin can delete" ON bet_matches AS PERMISSIVE FOR DELETE TO authenticated
-  USING ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
-
-CREATE POLICY "admin can insert" ON bet_matches AS PERMISSIVE FOR INSERT TO authenticated
-  WITH CHECK ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
-
-CREATE POLICY "admin can update" ON bet_matches AS PERMISSIVE FOR UPDATE TO authenticated
-  USING ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text))
-  WITH CHECK ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
-
-CREATE POLICY "anon can read" ON bet_matches AS PERMISSIVE FOR SELECT TO anon
-  USING (true);
-
-CREATE POLICY "authenticated can read" ON bet_matches AS PERMISSIVE FOR SELECT TO authenticated
-  USING (true);
-
-ALTER TABLE bet_offers ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY "admin can delete" ON bet_offers AS PERMISSIVE FOR DELETE TO authenticated
-  USING ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
-
-CREATE POLICY "admin can insert" ON bet_offers AS PERMISSIVE FOR INSERT TO authenticated
-  WITH CHECK ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
-
-CREATE POLICY "admin can update" ON bet_offers AS PERMISSIVE FOR UPDATE TO authenticated
-  USING ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text))
-  WITH CHECK ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
-
-CREATE POLICY "anon can read" ON bet_offers AS PERMISSIVE FOR SELECT TO anon
-  USING (true);
-
-CREATE POLICY "authenticated can read" ON bet_offers AS PERMISSIVE FOR SELECT TO authenticated
-  USING (true);
-
 ALTER TABLE bet_selections ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "admin can delete" ON bet_selections AS PERMISSIVE FOR DELETE TO authenticated
@@ -1449,12 +1335,12 @@ CREATE POLICY "authenticated can read" ON games AS PERMISSIVE FOR SELECT TO auth
 
 ALTER TABLE lanetalk_game_imports ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "admin can read all" ON lanetalk_game_imports AS PERMISSIVE FOR SELECT TO authenticated
-  USING ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
-
 CREATE POLICY "admin can update" ON lanetalk_game_imports AS PERMISSIVE FOR UPDATE TO authenticated
   USING ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text))
   WITH CHECK ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
+
+CREATE POLICY "authenticated can read" ON lanetalk_game_imports AS PERMISSIVE FOR SELECT TO authenticated
+  USING (true);
 
 ALTER TABLE loan_ledger ENABLE ROW LEVEL SECURITY;
 
@@ -3283,9 +3169,9 @@ BEGIN
     RAISE EXCEPTION 'Wager exceeds your balance';
   END IF;
 
-  INSERT INTO public.bets (player_id, season_id, counterparty, stake, potential_payout, status,
+  INSERT INTO public.bets (player_id, season_id, stake, potential_payout, status,
                            custom_line_id, custom_line_title, custom_line_description, custom_line_category)
-    VALUES (v_player_id, v_season_id, 'house', p_stake, v_payout, 'pending',
+    VALUES (v_player_id, v_season_id, p_stake, v_payout, 'pending',
             v_line.id, v_line.title, v_line.description, v_line.category)
     RETURNING id INTO v_bet_id;
 
@@ -6162,10 +6048,6 @@ CREATE TRIGGER set_updated_at BEFORE UPDATE ON public.bet_legs FOR EACH ROW EXEC
 CREATE TRIGGER set_updated_at BEFORE UPDATE ON public.bet_markets FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
 CREATE TRIGGER trg_refund_bets_before_market_delete BEFORE DELETE ON public.bet_markets FOR EACH ROW EXECUTE FUNCTION refund_bets_before_market_delete();
-
-CREATE TRIGGER set_updated_at BEFORE UPDATE ON public.bet_matches FOR EACH ROW EXECUTE FUNCTION set_updated_at();
-
-CREATE TRIGGER set_updated_at BEFORE UPDATE ON public.bet_offers FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
 CREATE TRIGGER set_updated_at BEFORE UPDATE ON public.bet_selections FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
