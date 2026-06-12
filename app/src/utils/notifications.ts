@@ -1,4 +1,4 @@
-import { pvpChallenges } from './supabase/db'
+import { auctions, pvpChallenges } from './supabase/db'
 import { normalizeChallenge, isReceivedForPlayer } from '../hooks/usePvpData'
 import { PinsinoStackParamList } from '../navigation/types'
 
@@ -25,6 +25,21 @@ export const NOTIFICATION_SOURCES: NotificationSource[] = [
       return (data ?? [])
         .map(normalizeChallenge)
         .filter(c => isReceivedForPlayer(c, playerId)).length
+    },
+  },
+  {
+    key: 'auction',
+    route: 'AuctionHouse',
+    // Open auctions where the player has NO active bid — a true pending action
+    // (FINDINGS §7). Bid rows are owner-only via RLS, so the bids query returns
+    // only the viewer's.
+    fetchCount: async (_playerId, seasonId) => {
+      const [{ data: auctionRows }, { data: bidRows }] = await Promise.all([
+        auctions.listBySeason(seasonId),
+        auctions.listMyBids(),
+      ])
+      const bidOn = new Set((bidRows ?? []).map((b: any) => b.auction_id))
+      return (auctionRows ?? []).filter((a: any) => a.status === 'open' && !bidOn.has(a.id)).length
     },
   },
 ]

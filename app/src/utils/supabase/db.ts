@@ -576,9 +576,11 @@ export const bets = {
   // Place a house bet atomically (SECURITY DEFINER); O/U passes one selection id.
   // customLineId tags the bet with a special's identity (title/description/
   // category snapshotted server-side, so branding survives line edits/deletion).
-  place: (selectionIds: string[], stake: number, customLineId?: string) =>
+  // insuranceItemId attaches a Safety Ticket (consumed at placement, win or
+  // lose; if the bet loses the stake refunds at settlement).
+  place: (selectionIds: string[], stake: number, customLineId?: string, insuranceItemId?: string) =>
     // undefined is dropped from the RPC payload → the param's NULL default applies.
-    supabase.rpc('place_house_bet', { p_selection_ids: selectionIds, p_stake: stake, p_custom_line_id: customLineId }),
+    supabase.rpc('place_house_bet', { p_selection_ids: selectionIds, p_stake: stake, p_custom_line_id: customLineId, p_insurance_item_id: insuranceItemId }),
   // Admin: total undo of a placed bet (removes ledger rows + bet, re-opens market).
   cancel: (betId: string) =>
     supabase.rpc('cancel_bet', { p_bet_id: betId }),
@@ -948,6 +950,105 @@ export const bountyLedger = {
     supabase.from('pin_ledger').select('*, players(name)')
       .eq('bounty_post_id', bountyId)
       .order('created_at', { ascending: false }),
+}
+
+// ── Auction House (auctions / auction_bids) + item framework ─────────────────
+// Sealed-bid pledge auctions (context/economy/AUCTION_FINDINGS.md). All writes
+// go through SECURITY DEFINER RPCs — the tables carry NO write policies.
+// auction_bids rows are owner-only with the amount encrypted at rest, so the
+// existence of YOUR bid comes from a plain select (RLS filters to yours) but
+// the amount is readable only via the my_bid_amount RPC.
+const AUCTION_GRAPH =
+  '*, item_catalog(key, name, description, icon, effect_type, activation_mode), ' +
+  'winner:players!auctions_winner_player_id_fkey(name)'
+
+export interface AuctionRpcInput {
+  catalogKey: string
+  description: string
+  minimumBid: number
+  opensAt: string
+  closesAt: string
+}
+
+export const auctions = {
+  // Auction House list: every auction of the season (open/scheduled/settled
+  // sectioning is pure compute in utils/auction.ts).
+  listBySeason: (seasonId: string) =>
+    supabase.from('auctions').select(AUCTION_GRAPH)
+      .eq('season_id', seasonId)
+      .order('closes_at', { ascending: false }),
+  getById: (auctionId: string) =>
+    supabase.from('auctions').select(AUCTION_GRAPH).eq('id', auctionId).single(),
+  // The viewer's own active bid rows (RLS: owner-only — other players' bids
+  // never arrive). Amounts are ciphertext; use myBidAmount for the number.
+  listMyBids: () =>
+    supabase.from('auction_bids').select('id, auction_id, status').eq('status', 'active'),
+  myBidAmount: (auctionId: string) =>
+    supabase.rpc('my_bid_amount', { p_auction_id: auctionId }),
+  placeBid: (auctionId: string, amount: number) =>
+    supabase.rpc('place_auction_bid', { p_auction_id: auctionId, p_amount: amount }),
+  cancelBid: (auctionId: string) =>
+    supabase.rpc('cancel_auction_bid', { p_auction_id: auctionId }),
+  create: (a: AuctionRpcInput) =>
+    supabase.rpc('create_auction', {
+      p_catalog_key: a.catalogKey,
+      p_description: a.description,
+      p_minimum_bid: a.minimumBid,
+      p_opens_at: a.opensAt,
+      p_closes_at: a.closesAt,
+    }),
+  update: (auctionId: string, a: AuctionRpcInput) =>
+    supabase.rpc('update_auction', {
+      p_auction_id: auctionId,
+      p_catalog_key: a.catalogKey,
+      p_description: a.description,
+      p_minimum_bid: a.minimumBid,
+      p_opens_at: a.opensAt,
+      p_closes_at: a.closesAt,
+    }),
+  openNow: (auctionId: string) =>
+    supabase.rpc('open_auction_now', { p_auction_id: auctionId }),
+  // Admin "Settle Now" = closing the auction: stamps closes_at and runs the
+  // one settlement path (the same one the cron sweep calls).
+  settle: (auctionId: string) =>
+    supabase.rpc('settle_auction', { p_auction_id: auctionId }),
+  cancel: (auctionId: string) =>
+    supabase.rpc('cancel_auction', { p_auction_id: auctionId }),
+  reverse: (auctionId: string) =>
+    supabase.rpc('reverse_settled_auction', { p_auction_id: auctionId }),
+}
+
+// Auction money is plain pin_ledger rows tagged with auction_id. The player
+// side of 'auction_check_bounce' rows is the public bounce story (name + fee
+// — the pledged amount was destroyed at settlement and exists nowhere).
+export const auctionLedger = {
+  listBySeason: (seasonId: string) =>
+    supabase.from('pin_ledger').select('auction_id, amount, type, is_house, players(name)')
+      .eq('season_id', seasonId)
+      .not('auction_id', 'is', null)
+      .eq('is_house', false),
+}
+
+export const itemCatalog = {
+  // Create-modal picker + item display copy. Catalog rows are admin-curated;
+  // functional columns are frozen once instances exist (the update RPC enforces).
+  listActive: () =>
+    supabase.from('item_catalog').select('*').eq('is_active', true).order('created_at'),
+}
+
+export const inventoryItems = {
+  // My Items: every atomic single-use row (active + spent) for the season;
+  // grouping/sorting is pure compute (utils/auction.ts groupInventory).
+  listByPlayerSeason: (playerId: string, seasonId: string) =>
+    supabase.from('player_inventory_items')
+      .select('*, item_catalog(key, name, description, icon, effect_type, activation_mode)')
+      .eq('player_id', playerId)
+      .eq('season_id', seasonId)
+      .order('granted_at', { ascending: false }),
+  grant: (playerId: string, catalogKey: string, quantity = 1) =>
+    supabase.rpc('grant_inventory_item', {
+      p_player_id: playerId, p_catalog_key: catalogKey, p_quantity: quantity,
+    }),
 }
 
 // ── Activity Feed ("Market Moves") — activity_feed_events ────────────────────

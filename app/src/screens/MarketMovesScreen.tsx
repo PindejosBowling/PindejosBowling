@@ -29,6 +29,7 @@ const FILTERS: { key: FeedFilter; label: string }[] = [
   { key: 'loan_shark', label: 'Loan Shark' },
   { key: 'pvp', label: 'PvP' },
   { key: 'bounty_board', label: 'Bounties' },
+  { key: 'auction_house', label: 'Auctions' },
 ]
 const LABEL_BY_KEY = Object.fromEntries(FILTERS.map(f => [f.key, f.label]))
 
@@ -132,6 +133,12 @@ export default function MarketMovesScreen() {
     if (event.bountySourceId) {
       const bountyId = event.bountySourceId
       return () => navigation.navigate('BountyDetail', { bountyId })
+    }
+    // Auction moves → the public Auction detail page (a reversed auction's
+    // feed rows cascade away, so a live id always resolves).
+    if (event.auctionSourceId) {
+      const auctionId = event.auctionSourceId
+      return () => navigation.navigate('AuctionDetail', { auctionId })
     }
     // Weekly House result + system events: no detail in v1.
     return undefined

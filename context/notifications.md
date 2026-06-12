@@ -27,9 +27,11 @@ export interface NotificationSource {
 }
 ```
 
-Sources live in the `NOTIFICATION_SOURCES` array. The only live source today is **`pvp`**, which counts
-contracts awaiting the player's response (reusing `isReceivedForPlayer` from
-[`usePvpData`](../app/src/hooks/usePvpData.ts)).
+Sources live in the `NOTIFICATION_SOURCES` array. Live sources: **`pvp`** (contracts
+awaiting the player's response, reusing `isReceivedForPlayer` from
+[`usePvpData`](../app/src/hooks/usePvpData.ts)) and **`auction`** (open auctions where
+the player has **no active bid** — bid existence comes from the owner-only
+`auction_bids` RLS, so the query naturally returns only the viewer's rows).
 
 ## Data flow
 
