@@ -12,6 +12,7 @@ import { useNavigation } from '@react-navigation/native'
 import { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { colors, fonts, radius } from '../theme'
 import ScreenHeader from '../components/ui/ScreenHeader'
+import PixelArtBackdrop from '../components/pixelart/PixelArtBackdrop'
 import LoadingView from '../components/ui/LoadingView'
 import ToggleGroup from '../components/ui/ToggleGroup'
 import BetRow from '../components/betting/BetRow'
@@ -425,6 +426,7 @@ export default function SportsbookScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
+      <PixelArtBackdrop scene="sportsbook" />
       <ScrollView
         contentContainerStyle={[
           styles.content,

@@ -25,6 +25,11 @@ function compose(
   return canvas.map(r => r.join(''))
 }
 
+/** Swap palette keys so one sprite can be reused in different colors. */
+function rekey(sprite: Sprite, map: Record<string, string>): Sprite {
+  return sprite.map(row => Array.from(row).map(ch => map[ch] ?? ch).join(''))
+}
+
 // ---------------------------------------------------------------------------
 // Sprites (palette keys are resolved per scene)
 // ---------------------------------------------------------------------------
@@ -56,6 +61,85 @@ const SPARKLE: Sprite = [
 ]
 
 const STAR: Sprite = ['g']
+
+const BOLT: Sprite = [
+  '..g',
+  '.gg',
+  'ggg',
+  '.g.',
+  'g..',
+]
+
+// Office tower with lit windows on a sparse grid.
+function building(w: number, h: number): Sprite {
+  return Array.from({ length: h }, (_, dy) =>
+    Array.from({ length: w }, (_, dx) =>
+      dy > 0 && dx % 3 === 1 && dy % 2 === 1 ? 'y' : 'k',
+    ).join(''),
+  )
+}
+
+const SCOREBOARD: Sprite = [
+  '.......f........',
+  '.......f........',
+  'ffffffffffffffff',
+  'f..............f',
+  'f.yy.yy...w.ww.f',
+  'f..............f',
+  'f.ww.w....yy.y.f',
+  'f..............f',
+  'ffffffffffffffff',
+  '....f......f....',
+  '....f......f....',
+]
+
+const WANTED_POSTER: Sprite = [
+  'pppppppppppp',
+  'p..........p',
+  'p.tt.tt.tt.p',
+  'p..........p',
+  'p....gg....p',
+  'p...gggg...p',
+  'p..gggggg..p',
+  'p...gggg...p',
+  'p....gg....p',
+  'p..........p',
+  'p.tttttttt.p',
+  'p..tttttt..p',
+  'p..........p',
+  'pppppppppppp',
+]
+
+const SHARK_FIN: Sprite = [
+  '...s...',
+  '..ss...',
+  '.ssss..',
+  'ssssss.',
+]
+
+const SHARK_FIN_SMALL: Sprite = [
+  '.s..',
+  'ssss',
+]
+
+const GAVEL_HEAD: Sprite = [
+  '.hhhhhh.',
+  'hhhhhhhh',
+  'hhhhhhhh',
+  '.hhhhhh.',
+]
+
+const GAVEL_HANDLE: Sprite = [
+  'll',
+  'll',
+  'll',
+  'll',
+]
+
+const SOUND_BLOCK: Sprite = [
+  '.kkkkkkkk.',
+  'kkkkkkkkkk',
+]
 
 // ---------------------------------------------------------------------------
 // Scene definitions
@@ -101,8 +185,167 @@ const pinsino: SceneDef = {
   },
 }
 
+// Market Moves: a city skyline under a zigzagging ticker line.
+const tickerLine: Sprite = (() => {
+  const rows = Array.from({ length: 4 }, () => Array<string>(44).fill('.'))
+  const path = [3, 2, 1, 0, 1, 2]
+  for (let x = 0; x < 41; x++) rows[path[x % path.length]][x] = 't'
+  // Arrowhead pointing up at the end of the line.
+  rows[0][43] = 'a'
+  rows[1][42] = 'a'
+  rows[1][43] = 'a'
+  rows[2][41] = 'a'
+  rows[2][42] = 'a'
+  rows[2][43] = 'a'
+  return rows.map(r => r.join(''))
+})()
+
+const marketmoves: SceneDef = {
+  anchor: 'bottom',
+  opacity: 0.12,
+  grid: {
+    rows: compose(48, 12, [
+      { sprite: building(6, 6), x: 0, y: 5 },
+      { sprite: building(8, 9), x: 7, y: 2 },
+      { sprite: building(5, 4), x: 16, y: 7 },
+      { sprite: building(7, 7), x: 22, y: 4 },
+      { sprite: building(6, 5), x: 30, y: 6 },
+      { sprite: building(8, 8), x: 37, y: 3 },
+      { sprite: building(3, 4), x: 45, y: 7 },
+      { sprite: ['n'.repeat(48)], x: 0, y: 11 },
+      { sprite: tickerLine, x: 1, y: 0 },
+    ]),
+    palette: {
+      k: colors.muted2,
+      y: colors.gold,
+      t: colors.accent,
+      a: colors.success,
+      n: colors.pixelArt.teal,
+    },
+  },
+}
+
+// Sportsbook: a dot-matrix scoreboard on legs. Quietest — the screen is dense.
+const sportsbook: SceneDef = {
+  anchor: 'bottomRight',
+  pixelSize: 6,
+  opacity: 0.08,
+  grid: {
+    rows: SCOREBOARD,
+    palette: {
+      f: colors.muted,
+      y: colors.gold,
+      w: colors.text,
+    },
+  },
+}
+
+// PvP: two balls squaring off across a lightning bolt.
+const pvp: SceneDef = {
+  anchor: 'bottomCenter',
+  pixelSize: 7,
+  opacity: 0.12,
+  grid: {
+    rows: compose(26, 8, [
+      { sprite: ['n'.repeat(26)], x: 0, y: 7 },
+      { sprite: BALL, x: 1, y: 2 },
+      { sprite: rekey(BALL, { b: 'r' }), x: 19, y: 2 },
+      { sprite: BOLT, x: 11, y: 1 },
+      { sprite: STAR, x: 9, y: 0 },
+      { sprite: STAR, x: 15, y: 6 },
+    ]),
+    palette: {
+      b: colors.pixelArt.purple,
+      r: colors.pixelArt.rose,
+      d: colors.bg,
+      g: colors.gold,
+      n: colors.pixelArt.teal,
+    },
+  },
+}
+
+// Bounties: a wanted poster with a sheriff-star centerpiece.
+const bounty: SceneDef = {
+  anchor: 'topRight',
+  pixelSize: 5,
+  opacity: 0.12,
+  grid: {
+    rows: WANTED_POSTER,
+    palette: {
+      p: colors.pixelArt.sand,
+      t: colors.muted,
+      g: colors.gold,
+    },
+  },
+}
+
+// Loan Shark: fins cresting the waterline. Quiet — the ledger is dense.
+const loansharkWater: Sprite = (() => {
+  const rows = Array.from({ length: 5 }, () => Array<string>(48).fill('.'))
+  for (let x = 0; x < 48; x++) {
+    if (x % 6 === 2) rows[0][x] = 'v' // crests
+    if (x % 6 !== 5) rows[1][x] = 'v' // broken waterline
+  }
+  for (let y = 2; y < 5; y++) {
+    for (let x = 0; x < 48; x++) if ((x + y) % 5 === 0) rows[y][x] = 'u' // depths
+  }
+  return rows.map(r => r.join(''))
+})()
+
+const loanshark: SceneDef = {
+  anchor: 'bottom',
+  opacity: 0.08,
+  grid: {
+    rows: compose(48, 9, [
+      { sprite: loansharkWater, x: 0, y: 4 },
+      { sprite: SHARK_FIN, x: 10, y: 0 },
+      { sprite: SHARK_FIN_SMALL, x: 34, y: 2 },
+      { sprite: ['o'], x: 19, y: 1 },
+      { sprite: ['o'], x: 21, y: 2 },
+    ]),
+    palette: {
+      s: colors.muted,
+      v: colors.pixelArt.teal,
+      u: colors.muted2,
+      o: colors.text,
+    },
+  },
+}
+
+// Auction House: the gavel mid-strike, sparks flying off the sound block.
+const auction: SceneDef = {
+  anchor: 'bottomRight',
+  pixelSize: 6,
+  opacity: 0.12,
+  grid: {
+    rows: compose(14, 13, [
+      { sprite: GAVEL_HEAD, x: 3, y: 0 },
+      { sprite: GAVEL_HANDLE, x: 6, y: 4 },
+      { sprite: STAR, x: 1, y: 7 },
+      { sprite: STAR, x: 12, y: 7 },
+      { sprite: STAR, x: 0, y: 9 },
+      { sprite: STAR, x: 13, y: 9 },
+      { sprite: SOUND_BLOCK, x: 2, y: 10 },
+      { sprite: ['n'.repeat(14)], x: 0, y: 12 },
+    ]),
+    palette: {
+      h: colors.pixelArt.sand,
+      l: colors.pixelArt.rose,
+      g: colors.gold,
+      k: colors.pixelArt.teal,
+      n: colors.pixelArt.sand,
+    },
+  },
+}
+
 export const SCENES = {
   pinsino,
+  marketmoves,
+  sportsbook,
+  pvp,
+  bounty,
+  loanshark,
+  auction,
 } satisfies Record<string, SceneDef>
 
 export type SceneName = keyof typeof SCENES

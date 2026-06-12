@@ -5,6 +5,7 @@ import { useNavigation, useFocusEffect } from '@react-navigation/native'
 import { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { colors, fonts, radius } from '../theme'
 import ScreenHeader from '../components/ui/ScreenHeader'
+import PixelArtBackdrop from '../components/pixelart/PixelArtBackdrop'
 import LoadingView from '../components/ui/LoadingView'
 import Button from '../components/ui/Button'
 import AuctionCard from '../components/auction/AuctionCard'
@@ -56,6 +57,7 @@ export default function AuctionHouseScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
+      <PixelArtBackdrop scene="auction" />
       <ScreenHeader title="Auction House" subtitle="Sealed bids · the hammer falls on its own" onBack={() => navigation.goBack()} />
       <ScrollView
         contentContainerStyle={styles.content}
