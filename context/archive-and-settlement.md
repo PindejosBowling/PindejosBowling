@@ -192,7 +192,7 @@ offsetting rows) — see the "Reversal rule" subsection in
 [supabase/PIN_ECONOMY_SCHEMA.md](../supabase/PIN_ECONOMY_SCHEMA.md) §4. It is
 safe here only because the snapshot guarantees exact restoration.
 
-**Insured bets (Safety Ticket):** the lost branch of `finalize_bets_for_market`
+**Insured bets (Golden Ticket):** the lost branch of `finalize_bets_for_market`
 writes a NOT-EXISTS-guarded `bet_insurance_refund` pair (bet-linked +
 week-stamped), so it is captured, reversed, and re-derived by the engine
 exactly like other bet money. The consumed item does NOT revert on unarchive

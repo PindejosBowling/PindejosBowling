@@ -19,7 +19,7 @@ import ActiveBetsView from '../components/betting/ActiveBetsView'
 import SettledBetsView from '../components/betting/SettledBetsView'
 import BetDetailModal from '../components/betting/BetDetailModal'
 import WagerSheet from '../components/betting/WagerSheet'
-import SafetyTicketToggle from '../components/auction/SafetyTicketToggle'
+import GoldenTicketToggle from '../components/auction/GoldenTicketToggle'
 import { resultBadge, betReturnText } from '../utils/bets'
 import LineRow from '../components/betting/LineRow'
 import LineRowContainer from '../components/betting/LineRowContainer'
@@ -117,7 +117,7 @@ export default function SportsbookScreen() {
   // Wager sheet for taking a custom line ("special") — the whole bundle at once.
   const [takeModal, setTakeModal] = useState<{ line: CustomLineView; wager: string } | null>(null)
 
-  // Safety Tickets (auction-won bet insurance): unconsumed attach_to_bet items,
+  // Golden Tickets (auction-won bet insurance): unconsumed attach_to_bet items,
   // oldest first — the toggle consumes tickets[0]. Default OFF per sheet open;
   // spending a scarce item is always a deliberate act.
   const [tickets, setTickets] = useState<string[]>([])
@@ -265,7 +265,7 @@ export default function SportsbookScreen() {
         [sel.selectionId], wagerNum, undefined, insureBet ? tickets[0] : undefined)
       if (betErr) { showToast(betErr.message, 'error'); return }
 
-      showToast(insureBet ? 'Bet placed — Safety Ticket attached!' : 'Bet placed!', 'success')
+      showToast(insureBet ? 'Bet placed — Golden Ticket attached!' : 'Bet placed!', 'success')
       setModal(null)
       await Promise.all([reload(), reloadTickets()])
     } catch {
@@ -300,7 +300,7 @@ export default function SportsbookScreen() {
       const { error } = await bets.place(
         takeModal.line.selectionIds, wagerNum, takeModal.line.lineId, insureBet ? tickets[0] : undefined)
       if (error) { showToast(error.message, 'error'); return }
-      showToast(insureBet ? 'Bet placed — Safety Ticket attached!' : 'Bet placed!', 'success')
+      showToast(insureBet ? 'Bet placed — Golden Ticket attached!' : 'Bet placed!', 'success')
       setTakeModal(null)
       await Promise.all([reload(), reloadTickets()])
     } catch {
@@ -356,7 +356,7 @@ export default function SportsbookScreen() {
       const { error } = await bets.place(
         parlayLegs.map(l => l.selectionId), wagerNum, undefined, insureBet ? tickets[0] : undefined)
       if (error) { showToast(error.message, 'error'); return }
-      showToast(insureBet ? 'Parlay placed — Safety Ticket attached!' : 'Parlay placed!', 'success')
+      showToast(insureBet ? 'Parlay placed — Golden Ticket attached!' : 'Parlay placed!', 'success')
       setParlayModalOpen(false)
       setParlayLegs([])
       setParlayWager('')
@@ -648,7 +648,7 @@ export default function SportsbookScreen() {
               )
             })}
           </View>
-          <SafetyTicketToggle ticketCount={tickets.length} enabled={insureBet} onToggle={setInsureBet} disabled={placing} />
+          <GoldenTicketToggle ticketCount={tickets.length} enabled={insureBet} onToggle={setInsureBet} disabled={placing} />
         </WagerSheet>
       )}
 
@@ -680,7 +680,7 @@ export default function SportsbookScreen() {
               </View>
             ))}
           </View>
-          <SafetyTicketToggle ticketCount={tickets.length} enabled={insureBet} onToggle={setInsureBet} disabled={placing} />
+          <GoldenTicketToggle ticketCount={tickets.length} enabled={insureBet} onToggle={setInsureBet} disabled={placing} />
         </WagerSheet>
       )}
 
@@ -710,7 +710,7 @@ export default function SportsbookScreen() {
               </View>
             ))}
           </View>
-          <SafetyTicketToggle ticketCount={tickets.length} enabled={insureBet} onToggle={setInsureBet} disabled={placing} />
+          <GoldenTicketToggle ticketCount={tickets.length} enabled={insureBet} onToggle={setInsureBet} disabled={placing} />
         </WagerSheet>
       )}
 

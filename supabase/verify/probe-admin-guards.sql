@@ -29,13 +29,13 @@ DECLARE
     'public.suppress_activity_event(gen_random_uuid(), ''x'')',
     'public.restore_activity_event(gen_random_uuid())',
     'public.create_system_activity_event(''system'', ''x'', ''y'', ''{}'')',
-    'public.create_auction(''safety_ticket'', ''d'', 100, now(), now() + interval ''1 hour'')',
-    'public.update_auction(gen_random_uuid(), ''safety_ticket'', ''d'', 100, now(), now() + interval ''1 hour'')',
+    'public.create_auction(''golden_ticket'', ''d'', 100, now(), now() + interval ''1 hour'')',
+    'public.update_auction(gen_random_uuid(), ''golden_ticket'', ''d'', 100, now(), now() + interval ''1 hour'')',
     'public.open_auction_now(gen_random_uuid())',
     'public.settle_auction(gen_random_uuid())',
     'public.cancel_auction(gen_random_uuid())',
     'public.reverse_settled_auction(gen_random_uuid())',
-    'public.grant_inventory_item(gen_random_uuid(), ''safety_ticket'', 1)',
+    'public.grant_inventory_item(gen_random_uuid(), ''golden_ticket'', 1)',
     'public.create_catalog_item(''k'', ''n'', ''d'', ''i'', ''cosmetic'', ''{}'', ''admin_honored'')',
     'public.update_catalog_item(gen_random_uuid(), ''n'', ''d'', ''i'', ''cosmetic'', ''{}'', ''admin_honored'', true)'
   ];

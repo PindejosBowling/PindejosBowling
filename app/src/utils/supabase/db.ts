@@ -576,7 +576,7 @@ export const bets = {
   // Place a house bet atomically (SECURITY DEFINER); O/U passes one selection id.
   // customLineId tags the bet with a special's identity (title/description/
   // category snapshotted server-side, so branding survives line edits/deletion).
-  // insuranceItemId attaches a Safety Ticket (consumed at placement, win or
+  // insuranceItemId attaches a Golden Ticket (consumed at placement, win or
   // lose; if the bet loses the stake refunds at settlement).
   place: (selectionIds: string[], stake: number, customLineId?: string, insuranceItemId?: string) =>
     // undefined is dropped from the RPC payload → the param's NULL default applies.

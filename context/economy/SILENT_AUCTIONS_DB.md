@@ -3,7 +3,7 @@
 > Migrations `20260612200001`–`20260612200006`, applied 2026-06-12. Decision
 > record: [AUCTION_FINDINGS.md](AUCTION_FINDINGS.md); design rationale:
 > [ECONOMIC_DESIGN_SILENT_AUCTIONS.md](ECONOMIC_DESIGN_SILENT_AUCTIONS.md).
-> Read this before touching any `auction_*` / `item_*` / Safety Ticket code.
+> Read this before touching any `auction_*` / `item_*` / Golden Ticket code.
 
 ## 1. The shape
 
@@ -18,12 +18,12 @@ prize is a real inventory item (the league's first item framework).
 ### `item_catalog`
 `key` (unique), `name`, `description`, `icon`, `effect_type`
 (`bet_insurance|cosmetic|access_pass|custom` — each value promises a code hook
-or admin honor), `effect_params jsonb` (per-type parameters; Safety Ticket:
+or admin honor), `effect_params jsonb` (per-type parameters; Golden Ticket:
 `{"refund_share": 1.0}`), `activation_mode`
 (`attach_to_bet|passive|admin_honored` — drives the UI affordance only),
 `is_active`. **Functional columns freeze once an instance exists**
 (`update_catalog_item` RAISEs); `name`/`description`/`icon` stay editable;
-changed behavior = new key (`safety_ticket_v2`). No `domain`, no `charges`.
+changed behavior = new key (`golden_ticket_v2`). No `domain`, no `charges`.
 
 ### `player_inventory_items`
 **Atomic single-use rows — quantity is ALWAYS row count** (grants, pack sales,
@@ -117,7 +117,7 @@ DB superuser can ultimately extract the key — accepted risk, by decision.
 Lock ordering everywhere: **the auction row first** (`FOR UPDATE`) — bid,
 cancel, and settle serialize on one lock.
 
-## 7. Safety Ticket hooks (the one wired effect)
+## 7. Golden Ticket hooks (the one wired effect)
 
 - `place_house_bet(..., p_insurance_item_id uuid DEFAULT NULL)` (4-arg):
   validates catalog `effect_type='bet_insurance'` + `activation_mode=
@@ -141,4 +141,4 @@ bounce(40)→win(110) settlement, idempotent re-settle, foreign/consumed ticket
 rejections, insured-loss refund + double-refund guard, reverse blocked-while-
 consumed then zero-residue. The auction admin RPCs are in
 `probe-admin-guards.sql`. Requires the Vault secret + the live
-`safety_ticket` catalog row.
+`golden_ticket` catalog row.

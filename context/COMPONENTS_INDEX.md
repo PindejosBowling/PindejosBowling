@@ -127,7 +127,7 @@ All sheets **mounted conditionally**. Components bind to the view types in `util
 | `AuctionAdminActionModal` | `{ auction, onClose, onDone, onEdit }` | Admin actions by status via `useAdminAction`: Edit / Open Now (scheduled), Settle Now (open), Cancel-erase or Reverse-settlement (destructive). **No bid inspection — sealed means sealed, even for admins.** |
 | `MyItemRow` | `{ group: InventoryGroupView, onPress }` | One grouped inventory row — items are **atomic single-use**, identical ones display as ×N (`groupInventory`). Consumed groups stay visible greyed-out with an **EXPIRED** tag. |
 | `ItemInfoSheet` | `{ group, onClose }` | Info-only sheet: what it does / how to use it / per-item provenance lines. No actions — activation lives at the point of use. |
-| `SafetyTicketToggle` | `{ ticketCount, enabled, onToggle, disabled? }` | The "use Safety Ticket" row for `WagerSheet`'s children slot. Default OFF; renders nothing at 0 tickets; ON-state copy states the ticket is spent at placement win or lose. **Not yet mounted** — wires into SportsbookScreen when `placeHouseBet` gains the insurance arg. |
+| `GoldenTicketToggle` | `{ ticketCount, enabled, onToggle, disabled? }` | The "use Golden Ticket" row for `WagerSheet`'s children slot. Default OFF; renders nothing at 0 tickets; ON-state copy states the ticket is spent at placement win or lose. **Not yet mounted** — wires into SportsbookScreen when `placeHouseBet` gains the insurance arg. |
 
 ## Activity Feed ("Market Moves") (`components/economy/`)
 

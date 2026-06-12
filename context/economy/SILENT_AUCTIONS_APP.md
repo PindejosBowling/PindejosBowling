@@ -13,7 +13,7 @@
 | Hooks | `useAuctionHouseData` (list + My Items + balance), `useAuctionDetailData` (one auction + decoded own bid); normalizers exported from the house hook |
 | Screens | `AuctionHouseScreen` (OPEN → SCHEDULED → MY ITEMS → RECENTLY SETTLED, admin `+ Create Auction`), `AuctionDetailScreen` (ticking countdown, owner tap-to-reveal, bid/cancel CTAs, settlement reveal, admin Manage) |
 | Components | `components/auction/` — see [COMPONENTS_INDEX.md](../COMPONENTS_INDEX.md) |
-| Cross-cutting | `SafetyTicketToggle` in all three Sportsbook wager flows; `auction` notification source; `auction_house` feed templates + filter pill + tap-through |
+| Cross-cutting | `GoldenTicketToggle` in all three Sportsbook wager flows; `auction` notification source; `auction_house` feed templates + filter pill + tap-through |
 | Flags | `SHOW_AUCTION_HOUSE` gates the Pinsino tile independently of `SHOW_PINSINO` |
 
 ## The sealed-bid display contract
@@ -41,7 +41,7 @@
   consumed greyed **EXPIRED** below — history preserved); row tap → info-only
   `ItemInfoSheet` with per-item provenance. Activation lives only at the point
   of use.
-- **Safety Ticket toggle** (`SafetyTicketToggle`, all three Sportsbook flows):
+- **Golden Ticket toggle** (`GoldenTicketToggle`, all three Sportsbook flows):
   default OFF, reset per sheet open, hidden at 0 tickets, consumes the oldest
   unconsumed `bet_insurance`+`attach_to_bet` item (`tickets[0]`), copy states
   the ticket is **spent at placement win or lose**; ticket list reloads after
