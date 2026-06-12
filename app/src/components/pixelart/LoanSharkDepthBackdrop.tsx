@@ -19,7 +19,7 @@ import { BACKDROP_OPACITY, FIELD_PIXEL } from './config'
 const PIXEL = FIELD_PIXEL
 const OPACITY = BACKDROP_OPACITY.scrollField
 const EDGE_COLS = 3 // gutter width (in cells) that keeps full speckle density
-const CENTER_DENSITY = 0.28 // density multiplier behind the cards
+const CENTER_DENSITY = 0.08 // density multiplier behind the cards
 
 // Small fin for the gutters.
 const FIN: { dx: number; dy: number; ch: string }[] = [
@@ -53,15 +53,15 @@ function buildField(cols: number, rowCount: number): string[] {
       const distFromEdge = Math.min(x, cols - 1 - x)
       const mult = distFromEdge < EDGE_COLS ? 1 : CENTER_DENSITY
       if (f < 0.3) {
-        if (h < 20 * mult) rows[y][x] = 'v' // sunny shallows
+        if (h < 13 * mult) rows[y][x] = 'v' // sunny shallows
       } else if (f < 0.55) {
-        if (h < 32 * mult) rows[y][x] = h % 3 ? 'v' : 'u' // mid-water, cooling off
+        if (h < 21 * mult) rows[y][x] = h % 3 ? 'v' : 'u' // mid-water, cooling off
       } else if (f < 0.8) {
         if (h < 3 * mult) rows[y][x] = 'o' // stray bubbles
-        else if (h < 46 * mult) rows[y][x] = h % 3 ? 'u' : 'm' // deep water
+        else if (h < 31 * mult) rows[y][x] = h % 3 ? 'u' : 'm' // deep water
       } else {
         if (h < 2 * mult) rows[y][x] = 'e' // glints in the dark
-        else if (h < 72 * mult) rows[y][x] = h % 4 ? 'a' : 'm' // the abyss
+        else if (h < 48 * mult) rows[y][x] = h % 4 ? 'a' : 'm' // the abyss
       }
     }
   }
