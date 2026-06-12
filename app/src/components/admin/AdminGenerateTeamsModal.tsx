@@ -31,9 +31,12 @@ interface GenPlayer {
 }
 
 // Round-robin templates keyed by team *number* (1-based); mapped to team ids before insert.
-type ScheduleTemplate = { game_number: number; team_a: number; team_b: number }
+export type ScheduleTemplate = { game_number: number; team_a: number; team_b: number }
 
-function buildSchedule(numTeams: number): ScheduleTemplate[] {
+// The league's standard night schedule per team count (team numbers are
+// 1-based). Also consumed by PlayoffsScreen's materialize flow, so playoff
+// weeks get the same schedule shape as a generated week.
+export function buildSchedule(numTeams: number): ScheduleTemplate[] {
   if (numTeams === 2) return [
     { game_number: 1, team_a: 1, team_b: 2 },
     { game_number: 2, team_a: 1, team_b: 2 },
