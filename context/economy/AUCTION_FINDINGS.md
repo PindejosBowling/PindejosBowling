@@ -20,10 +20,18 @@ Outcome of the 2026-06-11 design-grilling session on `ECONOMIC_DESIGN_SILENT_AUC
 
 The winner's prize is not a trophy or a free-text honor-system note. This feature ships:
 
-- **`item_catalog`** — item definitions: stable `key`, `effect_type` (`bet_insurance | cosmetic | access_pass | custom`), `effect_params jsonb`, target `domain`, `activation_mode` (`attach_to_bet | passive | admin_honored`), `charges`.
-- **`player_inventory_items`** — instances: player/catalog/season FKs, `remaining_charges`, `granted_at` / `consumed_at`, `source` (`auction | merchant | admin_grant`), nullable `auction_id`.
+- **`item_catalog`** — item definitions: stable `key`, `name`, `description`, `icon`, `effect_type` (`bet_insurance | cosmetic | access_pass | custom`), `effect_params jsonb`, `activation_mode` (`attach_to_bet | passive | admin_honored`), `is_active`.
+- **`player_inventory_items`** — instances: `player_id`, catalog FK, `season_id NOT NULL`, `source` (`auction | merchant | admin_grant`), nullable `auction_id` (provenance + revocation key, `ON DELETE SET NULL`), `granted_at`, `consumed_at`.
 
 Designed so the future Traveling Merchant reuses it unchanged. **Framework + one wired hook in v1**; all other catalog effect types stay admin-honored until their domain hook lands.
+
+Item-framework doctrine (schema review 2026-06-12, "bedrock for the marketplace"):
+
+- **Items are atomic and single-use — there is no charge counter.** "3 charges" is 3 rows. Quantity is *always* row count (grants, future pack sales, transfers, display ×N grouping in the view layer). The entire lifecycle is `consumed_at NULL → timestamp`; consume = one guarded UPDATE (rowcount = success), restore (`cancel_bet`) = set it back to NULL on the row `bets.insurance_item_id` points at; reverse-settlement guard = "is the granted row consumed". No `charges`/`remaining_charges` columns, no split logic ever.
+- **Instances are season-scoped (v1 minimal):** usable only in their own season (consumption hooks check `season_id = current_season_id()`); a closed season's items are inert history — expiry is derived, no column. Durable/cross-season items are a future deliberate migration.
+- **Catalog rows are immutable once granted, with a copy carve-out:** functional columns (`effect_type`, `effect_params`, `activation_mode`) freeze when the first instance exists — enforced in the admin update RPC; `name`/`description`/`icon` stay editable; retirement = `is_active = false`. Changed behavior = new row (`safety_ticket_v2`).
+- **Effect encoding contract:** `effect_type` is a closed CHECK enum where each value promises a real code hook (or admin honor); `effect_params` parametrizes within a type — Safety Ticket seeds `{"refund_share": 1.0}` and the settlement hook reads it (a half-refund variant is later just a new catalog row); `activation_mode` drives only the UI affordance. No `domain` column — derivable from `effect_type`, nothing reads it.
+- **Transferability needs nothing structural:** ownership is `player_id` on an atomic row; a future trade is an UPDATE + provenance event. Discipline: never denormalize owner identity elsewhere; `source`/`auction_id` describe origin, not current ownership.
 
 ### 2. First wired effect: Safety Ticket (bet insurance)
 
