@@ -43,6 +43,16 @@ Every reusable component in [app/src/components/](../app/src/components/), group
 | `StatDonut` | `{ value (0..1), valueText, label, color, size? }` | Donut/progress ring with big center text + caption (FrameStatsScreen). |
 | `StatRadarChart` | `{ axes: RadarAxis[], size? }` — exports `RadarAxis { label, valueText, radial (0..1) }` | N-spoke radar/web chart; caller pre-normalizes each axis to 0..1 (FrameStatsScreen). |
 
+## Pixel-art backdrops (`components/pixelart/`, react-native-svg)
+
+Ambient retro pixel-art scenes behind the Pinsino landing screens — decorative only, never interactive. Colors come from theme tokens plus the dedicated `colors.pixelArt` tint group (theme.ts); scenes are sprite-composed in `scenes.ts`, not hand-drawn ASCII blocks.
+
+| Component | Props | Purpose |
+|---|---|---|
+| `PixelArtBackdrop` | `{ scene: SceneName }` | **The only thing screens mount.** Absolute-fill, `pointerEvents="none"` layer placed as the first child inside a screen's SafeAreaView (behind header + ScrollView). Resolves the scene's anchor (`bottom` full-bleed / `bottomCenter` / `bottomRight` / `topRight`) and whisper-quiet opacity (0.12 sparse, 0.08 dense screens). One scene per Pinsino landing screen: `pinsino`, `marketmoves`, `sportsbook`, `pvp`, `bounty`, `loanshark`, `auction`. |
+| `PixelArt` | `{ grid: PixelGrid, pixelSize }` | Generic renderer: a `PixelGrid` (rows of palette-keyed chars, `'.'` transparent) drawn as one SVG `<Rect>` per cell. Reusable anywhere pixel art is needed. |
+| `scenes.ts` | exports `SCENES`, `SceneName`, `SceneDef` | Scene catalog + the `compose`/`rekey` sprite-stamping helpers and sprite library (PIN, BALL, SHARK_FIN, GAVEL…). To add a scene: define sprites, `compose()` a grid, pick anchor/opacity, add to `SCENES`, mount `<PixelArtBackdrop scene="…" />` on the screen. |
+
 ## League / matchup display (`components/league/`)
 
 | Component | Props | Purpose |
