@@ -13,6 +13,7 @@ import { useNavigation, useFocusEffect } from '@react-navigation/native'
 import { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { colors, fonts, radius } from '../theme'
 import AppHeader from '../components/league/AppHeader'
+import PixelArtBackdrop from '../components/pixelart/PixelArtBackdrop'
 import LoadingView from '../components/ui/LoadingView'
 import PinsinoLeaderboardTable from '../components/betting/PinsinoLeaderboardTable'
 import { usePinsinoData } from '../hooks/usePinsinoData'
@@ -57,6 +58,7 @@ export default function PinsinoScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
+      <PixelArtBackdrop scene="pinsino" />
       <AppHeader />
       <ScrollView
         contentContainerStyle={styles.content}
