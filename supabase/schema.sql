@@ -1846,7 +1846,7 @@ CREATE OR REPLACE FUNCTION public.assert_admin()
  SET search_path TO ''
 AS $function$
 BEGIN
-  IF ((SELECT auth.jwt()) -> 'app_metadata' ->> 'role') IS DISTINCT FROM 'admin' THEN
+  IF public.is_admin() IS DISTINCT FROM true THEN
     RAISE EXCEPTION 'Admin only';
   END IF;
 END;
