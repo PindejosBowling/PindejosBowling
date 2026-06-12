@@ -188,9 +188,11 @@ BEGIN
       WHERE auction_id = v_auction AND event_type = 'auction_won' AND actor_player_id = v_p2) <> 1 THEN
     RAISE EXCEPTION 'PROBE_FAIL: won event missing';
   END IF;
+  -- Feed events show in the week they occurred (the open week — same stamp
+  -- as the ledger), and the archive engine is exempt from touching them.
   IF EXISTS (SELECT 1 FROM public.activity_feed_events
-             WHERE auction_id = v_auction AND week_id IS NOT NULL) THEN
-    RAISE EXCEPTION 'PROBE_FAIL: auction feed events must be week-agnostic (NULL week)';
+             WHERE auction_id = v_auction AND week_id IS DISTINCT FROM v_week) THEN
+    RAISE EXCEPTION 'PROBE_FAIL: auction feed events not stamped with the open week';
   END IF;
   IF EXISTS (SELECT 1 FROM public.activity_feed_events
              WHERE auction_id = v_auction AND public_payload::text LIKE '%450%') THEN

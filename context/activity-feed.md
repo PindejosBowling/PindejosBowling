@@ -145,9 +145,12 @@ informational (the publisher's own source list remains the validation).
 > post-catalog): an `auction_id` source FK with **split dedup indexes** — the standard
 > `(auction_id, event_type)` unique excludes `auction_check_bounce`, which dedups on
 > `(auction_id, event_type, actor_player_id)` instead, because multiple bouncers per
-> auction are legitimate. Auction events carry **`week_id = NULL`** (week-agnostic
-> entities — they group under Market Moves' "Other Moves"), and a reversed auction's
-> feed rows CASCADE away with it.
+> auction are legitimate. Auction events are **week-stamped with the week they
+> occurred** (the season's open week at the moment of opening/settlement — the same
+> stamp the auction ledger pairs carry; `…210000_auction_feed_week_stamp`), but
+> `unarchive_week`'s feed delete is auction-exempt (`AND auction_id IS NULL`) — a
+> reversed auction's feed rows CASCADE away with it, and the archive engine never
+> touches them.
 >
 > **PvP** was added by `20260607180200_activity_feed_pvp.sql`: a `pvp_challenge_id` source
 > FK column, the `pvp` `source_feature`, the two events above, and publish calls in

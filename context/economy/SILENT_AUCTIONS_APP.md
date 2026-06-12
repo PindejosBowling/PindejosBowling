@@ -52,8 +52,9 @@
   badge + winner banner), check_bounce (FEE badge; special copy at fee 0),
   no_sale (ironic all-bounce branch when `bounce_count === bidder_count > 0`).
   Auctions filter pill; `auction_id` tap-through to AuctionDetail. **Auction
-  events are week-NULL** → they group under Market Moves' "Other Moves"
-  bucket, by design (week-agnostic entities).
+  events are week-stamped with the week they occurred** (the ledger's
+  open-week stamp), so Market Moves groups them under the right week header;
+  the archive engine never deletes them (auction-exempt feed delete).
 
 ## Admin
 

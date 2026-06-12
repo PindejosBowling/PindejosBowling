@@ -86,10 +86,13 @@ DB superuser can ultimately extract the key — accepted risk, by decision.
   defaulted `p_auction_id` (10-arg signature).
 - **Week stamp**: settlement stamps the season's open week (the `take_loan`
   convention) so weekly accounting books outcomes to the week they occurred.
-- **Archive independence**: `unarchive_week`'s pin delete carries
-  `AND pl.auction_id IS NULL` — the archive engine NEVER reverses auction
-  money (closes the sweep-vs-archive race). The only reversal is
-  `reverse_settled_auction`, by root ref, per the §4 reversal rule.
+  Feed events carry the same stamp (`…210000_auction_feed_week_stamp`) so
+  Market Moves groups them under the right week.
+- **Archive independence**: `unarchive_week`'s pin **and feed** deletes carry
+  `AND auction_id IS NULL` — the archive engine NEVER reverses auction money
+  or deletes auction feed rows (closes the sweep-vs-archive race). The only
+  reversal is `reverse_settled_auction`, by root ref, per the §4 reversal
+  rule; feed rows die only with their auction (CASCADE).
 - Zero-fee bounces are **ledger-silent, feed-loud**: no pair when
   `LEAST(balance, bounce_fee) = 0`, but the bounce event still publishes.
 

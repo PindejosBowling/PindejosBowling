@@ -168,13 +168,14 @@ guard**: unless forced, RAISE if week N+1 holds any scores, bets, PvP, RSVPs,
 or ledger rows (the app surfaces the message and arms **Force Unarchive**).
 
 **Reversal, in order:**
-1. **Delete what settlement inserted** — `activity_feed_events`, `pin_ledger`
-   (week-stamped OR bet-linked branch, **excluding `auction_id` rows** —
-   auction money settles on its own pg_cron clock, is week-stamped only for
-   accounting, and reverses exclusively via `reverse_settled_auction`; see
-   [economy/SILENT_AUCTIONS_DB.md](economy/SILENT_AUCTIONS_DB.md) §5),
-   `pvp_ledger`, `loan_ledger` rows whose
-   id is *not* in the run's `preexisting_id` set.
+1. **Delete what settlement inserted** — `activity_feed_events` and
+   `pin_ledger` (week-stamped OR bet-linked branch), `pvp_ledger`,
+   `loan_ledger` rows whose id is *not* in the run's `preexisting_id` set.
+   **Both the feed and pin deletes exclude `auction_id` rows** — auction
+   activity settles on its own pg_cron clock, is week-stamped only so
+   accounting/feed group it under the right week, and reverses exclusively
+   via `reverse_settled_auction`; see
+   [economy/SILENT_AUCTIONS_DB.md](economy/SILENT_AUCTIONS_DB.md) §5.
 2. **Restore what settlement updated** — `bet_markets`, `bet_selections`,
    `bets`, `bet_legs`, `pvp_challenges`, `pvp_challenge_offers`, `loans` from
    the `preimage_row` payloads.

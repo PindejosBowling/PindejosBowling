@@ -3473,6 +3473,7 @@ DECLARE
   v_auction   public.auctions;
   v_item_name text;
   v_item_icon text;
+  v_week      uuid;
 BEGIN
   UPDATE public.auctions
      SET status = 'open'
@@ -3485,9 +3486,14 @@ BEGIN
   SELECT c.name, c.icon INTO v_item_name, v_item_icon
     FROM public.item_catalog c WHERE c.id = v_auction.catalog_item_id;
 
+  -- The week this opening occurred in (the season's open week right now).
+  SELECT id INTO v_week
+    FROM public.weeks WHERE season_id = v_auction.season_id AND is_archived = false
+    ORDER BY week_number DESC LIMIT 1;
+
   PERFORM public.publish_activity_event(
     'auction_house', 'auction_opened',
-    v_auction.season_id, NULL, NULL, NULL, NULL,
+    v_auction.season_id, v_week, NULL, NULL, NULL,
     NULL, NULL,
     'auction_house.opened',
     jsonb_build_object('item_name', v_item_name, 'item_icon', v_item_icon,
@@ -4694,7 +4700,8 @@ BEGIN
     FROM public.item_catalog WHERE id = v_auction.catalog_item_id;
 
   -- Week stamp: the season's open week at settlement time (accounting
-  -- accuracy; the archive engine is auction-exempt — see M3's unarchive edit).
+  -- accuracy; the archive engine is auction-exempt). Shared by the ledger
+  -- pairs AND the feed events below.
   SELECT id INTO v_week
     FROM public.weeks WHERE season_id = v_auction.season_id AND is_archived = false
     ORDER BY week_number DESC LIMIT 1;
@@ -4736,7 +4743,7 @@ BEGIN
 
       PERFORM public.publish_activity_event(
         'auction_house', 'auction_won',
-        v_auction.season_id, NULL, v_bid.player_id, NULL, NULL,
+        v_auction.season_id, v_week, v_bid.player_id, NULL, NULL,
         NULL, NULL,
         'auction_house.won',
         jsonb_build_object('item_name', v_item_name, 'item_icon', v_item_icon,
@@ -4762,7 +4769,7 @@ BEGIN
 
       PERFORM public.publish_activity_event(
         'auction_house', 'auction_check_bounce',
-        v_auction.season_id, NULL, v_bid.player_id, NULL, NULL,
+        v_auction.season_id, v_week, v_bid.player_id, NULL, NULL,
         NULL, NULL,
         'auction_house.check_bounce',
         jsonb_build_object('item_name', v_item_name, 'item_icon', v_item_icon,
@@ -4782,12 +4789,9 @@ BEGIN
    WHERE auction_id = p_auction_id AND status <> 'won';
 
   IF NOT v_won THEN
-    -- No-sale. Payload carries the counts (the rows are gone) — the app
-    -- template special-cases bounce_count = bidder_count > 0 with the
-    -- "every single pledge bounced" copy.
     PERFORM public.publish_activity_event(
       'auction_house', 'auction_no_sale',
-      v_auction.season_id, NULL, NULL, NULL, NULL,
+      v_auction.season_id, v_week, NULL, NULL, NULL,
       NULL, NULL,
       'auction_house.no_sale',
       jsonb_build_object('item_name', v_item_name, 'item_icon', v_item_icon,
@@ -6530,15 +6534,17 @@ BEGIN
   -- 3a. Delete the rows settlement INSERTed (everything matching the predicate
   --     whose id is NOT in the captured pre-existing set).
   -- --------------------------------------------------------------------------
+  -- Auction exemption (both deletes): auction activity settles on its own
+  -- clock and is reversed only by reverse_settled_auction — the archive
+  -- engine never touches it.
   DELETE FROM public.activity_feed_events a
    WHERE a.week_id = p_week_id
+     AND a.auction_id IS NULL
      AND a.id NOT IN (
        SELECT pk FROM public.week_archive_snapshot
         WHERE run_id = v_run_id AND kind = 'preexisting_id' AND table_name = 'activity_feed_events'
      );
 
-  -- Auction exemption: auction money settles on its own clock and is reversed
-  -- only by reverse_settled_auction — the archive engine never touches it.
   DELETE FROM public.pin_ledger pl
    WHERE (pl.week_id = p_week_id
           OR pl.bet_id IN (SELECT b.id FROM public.bets b WHERE b.week_id = p_week_id))
