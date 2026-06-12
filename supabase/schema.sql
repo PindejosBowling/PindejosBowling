@@ -6,6 +6,17 @@
 -- TABLES
 -- =====================================================
 
+CREATE TABLE activity_event_catalog (
+  event_type text NOT NULL,
+  source_feature text NOT NULL,
+  template_key text NOT NULL,
+  requires_actor boolean NOT NULL,
+  allowed_fk text NOT NULL,
+  default_visibility text NOT NULL,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now()
+);
+
 CREATE TABLE activity_feed_events (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   season_id uuid NOT NULL,
@@ -501,11 +512,15 @@ CREATE TABLE weeks (
 -- CONSTRAINTS
 -- =====================================================
 
+ALTER TABLE activity_event_catalog ADD CONSTRAINT activity_event_catalog_allowed_fk_check CHECK ((allowed_fk = ANY (ARRAY['sportsbook_bet_id'::text, 'loan_id'::text, 'pvp_challenge_id'::text, 'bounty_post_id'::text, 'none'::text])));
+
+ALTER TABLE activity_event_catalog ADD CONSTRAINT activity_event_catalog_pkey PRIMARY KEY (event_type);
+
 ALTER TABLE activity_feed_events ADD CONSTRAINT activity_feed_events_actor_player_id_fkey FOREIGN KEY (actor_player_id) REFERENCES players(id) ON DELETE SET NULL;
 
 ALTER TABLE activity_feed_events ADD CONSTRAINT activity_feed_events_bounty_post_id_fkey FOREIGN KEY (bounty_post_id) REFERENCES bounty_post(id) ON DELETE CASCADE;
 
-ALTER TABLE activity_feed_events ADD CONSTRAINT activity_feed_events_event_type_check CHECK ((event_type = ANY (ARRAY['sportsbook_bet_placed'::text, 'sportsbook_parlay_placed'::text, 'sportsbook_big_ticket_placed'::text, 'sportsbook_big_win'::text, 'sportsbook_parlay_hit'::text, 'sportsbook_weekly_house_result'::text, 'loan_shark_loan_taken'::text, 'loan_shark_loan_repaid'::text, 'loan_shark_special_offer'::text, 'pvp_challenge_accepted'::text, 'pvp_challenge_settled'::text, 'bounty_board_bounty_posted'::text, 'bounty_board_hunter_joined'::text, 'bounty_board_bounty_closed'::text, 'bounty_board_sponsor_won'::text, 'bounty_board_hunters_won'::text])));
+ALTER TABLE activity_feed_events ADD CONSTRAINT activity_feed_events_event_type_fkey FOREIGN KEY (event_type) REFERENCES activity_event_catalog(event_type);
 
 ALTER TABLE activity_feed_events ADD CONSTRAINT activity_feed_events_loan_id_fkey FOREIGN KEY (loan_id) REFERENCES loans(id) ON DELETE CASCADE;
 
@@ -1120,6 +1135,15 @@ CREATE INDEX week_archive_snapshot_run_idx ON public.week_archive_snapshot USING
 -- =====================================================
 -- ROW LEVEL SECURITY
 -- =====================================================
+
+ALTER TABLE activity_event_catalog ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "admin can write" ON activity_event_catalog AS PERMISSIVE FOR ALL TO authenticated
+  USING (( SELECT is_admin() AS is_admin))
+  WITH CHECK (( SELECT is_admin() AS is_admin));
+
+CREATE POLICY "authenticated can read" ON activity_event_catalog AS PERMISSIVE FOR SELECT TO authenticated
+  USING (true);
 
 ALTER TABLE activity_feed_events ENABLE ROW LEVEL SECURITY;
 
@@ -3654,110 +3678,51 @@ CREATE OR REPLACE FUNCTION public.publish_activity_event(p_source_feature text, 
  SET search_path TO ''
 AS $function$
 DECLARE
-  v_def_visibility text;
-  v_requires_actor boolean;
-  v_allowed_fk     text;   -- 'sportsbook_bet_id' | 'loan_id' | 'pvp_challenge_id' | 'bounty_post_id' | 'none'
-  v_template       text;
-  v_visibility     text;
-  v_id             uuid;
+  v_cat        public.activity_event_catalog;
+  v_n_fks      integer;
+  v_provided   text;
+  v_visibility text;
+  v_id         uuid;
 BEGIN
   -- 1. Validate source_feature.
   IF p_source_feature NOT IN ('sportsbook','loan_shark','pvp','bounty_board','system','admin') THEN
     RAISE EXCEPTION 'Unknown source_feature: %', p_source_feature;
   END IF;
 
-  -- 2. Event catalog lookup. RAISE on unknown event_type. (Importance is no longer
-  --    set here — it is derived in the app from event_type.)
-  CASE p_event_type
-    WHEN 'sportsbook_bet_placed' THEN
-      v_def_visibility := 'public'; v_requires_actor := true;
-      v_allowed_fk := 'sportsbook_bet_id'; v_template := 'sportsbook.bet_placed';
-    WHEN 'sportsbook_parlay_placed' THEN
-      v_def_visibility := 'public'; v_requires_actor := true;
-      v_allowed_fk := 'sportsbook_bet_id'; v_template := 'sportsbook.parlay_placed';
-    WHEN 'sportsbook_big_ticket_placed' THEN
-      v_def_visibility := 'public'; v_requires_actor := true;
-      v_allowed_fk := 'sportsbook_bet_id'; v_template := 'sportsbook.big_ticket_placed';
-    WHEN 'sportsbook_big_win' THEN
-      v_def_visibility := 'public'; v_requires_actor := true;
-      v_allowed_fk := 'sportsbook_bet_id'; v_template := 'sportsbook.big_win';
-    WHEN 'sportsbook_parlay_hit' THEN
-      v_def_visibility := 'public'; v_requires_actor := true;
-      v_allowed_fk := 'sportsbook_bet_id'; v_template := 'sportsbook.parlay_hit';
-    WHEN 'sportsbook_weekly_house_result' THEN
-      v_def_visibility := 'public'; v_requires_actor := false;
-      v_allowed_fk := 'none';              v_template := 'sportsbook.weekly_house_result';
-    WHEN 'loan_shark_loan_taken' THEN
-      v_def_visibility := 'public'; v_requires_actor := true;
-      v_allowed_fk := 'loan_id';           v_template := 'loan_shark.loan_taken';
-    WHEN 'loan_shark_loan_repaid' THEN
-      v_def_visibility := 'public'; v_requires_actor := true;
-      v_allowed_fk := 'loan_id';           v_template := 'loan_shark.loan_repaid';
-    WHEN 'loan_shark_special_offer' THEN
-      v_def_visibility := 'public'; v_requires_actor := false;
-      v_allowed_fk := 'none';              v_template := 'loan_shark.special_offer';
-    WHEN 'pvp_challenge_accepted' THEN
-      v_def_visibility := 'public'; v_requires_actor := true;
-      v_allowed_fk := 'pvp_challenge_id';  v_template := 'pvp.challenge_accepted';
-    WHEN 'pvp_challenge_settled' THEN
-      v_def_visibility := 'public'; v_requires_actor := true;
-      v_allowed_fk := 'pvp_challenge_id';  v_template := 'pvp.challenge_settled';
-    WHEN 'bounty_board_bounty_posted' THEN
-      v_def_visibility := 'public'; v_requires_actor := false;
-      v_allowed_fk := 'bounty_post_id';    v_template := 'bounty_board.bounty_posted';
-    WHEN 'bounty_board_hunter_joined' THEN
-      v_def_visibility := 'public'; v_requires_actor := true;
-      v_allowed_fk := 'bounty_post_id';    v_template := 'bounty_board.hunter_joined';
-    WHEN 'bounty_board_bounty_closed' THEN
-      v_def_visibility := 'public'; v_requires_actor := false;
-      v_allowed_fk := 'bounty_post_id';    v_template := 'bounty_board.bounty_closed';
-    WHEN 'bounty_board_sponsor_won' THEN
-      v_def_visibility := 'public'; v_requires_actor := false;
-      v_allowed_fk := 'bounty_post_id';    v_template := 'bounty_board.sponsor_won';
-    WHEN 'bounty_board_hunters_won' THEN
-      v_def_visibility := 'public'; v_requires_actor := false;
-      v_allowed_fk := 'bounty_post_id';    v_template := 'bounty_board.hunters_won';
-    ELSE
-      RAISE EXCEPTION 'Unknown event_type: %', p_event_type;
-  END CASE;
+  -- 2. Catalog lookup. RAISE on unknown event_type.
+  SELECT * INTO v_cat FROM public.activity_event_catalog WHERE event_type = p_event_type;
+  IF v_cat.event_type IS NULL THEN
+    RAISE EXCEPTION 'Unknown event_type: %', p_event_type;
+  END IF;
 
-  -- 3. Source-FK ↔ feature consistency. The catalog's allowed_source_fk must match
-  --    exactly which FK arg is non-NULL (all others must be NULL).
-  IF v_allowed_fk = 'sportsbook_bet_id' THEN
-    IF p_sportsbook_bet_id IS NULL OR p_loan_id IS NOT NULL OR p_pvp_challenge_id IS NOT NULL OR p_bounty_post_id IS NOT NULL THEN
-      RAISE EXCEPTION 'Event % requires sportsbook_bet_id only', p_event_type;
-    END IF;
-  ELSIF v_allowed_fk = 'loan_id' THEN
-    IF p_loan_id IS NULL OR p_sportsbook_bet_id IS NOT NULL OR p_pvp_challenge_id IS NOT NULL OR p_bounty_post_id IS NOT NULL THEN
-      RAISE EXCEPTION 'Event % requires loan_id only', p_event_type;
-    END IF;
-  ELSIF v_allowed_fk = 'pvp_challenge_id' THEN
-    IF p_pvp_challenge_id IS NULL OR p_sportsbook_bet_id IS NOT NULL OR p_loan_id IS NOT NULL OR p_bounty_post_id IS NOT NULL THEN
-      RAISE EXCEPTION 'Event % requires pvp_challenge_id only', p_event_type;
-    END IF;
-  ELSIF v_allowed_fk = 'bounty_post_id' THEN
-    IF p_bounty_post_id IS NULL OR p_sportsbook_bet_id IS NOT NULL OR p_loan_id IS NOT NULL OR p_pvp_challenge_id IS NOT NULL THEN
-      RAISE EXCEPTION 'Event % requires bounty_post_id only', p_event_type;
-    END IF;
-  ELSE  -- 'none' → no source FK permitted
-    IF p_sportsbook_bet_id IS NOT NULL OR p_loan_id IS NOT NULL OR p_pvp_challenge_id IS NOT NULL OR p_bounty_post_id IS NOT NULL THEN
-      RAISE EXCEPTION 'Event % must not carry a source FK', p_event_type;
-    END IF;
+  -- 3. Source-FK ↔ feature consistency: exactly the catalog's allowed FK is
+  --    set (all others NULL); 'none' means no FK at all.
+  v_n_fks := (p_sportsbook_bet_id IS NOT NULL)::int + (p_loan_id IS NOT NULL)::int
+           + (p_pvp_challenge_id IS NOT NULL)::int + (p_bounty_post_id IS NOT NULL)::int;
+  v_provided := CASE
+    WHEN p_sportsbook_bet_id IS NOT NULL THEN 'sportsbook_bet_id'
+    WHEN p_loan_id           IS NOT NULL THEN 'loan_id'
+    WHEN p_pvp_challenge_id  IS NOT NULL THEN 'pvp_challenge_id'
+    WHEN p_bounty_post_id    IS NOT NULL THEN 'bounty_post_id'
+    ELSE 'none' END;
+  IF v_n_fks > 1 OR v_provided <> v_cat.allowed_fk THEN
+    RAISE EXCEPTION 'Event % requires source FK % only (got %, % set)',
+      p_event_type, v_cat.allowed_fk, v_provided, v_n_fks;
   END IF;
 
   -- 4. Actor requirement.
-  IF v_requires_actor AND p_actor_player_id IS NULL THEN
+  IF v_cat.requires_actor AND p_actor_player_id IS NULL THEN
     RAISE EXCEPTION 'Event % requires an actor_player_id', p_event_type;
   END IF;
 
   -- 5. template_key must match the catalog (keeps copy controlled).
-  IF p_template_key IS DISTINCT FROM v_template THEN
+  IF p_template_key IS DISTINCT FROM v_cat.template_key THEN
     RAISE EXCEPTION 'template_key % does not match catalog template % for event %',
-      p_template_key, v_template, p_event_type;
+      p_template_key, v_cat.template_key, p_event_type;
   END IF;
 
   -- 6. Apply catalog default visibility.
-  v_visibility := COALESCE(p_visibility, v_def_visibility);
+  v_visibility := COALESCE(p_visibility, v_cat.default_visibility);
 
   -- 7. Insert (idempotent via the partial unique dedup indexes).
   INSERT INTO public.activity_feed_events (
@@ -3771,7 +3736,7 @@ BEGIN
     p_actor_player_id, p_subject_player_id, p_secondary_player_id,
     p_sportsbook_bet_id, p_loan_id, p_pvp_challenge_id, p_bounty_post_id,
     v_visibility, 'published',
-    v_template, COALESCE(p_public_payload, '{}'::jsonb), COALESCE(p_admin_payload, '{}'::jsonb),
+    v_cat.template_key, COALESCE(p_public_payload, '{}'::jsonb), COALESCE(p_admin_payload, '{}'::jsonb),
     COALESCE(p_occurred_at, now())
   )
   ON CONFLICT DO NOTHING
@@ -5926,6 +5891,8 @@ $function$
 -- =====================================================
 -- TRIGGERS
 -- =====================================================
+
+CREATE TRIGGER set_updated_at BEFORE UPDATE ON public.activity_event_catalog FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
 CREATE TRIGGER set_updated_at BEFORE UPDATE ON public.activity_feed_events FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 

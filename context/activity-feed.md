@@ -65,8 +65,9 @@ and PvP):
   (at most one source FK), partial-unique dedup indexes per `(<source_fk>, event_type)`,
   and **tightened RLS** (anon/authenticated read only `published`+`public`; a separate
   admin-read-all policy; admin-only direct writes).
-- `publish_activity_event(...)` — validates feature, event_type (against the in-function
-  **catalog** `CASE` block), source-FK↔feature consistency, actor requirement, and
+- `publish_activity_event(...)` — validates feature, event_type (by looking up the
+  **`activity_event_catalog`** row; originally an in-function `CASE` block, replaced by
+  the catalog table in `20260612183555`), source-FK↔feature consistency, actor requirement, and
   `template_key`; applies the catalog default for **visibility** (importance is **not** a
   DB concept — see the note under the catalog table); inserts with
   `ON CONFLICT DO NOTHING` (idempotent — a re-run RPC never double-posts). The PvP
@@ -97,9 +98,14 @@ and PvP):
 ## The event catalog (currently live events)
 
 The catalog is the contract between the publisher and the renderer. It is encoded **twice
-on purpose** and the two must agree: the authoritative copy is the `CASE` block in
-`publish_activity_event` (server validation: defaults, required actor, allowed source FK),
-mirrored by the `switch (row.templateKey)` in `renderFeedEvent` (client copy).
+on purpose** and the two must agree: the authoritative copy is the
+**`activity_event_catalog` table** (one row per event type: `template_key`,
+`requires_actor`, `allowed_fk`, `default_visibility`; since
+`20260612183555_activity_event_catalog` — `publish_activity_event` looks the row up and
+the old per-event `CASE` block and `event_type` CHECK are gone, replaced by an FK into
+the catalog), mirrored by the `switch (row.templateKey)` in `renderFeedEvent` (client
+copy). The catalog table is authenticated-read / admin-write; `source_feature` on it is
+informational (the publisher's own source list remains the validation).
 
 | `event_type` | `template_key` | importance | source FK | publisher | `public_payload` |
 |---|---|---|---|---|---|
@@ -144,13 +150,14 @@ mirrored by the `switch (row.templateKey)` in `renderFeedEvent` (client copy).
 Use this when the source feature already has a source-FK column on `activity_feed_events`
 (e.g. another sportsbook or loan event). **No table change is required.**
 
-1. **DB — register it in the catalog.** Add a `WHEN '<event_type>'` branch to the `CASE`
-   block in `publish_activity_event` (new migration that `CREATE OR REPLACE`s the helper),
-   setting `default_visibility`, `requires_actor`, `allowed_source_fk`, and the canonical
-   `template_key`. Also add the new `event_type` (and `template_key` if you constrain it) to
-   the table's `CHECK` constraint via the same or a prior migration. **Importance is set in
-   the app, not here** — if the event should surface under Highlights, add it to
-   `EVENT_IMPORTANCE` in [activityFeedTemplates.ts](../app/src/utils/activityFeedTemplates.ts).
+1. **DB — register it in the catalog.** One migration, one statement: `INSERT INTO
+   public.activity_event_catalog (event_type, source_feature, template_key,
+   requires_actor, allowed_fk, default_visibility) VALUES (…)`. **No function or
+   constraint edit** — `publish_activity_event` reads the catalog and the table's
+   `event_type` FK accepts the new row automatically (since
+   `20260612183555_activity_event_catalog`). **Importance is set in the app, not here**
+   — if the event should surface under Highlights, add it to `EVENT_IMPORTANCE` in
+   [activityFeedTemplates.ts](../app/src/utils/activityFeedTemplates.ts).
 2. **DB — publish it.** In the source RPC, after the pin/ledger writes and inside the same
    transaction, `PERFORM public.publish_activity_event('<feature>', '<event_type>', …)`.
    Pass the concrete source FK; build a **league-safe** `public_payload` (snapshot the
@@ -184,11 +191,12 @@ PvP migration (`20260607180200_activity_feed_pvp.sql`) is the worked, copyable e
    ```
    Extend `activity_feed_one_source_check` by one `+ (<feature>_<source>_id IS NOT NULL)::int`
    term (drop + re-add the constraint). Add the new `source_feature` value to that column's
-   `CHECK`, and the new `event_type` value(s) to the `event_type` `CHECK`.
-2. **DB — extend the catalog + helper.** Add the new `event_type` `WHEN` branches to the
-   `publish_activity_event` `CASE` block, and add a branch for the new `allowed_source_fk`
-   value in the source-FK↔feature consistency block (a hardcoded `IF/ELSIF` over the known
-   FKs). **The helper signature must gain the new FK parameter.** Postgres can't
+   `CHECK`. (No `event_type` CHECK to edit — it is an FK into `activity_event_catalog`.)
+2. **DB — extend the catalog + helper.** `INSERT` the new event type row(s) into
+   `activity_event_catalog`, extend the `allowed_fk` CHECK on the catalog with the new
+   FK name, and in `publish_activity_event` add the new FK to the `v_n_fks` /
+   `v_provided` computation (step 3 of the function). **The helper signature must gain
+   the new FK parameter.** Postgres can't
    `CREATE OR REPLACE` with a changed argument list, so follow the PvP pattern exactly:
    `DROP FUNCTION public.publish_activity_event(<old full arg-type list>);` then
    `CREATE FUNCTION …` with the new FK **appended as a trailing parameter with a default**
@@ -213,7 +221,7 @@ PvP migration (`20260607180200_activity_feed_pvp.sql`) is the worked, copyable e
 6. **Verify** as in Recipe A, plus confirm the one-source CHECK still rejects two FKs and
    cancelling the new source row cascade-deletes its feed row.
 
-> **Golden rule:** the catalog (`CASE` in `publish_activity_event`) and the renderer
+> **Golden rule:** the catalog (the `activity_event_catalog` table) and the renderer
 > (`switch` in `activityFeedTemplates.ts`) are two halves of one contract — change them
 > together, and keep the `event_type` → `template_key` mapping identical on both sides.
 

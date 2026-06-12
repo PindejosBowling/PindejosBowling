@@ -3,7 +3,9 @@
 > Handoff snapshot as of **2026-06-12 (end of session 2)**, branch **`db-changes`**,
 > worktree `.claude/worktrees/db-changes`. Read this first; detailed plans live in
 > the four `TODO_DB_*.md` docs (each section carries its own ✅ status block).
-> **⛔ One migration is WRITTEN BUT NOT PUSHED — see "In flight" below.**
+> **Session 3 (2026-06-12): the §5 migration was pushed and verified — nothing
+> is in flight anymore.** All four TODO docs are complete (modulo
+> deferred-by-design items).
 
 ## Where this came from
 
@@ -13,7 +15,7 @@ consolidation RPC rewrites → everything else. That sequence is now ~95% execut
 
 | Doc | Status |
 |---|---|
-| [TODO_DB_CONSOLIDATION.md](TODO_DB_CONSOLIDATION.md) | §1 ✅ §2 ✅ §3 ✅ §4 ✅ · **§5 in flight (migration written, NOT pushed)** · §6 deferred by design |
+| [TODO_DB_CONSOLIDATION.md](TODO_DB_CONSOLIDATION.md) | §1 ✅ §2 ✅ §3 ✅ §4 ✅ §5 ✅ (pushed 2026-06-12, session 3) · §6 deferred by design |
 | [TODO_DB_FUNCTION_HYGIENE.md](TODO_DB_FUNCTION_HYGIENE.md) | §1 ✅ §2 ✅ §3 ✅(docs) §4 ✅ §5 ✅(option a) §6 ✅(docs; optional drift guard not built) — **complete** |
 | [TODO_DB_PERFORMANCE.md](TODO_DB_PERFORMANCE.md) | §1 ✅ §2 ✅ §3 ✅ §4 ✅ · §5 deferred by design (measure-first; §1 likely mooted it) |
 | [TODO_DB_SECURITY.md](TODO_DB_SECURITY.md) | §1 ✅ §2 ✅ §3 ✅ §4 ✅ — **complete** |
@@ -92,25 +94,20 @@ On `db-changes`, verified but NOT yet merged to main:
   indexes), three FK indexes. Kept idx_bets_status/idx_bet_markets_status/
   idx_pin_ledger_house/idx_pin_ledger_season on idx_scan evidence.
 
-## ⛔ In flight — NOT pushed
+## ✅ Formerly in flight — pushed 2026-06-12 (session 3)
 
-**`supabase/migrations/20260612183555_activity_event_catalog.sql`**
-(CONSOLIDATION §5) is **written, reviewed by the user, but NOT pushed** — the
-user stopped the session at the push-approval gate. It: creates
-`activity_event_catalog` (16 seeded rows, RLS authenticated-read/admin-write,
-audit columns), swaps the `event_type` CHECK for an FK, and rewrites
-`publish_activity_event` (catalog lookup replaces the CASE; FK-exclusivity is
-one comparison; failure-path error text consolidated — success paths verbatim).
-
-**Next agent:** re-confirm with the user, push it, then: probe suite → snapshot
-ritual → types regen (new table) → tsc → update
-[context/activity-feed.md](context/activity-feed.md) recipe ("add a new event
-type" = 1 catalog INSERT + app template, no function/constraint edit) → mark
-TODO_DB_CONSOLIDATION §5 done → commit.
+**`20260612183555_activity_event_catalog.sql`** (CONSOLIDATION §5) was pushed
+with user approval after pre-push probes passed. Full ritual completed:
+post-push probes ✅, snapshot + anon posture ✅, types regen (new table) ✅,
+`tsc` ✅, activity-feed.md recipe rewritten (add an event = 1 catalog INSERT +
+app template). **Push-time finding:** the `enforce_audit_columns` event trigger
+auto-attaches `set_updated_at` to every new public table — an explicit
+`CREATE TRIGGER set_updated_at` in a migration collides (42710). The statement
+was removed from the migration; future CREATE TABLE migrations must omit it.
 
 ## Remaining backlog (in suggested order)
 
-1. **Push the in-flight §5 migration** (above).
+1. ~~**Push the in-flight §5 migration**~~ ✅ done 2026-06-12 (session 3).
 2. ~~**Docs-only items**~~ ✅ done 2026-06-12 (session 3): HYGIENE §3 reversal
    rule in PIN_ECONOMY_SCHEMA §4 + archive-doc pointer; HYGIENE §6 mirror note
    in PvP_DB.md (optional drift guard deliberately not built).

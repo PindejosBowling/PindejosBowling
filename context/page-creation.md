@@ -45,6 +45,15 @@ SUPABASE_ACCESS_TOKEN=<token> \
 
 Load `SUPABASE_ACCESS_TOKEN` from `app/.env.local`. Project ref: `lyihsvxraurjghjqxaau`.
 
+### New tables: audit columns are enforced, the trigger is automatic
+
+The `enforce_audit_columns` event trigger fires on every `CREATE TABLE` in
+`public`: it **rejects** tables missing `created_at`/`updated_at`, and it
+**auto-attaches** the `set_updated_at` trigger. So every new table needs the
+two audit columns, and the migration must **NOT** contain an explicit
+`CREATE TRIGGER set_updated_at …` — that collides with the auto-attached one
+and fails the push with `42710 trigger already exists`.
+
 ### Backfilling and generated columns
 
 When splitting or transforming an existing column, use a migration that:

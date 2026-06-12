@@ -19,8 +19,9 @@ CREATE TABLE public.activity_event_catalog (
   updated_at         timestamptz NOT NULL DEFAULT now()
 );
 
-CREATE TRIGGER set_updated_at BEFORE UPDATE ON public.activity_event_catalog
-  FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
+-- No explicit set_updated_at trigger: the enforce_audit_columns event trigger
+-- auto-attaches it to every new public table at CREATE TABLE time (an explicit
+-- CREATE TRIGGER here collides with it — 42710).
 
 ALTER TABLE public.activity_event_catalog ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "authenticated can read" ON public.activity_event_catalog

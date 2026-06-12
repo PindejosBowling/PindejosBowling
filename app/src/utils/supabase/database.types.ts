@@ -14,6 +14,39 @@ export type Database = {
   }
   public: {
     Tables: {
+      activity_event_catalog: {
+        Row: {
+          allowed_fk: string
+          created_at: string
+          default_visibility: string
+          event_type: string
+          requires_actor: boolean
+          source_feature: string
+          template_key: string
+          updated_at: string
+        }
+        Insert: {
+          allowed_fk: string
+          created_at?: string
+          default_visibility: string
+          event_type: string
+          requires_actor: boolean
+          source_feature: string
+          template_key: string
+          updated_at?: string
+        }
+        Update: {
+          allowed_fk?: string
+          created_at?: string
+          default_visibility?: string
+          event_type?: string
+          requires_actor?: boolean
+          source_feature?: string
+          template_key?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       activity_feed_events: {
         Row: {
           actor_player_id: string | null
@@ -107,6 +140,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "bounty_post"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "activity_feed_events_event_type_fkey"
+            columns: ["event_type"]
+            isOneToOne: false
+            referencedRelation: "activity_event_catalog"
+            referencedColumns: ["event_type"]
           },
           {
             foreignKeyName: "activity_feed_events_loan_id_fkey"
