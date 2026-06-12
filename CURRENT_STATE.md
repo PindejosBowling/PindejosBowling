@@ -52,9 +52,12 @@ whose branch was never committed/merged. It opened `lanetalk_game_imports`
 SELECT from admin-only to all `authenticated`. Resolution: reconstructed the file
 from live `pg_policy` state ([the file](supabase/migrations/20260612000000_lanetalk_imports_authenticated_read.sql)
 is commented as reconstructed) so local/remote migration history match. The
-schema snapshot had been stale for the same reason. **Open follow-ups:** find
-the worktree that pushed it (it may hold orphaned app-side changes), and make
-sure worktree workers commit migration files before pushing them.
+schema snapshot had been stale for the same reason.
+**Resolved 2026-06-12:** the "orphaned" worktree branch was merged to main as
+`005f363` (LaneTalk import admin screen + the original migration file); the
+reconstruction was superseded by the authored file when main was merged back
+into `db-changes` (PR #39). Remaining lesson: worktree workers must commit
+migration files before pushing them.
 
 ## Working tree (uncommitted, branch `db-changes`)
 
