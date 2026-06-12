@@ -6,11 +6,9 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { colors, fonts, radius } from '../theme'
 import ScreenHeader from '../components/ui/ScreenHeader'
 import LoadingView from '../components/ui/LoadingView'
-import Button from '../components/ui/Button'
 import AuctionCard from '../components/auction/AuctionCard'
 import MyItemRow from '../components/auction/MyItemRow'
 import ItemInfoSheet from '../components/auction/ItemInfoSheet'
-import AuctionCreateModal from '../components/auction/AuctionCreateModal'
 import { useAuctionHouseData } from '../hooks/useAuctionHouseData'
 import { useRefresh } from '../hooks/useRefresh'
 import { useAuthStore } from '../stores/authStore'
@@ -22,12 +20,12 @@ type Nav = NativeStackNavigationProp<PinsinoStackParamList>
 export default function AuctionHouseScreen() {
   const navigation = useNavigation<Nav>()
   const playerId = useAuthStore(s => s.playerId)
-  const isAdmin = useAuthStore(s => s.role) === 'admin'
 
+  // Admin controls live on AuctionHouseAdmin (Pinsino Admin → Auction House) —
+  // this screen is purely the player-facing floor.
   const { loading, balance, auctions, myItems, reload } = useAuctionHouseData(playerId)
   const { refreshing, onRefresh } = useRefresh(reload)
 
-  const [createOpen, setCreateOpen] = useState(false)
   const [infoGroup, setInfoGroup] = useState<InventoryGroupView | null>(null)
 
   // Refresh on return (e.g. after bidding on detail). Silent after first load.
@@ -66,10 +64,6 @@ export default function AuctionHouseScreen() {
           <Text style={styles.balancePillValue}>{balance.toLocaleString()} pins</Text>
         </View>
 
-        {isAdmin && (
-          <Button label="+ Create Auction" variant="outline" onPress={() => setCreateOpen(true)} style={styles.createBtn} />
-        )}
-
         {noAuctions ? (
           <View style={styles.emptyCard}>
             <Text style={styles.emptyText}>Nothing on the block — check back when the House lists something worth fighting over.</Text>
@@ -93,9 +87,6 @@ export default function AuctionHouseScreen() {
         {auctionSection('RECENTLY SETTLED', sections.settled)}
       </ScrollView>
 
-      {createOpen && (
-        <AuctionCreateModal onClose={() => setCreateOpen(false)} onDone={reload} />
-      )}
       {infoGroup && (
         <ItemInfoSheet group={infoGroup} onClose={() => setInfoGroup(null)} />
       )}
@@ -122,8 +113,6 @@ const styles = StyleSheet.create({
   },
   balancePillLabel: { fontFamily: fonts.barlowCondensed, fontSize: 12, letterSpacing: 1.5, color: colors.muted },
   balancePillValue: { fontFamily: fonts.barlowCondensedHeavy, fontSize: 20, color: colors.accent },
-
-  createBtn: { marginBottom: 14 },
 
   sectionLabel: {
     fontFamily: fonts.barlowCondensed,

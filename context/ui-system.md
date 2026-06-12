@@ -94,7 +94,8 @@ Central signed-URL cache for player profile pictures. `load()` fetches `players.
 | `ProfilePictures` | ProfilePicturesScreen — admin uploads/deletes player profile photos on behalf of any player (admin only) |
 | `PastGames` | PastGamesScreen — browse historical week rosters and scores by season |
 | `Registration` | RegistrationScreen — per-season sign-ups; admins open/close registration, manage the roster, and delete an open season |
-| `PinsinoAdmin` | PinsinoAdminScreen — **admin-only** hub: tile menu with Accounting, Sportsbook, and Loan Shark subpages |
+| `PinsinoAdmin` | PinsinoAdminScreen — **admin-only** hub: tile menu with Accounting, Market Moves, Sportsbook, PvP, Bounties, Loan Shark, and Auction House subpages |
+| `AuctionHouseAdmin` | AuctionHouseAdminScreen — **admin-only** Auction House administration: auction create/manage, item-catalog curation, item grants (player screens carry no admin controls) |
 | `PinsinoAccounting` | PinsinoAccountingScreen — **admin-only** house ledger: House Balance collapsible statement card + Activity / Weekly P&L toggle |
 | `AdminSportsbook` | AdminSportsbookScreen — **admin-only** Active Bets / Settled Bets toggle; admin settle (`SettleBetModal`) and cancel (`cancel_bet`) actions |
 | `LoanSharkAdmin` | LoanSharkAdminScreen — **admin-only** list of active loans (player, product, outstanding); cancel (✕) → confirm → `loans.cancel` + reload |
@@ -105,7 +106,7 @@ Central signed-URL cache for player profile pictures. `load()` fetches `players.
 
 **SportsbookScreen** (`Pinsino` stack) — public betting: **Place Bets** (open markets as collapsible board — see [Betting Line Board](betting-line-board.md)), **Active Bets** (read-only `ActiveBetsView`), **Settled Bets** (read-only `SettledBetsView`) toggled via `ToggleGroup`. Single and parlay placement, sticky parlay slip, `BetDetailModal`. `<Toast />` inside each `<Modal>`.
 
-**PinsinoAdminScreen** (hub) — pure tile menu: **Accounting** 📒 → `PinsinoAccounting`, **Sportsbook** 🏟️ → `AdminSportsbook`, **Loan Shark** 🦈 → `LoanSharkAdmin`. No content of its own beyond the admin gate.
+**PinsinoAdminScreen** (hub) — pure tile menu: **Accounting** 📒 → `PinsinoAccounting`, **Market Moves** 👀 → `MarketMovesAdmin`, **Sportsbook** 🏟️ → `AdminSportsbook`, **PvP** ⚔️ → `PvPAdmin`, **Bounties** 🎯 → `BountyAdmin`, **Loan Shark** 🦈 → `LoanSharkAdmin`, **Auction House** 🔨 → `AuctionHouseAdmin`. No content of its own beyond the admin gate.
 
 **PinsinoAccountingScreen** (`More` stack, admin-only) — house financials: collapsible **House Balance** statement card (stats: W-L-P record, hold%, exposure, biggest payout/take; ledger flows: stakes taken, payouts, refunds, bonuses; `signed()` helper for ± display) + season subtitle (`SEASON N · THE HOUSE`) + **Activity / Weekly P&L** toggle. Activity groups house ledger rows by week via `LedgerRow`; P&L lists per-week house net. Uses `useHousePinsinoData()`.
 
