@@ -45,7 +45,7 @@ Every reusable component in [app/src/components/](../app/src/components/), group
 
 ## Pixel-art backdrops (`components/pixelart/`, react-native-svg)
 
-Ambient retro pixel-art scenes behind the Pinsino landing screens — decorative only, never interactive. Colors come from theme tokens plus the dedicated `colors.pixelArt` tint group (theme.ts); scenes are sprite-composed in `scenes.ts`, not hand-drawn ASCII blocks.
+Ambient retro pixel-art scenes behind the Pinsino landing screens — decorative only, never interactive. Colors come from theme tokens plus the dedicated `colors.pixelArt` tint group (theme.ts); scenes are sprite-composed in `scenes.ts`, not hand-drawn ASCII blocks. **`config.ts` is the central standard** — cell size (`FIELD_PIXEL`), the opacity ladder (`BACKDROP_OPACITY`), anchor insets, and the mounting rule that art extends to the very top of the screen: fixed scenes/viewport fields mount as the first child inside the SafeAreaView; scroll-length fields mount inside the ScrollView **with the ScreenHeader also inside the ScrollView** (the Sportsbook pattern). New backdrops must pull their values from `config.ts`, never inline them.
 
 | Component | Props | Purpose |
 |---|---|---|

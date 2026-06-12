@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { StyleSheet, View } from 'react-native'
 import { colors } from '../../theme'
 import PixelArt, { PixelGrid } from './PixelArt'
+import { BACKDROP_OPACITY, FIELD_PIXEL } from './config'
 
 // Full-bleed scrolling depth field for the Loan Shark screen. The art runs the
 // entire scrollable length and maps depth to loan risk top-to-bottom: a solid
@@ -10,11 +11,13 @@ import PixelArt, { PixelGrid } from './PixelArt'
 //
 // The side gutters carry the densest speckle (they're always visible); behind
 // the loan cards the dots go sporadic so the field reads in the gaps without
-// bloating the rect count. Mount as the first child INSIDE the ScrollView so
-// the field scrolls with the content; it measures itself via onLayout.
+// bloating the rect count. Mount as the first child INSIDE the ScrollView —
+// with the ScreenHeader also inside the ScrollView so the field reaches the
+// very top of the screen (the mounting standard in ./config.ts); it measures
+// itself via onLayout.
 
-const PIXEL = 8
-const OPACITY = 0.22
+const PIXEL = FIELD_PIXEL
+const OPACITY = BACKDROP_OPACITY.scrollField
 const EDGE_COLS = 3 // gutter width (in cells) that keeps full speckle density
 const CENTER_DENSITY = 0.28 // density multiplier behind the cards
 

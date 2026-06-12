@@ -1,6 +1,7 @@
 import { StyleSheet, View, useWindowDimensions } from 'react-native'
 import PixelArt from './PixelArt'
 import { SCENES, SceneName } from './scenes'
+import { EDGE_INSET, TOP_ANCHOR_INSET } from './config'
 
 type Props = {
   scene: SceneName
@@ -29,6 +30,6 @@ export default function PixelArtBackdrop({ scene }: Props) {
 const styles = StyleSheet.create({
   bottom: { position: 'absolute', bottom: 0, left: 0 },
   bottomCenter: { position: 'absolute', bottom: 0, left: 0, right: 0, alignItems: 'center' },
-  bottomRight: { position: 'absolute', bottom: 0, right: 12 },
-  topRight: { position: 'absolute', top: 120, right: 12 },
+  bottomRight: { position: 'absolute', bottom: 0, right: EDGE_INSET },
+  topRight: { position: 'absolute', top: TOP_ANCHOR_INSET, right: EDGE_INSET },
 })

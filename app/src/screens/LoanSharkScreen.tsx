@@ -108,12 +108,14 @@ export default function LoanSharkScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
-      <ScreenHeader title="Loan Shark" subtitle="Borrow at your own risk" onBack={() => navigation.goBack()} />
+      {/* Header lives inside the ScrollView (the Sportsbook pattern) so the
+          depth field starts at the very top of the screen — see pixelart/config.ts. */}
       <ScrollView
         contentContainerStyle={styles.content}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.muted} />}
       >
         <LoanSharkDepthBackdrop />
+        <ScreenHeader title="Loan Shark" subtitle="Borrow at your own risk" onBack={() => navigation.goBack()} />
         <View style={styles.balancePill}>
           <Text style={styles.balancePillLabel}>BALANCE</Text>
           <Text style={styles.balancePillValue}>{balance.toLocaleString()} pins</Text>

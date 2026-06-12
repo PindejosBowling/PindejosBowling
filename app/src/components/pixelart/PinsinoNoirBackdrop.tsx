@@ -3,6 +3,7 @@ import { StyleSheet, View } from 'react-native'
 import { colors } from '../../theme'
 import PixelArt, { PixelGrid } from './PixelArt'
 import { Sprite, stamp } from './scenes'
+import { BACKDROP_OPACITY, FIELD_PIXEL } from './config'
 
 // Full-viewport desert-noir field for the Pinsino landing — minimal take on
 // "glitzy but dangerous": a sparse starfield and the moon, a single neon
@@ -12,8 +13,8 @@ import { Sprite, stamp } from './scenes'
 // Mount as the first child inside the SafeAreaView (it fills the viewport and
 // content scrolls over it); it measures itself via onLayout.
 
-const PIXEL = 8
-const OPACITY = 0.12
+const PIXEL = FIELD_PIXEL
+const OPACITY = BACKDROP_OPACITY.field
 
 const MOON: Sprite = [
   '..mmmm..',

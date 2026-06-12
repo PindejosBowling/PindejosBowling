@@ -1,5 +1,6 @@
 import { colors } from '../../theme'
 import { PixelGrid } from './PixelArt'
+import { BACKDROP_OPACITY } from './config'
 
 // Scenes are composed from small sprites stamped onto a '.'-filled canvas,
 // rather than hand-maintained full-width ASCII blocks. Later placements draw
@@ -155,7 +156,7 @@ const tickerLine: Sprite = (() => {
 
 const marketmoves: SceneDef = {
   anchor: 'bottom',
-  opacity: 0.12,
+  opacity: BACKDROP_OPACITY.scene,
   grid: {
     rows: compose(48, 12, [
       { sprite: building(6, 6), x: 0, y: 5 },
@@ -182,7 +183,7 @@ const marketmoves: SceneDef = {
 const sportsbook: SceneDef = {
   anchor: 'bottomRight',
   pixelSize: 6,
-  opacity: 0.08,
+  opacity: BACKDROP_OPACITY.sceneDense,
   grid: {
     rows: SCOREBOARD,
     palette: {
@@ -197,7 +198,7 @@ const sportsbook: SceneDef = {
 const pvp: SceneDef = {
   anchor: 'bottomCenter',
   pixelSize: 7,
-  opacity: 0.12,
+  opacity: BACKDROP_OPACITY.scene,
   grid: {
     rows: compose(26, 8, [
       { sprite: ['n'.repeat(26)], x: 0, y: 7 },
@@ -221,7 +222,7 @@ const pvp: SceneDef = {
 const bounty: SceneDef = {
   anchor: 'topRight',
   pixelSize: 5,
-  opacity: 0.12,
+  opacity: BACKDROP_OPACITY.scene,
   grid: {
     rows: WANTED_POSTER,
     palette: {
@@ -232,14 +233,14 @@ const bounty: SceneDef = {
   },
 }
 
-// Loan Shark uses LoanSharkDepthBorders (scrolling side strips) instead of a
-// fixed backdrop scene — the art length must track the scroll content.
+// Loan Shark uses LoanSharkDepthBackdrop (a scrolling depth field) instead of
+// a fixed backdrop scene — the art length must track the scroll content.
 
 // Auction House: the gavel mid-strike, sparks flying off the sound block.
 const auction: SceneDef = {
   anchor: 'bottomRight',
   pixelSize: 6,
-  opacity: 0.12,
+  opacity: BACKDROP_OPACITY.scene,
   grid: {
     rows: compose(14, 13, [
       { sprite: GAVEL_HEAD, x: 3, y: 0 },
