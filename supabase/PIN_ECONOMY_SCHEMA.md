@@ -256,15 +256,37 @@ counter-rows, by design.)
 - **Peer wagers** settle in the PvP system (stake escrow ↔ house, winner takes
   the pot) — see [context/economy/PvP_DB.md](../context/economy/PvP_DB.md).
 
+### `pin_ledger_double_entry()` — the only sanctioned way to move pins
+
+Every player↔house transfer goes through
+`pin_ledger_double_entry(player, season, week, amount, type, description,
+house_description?, bet_id?, bounty_post_id?)` — it inserts the player row
+(signed `amount`) and the house mirror (`-amount`) and returns both ids, making
+the nets-to-zero invariant structural. EXECUTE is revoked from all client
+roles; only the SECURITY DEFINER RPCs (running as owner) may call it. Callers
+that maintain a domain ledger (`loan_ledger` / `pvp_ledger`) insert their
+domain row referencing `player_entry_id`, then back-link both pin rows in one
+`UPDATE … SET <x>_ledger_id`. The only non-helper writes are the two
+single-sided mints: `score_credit` and (one side of) season-open `bonus`.
+
+**Ref-column policy:** a new economy feature gets **exactly one** root-entity
+ref column on `pin_ledger` — the one its cancel/refund path deletes by
+(`bet_id`, `bounty_post_id`, or a `<x>_ledger_id` back-link). The granular
+bounty refs (`bounty_hunter_stake_id`, `bounty_settlement_id`,
+`bounty_payout_id`) were dropped 2026-06-12 (`bets_bounty_adopt_helpers`);
+payout-level granularity lives in `bounty_payouts`.
+
 ---
 
 ## 5. Security & access model
 
 Follows the project-wide pattern (see `supabase/AUTH.md`).
 
-- **Reads:** open to `anon` + `authenticated` on all betting tables.
-- **Direct writes:** **admin-only** (RLS gated on
-  `auth.jwt() -> 'app_metadata' ->> 'role' = 'admin'`). Used by admin flows
+- **Reads:** `authenticated` only. Anon was locked out of every table on
+  2026-06-12 (`anon_lockdown` — see AUTH.md "Anon posture"); its sole
+  capability is the pre-login `is_registered_player` RPC.
+- **Direct writes:** **admin-only** (RLS gated on `(SELECT public.is_admin())`
+  — the shared helper that wraps the JWT role claim). Used by admin flows
   (line/market creation, settlement, cancellation).
 - **Player write paths go through `SECURITY DEFINER` RPCs**, never direct table
   writes. The RPC resolves the caller from `auth.uid()` (never trusts a

@@ -67,6 +67,14 @@ it's cheap to keep.
 
 ## 2. Extract `pin_ledger_double_entry()` — kill the five-row dance
 
+**Status: ✅ DONE 2026-06-12** — migrations `20260612145622_pin_ledger_double_entry_helper`
++ batches `…145700_loans_adopt_helpers` (B), `…151409_pvp_adopt_helpers` (C),
+`…153019_bets_bounty_adopt_helpers` (D, fused with §4). Each batch verified by a
+**rollback-probe** (`supabase/verify/probe-*.sql` via `run-probe.sh`): the real
+flows executed against live functions inside an always-aborting transaction,
+before and after the rewrite — captures byte-identical. Helper documented in
+PIN_ECONOMY_SCHEMA §4 as the only sanctioned way to move pins.
+
 The pattern *insert player pin row → insert house mirror row → insert domain-ledger
 row → back-link `UPDATE pin_ledger SET *_ledger_id`* is hand-written in ~10 RPCs.
 One helper makes the "every movement nets to zero" invariant structural.
@@ -155,6 +163,12 @@ bets count). Keep the old join only where it still expresses the right thing
 ---
 
 ## 4. Cap `pin_ledger`'s per-feature column growth
+
+**Status: ✅ DONE 2026-06-12** — fused into batch D
+(`20260612153019_bets_bounty_adopt_helpers`): settle_bounty +
+enter_bounty_as_hunter stopped writing the granular refs, the three columns
+(+ indexes) dropped, types regenerated, policy line added to
+PIN_ECONOMY_SCHEMA §4.
 
 Bounties added four ref columns; only `bounty_post_id` carries the cancel-refund
 semantics. `bounty_payouts` already preserves payout-level granularity.

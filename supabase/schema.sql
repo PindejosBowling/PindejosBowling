@@ -259,10 +259,7 @@ CREATE TABLE pin_ledger (
   week_id uuid,
   loan_ledger_id uuid,
   pvp_ledger_id uuid,
-  bounty_post_id uuid,
-  bounty_hunter_stake_id uuid,
-  bounty_settlement_id uuid,
-  bounty_payout_id uuid
+  bounty_post_id uuid
 );
 
 CREATE TABLE players (
@@ -720,13 +717,7 @@ ALTER TABLE loans ADD CONSTRAINT loans_status_check CHECK ((status = ANY (ARRAY[
 
 ALTER TABLE pin_ledger ADD CONSTRAINT pin_ledger_bet_id_fkey FOREIGN KEY (bet_id) REFERENCES bets(id) ON DELETE SET NULL;
 
-ALTER TABLE pin_ledger ADD CONSTRAINT pin_ledger_bounty_hunter_stake_id_fkey FOREIGN KEY (bounty_hunter_stake_id) REFERENCES bounty_hunter_stakes(id) ON DELETE CASCADE;
-
-ALTER TABLE pin_ledger ADD CONSTRAINT pin_ledger_bounty_payout_id_fkey FOREIGN KEY (bounty_payout_id) REFERENCES bounty_payouts(id) ON DELETE CASCADE;
-
 ALTER TABLE pin_ledger ADD CONSTRAINT pin_ledger_bounty_post_id_fkey FOREIGN KEY (bounty_post_id) REFERENCES bounty_post(id) ON DELETE CASCADE;
-
-ALTER TABLE pin_ledger ADD CONSTRAINT pin_ledger_bounty_settlement_id_fkey FOREIGN KEY (bounty_settlement_id) REFERENCES bounty_settlements(id) ON DELETE CASCADE;
 
 ALTER TABLE pin_ledger ADD CONSTRAINT pin_ledger_loan_ledger_id_fkey FOREIGN KEY (loan_ledger_id) REFERENCES loan_ledger(id) ON DELETE SET NULL;
 
@@ -1055,13 +1046,7 @@ CREATE INDEX loans_player_id_idx ON public.loans USING btree (player_id);
 
 CREATE INDEX loans_season_id_idx ON public.loans USING btree (season_id);
 
-CREATE INDEX pin_ledger_bounty_hunter_stake_id_idx ON public.pin_ledger USING btree (bounty_hunter_stake_id);
-
-CREATE INDEX pin_ledger_bounty_payout_id_idx ON public.pin_ledger USING btree (bounty_payout_id);
-
 CREATE INDEX pin_ledger_bounty_post_id_idx ON public.pin_ledger USING btree (bounty_post_id);
-
-CREATE INDEX pin_ledger_bounty_settlement_id_idx ON public.pin_ledger USING btree (bounty_settlement_id);
 
 CREATE INDEX pin_ledger_loan_ledger_id_idx ON public.pin_ledger USING btree (loan_ledger_id);
 
@@ -2507,20 +2492,11 @@ AS $function$
 DECLARE
   v_sponsor_id uuid;
   v_season_id  uuid;
-  v_balance    int;
   v_escrow     int;
   v_bounty_id  uuid;
 BEGIN
-  SELECT id INTO v_sponsor_id FROM public.players WHERE user_id = auth.uid();
-  IF v_sponsor_id IS NULL THEN
-    RAISE EXCEPTION 'No player linked to the current user';
-  END IF;
-
-  SELECT id INTO v_season_id
-    FROM public.seasons WHERE is_active = true AND registration_open = false;
-  IF v_season_id IS NULL THEN
-    RAISE EXCEPTION 'No active season';
-  END IF;
+  v_sponsor_id := public.current_player_id();
+  v_season_id  := public.current_season_id();
 
   IF p_week_id IS NOT NULL THEN
     IF NOT EXISTS (
@@ -2552,9 +2528,7 @@ BEGIN
 
   v_escrow := p_reward_per_hunter * p_max_hunters;
 
-  SELECT COALESCE(SUM(amount), 0) INTO v_balance
-    FROM public.pin_ledger WHERE player_id = v_sponsor_id AND season_id = v_season_id;
-  IF v_balance < v_escrow THEN
+  IF public.pin_balance(v_sponsor_id, v_season_id) < v_escrow THEN
     RAISE EXCEPTION 'Insufficient balance: sponsoring up to % hunters at % each requires % pins',
       p_max_hunters, p_reward_per_hunter, v_escrow;
   END IF;
@@ -2574,12 +2548,10 @@ BEGIN
 
   -- Escrow the full max liability (player -R*m, house +R*m). Both rows carry
   -- bounty_post_id so cancel deletes them together.
-  INSERT INTO public.pin_ledger (player_id, season_id, week_id, is_house, amount, type, description, bounty_post_id)
-    VALUES (v_sponsor_id, v_season_id, p_week_id, false, -v_escrow,
-            'bounty_sponsor_stake', 'Bounty sponsor stake escrowed', v_bounty_id);
-  INSERT INTO public.pin_ledger (player_id, season_id, week_id, is_house, amount, type, description, bounty_post_id)
-    VALUES (NULL, v_season_id, p_week_id, true, v_escrow,
-            'bounty_sponsor_stake', 'Bounty sponsor stake escrowed (house)', v_bounty_id);
+  PERFORM public.pin_ledger_double_entry(
+    v_sponsor_id, v_season_id, p_week_id,
+    -v_escrow, 'bounty_sponsor_stake', 'Bounty sponsor stake escrowed',
+    NULL, NULL, v_bounty_id);
 
   -- Activity Feed: a sponsor bounty is on the board. Actor = sponsor (leads the card).
   PERFORM public.publish_activity_event(
@@ -2811,15 +2783,11 @@ AS $function$
 DECLARE
   v_hunter_id    uuid;
   v_bounty       public.bounty_post;
-  v_balance      int;
   v_entry_number int;
   v_count        int;
   v_stake_id     uuid;
 BEGIN
-  SELECT id INTO v_hunter_id FROM public.players WHERE user_id = auth.uid();
-  IF v_hunter_id IS NULL THEN
-    RAISE EXCEPTION 'No player linked to the current user';
-  END IF;
+  v_hunter_id := public.current_player_id();
 
   -- Serialize concurrent entries so entry_number + capacity are deterministic.
   SELECT * INTO v_bounty FROM public.bounty_post WHERE id = p_bounty_post_id FOR UPDATE;
@@ -2851,9 +2819,7 @@ BEGIN
     RAISE EXCEPTION 'Bounty is full';
   END IF;
 
-  SELECT COALESCE(SUM(amount), 0) INTO v_balance
-    FROM public.pin_ledger WHERE player_id = v_hunter_id AND season_id = v_bounty.season_id;
-  IF v_balance < v_bounty.hunter_stake_amount THEN
+  IF public.pin_balance(v_hunter_id, v_bounty.season_id) < v_bounty.hunter_stake_amount THEN
     RAISE EXCEPTION 'Insufficient balance to enter this bounty';
   END IF;
 
@@ -2869,12 +2835,10 @@ BEGIN
   )
   RETURNING id INTO v_stake_id;
 
-  INSERT INTO public.pin_ledger (player_id, season_id, week_id, is_house, amount, type, description, bounty_post_id, bounty_hunter_stake_id)
-    VALUES (v_hunter_id, v_bounty.season_id, v_bounty.week_id, false, -v_bounty.hunter_stake_amount,
-            'bounty_hunter_stake', 'Bounty hunter stake escrowed', p_bounty_post_id, v_stake_id);
-  INSERT INTO public.pin_ledger (player_id, season_id, week_id, is_house, amount, type, description, bounty_post_id, bounty_hunter_stake_id)
-    VALUES (NULL, v_bounty.season_id, v_bounty.week_id, true, v_bounty.hunter_stake_amount,
-            'bounty_hunter_stake', 'Bounty hunter stake escrowed (house)', p_bounty_post_id, v_stake_id);
+  PERFORM public.pin_ledger_double_entry(
+    v_hunter_id, v_bounty.season_id, v_bounty.week_id,
+    -v_bounty.hunter_stake_amount, 'bounty_hunter_stake', 'Bounty hunter stake escrowed',
+    NULL, NULL, p_bounty_post_id);
 
   PERFORM public.publish_activity_event(
     'bounty_board', 'bounty_board_hunter_joined',
@@ -2938,9 +2902,9 @@ BEGIN
     ) THEN
       -- All legs push/void → refund the stake (double-entry).
       UPDATE public.bets SET status = 'push', settled_at = now() WHERE id = v_bet.id;
-      INSERT INTO public.pin_ledger (player_id, season_id, week_id, is_house, amount, type, description, bet_id) VALUES
-        (v_bet.player_id, v_bet.season_id, v_week_id, false,  v_bet.stake, 'bet_refund', 'Push refund',         v_bet.id),
-        (NULL,            v_bet.season_id, v_week_id, true,  -v_bet.stake, 'bet_refund', 'Push refund (house)', v_bet.id);
+      PERFORM public.pin_ledger_double_entry(
+        v_bet.player_id, v_bet.season_id, v_week_id,
+        v_bet.stake, 'bet_refund', 'Push refund', NULL, v_bet.id);
 
     ELSE
       -- Won: payout = floor(stake × product(won-leg odds)). Push/void legs drop out.
@@ -2955,9 +2919,9 @@ BEGIN
       UPDATE public.bets
         SET status = 'won', potential_payout = v_payout, settled_at = now()
         WHERE id = v_bet.id;
-      INSERT INTO public.pin_ledger (player_id, season_id, week_id, is_house, amount, type, description, bet_id) VALUES
-        (v_bet.player_id, v_bet.season_id, v_week_id, false,  v_payout, 'bet_payout', 'Bet won',         v_bet.id),
-        (NULL,            v_bet.season_id, v_week_id, true,  -v_payout, 'bet_payout', 'Bet won (house)', v_bet.id);
+      PERFORM public.pin_ledger_double_entry(
+        v_bet.player_id, v_bet.season_id, v_week_id,
+        v_payout, 'bet_payout', 'Bet won', NULL, v_bet.id);
     END IF;
   END LOOP;
 END;
@@ -3131,10 +3095,7 @@ DECLARE
   v_n         integer;
   v_line      public.custom_lines%ROWTYPE;
 BEGIN
-  SELECT id INTO v_player_id FROM public.players WHERE user_id = auth.uid();
-  IF v_player_id IS NULL THEN
-    RAISE EXCEPTION 'No player linked to the current user';
-  END IF;
+  v_player_id := public.current_player_id();
 
   IF p_selection_ids IS NULL OR array_length(p_selection_ids, 1) IS NULL THEN
     RAISE EXCEPTION 'No selections provided';
@@ -3200,9 +3161,7 @@ BEGIN
 
   v_payout := FLOOR(p_stake * v_odds);
 
-  SELECT COALESCE(SUM(amount), 0) INTO v_balance
-    FROM public.pin_ledger
-    WHERE player_id = v_player_id AND season_id = v_season_id;
+  v_balance := public.pin_balance(v_player_id, v_season_id);
   IF p_stake > v_balance THEN
     RAISE EXCEPTION 'Wager exceeds your balance';
   END IF;
@@ -3219,9 +3178,9 @@ BEGIN
     WHERE s.id = ANY (p_selection_ids);
 
   -- Double-entry stake: player -stake, house +stake (nets to zero).
-  INSERT INTO public.pin_ledger (player_id, season_id, week_id, is_house, amount, type, description, bet_id) VALUES
-    (v_player_id, v_season_id, v_week_id, false, -p_stake, 'bet_stake', 'Bet placed',         v_bet_id),
-    (NULL,        v_season_id, v_week_id, true,   p_stake, 'bet_stake', 'Bet placed (house)', v_bet_id);
+  PERFORM public.pin_ledger_double_entry(
+    v_player_id, v_season_id, v_week_id,
+    -p_stake, 'bet_stake', 'Bet placed', NULL, v_bet_id);
 
   -- Activity Feed: post at most ONE placement event by priority (§3, §10.3).
   -- v_balance here is the pre-bet balance; v_n is the leg count; v_payout is the
@@ -4127,9 +4086,7 @@ DECLARE
   v_titles      text;
   v_bet         record;
 BEGIN
-  IF ((SELECT auth.jwt()) -> 'app_metadata' ->> 'role') <> 'admin' THEN
-    RAISE EXCEPTION 'Admin only';
-  END IF;
+  PERFORM public.assert_admin();
 
   SELECT season_id, week_number INTO v_season_id, v_week_number
     FROM public.weeks WHERE id = p_week_id;
@@ -4267,9 +4224,9 @@ BEGIN
     LOOP
       UPDATE public.bet_legs SET result = 'void' WHERE bet_id = v_bet.id AND result IS NULL;
       UPDATE public.bets SET status = 'void', settled_at = now() WHERE id = v_bet.id;
-      INSERT INTO public.pin_ledger (player_id, season_id, week_id, is_house, amount, type, description, bet_id) VALUES
-        (v_bet.player_id, v_bet.season_id, p_week_id, false,  v_bet.stake, 'bet_refund', 'Voided at archive — market never settled',         v_bet.id),
-        (NULL,            v_bet.season_id, p_week_id, true,  -v_bet.stake, 'bet_refund', 'Voided at archive — market never settled (house)', v_bet.id);
+      PERFORM public.pin_ledger_double_entry(
+        v_bet.player_id, v_bet.season_id, p_week_id,
+        v_bet.stake, 'bet_refund', 'Voided at archive — market never settled', NULL, v_bet.id);
     END LOOP;
   END IF;
 
@@ -4328,14 +4285,8 @@ DECLARE
   v_stake           record;
   v_payout          int;
 BEGIN
-  IF ((SELECT auth.jwt()) -> 'app_metadata' ->> 'role') <> 'admin' THEN
-    RAISE EXCEPTION 'Admin only';
-  END IF;
-
-  SELECT id INTO v_admin_id FROM public.players WHERE user_id = auth.uid();
-  IF v_admin_id IS NULL THEN
-    RAISE EXCEPTION 'No player linked to the current user';
-  END IF;
+  PERFORM public.assert_admin();
+  v_admin_id := public.current_player_id();
 
   SELECT * INTO v_bounty FROM public.bounty_post WHERE id = p_bounty_post_id FOR UPDATE;
   IF v_bounty.id IS NULL THEN
@@ -4402,14 +4353,10 @@ BEGIN
         VALUES (v_settlement_id, p_bounty_post_id, v_bounty.sponsor_player_id, false, v_total_stakes + v_escrow)
         RETURNING id INTO v_payout_id;
 
-      INSERT INTO public.pin_ledger (player_id, season_id, week_id, is_house, amount, type, description,
-                                     bounty_post_id, bounty_settlement_id, bounty_payout_id)
-        VALUES (v_bounty.sponsor_player_id, v_bounty.season_id, v_bounty.week_id, false, v_total_stakes + v_escrow,
-                'bounty_payout', 'Bounty sponsor won', p_bounty_post_id, v_settlement_id, v_payout_id);
-      INSERT INTO public.pin_ledger (player_id, season_id, week_id, is_house, amount, type, description,
-                                     bounty_post_id, bounty_settlement_id, bounty_payout_id)
-        VALUES (NULL, v_bounty.season_id, v_bounty.week_id, true, -(v_total_stakes + v_escrow),
-                'bounty_payout', 'Bounty sponsor won (house)', p_bounty_post_id, v_settlement_id, v_payout_id);
+      PERFORM public.pin_ledger_double_entry(
+        v_bounty.sponsor_player_id, v_bounty.season_id, v_bounty.week_id,
+        v_total_stakes + v_escrow, 'bounty_payout', 'Bounty sponsor won',
+        NULL, NULL, p_bounty_post_id);
     ELSE
       -- House bounty: the House keeps the hunter stakes (reporting-only payout row,
       -- no ledger movement — House-to-House is not ledgered, §22.3).
@@ -4431,26 +4378,18 @@ BEGIN
         VALUES (v_settlement_id, p_bounty_post_id, v_stake.player_id, false, v_payout)
         RETURNING id INTO v_payout_id;
 
-      INSERT INTO public.pin_ledger (player_id, season_id, week_id, is_house, amount, type, description,
-                                     bounty_post_id, bounty_settlement_id, bounty_payout_id, bounty_hunter_stake_id)
-        VALUES (v_stake.player_id, v_bounty.season_id, v_bounty.week_id, false, v_payout,
-                'bounty_payout', 'Bounty hunter won', p_bounty_post_id, v_settlement_id, v_payout_id, v_stake.id);
-      INSERT INTO public.pin_ledger (player_id, season_id, week_id, is_house, amount, type, description,
-                                     bounty_post_id, bounty_settlement_id, bounty_payout_id, bounty_hunter_stake_id)
-        VALUES (NULL, v_bounty.season_id, v_bounty.week_id, true, -v_payout,
-                'bounty_payout', 'Bounty hunter won (house)', p_bounty_post_id, v_settlement_id, v_payout_id, v_stake.id);
+      PERFORM public.pin_ledger_double_entry(
+        v_stake.player_id, v_bounty.season_id, v_bounty.week_id,
+        v_payout, 'bounty_payout', 'Bounty hunter won',
+        NULL, NULL, p_bounty_post_id);
     END LOOP;
 
     -- Return the sponsor's unused escrow ((max_hunters - n) * R) for a sponsor bounty.
     IF v_bounty.bounty_type = 'sponsor_bounty' AND v_unused_escrow > 0 THEN
-      INSERT INTO public.pin_ledger (player_id, season_id, week_id, is_house, amount, type, description,
-                                     bounty_post_id, bounty_settlement_id)
-        VALUES (v_bounty.sponsor_player_id, v_bounty.season_id, v_bounty.week_id, false, v_unused_escrow,
-                'bounty_payout', 'Bounty unused escrow returned', p_bounty_post_id, v_settlement_id);
-      INSERT INTO public.pin_ledger (player_id, season_id, week_id, is_house, amount, type, description,
-                                     bounty_post_id, bounty_settlement_id)
-        VALUES (NULL, v_bounty.season_id, v_bounty.week_id, true, -v_unused_escrow,
-                'bounty_payout', 'Bounty unused escrow returned (house)', p_bounty_post_id, v_settlement_id);
+      PERFORM public.pin_ledger_double_entry(
+        v_bounty.sponsor_player_id, v_bounty.season_id, v_bounty.week_id,
+        v_unused_escrow, 'bounty_payout', 'Bounty unused escrow returned',
+        NULL, NULL, p_bounty_post_id);
     END IF;
 
     UPDATE public.bounty_hunter_stakes
