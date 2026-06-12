@@ -14,7 +14,7 @@ consolidation RPC rewrites → everything else. That sequence is now ~95% execut
 | Doc | Status |
 |---|---|
 | [TODO_DB_CONSOLIDATION.md](TODO_DB_CONSOLIDATION.md) | §1 ✅ §2 ✅ §3 ✅ §4 ✅ · **§5 in flight (migration written, NOT pushed)** · §6 deferred by design |
-| [TODO_DB_FUNCTION_HYGIENE.md](TODO_DB_FUNCTION_HYGIENE.md) | §1 ✅ §2 ✅ §4 ✅ §5 ✅(option a) · §3 + §6 are **docs-only, not done** |
+| [TODO_DB_FUNCTION_HYGIENE.md](TODO_DB_FUNCTION_HYGIENE.md) | §1 ✅ §2 ✅ §3 ✅(docs) §4 ✅ §5 ✅(option a) §6 ✅(docs; optional drift guard not built) — **complete** |
 | [TODO_DB_PERFORMANCE.md](TODO_DB_PERFORMANCE.md) | §1 ✅ §2 ✅ §3 ✅ §4 ✅ · §5 deferred by design (measure-first; §1 likely mooted it) |
 | [TODO_DB_SECURITY.md](TODO_DB_SECURITY.md) | §1 ✅ §2 ✅ §3 ✅ §4 ✅ — **complete** |
 
@@ -111,14 +111,11 @@ TODO_DB_CONSOLIDATION §5 done → commit.
 ## Remaining backlog (in suggested order)
 
 1. **Push the in-flight §5 migration** (above).
-2. **Docs-only items:** HYGIENE §3 (reversal rule subsection in
-   PIN_ECONOMY_SCHEMA + pointer in context/archive-and-settlement.md — text is
-   drafted in TODO_DB_FUNCTION_HYGIENE §3) and HYGIENE §6 (PvP challenge↔offer
-   mirror note in context/economy/PvP_DB.md; the optional drift guard in
-   accept_pvp_challenge is a judgment call).
-3. **TODO status sweep:** several doc sections done this session still lack ✅
-   blocks (FUNCTION_HYGIENE §2/§4/§5, PERFORMANCE §1–4, CONSOLIDATION §5 once
-   pushed). Update each + the table at the top of this file.
+2. ~~**Docs-only items**~~ ✅ done 2026-06-12 (session 3): HYGIENE §3 reversal
+   rule in PIN_ECONOMY_SCHEMA §4 + archive-doc pointer; HYGIENE §6 mirror note
+   in PvP_DB.md (optional drift guard deliberately not built).
+3. ~~**TODO status sweep**~~ ✅ done 2026-06-12 (session 3) for FUNCTION_HYGIENE
+   §2/§3/§4/§5/§6 + PERFORMANCE §1–4; CONSOLIDATION §5 block pending its push.
 4. **Checkpoint PR to main** (commits `4027aaf`…HEAD). Ask the user first.
 5. **Ask the user to OTP-login once** (JWT-hook verification, see d51a834).
 6. Deferred by design (do NOT do without a new decision): `bet_legs.side` drop

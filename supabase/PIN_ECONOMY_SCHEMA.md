@@ -276,6 +276,27 @@ bounty refs (`bounty_hunter_stake_id`, `bounty_settlement_id`,
 `bounty_payout_id`) were dropped 2026-06-12 (`bets_bounty_adopt_helpers`);
 payout-level granularity lives in `bounty_payouts`.
 
+### Reversal rule — delete-refund vs append-reversal
+
+Two undo mechanisms coexist in the ledger, and the split is principled:
+
+- **Delete-refund is allowed only for unsettled escrow** — the paired stake
+  rows of a bet/contract/bounty that never reached settlement — and always by
+  the feature's root ref column (`cancel_bet`, `cancel_loan`,
+  `cancel_pvp_challenge`, `cancel_bounty`, `refund_bets_before_market_delete`,
+  `remove_over_under_markets_for_game`). The pair nets to zero, so deleting it
+  leaves balances untouched; the contract "never existed."
+- **Anything after settlement is reversed by appending offsetting rows**
+  (`void_pvp_challenge`, PvP push refunds, bet push/void refunds). Settled
+  money is history; history gets corrected, not erased.
+
+`unarchive_week` is the single sanctioned exception: a snapshot-based surgical
+reversal that may delete settlement-era rows because the archive snapshot
+guarantees exact restoration (see
+[context/archive-and-settlement.md](../context/archive-and-settlement.md)).
+New features must pick the side this rule dictates — pre-settlement escrow
+deletes by root ref; everything else appends.
+
 ---
 
 ## 5. Security & access model

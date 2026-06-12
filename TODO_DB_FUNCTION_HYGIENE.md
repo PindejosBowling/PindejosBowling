@@ -62,6 +62,11 @@ plus an admin-tools batch: `archive_week`, `unarchive_week`, `cancel_*`,
 `pin_ledger.week_id` now exists and is stamped by the mint itself.
 
 ### Migration — `score_credit_guard_week_id`
+
+**Status: ✅ DONE 2026-06-12** — migration `20260612175222_score_credit_guard_and_pvp_expired`
+(commit `5e48d77`). Backfill check returned 0 NULLs (no DML needed); guard now
+`WHERE week_id = p_week_id AND type = 'score_credit'`. Probe-verified.
+
 1. **Backfill check first** (read-only):
    `SELECT count(*) FROM pin_ledger WHERE type='score_credit' AND week_id IS NULL`.
    If > 0, backfill in this migration by parsing `description` (`'Week N Game …'`)
@@ -90,6 +95,11 @@ remove *pre-settlement escrow pairs*; post-settlement money always reverses by
 append). The debt is that it's nowhere stated, so every new feature re-derives it.
 
 ### Task (docs only)
+
+**Status: ✅ DONE 2026-06-12** — "Reversal rule" subsection added to
+`supabase/PIN_ECONOMY_SCHEMA.md` §4 (after the ref-column policy) + pointer in
+`context/archive-and-settlement.md` under the unarchive reversal steps.
+
 - Add a **"Reversal rule"** subsection to
   [supabase/PIN_ECONOMY_SCHEMA.md](supabase/PIN_ECONOMY_SCHEMA.md) and a pointer in
   [context/archive-and-settlement.md](context/archive-and-settlement.md):
@@ -109,6 +119,14 @@ Current state: most functions `SET search_path TO ''`; `playoff_*` (6 functions)
 trigger).
 
 ### Migration — `normalize_search_path`
+
+**Status: ✅ DONE 2026-06-12** — migration `20260612172957_normalize_search_path`
+(commit `d51a834`), generated from the live catalog. **Deliberate deviation:**
+`SET search_path TO 'public','pg_temp'` instead of `''`+qualify — same security
+property (pg_temp-first shadowing closed), zero body-rewrite risk.
+`custom_access_token` verified by direct invocation; a real OTP login check by
+the user is still outstanding.
+
 1. `CREATE OR REPLACE` each of the 8 outliers with `SET search_path TO ''` and
    fully qualified `public.` table refs.
 2. **Caution — `custom_access_token` is the JWT claims hook** (runs as
@@ -140,6 +158,12 @@ Recommendation: **(a)** — the distinction between "I withdrew it" and "it laps
 at archive" is real and free to keep.
 
 ### Migration — `pvp_expired_status` (if (a))
+
+**Status: ✅ DONE 2026-06-12 (option a)** — migration
+`20260612175222_score_credit_guard_and_pvp_expired` (commit `5e48d77`).
+Week-close sweep now stamps `'expired'`; the app already renders the status
+(no app change was needed).
+
 1. Update `close_open_pvp_challenges` to set `'expired'`.
 2. App: surface `'expired'` wherever `'cancelled'` is rendered
    (grep `usePvpData.ts`, PvP screens for status unions).
@@ -157,6 +181,12 @@ the dual-write but means rewriting every read path (app reads challenge columns
 directly, including realtime payloads).
 
 ### Task (docs + cheap guard, no restructure)
+
+**Status: ✅ DONE 2026-06-12 (docs part)** — mirror invariant documented in
+`context/economy/PvP_DB.md` under `pvp_challenge_offers`. The optional drift
+guard in `accept_pvp_challenge` was **not** implemented (judgment call left
+open; revisit only with a new decision).
+
 1. Document in [context/economy/PvP_DB.md](context/economy/PvP_DB.md): *the
    challenge row is a denormalized snapshot of the live offer, maintained only by
    `create_pvp_challenge` / `counter_pvp_challenge`; never update either side
@@ -168,9 +198,13 @@ directly, including realtime payloads).
 ---
 
 ## Done when
-- [ ] Helpers exist, granted correctly, adopted by all RPC batches
-- [ ] `grep -c "app_metadata' ->> 'role'" supabase/schema.sql` drops to ~0 in the
-      FUNCTIONS section (policies are SECURITY doc scope)
-- [ ] `score_credit` guard uses `week_id`; double-archive no-ops
-- [ ] All functions show `SET search_path TO ''` in the regenerated snapshot
-- [ ] Reversal rule + PvP mirror documented; PvP status decision executed
+- [x] Helpers exist, granted correctly, adopted by all RPC batches
+- [x] `grep -c "app_metadata' ->> 'role'" supabase/schema.sql` drops to ~0 in the
+      FUNCTIONS section (policies are SECURITY doc scope) — only `is_admin()`
+      itself remains
+- [x] `score_credit` guard uses `week_id`; double-archive no-ops
+- [x] All functions normalized — to `'public','pg_temp'`, not `''` (deliberate
+      deviation, see §4 status block); OTP-login check of the JWT hook still
+      outstanding
+- [x] Reversal rule + PvP mirror documented; PvP status decision executed
+      (option a, `'expired'`)
