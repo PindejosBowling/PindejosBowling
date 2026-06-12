@@ -1127,17 +1127,17 @@ CREATE INDEX week_archive_snapshot_run_idx ON public.week_archive_snapshot USING
 ALTER TABLE activity_feed_events ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "admin can delete" ON activity_feed_events AS PERMISSIVE FOR DELETE TO authenticated
-  USING ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
+  USING (( SELECT is_admin() AS is_admin));
 
 CREATE POLICY "admin can insert" ON activity_feed_events AS PERMISSIVE FOR INSERT TO authenticated
-  WITH CHECK ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
+  WITH CHECK (( SELECT is_admin() AS is_admin));
 
 CREATE POLICY "admin can read all" ON activity_feed_events AS PERMISSIVE FOR SELECT TO authenticated
-  USING ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
+  USING (( SELECT is_admin() AS is_admin));
 
 CREATE POLICY "admin can update" ON activity_feed_events AS PERMISSIVE FOR UPDATE TO authenticated
-  USING ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text))
-  WITH CHECK ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
+  USING (( SELECT is_admin() AS is_admin))
+  WITH CHECK (( SELECT is_admin() AS is_admin));
 
 CREATE POLICY "authenticated can read public published" ON activity_feed_events AS PERMISSIVE FOR SELECT TO authenticated
   USING (((status = 'published'::text) AND (visibility = 'public'::text)));
@@ -1145,14 +1145,14 @@ CREATE POLICY "authenticated can read public published" ON activity_feed_events 
 ALTER TABLE bet_legs ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "admin can delete" ON bet_legs AS PERMISSIVE FOR DELETE TO authenticated
-  USING ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
+  USING (( SELECT is_admin() AS is_admin));
 
 CREATE POLICY "admin can insert" ON bet_legs AS PERMISSIVE FOR INSERT TO authenticated
-  WITH CHECK ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
+  WITH CHECK (( SELECT is_admin() AS is_admin));
 
 CREATE POLICY "admin can update" ON bet_legs AS PERMISSIVE FOR UPDATE TO authenticated
-  USING ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text))
-  WITH CHECK ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
+  USING (( SELECT is_admin() AS is_admin))
+  WITH CHECK (( SELECT is_admin() AS is_admin));
 
 CREATE POLICY "authenticated can read" ON bet_legs AS PERMISSIVE FOR SELECT TO authenticated
   USING (true);
@@ -1160,14 +1160,14 @@ CREATE POLICY "authenticated can read" ON bet_legs AS PERMISSIVE FOR SELECT TO a
 ALTER TABLE bet_markets ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "admin can delete" ON bet_markets AS PERMISSIVE FOR DELETE TO authenticated
-  USING ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
+  USING (( SELECT is_admin() AS is_admin));
 
 CREATE POLICY "admin can insert" ON bet_markets AS PERMISSIVE FOR INSERT TO authenticated
-  WITH CHECK ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
+  WITH CHECK (( SELECT is_admin() AS is_admin));
 
 CREATE POLICY "admin can update" ON bet_markets AS PERMISSIVE FOR UPDATE TO authenticated
-  USING ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text))
-  WITH CHECK ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
+  USING (( SELECT is_admin() AS is_admin))
+  WITH CHECK (( SELECT is_admin() AS is_admin));
 
 CREATE POLICY "authenticated can read" ON bet_markets AS PERMISSIVE FOR SELECT TO authenticated
   USING (true);
@@ -1175,14 +1175,14 @@ CREATE POLICY "authenticated can read" ON bet_markets AS PERMISSIVE FOR SELECT T
 ALTER TABLE bet_selections ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "admin can delete" ON bet_selections AS PERMISSIVE FOR DELETE TO authenticated
-  USING ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
+  USING (( SELECT is_admin() AS is_admin));
 
 CREATE POLICY "admin can insert" ON bet_selections AS PERMISSIVE FOR INSERT TO authenticated
-  WITH CHECK ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
+  WITH CHECK (( SELECT is_admin() AS is_admin));
 
 CREATE POLICY "admin can update" ON bet_selections AS PERMISSIVE FOR UPDATE TO authenticated
-  USING ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text))
-  WITH CHECK ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
+  USING (( SELECT is_admin() AS is_admin))
+  WITH CHECK (( SELECT is_admin() AS is_admin));
 
 CREATE POLICY "authenticated can read" ON bet_selections AS PERMISSIVE FOR SELECT TO authenticated
   USING (true);
@@ -1190,14 +1190,14 @@ CREATE POLICY "authenticated can read" ON bet_selections AS PERMISSIVE FOR SELEC
 ALTER TABLE bets ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "admin can delete" ON bets AS PERMISSIVE FOR DELETE TO authenticated
-  USING ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
+  USING (( SELECT is_admin() AS is_admin));
 
 CREATE POLICY "admin can insert" ON bets AS PERMISSIVE FOR INSERT TO authenticated
-  WITH CHECK ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
+  WITH CHECK (( SELECT is_admin() AS is_admin));
 
 CREATE POLICY "admin can update" ON bets AS PERMISSIVE FOR UPDATE TO authenticated
-  USING ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text))
-  WITH CHECK ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
+  USING (( SELECT is_admin() AS is_admin))
+  WITH CHECK (( SELECT is_admin() AS is_admin));
 
 CREATE POLICY "authenticated can read" ON bets AS PERMISSIVE FOR SELECT TO authenticated
   USING (true);
@@ -1207,7 +1207,7 @@ ALTER TABLE board_posts ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "authenticated can delete own" ON board_posts AS PERMISSIVE FOR DELETE TO authenticated
   USING (((player_id = ( SELECT players.id
    FROM players
-  WHERE (players.user_id = ( SELECT auth.uid() AS uid)))) OR (((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text)));
+  WHERE (players.user_id = ( SELECT auth.uid() AS uid)))) OR ( SELECT is_admin() AS is_admin)));
 
 CREATE POLICY "authenticated can insert" ON board_posts AS PERMISSIVE FOR INSERT TO authenticated
   WITH CHECK ((player_id = ( SELECT players.id
@@ -1220,14 +1220,14 @@ CREATE POLICY "authenticated can read" ON board_posts AS PERMISSIVE FOR SELECT T
 ALTER TABLE bounty_hunter_stakes ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "admin can delete" ON bounty_hunter_stakes AS PERMISSIVE FOR DELETE TO authenticated
-  USING ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
+  USING (( SELECT is_admin() AS is_admin));
 
 CREATE POLICY "admin can insert" ON bounty_hunter_stakes AS PERMISSIVE FOR INSERT TO authenticated
-  WITH CHECK ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
+  WITH CHECK (( SELECT is_admin() AS is_admin));
 
 CREATE POLICY "admin can update" ON bounty_hunter_stakes AS PERMISSIVE FOR UPDATE TO authenticated
-  USING ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text))
-  WITH CHECK ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
+  USING (( SELECT is_admin() AS is_admin))
+  WITH CHECK (( SELECT is_admin() AS is_admin));
 
 CREATE POLICY "authenticated can read" ON bounty_hunter_stakes AS PERMISSIVE FOR SELECT TO authenticated
   USING (true);
@@ -1235,14 +1235,14 @@ CREATE POLICY "authenticated can read" ON bounty_hunter_stakes AS PERMISSIVE FOR
 ALTER TABLE bounty_payouts ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "admin can delete" ON bounty_payouts AS PERMISSIVE FOR DELETE TO authenticated
-  USING ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
+  USING (( SELECT is_admin() AS is_admin));
 
 CREATE POLICY "admin can insert" ON bounty_payouts AS PERMISSIVE FOR INSERT TO authenticated
-  WITH CHECK ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
+  WITH CHECK (( SELECT is_admin() AS is_admin));
 
 CREATE POLICY "admin can update" ON bounty_payouts AS PERMISSIVE FOR UPDATE TO authenticated
-  USING ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text))
-  WITH CHECK ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
+  USING (( SELECT is_admin() AS is_admin))
+  WITH CHECK (( SELECT is_admin() AS is_admin));
 
 CREATE POLICY "authenticated can read" ON bounty_payouts AS PERMISSIVE FOR SELECT TO authenticated
   USING (true);
@@ -1250,14 +1250,14 @@ CREATE POLICY "authenticated can read" ON bounty_payouts AS PERMISSIVE FOR SELEC
 ALTER TABLE bounty_post ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "admin can delete" ON bounty_post AS PERMISSIVE FOR DELETE TO authenticated
-  USING ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
+  USING (( SELECT is_admin() AS is_admin));
 
 CREATE POLICY "admin can insert" ON bounty_post AS PERMISSIVE FOR INSERT TO authenticated
-  WITH CHECK ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
+  WITH CHECK (( SELECT is_admin() AS is_admin));
 
 CREATE POLICY "admin can update" ON bounty_post AS PERMISSIVE FOR UPDATE TO authenticated
-  USING ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text))
-  WITH CHECK ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
+  USING (( SELECT is_admin() AS is_admin))
+  WITH CHECK (( SELECT is_admin() AS is_admin));
 
 CREATE POLICY "authenticated can read" ON bounty_post AS PERMISSIVE FOR SELECT TO authenticated
   USING (true);
@@ -1265,14 +1265,14 @@ CREATE POLICY "authenticated can read" ON bounty_post AS PERMISSIVE FOR SELECT T
 ALTER TABLE bounty_settlements ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "admin can delete" ON bounty_settlements AS PERMISSIVE FOR DELETE TO authenticated
-  USING ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
+  USING (( SELECT is_admin() AS is_admin));
 
 CREATE POLICY "admin can insert" ON bounty_settlements AS PERMISSIVE FOR INSERT TO authenticated
-  WITH CHECK ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
+  WITH CHECK (( SELECT is_admin() AS is_admin));
 
 CREATE POLICY "admin can update" ON bounty_settlements AS PERMISSIVE FOR UPDATE TO authenticated
-  USING ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text))
-  WITH CHECK ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
+  USING (( SELECT is_admin() AS is_admin))
+  WITH CHECK (( SELECT is_admin() AS is_admin));
 
 CREATE POLICY "authenticated can read" ON bounty_settlements AS PERMISSIVE FOR SELECT TO authenticated
   USING (true);
@@ -1280,14 +1280,14 @@ CREATE POLICY "authenticated can read" ON bounty_settlements AS PERMISSIVE FOR S
 ALTER TABLE custom_lines ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "admin can delete" ON custom_lines AS PERMISSIVE FOR DELETE TO authenticated
-  USING ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
+  USING (( SELECT is_admin() AS is_admin));
 
 CREATE POLICY "admin can insert" ON custom_lines AS PERMISSIVE FOR INSERT TO authenticated
-  WITH CHECK ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
+  WITH CHECK (( SELECT is_admin() AS is_admin));
 
 CREATE POLICY "admin can update" ON custom_lines AS PERMISSIVE FOR UPDATE TO authenticated
-  USING ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text))
-  WITH CHECK ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
+  USING (( SELECT is_admin() AS is_admin))
+  WITH CHECK (( SELECT is_admin() AS is_admin));
 
 CREATE POLICY "authenticated can read" ON custom_lines AS PERMISSIVE FOR SELECT TO authenticated
   USING (true);
@@ -1295,10 +1295,10 @@ CREATE POLICY "authenticated can read" ON custom_lines AS PERMISSIVE FOR SELECT 
 ALTER TABLE games ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "admin can delete" ON games AS PERMISSIVE FOR DELETE TO authenticated
-  USING ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
+  USING (( SELECT is_admin() AS is_admin));
 
 CREATE POLICY "admin can insert" ON games AS PERMISSIVE FOR INSERT TO authenticated
-  WITH CHECK ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
+  WITH CHECK (( SELECT is_admin() AS is_admin));
 
 CREATE POLICY "authenticated can read" ON games AS PERMISSIVE FOR SELECT TO authenticated
   USING (true);
@@ -1306,8 +1306,8 @@ CREATE POLICY "authenticated can read" ON games AS PERMISSIVE FOR SELECT TO auth
 ALTER TABLE lanetalk_game_imports ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "admin can update" ON lanetalk_game_imports AS PERMISSIVE FOR UPDATE TO authenticated
-  USING ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text))
-  WITH CHECK ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
+  USING (( SELECT is_admin() AS is_admin))
+  WITH CHECK (( SELECT is_admin() AS is_admin));
 
 CREATE POLICY "authenticated can read" ON lanetalk_game_imports AS PERMISSIVE FOR SELECT TO authenticated
   USING (true);
@@ -1315,14 +1315,14 @@ CREATE POLICY "authenticated can read" ON lanetalk_game_imports AS PERMISSIVE FO
 ALTER TABLE loan_ledger ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "admin can delete" ON loan_ledger AS PERMISSIVE FOR DELETE TO authenticated
-  USING ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
+  USING (( SELECT is_admin() AS is_admin));
 
 CREATE POLICY "admin can insert" ON loan_ledger AS PERMISSIVE FOR INSERT TO authenticated
-  WITH CHECK ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
+  WITH CHECK (( SELECT is_admin() AS is_admin));
 
 CREATE POLICY "admin can update" ON loan_ledger AS PERMISSIVE FOR UPDATE TO authenticated
-  USING ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text))
-  WITH CHECK ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
+  USING (( SELECT is_admin() AS is_admin))
+  WITH CHECK (( SELECT is_admin() AS is_admin));
 
 CREATE POLICY "authenticated can read" ON loan_ledger AS PERMISSIVE FOR SELECT TO authenticated
   USING (true);
@@ -1330,14 +1330,14 @@ CREATE POLICY "authenticated can read" ON loan_ledger AS PERMISSIVE FOR SELECT T
 ALTER TABLE loan_products ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "admin can delete" ON loan_products AS PERMISSIVE FOR DELETE TO authenticated
-  USING ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
+  USING (( SELECT is_admin() AS is_admin));
 
 CREATE POLICY "admin can insert" ON loan_products AS PERMISSIVE FOR INSERT TO authenticated
-  WITH CHECK ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
+  WITH CHECK (( SELECT is_admin() AS is_admin));
 
 CREATE POLICY "admin can update" ON loan_products AS PERMISSIVE FOR UPDATE TO authenticated
-  USING ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text))
-  WITH CHECK ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
+  USING (( SELECT is_admin() AS is_admin))
+  WITH CHECK (( SELECT is_admin() AS is_admin));
 
 CREATE POLICY "authenticated can read" ON loan_products AS PERMISSIVE FOR SELECT TO authenticated
   USING (true);
@@ -1345,14 +1345,14 @@ CREATE POLICY "authenticated can read" ON loan_products AS PERMISSIVE FOR SELECT
 ALTER TABLE loans ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "admin can delete" ON loans AS PERMISSIVE FOR DELETE TO authenticated
-  USING ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
+  USING (( SELECT is_admin() AS is_admin));
 
 CREATE POLICY "admin can insert" ON loans AS PERMISSIVE FOR INSERT TO authenticated
-  WITH CHECK ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
+  WITH CHECK (( SELECT is_admin() AS is_admin));
 
 CREATE POLICY "admin can update" ON loans AS PERMISSIVE FOR UPDATE TO authenticated
-  USING ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text))
-  WITH CHECK ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
+  USING (( SELECT is_admin() AS is_admin))
+  WITH CHECK (( SELECT is_admin() AS is_admin));
 
 CREATE POLICY "authenticated can read" ON loans AS PERMISSIVE FOR SELECT TO authenticated
   USING (true);
@@ -1360,10 +1360,10 @@ CREATE POLICY "authenticated can read" ON loans AS PERMISSIVE FOR SELECT TO auth
 ALTER TABLE pin_ledger ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "admin can delete" ON pin_ledger AS PERMISSIVE FOR DELETE TO authenticated
-  USING ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
+  USING (( SELECT is_admin() AS is_admin));
 
 CREATE POLICY "admin can insert" ON pin_ledger AS PERMISSIVE FOR INSERT TO authenticated
-  WITH CHECK ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
+  WITH CHECK (( SELECT is_admin() AS is_admin));
 
 CREATE POLICY "authenticated can read" ON pin_ledger AS PERMISSIVE FOR SELECT TO authenticated
   USING (true);
@@ -1371,11 +1371,11 @@ CREATE POLICY "authenticated can read" ON pin_ledger AS PERMISSIVE FOR SELECT TO
 ALTER TABLE players ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "admin can insert" ON players AS PERMISSIVE FOR INSERT TO authenticated
-  WITH CHECK ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
+  WITH CHECK (( SELECT is_admin() AS is_admin));
 
 CREATE POLICY "admin can update" ON players AS PERMISSIVE FOR UPDATE TO authenticated
-  USING ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text))
-  WITH CHECK ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
+  USING (( SELECT is_admin() AS is_admin))
+  WITH CHECK (( SELECT is_admin() AS is_admin));
 
 CREATE POLICY "authenticated can read" ON players AS PERMISSIVE FOR SELECT TO authenticated
   USING (true);
@@ -1383,8 +1383,8 @@ CREATE POLICY "authenticated can read" ON players AS PERMISSIVE FOR SELECT TO au
 ALTER TABLE playoff_draft_captains ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "admin can write" ON playoff_draft_captains AS PERMISSIVE FOR ALL TO authenticated
-  USING ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text))
-  WITH CHECK ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
+  USING (( SELECT is_admin() AS is_admin))
+  WITH CHECK (( SELECT is_admin() AS is_admin));
 
 CREATE POLICY "authenticated can read" ON playoff_draft_captains AS PERMISSIVE FOR SELECT TO authenticated
   USING (true);
@@ -1392,8 +1392,8 @@ CREATE POLICY "authenticated can read" ON playoff_draft_captains AS PERMISSIVE F
 ALTER TABLE playoff_draft_picks ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "admin can write" ON playoff_draft_picks AS PERMISSIVE FOR ALL TO authenticated
-  USING ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text))
-  WITH CHECK ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
+  USING (( SELECT is_admin() AS is_admin))
+  WITH CHECK (( SELECT is_admin() AS is_admin));
 
 CREATE POLICY "authenticated can read" ON playoff_draft_picks AS PERMISSIVE FOR SELECT TO authenticated
   USING (true);
@@ -1401,8 +1401,8 @@ CREATE POLICY "authenticated can read" ON playoff_draft_picks AS PERMISSIVE FOR 
 ALTER TABLE playoff_draft_pool ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "admin can write" ON playoff_draft_pool AS PERMISSIVE FOR ALL TO authenticated
-  USING ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text))
-  WITH CHECK ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
+  USING (( SELECT is_admin() AS is_admin))
+  WITH CHECK (( SELECT is_admin() AS is_admin));
 
 CREATE POLICY "authenticated can read" ON playoff_draft_pool AS PERMISSIVE FOR SELECT TO authenticated
   USING (true);
@@ -1410,8 +1410,8 @@ CREATE POLICY "authenticated can read" ON playoff_draft_pool AS PERMISSIVE FOR S
 ALTER TABLE playoff_drafts ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "admin can write" ON playoff_drafts AS PERMISSIVE FOR ALL TO authenticated
-  USING ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text))
-  WITH CHECK ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
+  USING (( SELECT is_admin() AS is_admin))
+  WITH CHECK (( SELECT is_admin() AS is_admin));
 
 CREATE POLICY "authenticated can read" ON playoff_drafts AS PERMISSIVE FOR SELECT TO authenticated
   USING (true);
@@ -1419,14 +1419,14 @@ CREATE POLICY "authenticated can read" ON playoff_drafts AS PERMISSIVE FOR SELEC
 ALTER TABLE pvp_challenge_offers ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "admin can delete" ON pvp_challenge_offers AS PERMISSIVE FOR DELETE TO authenticated
-  USING ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
+  USING (( SELECT is_admin() AS is_admin));
 
 CREATE POLICY "admin can insert" ON pvp_challenge_offers AS PERMISSIVE FOR INSERT TO authenticated
-  WITH CHECK ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
+  WITH CHECK (( SELECT is_admin() AS is_admin));
 
 CREATE POLICY "admin can update" ON pvp_challenge_offers AS PERMISSIVE FOR UPDATE TO authenticated
-  USING ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text))
-  WITH CHECK ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
+  USING (( SELECT is_admin() AS is_admin))
+  WITH CHECK (( SELECT is_admin() AS is_admin));
 
 CREATE POLICY "authenticated can read" ON pvp_challenge_offers AS PERMISSIVE FOR SELECT TO authenticated
   USING (true);
@@ -1434,14 +1434,14 @@ CREATE POLICY "authenticated can read" ON pvp_challenge_offers AS PERMISSIVE FOR
 ALTER TABLE pvp_challenges ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "admin can delete" ON pvp_challenges AS PERMISSIVE FOR DELETE TO authenticated
-  USING ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
+  USING (( SELECT is_admin() AS is_admin));
 
 CREATE POLICY "admin can insert" ON pvp_challenges AS PERMISSIVE FOR INSERT TO authenticated
-  WITH CHECK ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
+  WITH CHECK (( SELECT is_admin() AS is_admin));
 
 CREATE POLICY "admin can update" ON pvp_challenges AS PERMISSIVE FOR UPDATE TO authenticated
-  USING ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text))
-  WITH CHECK ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
+  USING (( SELECT is_admin() AS is_admin))
+  WITH CHECK (( SELECT is_admin() AS is_admin));
 
 CREATE POLICY "authenticated can read" ON pvp_challenges AS PERMISSIVE FOR SELECT TO authenticated
   USING (true);
@@ -1449,14 +1449,14 @@ CREATE POLICY "authenticated can read" ON pvp_challenges AS PERMISSIVE FOR SELEC
 ALTER TABLE pvp_ledger ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "admin can delete" ON pvp_ledger AS PERMISSIVE FOR DELETE TO authenticated
-  USING ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
+  USING (( SELECT is_admin() AS is_admin));
 
 CREATE POLICY "admin can insert" ON pvp_ledger AS PERMISSIVE FOR INSERT TO authenticated
-  WITH CHECK ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
+  WITH CHECK (( SELECT is_admin() AS is_admin));
 
 CREATE POLICY "admin can update" ON pvp_ledger AS PERMISSIVE FOR UPDATE TO authenticated
-  USING ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text))
-  WITH CHECK ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
+  USING (( SELECT is_admin() AS is_admin))
+  WITH CHECK (( SELECT is_admin() AS is_admin));
 
 CREATE POLICY "authenticated can read" ON pvp_ledger AS PERMISSIVE FOR SELECT TO authenticated
   USING (true);
@@ -1466,25 +1466,25 @@ ALTER TABLE registrations ENABLE ROW LEVEL SECURITY;
 CREATE POLICY registrations_delete ON registrations AS PERMISSIVE FOR DELETE TO authenticated
   USING (((player_id IN ( SELECT players.id
    FROM players
-  WHERE (players.user_id = ( SELECT auth.uid() AS uid)))) OR (((auth.jwt() -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text)));
+  WHERE (players.user_id = ( SELECT auth.uid() AS uid)))) OR ( SELECT is_admin() AS is_admin)));
 
 CREATE POLICY registrations_insert ON registrations AS PERMISSIVE FOR INSERT TO authenticated
   WITH CHECK (((player_id IN ( SELECT players.id
    FROM players
-  WHERE (players.user_id = ( SELECT auth.uid() AS uid)))) OR (((auth.jwt() -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text)));
+  WHERE (players.user_id = ( SELECT auth.uid() AS uid)))) OR ( SELECT is_admin() AS is_admin)));
 
 CREATE POLICY registrations_select ON registrations AS PERMISSIVE FOR SELECT TO authenticated
   USING (true);
 
 CREATE POLICY registrations_update ON registrations AS PERMISSIVE FOR UPDATE TO authenticated
-  USING ((((auth.jwt() -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text))
-  WITH CHECK ((((auth.jwt() -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
+  USING (( SELECT is_admin() AS is_admin))
+  WITH CHECK (( SELECT is_admin() AS is_admin));
 
 ALTER TABLE rsvp ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "admin can manage rsvp" ON rsvp AS PERMISSIVE FOR ALL TO authenticated
-  USING ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text))
-  WITH CHECK ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
+  USING (( SELECT is_admin() AS is_admin))
+  WITH CHECK (( SELECT is_admin() AS is_admin));
 
 CREATE POLICY "authenticated can read" ON rsvp AS PERMISSIVE FOR SELECT TO authenticated
   USING (true);
@@ -1500,14 +1500,14 @@ CREATE POLICY "player can manage own rsvp" ON rsvp AS PERMISSIVE FOR ALL TO auth
 ALTER TABLE scores ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "admin can delete" ON scores AS PERMISSIVE FOR DELETE TO authenticated
-  USING ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
+  USING (( SELECT is_admin() AS is_admin));
 
 CREATE POLICY "admin can insert" ON scores AS PERMISSIVE FOR INSERT TO authenticated
-  WITH CHECK ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
+  WITH CHECK (( SELECT is_admin() AS is_admin));
 
 CREATE POLICY "admin can update" ON scores AS PERMISSIVE FOR UPDATE TO authenticated
-  USING ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text))
-  WITH CHECK ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
+  USING (( SELECT is_admin() AS is_admin))
+  WITH CHECK (( SELECT is_admin() AS is_admin));
 
 CREATE POLICY "authenticated can read" ON scores AS PERMISSIVE FOR SELECT TO authenticated
   USING (true);
@@ -1515,10 +1515,10 @@ CREATE POLICY "authenticated can read" ON scores AS PERMISSIVE FOR SELECT TO aut
 ALTER TABLE season_champions ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "admin can delete" ON season_champions AS PERMISSIVE FOR DELETE TO authenticated
-  USING ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
+  USING (( SELECT is_admin() AS is_admin));
 
 CREATE POLICY "admin can insert" ON season_champions AS PERMISSIVE FOR INSERT TO authenticated
-  WITH CHECK ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
+  WITH CHECK (( SELECT is_admin() AS is_admin));
 
 CREATE POLICY "authenticated can read" ON season_champions AS PERMISSIVE FOR SELECT TO authenticated
   USING (true);
@@ -1526,14 +1526,14 @@ CREATE POLICY "authenticated can read" ON season_champions AS PERMISSIVE FOR SEL
 ALTER TABLE seasons ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "admin can delete" ON seasons AS PERMISSIVE FOR DELETE TO authenticated
-  USING ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
+  USING (( SELECT is_admin() AS is_admin));
 
 CREATE POLICY "admin can insert" ON seasons AS PERMISSIVE FOR INSERT TO authenticated
-  WITH CHECK ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
+  WITH CHECK (( SELECT is_admin() AS is_admin));
 
 CREATE POLICY "admin can update" ON seasons AS PERMISSIVE FOR UPDATE TO authenticated
-  USING ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text))
-  WITH CHECK ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
+  USING (( SELECT is_admin() AS is_admin))
+  WITH CHECK (( SELECT is_admin() AS is_admin));
 
 CREATE POLICY "authenticated can read" ON seasons AS PERMISSIVE FOR SELECT TO authenticated
   USING (true);
@@ -1541,14 +1541,14 @@ CREATE POLICY "authenticated can read" ON seasons AS PERMISSIVE FOR SELECT TO au
 ALTER TABLE team_slots ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "admin can delete" ON team_slots AS PERMISSIVE FOR DELETE TO authenticated
-  USING ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
+  USING (( SELECT is_admin() AS is_admin));
 
 CREATE POLICY "admin can insert" ON team_slots AS PERMISSIVE FOR INSERT TO authenticated
-  WITH CHECK ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
+  WITH CHECK (( SELECT is_admin() AS is_admin));
 
 CREATE POLICY "admin can update" ON team_slots AS PERMISSIVE FOR UPDATE TO authenticated
-  USING ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text))
-  WITH CHECK ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
+  USING (( SELECT is_admin() AS is_admin))
+  WITH CHECK (( SELECT is_admin() AS is_admin));
 
 CREATE POLICY "authenticated can read" ON team_slots AS PERMISSIVE FOR SELECT TO authenticated
   USING (true);
@@ -1556,14 +1556,14 @@ CREATE POLICY "authenticated can read" ON team_slots AS PERMISSIVE FOR SELECT TO
 ALTER TABLE teams ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "admin can delete" ON teams AS PERMISSIVE FOR DELETE TO authenticated
-  USING ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
+  USING (( SELECT is_admin() AS is_admin));
 
 CREATE POLICY "admin can insert" ON teams AS PERMISSIVE FOR INSERT TO authenticated
-  WITH CHECK ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
+  WITH CHECK (( SELECT is_admin() AS is_admin));
 
 CREATE POLICY "admin can update" ON teams AS PERMISSIVE FOR UPDATE TO authenticated
-  USING ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text))
-  WITH CHECK ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
+  USING (( SELECT is_admin() AS is_admin))
+  WITH CHECK (( SELECT is_admin() AS is_admin));
 
 CREATE POLICY "authenticated can read" ON teams AS PERMISSIVE FOR SELECT TO authenticated
   USING (true);
@@ -1571,21 +1571,21 @@ CREATE POLICY "authenticated can read" ON teams AS PERMISSIVE FOR SELECT TO auth
 ALTER TABLE week_archive_runs ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "admin can read runs" ON week_archive_runs AS PERMISSIVE FOR SELECT TO authenticated
-  USING ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
+  USING (( SELECT is_admin() AS is_admin));
 
 ALTER TABLE week_archive_snapshot ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "admin can read snapshot" ON week_archive_snapshot AS PERMISSIVE FOR SELECT TO authenticated
-  USING ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
+  USING (( SELECT is_admin() AS is_admin));
 
 ALTER TABLE weeks ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "admin can insert" ON weeks AS PERMISSIVE FOR INSERT TO authenticated
-  WITH CHECK ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
+  WITH CHECK (( SELECT is_admin() AS is_admin));
 
 CREATE POLICY "admin can update" ON weeks AS PERMISSIVE FOR UPDATE TO authenticated
-  USING ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text))
-  WITH CHECK ((((( SELECT auth.jwt() AS jwt) -> 'app_metadata'::text) ->> 'role'::text) = 'admin'::text));
+  USING (( SELECT is_admin() AS is_admin))
+  WITH CHECK (( SELECT is_admin() AS is_admin));
 
 CREATE POLICY "authenticated can read" ON weeks AS PERMISSIVE FOR SELECT TO authenticated
   USING (true);

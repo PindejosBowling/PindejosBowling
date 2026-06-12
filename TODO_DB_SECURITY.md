@@ -86,6 +86,16 @@ needs nothing but EXECUTE on it.
 
 ## 2. `is_admin()` policy dedup + fix `registrations` per-row `auth.jwt()`
 
+**Status: ✅ DONE 2026-06-12** — migration `20260612143010_rls_is_admin_dedup`,
+83 policies rewritten (112 admin-expression occurrences → `(SELECT is_admin())`;
+registrations' bare `auth.jwt()` fixed by the same substitution — its
+`auth.uid()` calls were already wrapped). Migration GENERATED from the live
+catalog by [supabase/verify/generate-rls-dedup.py](supabase/verify/generate-rls-dedup.py);
+behavior-preservation PROVEN by an empty normalized before/after `pg_policies`
+diff ([supabase/verify/diff-policies.sh](supabase/verify/diff-policies.sh), 118
+policies). Snapshot policy DDL has zero `app_metadata` references (remaining 32
+are RPC bodies — FUNCTION_HYGIENE batch scope).
+
 ~80 policies repeat the literal JWT-claim expression; the four `registrations`
 policies are the only ones calling **bare** `auth.jwt()` (re-evaluated per row —
 the initplan optimization needs the `(SELECT …)` wrapper).
@@ -168,8 +178,8 @@ Pre-checks (read-only):
 
 ## Done when
 - [x] Anon: one callable function, zero readable rows (curl-verified 2026-06-12)
-- [ ] All admin policies route through `(SELECT public.is_admin())`; registrations
-      wrapped; behavior diff clean
+- [x] All admin policies route through `(SELECT public.is_admin())`; registrations
+      wrapped; behavior diff clean (empty normalized pg_policies diff, 2026-06-12)
 - [x] AUTH.md documents the anon posture + phone-oracle trade-off (2026-06-12)
 - [ ] `players.name` is generated; app no longer writes it
 - [ ] Snapshot + types regenerated
