@@ -9,16 +9,21 @@ export function useLanetalkImportAdmin() {
   const [loading, setLoading] = useState(true)
   const [rawImports, setRawImports] = useState<any[]>([])
   const [unsettledProps, setUnsettledProps] = useState<any[]>([])
+  // Weeks with settled LaneTalk props — lets the screen badge a week as
+  // Confirmed (vs Unconfirmed when it still appears in unsettledProps).
+  const [settledPropWeeks, setSettledPropWeeks] = useState<Set<string>>(new Set())
 
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const [importsRes, propsRes] = await Promise.all([
+      const [importsRes, propsRes, settledRes] = await Promise.all([
         lanetalkImports.listRecent(),
         betMarkets.listUnsettledLanetalkProps(),
+        betMarkets.listSettledLanetalkPropWeeks(),
       ])
       setRawImports(importsRes.data ?? [])
       setUnsettledProps(propsRes.data ?? [])
+      setSettledPropWeeks(new Set((settledRes.data ?? []).map(r => r.week_id).filter((id): id is string => !!id)))
     } catch (e) {
       console.error('useLanetalkImportAdmin error:', e)
     } finally {
@@ -28,5 +33,5 @@ export function useLanetalkImportAdmin() {
 
   useEffect(() => { load() }, [load])
 
-  return { loading, rawImports, unsettledProps, reload: load }
+  return { loading, rawImports, unsettledProps, settledPropWeeks, reload: load }
 }

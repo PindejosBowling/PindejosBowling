@@ -45,22 +45,6 @@ export function useFrameStatsData(playerId: string | null) {
   return { loading, session, reload: load }
 }
 
-/** Lightweight existence check that gates the PlayerDetail entry point. */
-export function useHasFrameStats(playerId: string | null) {
-  const [hasFrameStats, setHasFrameStats] = useState(false)
-
-  useEffect(() => {
-    let cancelled = false
-    if (!playerId) { setHasFrameStats(false); return }
-    lanetalkImports.countByPlayer(playerId).then(({ count }) => {
-      if (!cancelled) setHasFrameStats((count ?? 0) > 0)
-    })
-    return () => { cancelled = true }
-  }, [playerId])
-
-  return hasFrameStats
-}
-
 // ----------------------------------------------------------------------------
 // Session assembly — fold the per-game import rows into one session.
 // ----------------------------------------------------------------------------
@@ -265,6 +249,63 @@ export function computeSessionStats(session: LanetalkSession | null): SessionSta
     splitPct: frameCount ? splits / frameCount : 0,
     splitsConverted,
   }
+}
+
+// ----------------------------------------------------------------------------
+// Frame-stat personal records — single-game and league-night highs.
+// ----------------------------------------------------------------------------
+
+export interface FrameRecords {
+  strikesGame: number
+  strikesNight: number
+  sparesGame: number
+  sparesNight: number
+  closedGame: number
+  closedNight: number
+}
+
+/** Best single-game and single-night (games grouped by league-night date)
+ *  strike / spare / closed-frame counts. Official games only — recreational
+ *  imports don't set records. Frames count once each (10/game), matching
+ *  `computeSessionStats`. */
+export function computeFrameRecords(session: LanetalkSession | null): FrameRecords | null {
+  if (!session) return null
+  const games = session.games.filter(g => g.classification === 'official')
+  if (!games.length) return null
+
+  const rec: FrameRecords = {
+    strikesGame: 0, strikesNight: 0,
+    sparesGame: 0, sparesNight: 0,
+    closedGame: 0, closedNight: 0,
+  }
+  const nights = new Map<string, { strikes: number; spares: number; closed: number }>()
+
+  for (const g of games) {
+    let strikes = 0
+    let spares = 0
+    for (const f of g.frames) {
+      if (f.is_strike) strikes += 1
+      else if (f.is_spare) spares += 1
+    }
+    const closed = strikes + spares
+    rec.strikesGame = Math.max(rec.strikesGame, strikes)
+    rec.sparesGame = Math.max(rec.sparesGame, spares)
+    rec.closedGame = Math.max(rec.closedGame, closed)
+
+    const night = nights.get(g.date) ?? { strikes: 0, spares: 0, closed: 0 }
+    night.strikes += strikes
+    night.spares += spares
+    night.closed += closed
+    nights.set(g.date, night)
+  }
+
+  for (const n of nights.values()) {
+    rec.strikesNight = Math.max(rec.strikesNight, n.strikes)
+    rec.sparesNight = Math.max(rec.sparesNight, n.spares)
+    rec.closedNight = Math.max(rec.closedNight, n.closed)
+  }
+
+  return rec
 }
 
 // ----------------------------------------------------------------------------

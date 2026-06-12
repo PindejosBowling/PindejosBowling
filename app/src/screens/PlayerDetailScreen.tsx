@@ -20,7 +20,7 @@ import {
   computeExpandedMatchups,
 } from '../hooks/usePlayerDetailData'
 import { initials } from '../utils/helpers'
-import { useHasFrameStats } from '../hooks/useFrameStatsData'
+import { useFrameStatsData, computeFrameRecords } from '../hooks/useFrameStatsData'
 import LoadingView from '../components/ui/LoadingView'
 import PillFilter from '../components/ui/PillFilter'
 import ScreenHeader from '../components/ui/ScreenHeader'
@@ -41,7 +41,8 @@ export default function PlayerDetailScreen() {
   } = usePlayerDetailData(name)
 
   const { playerSeason, expandedWeek, set } = useUiStore()
-  const { refreshing, onRefresh } = useRefresh(reload)
+  const { session: frameSession, reload: reloadFrames } = useFrameStatsData(playerId)
+  const { refreshing, onRefresh } = useRefresh(async () => { await Promise.all([reload(), reloadFrames()]) })
   const { width: screenWidth } = useWindowDimensions()
 
   const playerSeasons = useMemo(
@@ -87,14 +88,26 @@ export default function PlayerDetailScreen() {
 
   const chartData = useMemo(() => {
     if (!playerId) return null
-    const points = computeChartPoints(playerId, allScores, allSchedule, activeSeasonId)
-    if (!points.length) return null
+    const rawPoints = computeChartPoints(playerId, allScores, allSchedule, activeSeasonId)
+    if (!rawPoints.length) return null
+    // Every game carries its week label, so weeks repeat 2–3× and all-time
+    // becomes an unreadable wall — keep at most ~6 labels at evenly spaced
+    // points (week boundaries give uneven gaps since weeks have 2–3 games).
+    const weekCount = new Set(rawPoints.map(p => p.label)).size
+    const labelCount = Math.min(6, weekCount)
+    const labeledIdx = new Set(
+      labelCount > 1
+        ? Array.from({ length: labelCount }, (_, j) => Math.round(j * (rawPoints.length - 1) / (labelCount - 1)))
+        : [0],
+    )
+    const points = rawPoints.map((p, i) => (labeledIdx.has(i) ? p : { ...p, label: '' }))
     const avg = profile?.avg ?? 0
     const chartWidth = screenWidth - 32 - 4 - 12 - 35
     return { points, avg, chartWidth }
-  }, [playerId, allScores, activeSeasonId, profile, screenWidth])
+  }, [playerId, allScores, allSchedule, activeSeasonId, profile, screenWidth])
 
-  const hasFrameStats = useHasFrameStats(playerId)
+  const hasFrameStats = !!frameSession
+  const frameRecords = useMemo(() => computeFrameRecords(frameSession), [frameSession])
 
   function toggleWeek(key: string) {
     set({ expandedWeek: expandedWeek === key ? null : key })
@@ -131,10 +144,10 @@ export default function PlayerDetailScreen() {
           <View style={styles.statGrid}>
             <StatTile label="Avg" value={profile.avg > 0 ? profile.avg.toFixed(1) : '—'} />
             <StatTile label="High Game" value={profile.highGame || '—'} />
-            <StatTile label="W—L" value={`${profile.totalWins}–${profile.totalLosses}`} />
-            <StatTile label="Last 5 Avg" value={profile.last5Avg > 0 ? profile.last5Avg.toFixed(1) : '—'} />
             <StatTile label="Season Avg" value={profile.seasonAvg > 0 ? profile.seasonAvg.toFixed(1) : '—'} />
+            <StatTile label="Last 5 Avg" value={profile.last5Avg > 0 ? profile.last5Avg.toFixed(1) : '—'} />
             <StatTile label="Games" value={String(profile.totalGames)} />
+            <StatTile label="W—L" value={`${profile.totalWins}–${profile.totalLosses}`} />
           </View>
         ) : null}
 
@@ -160,16 +173,29 @@ export default function PlayerDetailScreen() {
         {records ? (
           <>
             <Text style={styles.sectionHeader}>Personal Records</Text>
-            <RecordCard icon="🎳" label="High Game" value={records.highGame || '—'} />
             <RecordCard icon="📈" label="High Series" value={records.highSeries || '—'} />
-            <RecordCard
-              icon="🔥"
-              label="Best Streak"
-              value={`${records.bestStreak} ${records.bestStreak === 1 ? 'night' : 'nights'}`}
-              sub={records.currentStreak > 0
-                ? `Current: ${records.currentStreak} ${records.currentStreakType === 'W' ? 'win' : 'loss'}${records.currentStreak > 1 ? (records.currentStreakType === 'W' ? 's' : 'es') : ''}`
-                : undefined}
-            />
+            {frameRecords ? (
+              <>
+                <RecordCard
+                  icon="💥"
+                  label="High Strikes"
+                  value={`${frameRecords.strikesGame} / ${frameRecords.strikesNight}`}
+                  sub="Game / Week"
+                />
+                <RecordCard
+                  icon="🎯"
+                  label="High Spares"
+                  value={`${frameRecords.sparesGame} / ${frameRecords.sparesNight}`}
+                  sub="Game / Week"
+                />
+                <RecordCard
+                  icon="✅"
+                  label="High Closed Frames"
+                  value={`${frameRecords.closedGame} / ${frameRecords.closedNight}`}
+                  sub="Game / Week"
+                />
+              </>
+            ) : null}
           </>
         ) : null}
 
@@ -200,7 +226,7 @@ export default function PlayerDetailScreen() {
                 yAxisColor="transparent"
                 xAxisColor="transparent"
                 yAxisTextStyle={{ color: colors.muted, fontSize: 10, fontFamily: fonts.barlowCondensed }}
-                xAxisLabelTextStyle={{ color: colors.muted, fontSize: 9, fontFamily: fonts.barlowCondensed }}
+                xAxisLabelTextStyle={{ color: colors.muted, fontSize: 11, fontFamily: fonts.barlowCondensed, width: 40, textAlign: 'center' }}
                 hideDataPoints={false}
                 showXAxisIndices={false}
                 hideYAxisText={false}
@@ -210,7 +236,6 @@ export default function PlayerDetailScreen() {
                 endSpacing={0}
                 backgroundColor={colors.surface}
                 xAxisLabelsVerticalShift={4}
-                rotateLabel
               />
             </View>
           </View>
