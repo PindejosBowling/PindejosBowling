@@ -811,7 +811,10 @@ export type Database = {
       lanetalk_game_imports: {
         Row: {
           classification: string
+          clean_pct: number | null
           created_at: string
+          first_ball_avg: number | null
+          frames: number | null
           game_number: number
           id: string
           payload: Json
@@ -819,13 +822,18 @@ export type Database = {
           player_id: string | null
           score: number | null
           source_url: string
+          spares: number | null
+          strikes: number | null
           team_slot_id: string | null
           updated_at: string
           week_id: string | null
         }
         Insert: {
           classification: string
+          clean_pct?: number | null
           created_at?: string
+          first_ball_avg?: number | null
+          frames?: number | null
           game_number: number
           id?: string
           payload: Json
@@ -833,13 +841,18 @@ export type Database = {
           player_id?: string | null
           score?: number | null
           source_url: string
+          spares?: number | null
+          strikes?: number | null
           team_slot_id?: string | null
           updated_at?: string
           week_id?: string | null
         }
         Update: {
           classification?: string
+          clean_pct?: number | null
           created_at?: string
+          first_ball_avg?: number | null
+          frames?: number | null
           game_number?: number
           id?: string
           payload?: Json
@@ -847,6 +860,8 @@ export type Database = {
           player_id?: string | null
           score?: number | null
           source_url?: string
+          spares?: number | null
+          strikes?: number | null
           team_slot_id?: string | null
           updated_at?: string
           week_id?: string | null

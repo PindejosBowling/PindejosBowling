@@ -197,7 +197,12 @@ CREATE TABLE lanetalk_game_imports (
   played_at timestamp with time zone,
   payload jsonb NOT NULL,
   created_at timestamp with time zone NOT NULL DEFAULT now(),
-  updated_at timestamp with time zone NOT NULL DEFAULT now()
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  frames integer,
+  strikes integer,
+  spares integer,
+  clean_pct numeric,
+  first_ball_avg numeric
 );
 
 CREATE TABLE loan_ledger (
@@ -2972,18 +2977,14 @@ CREATE OR REPLACE FUNCTION public.lanetalk_seed_lines(p_player_id uuid)
  SET search_path TO ''
 AS $function$
   SELECT
-    LEAST(9.5, GREATEST(0.5, floor(avg(st.strikes)) + 0.5))      AS strikes_line,
-    LEAST(9.5, GREATEST(0.5, floor(avg(st.spares)) + 0.5))       AS spares_line,
-    avg(st.strikes + st.spares)                                  AS clean_frames_per_game,
-    round(sum(st.first_ball_avg * f.n) / sum(f.n), 1)            AS first_ball_avg_line
+    LEAST(9.5, GREATEST(0.5, floor(avg(i.strikes)) + 0.5))       AS strikes_line,
+    LEAST(9.5, GREATEST(0.5, floor(avg(i.spares)) + 0.5))        AS spares_line,
+    avg(i.strikes + i.spares)                                    AS clean_frames_per_game,
+    round(sum(i.first_ball_avg * i.frames) / sum(i.frames), 1)   AS first_ball_avg_line
   FROM public.lanetalk_game_imports i
-  CROSS JOIN LATERAL (
-    SELECT jsonb_array_length(COALESCE(i.payload -> 'frames', '[]'::jsonb)) AS n
-  ) f
-  CROSS JOIN LATERAL public.lanetalk_game_stats(i.payload) st
   WHERE i.player_id = p_player_id
     AND i.classification = 'official'
-    AND f.n > 0
+    AND i.frames > 0
   HAVING count(*) > 0;
 $function$
 ;
@@ -4440,7 +4441,9 @@ BEGIN
              END
         INTO v_value
       FROM public.lanetalk_game_imports i
-      CROSS JOIN LATERAL public.lanetalk_game_stats(i.payload) st
+      CROSS JOIN LATERAL (
+        SELECT i.strikes, i.spares, i.clean_pct, i.first_ball_avg
+      ) st
       WHERE i.week_id = p_week_id
         AND i.player_id = v_mkt.subject_player_id
         AND i.game_number = v_mkt.game_number
@@ -4477,9 +4480,7 @@ BEGIN
           INTO v_value
         FROM public.lanetalk_game_imports i
         CROSS JOIN LATERAL (
-          SELECT g.strikes, g.spares, g.clean_pct, g.first_ball_avg,
-                 jsonb_array_length(COALESCE(i.payload -> 'frames', '[]'::jsonb)) AS frames
-          FROM public.lanetalk_game_stats(i.payload) g
+          SELECT i.strikes, i.spares, i.clean_pct, i.first_ball_avg, i.frames
         ) st
         WHERE i.week_id = p_week_id
           AND i.player_id = v_mkt.subject_player_id
@@ -5030,7 +5031,7 @@ BEGIN
          SELECT 1 FROM public.lanetalk_game_imports i
          WHERE i.player_id = m.subject_player_id
            AND i.classification = 'official'
-           AND jsonb_array_length(COALESCE(i.payload -> 'frames', '[]'::jsonb)) > 0)
+           AND i.frames > 0)
        OR (m.game_number IS NOT NULL AND m.game_number <> ALL (v_target_games))
        OR (m.game_number IS NOT NULL AND v_has_games AND NOT EXISTS (
              SELECT 1 FROM public.scores s
@@ -5506,6 +5507,24 @@ END;
 $function$
 ;
 
+CREATE OR REPLACE FUNCTION public.trg_lanetalk_import_stats()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SET search_path TO ''
+AS $function$
+DECLARE st record;
+BEGIN
+  SELECT * INTO st FROM public.lanetalk_game_stats(NEW.payload);
+  NEW.frames         := jsonb_array_length(COALESCE(NEW.payload -> 'frames', '[]'::jsonb));
+  NEW.strikes        := st.strikes;
+  NEW.spares         := st.spares;
+  NEW.clean_pct      := st.clean_pct;
+  NEW.first_ball_avg := st.first_ball_avg;
+  RETURN NEW;
+END;
+$function$
+;
+
 CREATE OR REPLACE FUNCTION public.trg_resync_markets_games()
  RETURNS trigger
  LANGUAGE plpgsql
@@ -5943,6 +5962,8 @@ CREATE TRIGGER games_resync_markets_upd AFTER UPDATE ON public.games REFERENCING
 CREATE TRIGGER games_same_week_check BEFORE INSERT OR UPDATE OF team_a_id, team_b_id ON public.games FOR EACH ROW EXECUTE FUNCTION games_same_week();
 
 CREATE TRIGGER set_updated_at BEFORE UPDATE ON public.games FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+CREATE TRIGGER lanetalk_import_stats BEFORE INSERT OR UPDATE OF payload ON public.lanetalk_game_imports FOR EACH ROW EXECUTE FUNCTION trg_lanetalk_import_stats();
 
 CREATE TRIGGER set_updated_at BEFORE UPDATE ON public.lanetalk_game_imports FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
