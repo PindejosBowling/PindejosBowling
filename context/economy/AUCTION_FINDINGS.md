@@ -2,10 +2,12 @@
 
 Outcome of the 2026-06-11 design-grilling session on `ECONOMIC_DESIGN_SILENT_AUCTIONS.md`, plus the codebase facts that shaped each decision. This is the decision record feeding the implementation plan; the eventual as-built specs are `SILENT_AUCTIONS_DB.md` / `SILENT_AUCTIONS_APP.md`.
 
+> **Revised 2026-06-12** after merging main's DB tech-debt batch (`CURRENT_STATE.md`): shared helpers (`assert_admin`/`is_admin`/`current_player_id`/`current_season_id`/`pin_balance`), `pin_ledger_double_entry()` as the only sanctioned pin movement, deny-by-default function grants (anon lockdown), and the `(SELECT public.is_admin())` RLS pattern. The build-on-new-primitives details live in the implementation plan.
+
 ## Codebase ground truth (verified)
 
-- Balance is `SUM(pin_ledger.amount)` per player+season; bet stakes are escrowed at placement, so "available balance" = current balance. The pledge model's affordability check is one query.
-- The Bounty Board is the structural template: root table + RPCs (create/enter/close/settle/cancel), SECURITY DEFINER identity from `auth.uid()`, double-entry ledger pairs, hard-delete cancel, `publish_activity_event` wiring.
+- Balance is `SUM(pin_ledger.amount)` per player+season — now wrapped by the shared `pin_balance(player, season)` helper, which all affordability checks must use; bet stakes are escrowed at placement, so "available balance" = current balance. The pledge model's affordability check is one helper call.
+- The Bounty Board is the structural template: root table + RPCs (create/enter/close/settle/cancel), SECURITY DEFINER identity via `current_player_id()`, ledger pairs via `pin_ledger_double_entry()`, hard-delete cancel, `publish_activity_event` wiring.
 - **No inventory/merchant system exists** — nothing in the live schema could be delivered to a winner.
 - **No hidden-row RLS precedent** — every table is fully readable; sealed bids need the codebase's first ownership-filtered policy.
 - **No pg_cron / scheduled jobs** — all transitions today are admin-RPC or archive-tick driven.
@@ -29,7 +31,7 @@ Explicit activation with charges: the player attaches a charge at bet placement 
 
 Hard requirement: the auction settles **at the configured close time, immediately**, with the item transferred only after payment commits. Therefore:
 
-- Enable `pg_cron` (first scheduled job in the project); a per-minute `sweep_auctions()` opens scheduled auctions at `opens_at` and settles due ones via an idempotent `settle_auction_internal` (no grants — cron has no JWT, so no `auth.jwt()` gate inside; security = revoked EXECUTE).
+- Enable `pg_cron` (first scheduled job in the project); a per-minute `sweep_auctions()` opens scheduled auctions at `opens_at` and settles due ones via an idempotent `settle_auction_internal` (no grants — cron has no JWT, so no `auth.jwt()` gate inside; security = simply never granting EXECUTE, which the post-lockdown deny-by-default posture makes automatic).
 - An admin-gated `settle_auction` wrapper exists as manual fallback.
 - `archive_week` / `unarchive_week` never know auctions exist.
 - The bid RPC's time check (`now() < closes_at`) is authoritative independent of cron lag; both bid and settle take `FOR UPDATE` on the auction row to kill the close-boundary race.
@@ -42,7 +44,7 @@ One item, one winner, first-price. Schema carries `quantity int DEFAULT 1 CHECK 
 
 Losing bids stay private **forever** — the doc's full post-settlement bid table is rejected on social-dynamics grounds (consistent with the sportsbook hiding the "under" side). Consequences:
 
-- `auction_bids` SELECT is owner-only **always** (no reveal flip) — the first ownership-filtered RLS policy in the codebase.
+- `auction_bids` SELECT is owner-only **always** (no reveal flip) — the first ownership-filtered RLS policy in the codebase. (All reads are `TO authenticated` post-lockdown; "public" read no longer exists anywhere.)
 - The public story lives on the `auctions` row (`winner_player_id`, `winning_price`, denormalized `bidder_count` maintained by the bid RPC) and in feed events.
 - Bounce events name the player and the fee, never their bid amount.
 
@@ -64,7 +66,7 @@ One active bid per player; raises only (prior bid marked `superseded`); `>= mini
 
 ### 10. Ledger & lifecycle plumbing
 
-- `pin_ledger`: new `auction_id` FK; new event types `auction_purchase`, `auction_check_bounce`, `bet_insurance_refund`.
+- `pin_ledger`: new `auction_id` FK — the feature's **exactly-one root ref** per the PIN_ECONOMY_SCHEMA §4 ref-column policy (it is what cancel/reverse deletes by); new event types `auction_purchase`, `auction_check_bounce`, `bet_insurance_refund`. All pairs are written by `pin_ledger_double_entry()`, extended with a trailing defaulted `p_auction_id`; the insurance refund is bet-domain and rides `bet_id` + `week_id`, with no auction ref.
 - Auction statuses: `draft → scheduled → open → settled / settled_no_winner` (no `cancelled` status — see below).
 - Cancel pre-settlement = hard delete (bids + feed rows cascade; no ledger rows can exist). Post-settlement = `reverse_settled_auction`: delete ledger pairs by `auction_id`, revoke the inventory item (RAISE if already consumed), delete the auction — "as if it never happened," per bounty cancel conventions.
 
