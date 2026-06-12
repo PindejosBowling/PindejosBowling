@@ -110,18 +110,6 @@ const WANTED_POSTER: Sprite = [
   'pppppppppppp',
 ]
 
-const SHARK_FIN: Sprite = [
-  '...s...',
-  '..ss...',
-  '.ssss..',
-  'ssssss.',
-]
-
-const SHARK_FIN_SMALL: Sprite = [
-  '.s..',
-  'ssss',
-]
-
 const GAVEL_HEAD: Sprite = [
   '.hhhhhh.',
   'hhhhhhhh',
@@ -279,38 +267,8 @@ const bounty: SceneDef = {
   },
 }
 
-// Loan Shark: fins cresting the waterline. Quiet — the ledger is dense.
-const loansharkWater: Sprite = (() => {
-  const rows = Array.from({ length: 5 }, () => Array<string>(48).fill('.'))
-  for (let x = 0; x < 48; x++) {
-    if (x % 6 === 2) rows[0][x] = 'v' // crests
-    if (x % 6 !== 5) rows[1][x] = 'v' // broken waterline
-  }
-  for (let y = 2; y < 5; y++) {
-    for (let x = 0; x < 48; x++) if ((x + y) % 5 === 0) rows[y][x] = 'u' // depths
-  }
-  return rows.map(r => r.join(''))
-})()
-
-const loanshark: SceneDef = {
-  anchor: 'bottom',
-  opacity: 0.08,
-  grid: {
-    rows: compose(48, 9, [
-      { sprite: loansharkWater, x: 0, y: 4 },
-      { sprite: SHARK_FIN, x: 10, y: 0 },
-      { sprite: SHARK_FIN_SMALL, x: 34, y: 2 },
-      { sprite: ['o'], x: 19, y: 1 },
-      { sprite: ['o'], x: 21, y: 2 },
-    ]),
-    palette: {
-      s: colors.muted,
-      v: colors.pixelArt.teal,
-      u: colors.muted2,
-      o: colors.text,
-    },
-  },
-}
+// Loan Shark uses LoanSharkDepthBorders (scrolling side strips) instead of a
+// fixed backdrop scene — the art length must track the scroll content.
 
 // Auction House: the gavel mid-strike, sparks flying off the sound block.
 const auction: SceneDef = {
@@ -344,7 +302,6 @@ export const SCENES = {
   sportsbook,
   pvp,
   bounty,
-  loanshark,
   auction,
 } satisfies Record<string, SceneDef>
 

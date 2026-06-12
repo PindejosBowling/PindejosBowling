@@ -12,7 +12,7 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { useNavigation } from '@react-navigation/native'
 import { colors, fonts, radius } from '../theme'
 import ScreenHeader from '../components/ui/ScreenHeader'
-import PixelArtBackdrop from '../components/pixelart/PixelArtBackdrop'
+import LoanSharkDepthBorders from '../components/pixelart/LoanSharkDepthBorders'
 import LoadingView from '../components/ui/LoadingView'
 import Toast from '../components/ui/Toast'
 import BorrowConfirmModal from '../components/economy/BorrowConfirmModal'
@@ -108,12 +108,12 @@ export default function LoanSharkScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
-      <PixelArtBackdrop scene="loanshark" />
       <ScreenHeader title="Loan Shark" subtitle="Borrow at your own risk" onBack={() => navigation.goBack()} />
       <ScrollView
         contentContainerStyle={styles.content}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.muted} />}
       >
+        <LoanSharkDepthBorders />
         <View style={styles.balancePill}>
           <Text style={styles.balancePillLabel}>BALANCE</Text>
           <Text style={styles.balancePillValue}>{balance.toLocaleString()} pins</Text>
