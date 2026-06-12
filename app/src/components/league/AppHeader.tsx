@@ -51,7 +51,8 @@ const styles = StyleSheet.create({
     paddingLeft: 16,
     paddingRight: 24,
     paddingVertical: 10,
-    backgroundColor: colors.bg,
+    // Transparent on purpose: screens mount ambient pixel-art backdrops behind
+    // the header (e.g. the Pinsino landing) and the art must show through.
   },
   emoji: {
     fontSize: 24,

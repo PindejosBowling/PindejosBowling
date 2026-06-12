@@ -52,7 +52,7 @@ The soft `pixelArt` tints carry most of the area; gold/lime/red carry the accent
 | Screen | Scene | Story |
 |---|---|---|
 | Pinsino landing | Minimal desert noir: starfield, moon, neon diamond, lone saguaro on a dune ridge, red eyes | The approach to the casino — empty desert, something watching |
-| Sportsbook | Grimy casino interior: unreadable odds boards, ball-as-roulette-wheel, pins-as-chips, counter with slips & parlay tickets | Inside the bookmaker's den |
+| Sportsbook | Scroll-length marquee menu board: a bulb-studded panel framing the header (title + view pills), side rails the full scroll length, closing rail at the bottom, eyes near the bottom rail | The bookmaker's menu — the lines are what's for sale |
 | Loan Shark | Scroll-length dive: beach → surf → shallows → fins → deep → abyss with eyes | Risk literally deepens as you scroll toward the worse loans |
 | Market Moves | City skyline, lit windows, zigzag ticker with an up-arrow | The financial district of a town that shouldn't have one |
 | PvP | Texas shootout at midnight (hero scene, bottom half of screen): two gunslinger pins drawn down across an empty street, gold holster glints, tumbleweed, saguaro, red eyes on the ridge | High-noon duel, hours after midnight |

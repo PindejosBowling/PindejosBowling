@@ -8,7 +8,7 @@ import {
   StyleSheet,
   RefreshControl,
 } from 'react-native'
-import { SafeAreaView } from 'react-native-safe-area-context'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useNavigation } from '@react-navigation/native'
 import { colors, fonts, radius } from '../theme'
 import ScreenHeader from '../components/ui/ScreenHeader'
@@ -58,6 +58,7 @@ export default function LoanSharkScreen() {
 
   const { loading, balance, products, activeLoan, reload } = useLoanSharkData(playerId)
   const { refreshing, onRefresh } = useRefresh(reload)
+  const insets = useSafeAreaInsets()
 
   const [confirmProduct, setConfirmProduct] = useState<LoanProductView | null>(null)
   const [repayAmount, setRepayAmount] = useState('')
@@ -107,11 +108,13 @@ export default function LoanSharkScreen() {
   if (loading) return <LoadingView label="Loading…" />
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
-      {/* Header lives inside the ScrollView (the Sportsbook pattern) so the
-          depth field starts at the very top of the screen — see pixelart/config.ts. */}
+    <View style={styles.safe}>
+      {/* Header lives inside the ScrollView so the depth field starts at the
+          very top of the screen; the safe-area inset is content padding rather
+          than a SafeAreaView edge so the art paints under the status bar to
+          the bezel — see pixelart/config.ts. */}
       <ScrollView
-        contentContainerStyle={styles.content}
+        contentContainerStyle={[styles.content, { paddingTop: insets.top }]}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.muted} />}
       >
         <LoanSharkDepthBackdrop />
@@ -231,7 +234,7 @@ export default function LoanSharkScreen() {
         />
       )}
       <Toast />
-    </SafeAreaView>
+    </View>
   )
 }
 
