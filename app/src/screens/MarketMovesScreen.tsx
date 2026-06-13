@@ -5,7 +5,7 @@ import { useNavigation, useFocusEffect } from '@react-navigation/native'
 import { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { colors, fonts, radius } from '../theme'
 import ScreenHeader from '../components/ui/ScreenHeader'
-import PixelArtBackdrop from '../components/pixelart/PixelArtBackdrop'
+import MarketMovesTownBackdrop from '../components/pixelart/MarketMovesTownBackdrop'
 import LoadingView from '../components/ui/LoadingView'
 import PillFilter from '../components/ui/PillFilter'
 import MarketMoveCard from '../components/economy/MarketMoveCard'
@@ -150,7 +150,7 @@ export default function MarketMovesScreen() {
   if (loading) {
     return (
       <SafeAreaView style={styles.safe} edges={['top']}>
-        <PixelArtBackdrop scene="marketmoves" />
+        <MarketMovesTownBackdrop />
         <LoadingView label="Loading…" transparent delayed />
       </SafeAreaView>
     )
@@ -158,7 +158,7 @@ export default function MarketMovesScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
-      <PixelArtBackdrop scene="marketmoves" />
+      <MarketMovesTownBackdrop />
       <ScreenHeader title="Market Moves" subtitle="The Pinsino Newswire" onBack={() => navigation.goBack()} />
       <View style={styles.pillBar}>
         <PillFilter

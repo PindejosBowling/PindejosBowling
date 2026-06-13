@@ -1,7 +1,6 @@
-// Central configuration for every pixel-art backdrop. All renderers
-// (PixelArtBackdrop, PinsinoNoirBackdrop, LoanSharkDepthBackdrop, and any
-// future ones) MUST take their cell size and opacity from here so page
-// backgrounds stay consistent app-wide.
+// Central configuration for every pixel-art backdrop. All renderers (the
+// per-screen *Backdrop components, and any future ones) MUST take their cell
+// size and opacity from here so page backgrounds stay consistent app-wide.
 //
 // THE MOUNTING STANDARD — art extends to the very top of the screen (the
 // physical bezel, painting under the status bar), and headers carry NO
@@ -35,9 +34,3 @@ export const BACKDROP_OPACITY = {
   /** Scroll-length procedural fields (art lives in the gutters/gaps). */
   scrollField: 0.22,
 }
-
-/** Vertical inset for `topRight`-anchored scenes so they clear the header. */
-export const TOP_ANCHOR_INSET = 120
-
-/** Horizontal inset for corner-anchored scenes. */
-export const EDGE_INSET = 12
