@@ -149,8 +149,8 @@ const marketmoves: SceneDef = {
   },
 }
 
-// Sportsbook uses SportsbookMenuBoardBackdrop (a scroll-length marquee frame
-// sized to the header panel) instead of a fixed scene.
+// Sportsbook uses SportsbookPokerTableBackdrop (a scroll-length nine-seat
+// poker-table border) instead of a fixed scene.
 
 // PvP uses PvPShootoutBackdrop (a full-viewport midnight-shootout field with
 // a bezel-to-ground sky) instead of a fixed scene.

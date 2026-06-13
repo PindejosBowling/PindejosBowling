@@ -33,7 +33,7 @@ All color comes from theme tokens — never invent hexes. From `src/theme.ts`:
 | Menace | `colors.danger` | `#ff4f6d` | eyes, rare glints — pixels, not shapes |
 | Bright detail | `colors.text` | `#f0f0f0` | stars, dice, bone-white accents (sparingly) |
 | Structure | `colors.surface3`, `colors.muted2`, `colors.muted` | charcoals/grays | frames, counters, silhouettes, dust |
-| Soft tints | `colors.pixelArt.*` | teal `#6fa8a3` · purple `#8d7fb8` · rose `#c2899c` · sand `#c4ad85` | the desaturated "art" layer: dunes, water, cacti, moons, wood |
+| Soft tints | `colors.pixelArt.*` | teal `#6fa8a3` · purple `#8d7fb8` · rose `#c2899c` · sand `#c4ad85` · wood `#5c4433` | the desaturated "art" layer: dunes, water, cacti, moons, table rails |
 
 The soft `pixelArt` tints carry most of the area; gold/lime/red carry the accents. A scene that's mostly gold is wrong. A scene with no gold at all is probably also wrong.
 
@@ -52,7 +52,7 @@ The soft `pixelArt` tints carry most of the area; gold/lime/red carry the accent
 | Screen | Scene | Story |
 |---|---|---|
 | Pinsino landing | Minimal desert noir: starfield, moon, neon diamond, lone saguaro on a dune ridge, red eyes | The approach to the casino — empty desert, something watching |
-| Sportsbook | Scroll-length marquee menu board: a bulb-studded panel framing the header (title + view pills), side rails the full scroll length, closing rail at the bottom, eyes near the bottom rail | The bookmaker's menu — the lines are what's for sale |
+| Sportsbook | Scroll-length nine-seat poker table seen from above: dark wooden rail wrapping the whole page (rounded corners, felt line inside), seat cushions around the rail dressed with trinkets — cards, chip stacks, a martini, dice, the dealer button — eyes under the table | The page is the table; the lines play out on the felt |
 | Loan Shark | Scroll-length dive: beach → surf → shallows → fins → deep → abyss with eyes | Risk literally deepens as you scroll toward the worse loans |
 | Market Moves | City skyline, lit windows, zigzag ticker with an up-arrow | The financial district of a town that shouldn't have one |
 | PvP | Texas shootout at midnight (full-viewport hero field): bezel-to-ground starfield with a shooting star, one bright star, and buzzards circling; two gunslinger pins drawn down across an empty street, gold holster glints, tumbleweed, saguaro, red eyes on the ridge | High-noon duel, hours after midnight |

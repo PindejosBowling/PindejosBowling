@@ -12,7 +12,7 @@ import { useNavigation } from '@react-navigation/native'
 import { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { colors, fonts, radius } from '../theme'
 import ScreenHeader from '../components/ui/ScreenHeader'
-import SportsbookMenuBoardBackdrop from '../components/pixelart/SportsbookMenuBoardBackdrop'
+import SportsbookPokerTableBackdrop from '../components/pixelart/SportsbookPokerTableBackdrop'
 import LoadingView from '../components/ui/LoadingView'
 import ToggleGroup from '../components/ui/ToggleGroup'
 import BetRow from '../components/betting/BetRow'
@@ -428,7 +428,7 @@ export default function SportsbookScreen() {
   return (
     <View style={styles.safe}>
       {/* Safe-area inset is content padding rather than a SafeAreaView edge so
-          the menu-board field paints under the status bar to the bezel. */}
+          the poker-table field paints under the status bar to the bezel. */}
       <ScrollView
         contentContainerStyle={[
           styles.content,
@@ -437,7 +437,7 @@ export default function SportsbookScreen() {
         ]}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.muted} />}
       >
-        <SportsbookMenuBoardBackdrop />
+        <SportsbookPokerTableBackdrop />
         <ScreenHeader title="Sportsbook" onBack={() => navigation.goBack()} />
 
         {/* View toggle */}
@@ -566,9 +566,9 @@ export default function SportsbookScreen() {
                   <LineRowContainer
                     title={title}
                     count={lineCount}
-                    // Game 1 opens the board ready to bet; everything else
-                    // starts as a collapsed summary bar.
-                    defaultCollapsed={group.key !== 'game-1'}
+                    // Every group starts as a collapsed summary bar — the
+                    // board opens as a stack of headers over the poker table.
+                    defaultCollapsed
                     disabled={gameInProgress}
                     rows={containerRows}
                   />
@@ -728,7 +728,9 @@ export default function SportsbookScreen() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.bg },
-  content: { paddingHorizontal: 16, paddingBottom: 40 },
+  // flexGrow keeps the scroll content (and the poker-table border measured
+  // from it) at least viewport-height when every group is collapsed.
+  content: { paddingHorizontal: 16, paddingBottom: 40, flexGrow: 1 },
 
   viewToggle: { marginBottom: 20 },
 

@@ -24,6 +24,7 @@ export const colors = {
     purple: '#8d7fb8',
     rose:   '#c2899c',
     sand:   '#c4ad85',
+    wood:   '#5c4433', // dark wood — table rails, furniture silhouettes
   },
 }
 
