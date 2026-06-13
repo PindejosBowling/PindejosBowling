@@ -57,23 +57,6 @@ function building(w: number, h: number): Sprite {
   )
 }
 
-const WANTED_POSTER: Sprite = [
-  'pppppppppppp',
-  'p..........p',
-  'p.tt.tt.tt.p',
-  'p..........p',
-  'p....gg....p',
-  'p...gggg...p',
-  'p..gggggg..p',
-  'p...gggg...p',
-  'p....gg....p',
-  'p..........p',
-  'p.tttttttt.p',
-  'p..tttttt..p',
-  'p..........p',
-  'pppppppppppp',
-]
-
 const GAVEL_HEAD: Sprite = [
   '.hhhhhh.',
   'hhhhhhhh',
@@ -155,20 +138,8 @@ const marketmoves: SceneDef = {
 // PvP uses PvPShootoutBackdrop (a full-viewport midnight-shootout field with
 // a bezel-to-ground sky) instead of a fixed scene.
 
-// Bounties: a wanted poster with a sheriff-star centerpiece.
-const bounty: SceneDef = {
-  anchor: 'topRight',
-  pixelSize: 5,
-  opacity: BACKDROP_OPACITY.scene,
-  grid: {
-    rows: WANTED_POSTER,
-    palette: {
-      p: colors.pixelArt.sand,
-      t: colors.muted,
-      g: colors.gold,
-    },
-  },
-}
+// Bounties uses BountyBoardBackdrop (a full-viewport wooden notice board with
+// pinned posters in the lower two-thirds) instead of a fixed scene.
 
 // Loan Shark uses LoanSharkDepthBackdrop (a scrolling depth field) instead of
 // a fixed backdrop scene — the art length must track the scroll content.
@@ -201,7 +172,6 @@ const auction: SceneDef = {
 
 export const SCENES = {
   marketmoves,
-  bounty,
   auction,
 } satisfies Record<string, SceneDef>
 
