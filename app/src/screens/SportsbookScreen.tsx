@@ -14,7 +14,7 @@ import { colors, fonts, radius } from '../theme'
 import ScreenHeader from '../components/ui/ScreenHeader'
 import ArtworkToggle from '../components/ui/ArtworkToggle'
 import SportsbookPokerTableBackdrop from '../components/pixelart/SportsbookPokerTableBackdrop'
-import LoadingView from '../components/ui/LoadingView'
+import ScreenBackdrop from '../components/pixelart/ScreenBackdrop'
 import ToggleGroup from '../components/ui/ToggleGroup'
 import BetRow from '../components/betting/BetRow'
 import ActiveBetsView from '../components/betting/ActiveBetsView'
@@ -425,30 +425,25 @@ export default function SportsbookScreen() {
     )
   }
 
-  // The poker table mounts behind the spinner too, so the art is already
-  // painted when the content swaps in — no pop.
-  if (loading) {
-    return (
-      <View style={styles.safe}>
-        <SportsbookPokerTableBackdrop />
-        <LoadingView label="Loading…" transparent delayed />
-      </View>
-    )
-  }
-
   return (
     <View style={styles.safe}>
       {/* Safe-area inset is content padding rather than a SafeAreaView edge so
-          the poker-table field paints under the status bar to the bezel. */}
+          the poker-table field paints under the status bar to the bezel.
+          ScreenBackdrop keeps the one poker-table instance mounted across the
+          load→ready swap — see pixelart/config.ts. */}
       <ScrollView
         contentContainerStyle={[
           styles.content,
           { paddingTop: insets.top },
           view === 'place' && placeMode === 'parlay' && parlayLegs.length > 0 && { paddingBottom: 96 },
         ]}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.muted} />}
+        refreshControl={
+          loading ? undefined : (
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.muted} />
+          )
+        }
       >
-        <SportsbookPokerTableBackdrop />
+        <ScreenBackdrop backdrop={<SportsbookPokerTableBackdrop />} loading={loading}>
         <ScreenHeader title="Sportsbook" onBack={() => navigation.goBack()} right={<ArtworkToggle />} />
 
         {/* Kept laid out (not unmounted) while artwork is revealed — only made
@@ -604,6 +599,7 @@ export default function SportsbookScreen() {
           <SettledBetsView bets={settledBets} onBetPress={setDetailModal} />
         )}
         </View>
+        </ScreenBackdrop>
       </ScrollView>
 
       {/* Parlay bet slip (sticky) */}

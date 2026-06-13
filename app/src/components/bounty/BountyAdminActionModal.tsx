@@ -62,8 +62,12 @@ export default function BountyAdminActionModal({ bounty: b, onClose, onDone }: P
       keyboardAvoiding
       bodyMaxHeight={460}
       footer={
+        // Cancel lives in the footer (outside the scrollable body) so the
+        // destructive action is always on screen at load — an admin must be able
+        // to erase a bounty without scrolling past CLOSE / SETTLE / hunter rows.
         <>
           {saving && <ActivityIndicator size="small" color={colors.accent} style={{ marginTop: 12 }} />}
+          <Button variant="outline" tone="danger" label="Cancel (erase bounty)" disabled={saving} onPress={cancel} style={styles.actSpacing} />
           <Button variant="ghost" label="Close" onPress={() => !saving && onClose()} />
         </>
       }
@@ -112,9 +116,6 @@ export default function BountyAdminActionModal({ bounty: b, onClose, onDone }: P
           <Button variant="outline" label="Hunters Win" disabled={saving} onPress={() => settle('hunter_win', 'Hunters win')} style={styles.actSpacing} />
         </>
       )}
-
-      <Text style={styles.section}>DESTRUCTIVE</Text>
-      <Button variant="outline" tone="danger" label="Cancel (erase bounty)" disabled={saving} onPress={cancel} style={styles.actSpacing} />
     </BottomSheet>
   )
 }

@@ -7,7 +7,7 @@ import { colors, fonts, radius } from '../theme'
 import ScreenHeader from '../components/ui/ScreenHeader'
 import ArtworkToggle from '../components/ui/ArtworkToggle'
 import PvPShootoutBackdrop from '../components/pixelart/PvPShootoutBackdrop'
-import LoadingView from '../components/ui/LoadingView'
+import ScreenBackdrop from '../components/pixelart/ScreenBackdrop'
 import PvpChallengeRow from '../components/pvp/PvpChallengeRow'
 import PvpChallengeDetailModal from '../components/pvp/PvpChallengeDetailModal'
 import Button from '../components/ui/Button'
@@ -42,17 +42,6 @@ export default function PvPScreen() {
   // Refresh on return (e.g. after creating a challenge). The hook's own mount load
   // covers the first paint; subsequent focus reloads are silent (no full-screen loader).
   useFocusEffect(useCallback(() => { reloadAll() }, [reloadAll]))
-
-  // Transitions stay art-only: the backdrop paints immediately and the
-  // spinner appears only if loading drags past 5s.
-  if (loading) {
-    return (
-      <SafeAreaView style={styles.safe} edges={['top']}>
-        <PvPShootoutBackdrop />
-        <LoadingView label="Loading…" transparent delayed />
-      </SafeAreaView>
-    )
-  }
 
   function openDetail(c: PvpChallengeView) {
     setDetailId(c.id)

@@ -14,7 +14,7 @@ import { colors, fonts, radius } from '../theme'
 import ScreenHeader from '../components/ui/ScreenHeader'
 import ArtworkToggle from '../components/ui/ArtworkToggle'
 import LoanSharkDepthBackdrop from '../components/pixelart/LoanSharkDepthBackdrop'
-import LoadingView from '../components/ui/LoadingView'
+import ScreenBackdrop from '../components/pixelart/ScreenBackdrop'
 import Toast from '../components/ui/Toast'
 import BorrowConfirmModal from '../components/economy/BorrowConfirmModal'
 import Button from '../components/ui/Button'
@@ -107,28 +107,23 @@ export default function LoanSharkScreen() {
     }
   }
 
-  // The depth field mounts behind the spinner too, so the art is already
-  // painted when the content swaps in — no pop.
-  if (loading) {
-    return (
-      <View style={styles.safe}>
-        <LoanSharkDepthBackdrop />
-        <LoadingView label="Loading…" transparent delayed />
-      </View>
-    )
-  }
-
   return (
     <View style={styles.safe}>
-      {/* Header lives inside the ScrollView so the depth field starts at the
-          very top of the screen; the safe-area inset is content padding rather
-          than a SafeAreaView edge so the art paints under the status bar to
-          the bezel — see pixelart/config.ts. */}
+      {/* The depth field mounts inside the ScrollView (a scroll-length field —
+          see pixelart/config.ts) so it measures the full scroll content, with
+          the header inside the scroll too and the safe-area inset as content
+          padding so the art paints under the status bar to the bezel.
+          ScreenBackdrop keeps that one backdrop instance mounted across the
+          load→ready swap. */}
       <ScrollView
         contentContainerStyle={[styles.content, { paddingTop: insets.top }]}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.muted} />}
+        refreshControl={
+          loading ? undefined : (
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.muted} />
+          )
+        }
       >
-        <LoanSharkDepthBackdrop />
+        <ScreenBackdrop backdrop={<LoanSharkDepthBackdrop />} loading={loading}>
         <ScreenHeader title="Loan Shark" subtitle="Borrow at your own risk" onBack={() => navigation.goBack()} right={<ArtworkToggle />} />
         {/* Kept laid out (not unmounted) while artwork is revealed — only made
             invisible + inert — so the depth field, which measures the scroll
@@ -244,6 +239,7 @@ export default function LoanSharkScreen() {
           </>
         )}
         </View>
+        </ScreenBackdrop>
       </ScrollView>
 
       {confirmProduct && (
