@@ -125,16 +125,25 @@ export default function AuctionDetailScreen() {
           </View>
         )}
 
-        {/* Terms */}
-        <Text style={styles.sectionLabel}>THE RULES</Text>
+        {/* Terms — plain language; the numbers live in the kv rows below. */}
+        <Text style={styles.sectionLabel}>HOW IT WORKS</Text>
         <View style={styles.card}>
-          {a.quantity > 1 && (
-            <View style={styles.kv}><Text style={styles.muted}>Up for grabs</Text><Text style={styles.kvValue}>{a.quantity} units — one per player</Text></View>
-          )}
+          {[
+            a.quantity > 1
+              ? `${a.quantity} up for grabs — the top ${a.quantity} bids each take one. You can only win one.`
+              : 'One winner — the highest bid takes it.',
+            'Bids are secret. Nobody sees your number — only how many bids are in.',
+            'Change or cancel your bid any time before the hammer falls.',
+            `Win but can't cover your bid? Your check bounces and you're fined up to ${a.bounceFee} pins.`,
+          ].map((line, i) => (
+            // Hanging indent: wrapped lines align with the text, not the bullet.
+            <View key={i} style={styles.ruleRow}>
+              <Text style={styles.ruleBullet}>🎳</Text>
+              <Text style={styles.ruleLine}>{line}</Text>
+            </View>
+          ))}
+          <View style={styles.ruleDivider} />
           <View style={styles.kv}><Text style={styles.muted}>Minimum bid</Text><Text style={styles.kvValue}>{a.minimumBid.toLocaleString()} pins</Text></View>
-          <View style={styles.kv}><Text style={styles.muted}>Bids are sealed</Text><Text style={styles.kvValue}>only the count is public</Text></View>
-          <View style={styles.kv}><Text style={styles.muted}>Edit / cancel</Text><Text style={styles.kvValue}>any time before close</Text></View>
-          <View style={styles.kv}><Text style={styles.muted}>Bounce penalty</Text><Text style={styles.kvValue}>min(balance, {a.bounceFee}) pins</Text></View>
           <View style={styles.kv}><Text style={styles.muted}>Opens</Text><Text style={styles.kvValue}>{formatCloseTime(a.opensAt)}</Text></View>
           <View style={styles.kv}><Text style={styles.muted}>Closes</Text><Text style={styles.kvValue}>{formatCloseTime(a.closesAt)}</Text></View>
         </View>
@@ -257,6 +266,10 @@ const styles = StyleSheet.create({
     marginTop: 6,
   },
 
+  ruleRow: { flexDirection: 'row', alignItems: 'flex-start', paddingVertical: 4 },
+  ruleBullet: { fontSize: 13, lineHeight: 19, marginRight: 10 },
+  ruleLine: { flex: 1, fontFamily: fonts.barlow, fontSize: 13, color: colors.text, lineHeight: 19 },
+  ruleDivider: { height: 1, backgroundColor: colors.border, marginVertical: 8 },
   kv: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 6 },
   kvValue: { fontFamily: fonts.barlowCondensed, fontSize: 15, color: colors.text },
   muted: { fontFamily: fonts.barlow, fontSize: 13, color: colors.muted, flex: 1, marginRight: 8 },
