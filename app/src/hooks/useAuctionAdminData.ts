@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect, useRef } from 'react'
-import { auctions, itemCatalog, players, seasons } from '../utils/supabase/db'
+import { auctionLedger, auctions, itemCatalog, players, seasons } from '../utils/supabase/db'
 import { AuctionView, CatalogItemAdminView } from '../utils/auction'
-import { normalizeAuction } from './useAuctionHouseData'
+import { bouncesByAuction, normalizeAuction, purchasesByAuction } from './useAuctionHouseData'
 import { PlayerPickerItem } from '../components/ui/PlayerPickerModal'
 
 export function normalizeCatalogItem(row: any): CatalogItemAdminView {
@@ -47,15 +47,22 @@ export function useAuctionAdminData(): AuctionAdminData {
       let auctionData: any[] = []
       let catalogData: any[] = []
       let playerData: any[] = []
+      let auctionLedgerData: any[] = []
       await Promise.all([
         seasonId
           ? auctions.listBySeason(seasonId).then(({ data }) => { auctionData = data ?? [] })
+          : Promise.resolve(),
+        seasonId
+          ? auctionLedger.listBySeason(seasonId).then(({ data }) => { auctionLedgerData = data ?? [] })
           : Promise.resolve(),
         itemCatalog.listAllWithCounts().then(({ data }) => { catalogData = data ?? [] }),
         players.listActive().then(({ data }) => { playerData = data ?? [] }),
       ])
 
-      setAuctionList(auctionData.map(row => normalizeAuction(row, null, [])))
+      const bounceMap = bouncesByAuction(auctionLedgerData)
+      const winnerMap = purchasesByAuction(auctionLedgerData)
+      setAuctionList(auctionData.map(row =>
+        normalizeAuction(row, null, bounceMap.get(row.id) ?? [], winnerMap.get(row.id) ?? [])))
       setCatalog(catalogData.map(normalizeCatalogItem))
       setPlayerOptions(playerData.map((p: any) => ({ id: p.id, name: p.name })))
     } finally {

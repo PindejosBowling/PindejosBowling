@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { View, Text, ScrollView, StyleSheet, RefreshControl, TouchableOpacity, Alert } from 'react-native'
+import { View, Text, ScrollView, StyleSheet, RefreshControl, TouchableOpacity } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useNavigation, useRoute, useFocusEffect, RouteProp } from '@react-navigation/native'
 import { colors, fonts, radius } from '../theme'
@@ -10,11 +10,9 @@ import AuctionBidSheet from '../components/auction/AuctionBidSheet'
 import { useAuctionDetailData } from '../hooks/useAuctionDetailData'
 import { useRefresh } from '../hooks/useRefresh'
 import { useAuthStore } from '../stores/authStore'
-import { useUiStore } from '../stores/uiStore'
 import { formatCountdown } from '../utils/auction'
 import { formatCloseTime } from '../utils/bounty'
 import { PinsinoStackParamList } from '../navigation/types'
-import { auctions } from '../utils/supabase/db'
 
 type Route = RouteProp<PinsinoStackParamList, 'AuctionDetail'>
 
@@ -22,7 +20,6 @@ export default function AuctionDetailScreen() {
   const navigation = useNavigation()
   const { params } = useRoute<Route>()
   const playerId = useAuthStore(s => s.playerId)
-  const { showToast } = useUiStore()
 
   // Admin management lives on AuctionHouseAdmin (Pinsino Admin → Auction House).
   const { loading, balance, auction, reload } = useAuctionDetailData(params.auctionId, playerId)
@@ -60,27 +57,6 @@ export default function AuctionDetailScreen() {
   // Past closes_at but the sweep hasn't settled yet: cron lag as theater.
   const hammerFalling = open && countdown == null
 
-  function confirmCancelBid() {
-    Alert.alert(
-      'Cancel your bid?',
-      'Withdraw your sealed bid? You can bid again while the auction is open.',
-      [
-        { text: 'Keep it', style: 'cancel' },
-        {
-          text: 'Cancel bid',
-          style: 'destructive',
-          onPress: async () => {
-            const { error } = await auctions.cancelBid(a.id)
-            if (error) { showToast(error.message, 'error'); return }
-            showToast('Bid cancelled', 'success')
-            setBidRevealed(false)
-            reload()
-          },
-        },
-      ],
-    )
-  }
-
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <ScreenHeader title="Auction" subtitle={a.itemName} onBack={() => navigation.goBack()} />
@@ -104,34 +80,55 @@ export default function AuctionDetailScreen() {
           )}
         </View>
 
-        {/* Live countdown / hammer */}
+        {/* Live countdown / hammer — open auctions pair the clock with the
+            bidder count at equal prominence. */}
         {(open || scheduled) && (
           <View style={styles.countdownCard}>
             {hammerFalling ? (
-              <Text style={styles.hammer}>🔨 HAMMER FALLING…</Text>
-            ) : (
               <>
-                <Text style={styles.countdownLabel}>{open ? 'CLOSES IN' : 'OPENS IN'}</Text>
-                <Text style={styles.countdownValue}>{countdown}</Text>
+                <Text style={styles.hammer}>🔨 HAMMER FALLING…</Text>
+                <Text style={styles.bidderLine}>
+                  {a.bidderCount === 0
+                    ? 'No sealed bids yet'
+                    : `${a.bidderCount} sealed bid${a.bidderCount === 1 ? '' : 's'} in`}
+                </Text>
               </>
-            )}
-            {open && (
-              <Text style={styles.bidderLine}>
-                {a.bidderCount === 0
-                  ? 'No sealed bids yet'
-                  : `${a.bidderCount} sealed bid${a.bidderCount === 1 ? '' : 's'} in`}
-              </Text>
+            ) : (
+              <View style={styles.countdownRow}>
+                <View style={styles.countdownCell}>
+                  <Text style={styles.countdownLabel}>{open ? 'CLOSES IN' : 'OPENS IN'}</Text>
+                  <Text style={styles.countdownValue}>{countdown}</Text>
+                </View>
+                {open && (
+                  <View style={styles.countdownCell}>
+                    <Text style={styles.countdownLabel}>{a.bidderCount === 1 ? 'BIDDER' : 'BIDDERS'}</Text>
+                    <Text style={styles.countdownValue}>{a.bidderCount}</Text>
+                  </View>
+                )}
+              </View>
             )}
           </View>
         )}
 
-        {/* Terms */}
-        <Text style={styles.sectionLabel}>THE RULES</Text>
+        {/* Terms — plain language; the numbers live in the kv rows below. */}
+        <Text style={styles.sectionLabel}>HOW IT WORKS</Text>
         <View style={styles.card}>
+          {[
+            a.quantity > 1
+              ? `${a.quantity} up for grabs — the top ${a.quantity} bids each take one. You can only win one.`
+              : 'One winner — the highest bid takes it.',
+            'Bids are secret. Nobody sees your number — only how many bids are in.',
+            `Once you're in, you're in. Change your bid any time before the hammer falls — but you can't take it back.`,
+            `Win but can't cover your bid? Your check bounces and you're fined up to ${a.bounceFee} pins.`,
+          ].map((line, i) => (
+            // Hanging indent: wrapped lines align with the text, not the bullet.
+            <View key={i} style={styles.ruleRow}>
+              <Text style={styles.ruleBullet}>🎳</Text>
+              <Text style={styles.ruleLine}>{line}</Text>
+            </View>
+          ))}
+          <View style={styles.ruleDivider} />
           <View style={styles.kv}><Text style={styles.muted}>Minimum bid</Text><Text style={styles.kvValue}>{a.minimumBid.toLocaleString()} pins</Text></View>
-          <View style={styles.kv}><Text style={styles.muted}>Bids are sealed</Text><Text style={styles.kvValue}>only the count is public</Text></View>
-          <View style={styles.kv}><Text style={styles.muted}>Edit / cancel</Text><Text style={styles.kvValue}>any time before close</Text></View>
-          <View style={styles.kv}><Text style={styles.muted}>Bounce penalty</Text><Text style={styles.kvValue}>min(balance, {a.bounceFee}) pins</Text></View>
           <View style={styles.kv}><Text style={styles.muted}>Opens</Text><Text style={styles.kvValue}>{formatCloseTime(a.opensAt)}</Text></View>
           <View style={styles.kv}><Text style={styles.muted}>Closes</Text><Text style={styles.kvValue}>{formatCloseTime(a.closesAt)}</Text></View>
         </View>
@@ -155,12 +152,28 @@ export default function AuctionDetailScreen() {
             <Text style={styles.sectionLabel}>THE HAMMER FELL</Text>
             <View style={styles.card}>
               {a.status === 'settled' ? (
-                <View style={styles.kv}>
-                  <Text style={styles.muted}>Won by {a.winnerName}</Text>
-                  <Text style={styles.kvValue}>{a.winningPrice?.toLocaleString()} pins</Text>
-                </View>
+                a.winners.length > 0 ? (
+                  // Every winner, pay-as-bid (ledger-derived). Falls back to
+                  // the denorm row below when the ledger fetch raced.
+                  a.winners.map((w, i) => (
+                    <View key={i} style={styles.kv}>
+                      <Text style={styles.muted}>Won by {w.playerName}</Text>
+                      <Text style={styles.kvValue}>{w.price.toLocaleString()} pins</Text>
+                    </View>
+                  ))
+                ) : (
+                  <View style={styles.kv}>
+                    <Text style={styles.muted}>Won by {a.winnerName}</Text>
+                    <Text style={styles.kvValue}>{a.winningPrice?.toLocaleString()} pins</Text>
+                  </View>
+                )
               ) : (
                 <Text style={styles.muted}>No sale — no valid bids met the minimum.</Text>
+              )}
+              {a.status === 'settled' && a.quantity > 1 && a.winners.length < a.quantity && (
+                <Text style={styles.muted}>
+                  {a.quantity - a.winners.length} of {a.quantity} units went unsold.
+                </Text>
               )}
               {a.bounces.map((b, i) => (
                 <View key={i} style={styles.kv}>
@@ -181,9 +194,6 @@ export default function AuctionDetailScreen() {
               onPress={() => setBidOpen(true)}
               style={styles.cta}
             />
-            {a.myBidAmount != null && (
-              <Button variant="outline" tone="danger" label="Cancel Bid" onPress={confirmCancelBid} style={styles.cancelCta} />
-            )}
           </>
         )}
       </ScrollView>
@@ -224,6 +234,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 12,
   },
+  countdownRow: { flexDirection: 'row', alignSelf: 'stretch' },
+  countdownCell: { flex: 1, alignItems: 'center' },
   countdownLabel: { fontFamily: fonts.barlowCondensed, fontSize: 12, letterSpacing: 2, color: colors.muted },
   countdownValue: { fontFamily: fonts.barlowCondensedHeavy, fontSize: 34, color: colors.accent, marginTop: 2 },
   hammer: { fontFamily: fonts.barlowCondensedHeavy, fontSize: 22, color: colors.gold, letterSpacing: 1 },
@@ -238,12 +250,15 @@ const styles = StyleSheet.create({
     marginTop: 6,
   },
 
+  ruleRow: { flexDirection: 'row', alignItems: 'flex-start', paddingVertical: 4 },
+  ruleBullet: { fontSize: 13, lineHeight: 19, marginRight: 10 },
+  ruleLine: { flex: 1, fontFamily: fonts.barlow, fontSize: 13, color: colors.text, lineHeight: 19 },
+  ruleDivider: { height: 1, backgroundColor: colors.border, marginVertical: 8 },
   kv: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 6 },
   kvValue: { fontFamily: fonts.barlowCondensed, fontSize: 15, color: colors.text },
   muted: { fontFamily: fonts.barlow, fontSize: 13, color: colors.muted, flex: 1, marginRight: 8 },
 
   cta: { marginTop: 6 },
-  cancelCta: { marginTop: 8 },
 
   emptyCard: {
     backgroundColor: colors.surface,

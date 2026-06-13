@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect, useRef } from 'react'
 import { auctions, auctionLedger, inventoryItems, pinLedger, seasons } from '../utils/supabase/db'
 import {
-  AuctionBounceView, AuctionView, InventoryItemView, itemHowToUse,
+  AuctionBounceView, AuctionView, AuctionWinnerView, InventoryItemView, itemHowToUse,
 } from '../utils/auction'
 
 // A flattened auctions row + catalog embed. The DB stores one terminal status
@@ -12,6 +12,7 @@ export function normalizeAuction(
   row: any,
   myBidAmount: number | null,
   bounces: AuctionBounceView[],
+  winners: AuctionWinnerView[] = [],
 ): AuctionView {
   const cat = row.item_catalog ?? {}
   const settledNoWinner = row.status === 'settled' && row.winner_player_id == null
@@ -27,9 +28,11 @@ export function normalizeAuction(
     closesAt: row.closes_at,
     minimumBid: row.minimum_bid,
     bounceFee: row.bounce_fee,
+    quantity: row.quantity ?? 1,
     bidderCount: row.bidder_count,
     winnerName: row.winner?.name ?? null,
     winningPrice: row.winning_price ?? null,
+    winners,
     bounces,
     myBidAmount,
   }
@@ -60,6 +63,20 @@ export function bouncesByAuction(ledgerRows: any[]): Map<string, AuctionBounceVi
     list.push({ playerName: r.players?.name ?? '—', feePaid: Math.abs(r.amount) })
     map.set(r.auction_id, list)
   }
+  return map
+}
+
+// Winners per auction from the same ledger fetch ('auction_purchase' rows are
+// public, pay-as-bid prices). Highest price first — settlement rank order.
+export function purchasesByAuction(ledgerRows: any[]): Map<string, AuctionWinnerView[]> {
+  const map = new Map<string, AuctionWinnerView[]>()
+  for (const r of ledgerRows) {
+    if (r.type !== 'auction_purchase' || !r.auction_id) continue
+    const list = map.get(r.auction_id) ?? []
+    list.push({ playerName: r.players?.name ?? '—', price: Math.abs(r.amount) })
+    map.set(r.auction_id, list)
+  }
+  for (const list of map.values()) list.sort((a, b) => b.price - a.price)
   return map
 }
 
@@ -111,10 +128,12 @@ export function useAuctionHouseData(playerId: string | null): AuctionHouseData {
       )
       const myAmounts = new Map(amounts)
       const bounceMap = bouncesByAuction(auctionLedgerData)
+      const winnerMap = purchasesByAuction(auctionLedgerData)
 
       setBalance(ledgerData.reduce((sum, e) => sum + e.amount, 0))
       setAuctionList(auctionData.map(row =>
-        normalizeAuction(row, myAmounts.get(row.id) ?? null, bounceMap.get(row.id) ?? [])))
+        normalizeAuction(row, myAmounts.get(row.id) ?? null,
+          bounceMap.get(row.id) ?? [], winnerMap.get(row.id) ?? [])))
       setMyItems(itemData.map(normalizeInventoryItem))
     } finally {
       loadedOnce.current = true

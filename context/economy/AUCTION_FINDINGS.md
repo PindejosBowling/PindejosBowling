@@ -46,9 +46,16 @@ Hard requirement: the auction settles **at the configured close time, immediatel
 - `archive_week` / `unarchive_week` never know auctions exist.
 - The bid RPC's time check (`now() < closes_at`) is authoritative independent of cron lag; both bid and settle take `FOR UPDATE` on the auction row to kill the close-boundary race.
 
-### 4. Single-item v1
+### 4. Multi-unit (as built — was: single-item v1)
 
-One item, one winner, first-price. Schema carries `quantity int DEFAULT 1 CHECK (quantity = 1)` so multi-unit is a later unlock, not a redesign.
+Originally one item, one winner, first-price, with `quantity int DEFAULT 1 CHECK (quantity = 1)` reserved as a later unlock. **Unlocked 2026-06-13** (migration `…20260613000500_auction_multi_unit`): quantity is 1–50 and the top N sealed bidders each win ONE unit. The mechanics:
+
+- **Pay-as-bid** — every winner pays their own sealed pledge (no uniform clearing price; consistent with the your-check-your-amount bounce model).
+- **Sell-what-sells** — settlement walks the same ranked list (amount DESC, submitted_at ASC); each affordable bidder takes one unit; broke bidders bounce and the cascade continues; `k < N` winners is a normal settle; `auction_no_sale` only at zero winners.
+- **One unit per player** — enforced by the existing one-active-bid-per-player index; no bid quantities, no partial fills.
+- **Winner denorms hold the FIRST (highest) winner** — the hammer-price headline. The full winners list is derived app-side from public `pin_ledger` `auction_purchase` rows (pay-as-bid prices were always public for the single winner; N winners reveal exactly as much).
+- **Feed:** one `auction_won` event per winner; the dedup index is actor-keyed (like bounces).
+- **Reverse is all-or-nothing:** any consumed item blocks the whole reversal; otherwise every granted item is revoked and the root-ref ledger claw-back covers all winners.
 
 ### 5. Reveal scope: winner + bounces only (tighter than the design doc)
 
@@ -72,7 +79,7 @@ Count of open auctions where the player has **no active bid** — a true pending
 
 ### 9. Bid mechanics: free sealed re-pricing (REVISED 2026-06-12, UI grilling — supersedes the design doc's raises-only model)
 
-One active bid per player; **no bid increment** (the `bid_increment` knob is deleted); the player may **edit their bid to any value or cancel it outright** any time before close. Every submission/edit revalidates `>= minimum_bid` and `<= pin_balance(...)`; cancel is a hard delete of the bid row. No ledger writes, no feed events at bid time. **Tie-break: any edit resets the bid's timestamp** — a tie goes to whoever has held their current amount longest. Public visibility during the auction is **count only**: players see how many bids exist, never who or how much (the `bidder_count` denorm is the sole public signal). Bounce fee `min(balance, 50)` unchanged. Rationale: sealed bids mean withdrawal/lowball theater is invisible, so raises-only bought nothing; one-active-bid still caps spam.
+One active bid per player; **no bid increment** (the `bid_increment` knob is deleted); the player may **edit their bid to any value `>= minimum_bid`** any time before close — but **never withdraw it** (decision reversed 2026-06-13, migration `…003000_auction_bids_no_cancel`: `cancel_auction_bid` is DROPped; bids are commitments; no admin variant — sealed means sealed, and pre-settlement escape for a whole auction remains the admin's `cancel_auction`). Every submission/edit revalidates `>= minimum_bid` and `<= pin_balance(...)`. No ledger writes, no feed events at bid time. **Tie-break: any edit resets the bid's timestamp** — a tie goes to whoever has held their current amount longest. Public visibility during the auction is **count only**: players see how many bids exist, never who or how much (the `bidder_count` denorm is the sole public signal). Bounce fee `min(balance, 50)` unchanged. Rationale: sealed bids mean withdrawal/lowball theater is invisible, so raises-only bought nothing; one-active-bid still caps spam.
 
 ### 10. Ledger & lifecycle plumbing
 
