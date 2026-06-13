@@ -94,17 +94,25 @@ export interface LineGroup {
   sortOrder: number  // ascending display order (game order, season-long last)
 }
 
-export function lineGroup(line: LineView): LineGroup {
-  if (line.gameNumber != null) {
-    return { key: `game-${line.gameNumber}`, label: `GAME ${line.gameNumber}`, sortOrder: line.gameNumber }
+// The grouping primitive shared by the Place Bets board (lines) and the
+// Active Bets board (placed bets): a market's section follows purely from its
+// game number + type, so both surfaces bucket identically and no market kind
+// can fall through the cracks (e.g. night-scoped props with no game number).
+export function marketGroup(gameNumber: number | null, marketType: string): LineGroup {
+  if (gameNumber != null) {
+    return { key: `game-${gameNumber}`, label: `GAME ${gameNumber}`, sortOrder: gameNumber }
   }
   // Night-scoped stat props (no single game, settled over the whole night)
   // lead the board, above the game groups (game numbers start at 1).
-  if (line.marketType === 'prop') {
+  if (marketType === 'prop') {
     return { key: 'weekly', label: 'WEEKLY', sortOrder: 0 }
   }
   // Season-long / futures markets (no game scope) collect at the end.
   return { key: 'season', label: 'SEASON', sortOrder: Number.MAX_SAFE_INTEGER }
+}
+
+export function lineGroup(line: LineView): LineGroup {
+  return marketGroup(line.gameNumber, line.marketType)
 }
 
 // The line *category* within a group — one collapsible LineRowContainer. A single
