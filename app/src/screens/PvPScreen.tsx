@@ -75,7 +75,7 @@ export default function PvPScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
-      <PvPShootoutBackdrop />
+      <ScreenBackdrop backdrop={<PvPShootoutBackdrop />} loading={loading}>
       <ScreenHeader title="PvP" subtitle="Challenge a rival, winner takes the pot" onBack={() => navigation.goBack()} right={<ArtworkToggle />} />
       {!artworkReveal && (
       <ScrollView
@@ -132,6 +132,7 @@ export default function PvPScreen() {
         )}
       </ScrollView>
       )}
+      </ScreenBackdrop>
 
       {detailId && (
         <PvpChallengeDetailModal

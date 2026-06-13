@@ -28,17 +28,6 @@ export default function BountyBoardScreen() {
   // Refresh on return (e.g. after posting or entering). Silent after first load.
   useFocusEffect(useCallback(() => { reload() }, [reload]))
 
-  // Transitions stay art-only: the backdrop paints immediately and the
-  // spinner appears only if loading drags past 5s.
-  if (loading) {
-    return (
-      <SafeAreaView style={styles.safe} edges={['top']}>
-        <BountyBoardBackdrop />
-        <LoadingView label="Loading…" transparent delayed />
-      </SafeAreaView>
-    )
-  }
-
   const section = (title: string, rows: BountyView[]) =>
     rows.length > 0 ? (
       <>
