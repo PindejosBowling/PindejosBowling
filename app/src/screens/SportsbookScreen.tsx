@@ -16,13 +16,11 @@ import ArtworkToggle from '../components/ui/ArtworkToggle'
 import SportsbookPokerTableBackdrop from '../components/pixelart/SportsbookPokerTableBackdrop'
 import ScreenBackdrop from '../components/pixelart/ScreenBackdrop'
 import ToggleGroup from '../components/ui/ToggleGroup'
-import BetRow from '../components/betting/BetRow'
 import ActiveBetsView from '../components/betting/ActiveBetsView'
 import SettledBetsView from '../components/betting/SettledBetsView'
 import BetDetailModal from '../components/betting/BetDetailModal'
 import WagerSheet from '../components/betting/WagerSheet'
 import GoldenTicketToggle from '../components/auction/GoldenTicketToggle'
-import { resultBadge, betReturnText } from '../utils/bets'
 import LineRow from '../components/betting/LineRow'
 import LineRowContainer from '../components/betting/LineRowContainer'
 import CustomLineRow from '../components/betting/CustomLineRow'
@@ -106,7 +104,7 @@ export default function SportsbookScreen() {
   const artworkReveal = useUiStore(s => s.artworkReveal)
   const navigation = useNavigation<PinsinoNav>()
 
-  const { loading, balance, openLines, weekTeams, customLines, myBets, weekBets, settledBets, reload } = usePinsinoData(playerId)
+  const { loading, balance, openLines, weekTeams, customLines, weekBets, settledBets, reload } = usePinsinoData(playerId)
   const { refreshing, onRefresh } = useRefresh(reload)
   const insets = useSafeAreaInsets()
 
@@ -146,6 +144,10 @@ export default function SportsbookScreen() {
   // The public tab is read-only: Active/Settled rows just open the details overlay
   // (settling/cancelling lives on the Pinsino Admin screen).
   const activeBets = useMemo(() => weekBets.filter(b => b.status === 'pending'), [weekBets])
+
+  // The viewer's slice of the active board — their own current-week pending bets.
+  // Surfaced as a MY BETS section atop Active Bets; Place Bets is purely for placing.
+  const myActiveBets = useMemo(() => activeBets.filter(b => b.playerId === playerId), [activeBets, playerId])
 
   // Two-level grouping for the board: game group (GAME 1, …, SEASON) → line
   // category (Player Over/Unders, …). Each category renders one collapsible
@@ -462,6 +464,7 @@ export default function SportsbookScreen() {
         {view === 'action' && (
           <ActiveBetsView
             bets={activeBets}
+            myBets={myActiveBets}
             onBetPress={setDetailModal}
             onParlayPress={setDetailModal}
           />
@@ -481,29 +484,6 @@ export default function SportsbookScreen() {
           <Text style={[styles.adminHint, { textAlign: 'center' }]}>
             Tap lines to add legs · all must win · odds double with each leg
           </Text>
-        )}
-
-        {/* My bets */}
-        {myBets.length > 0 && (
-          <>
-            <Text style={styles.sectionHeader}>MY BETS</Text>
-            <View style={styles.card}>
-              {myBets.map((bet, idx) => {
-                const badge = resultBadge(bet.status)
-                const isLast = idx === myBets.length - 1
-                return (
-                  <BetRow
-                    key={bet.id}
-                    bet={bet}
-                    isLast={isLast}
-                    badge={badge}
-                    betReturnText={betReturnText(bet)}
-                    onPress={() => setDetailModal(bet)}
-                  />
-                )
-              })}
-            </View>
-          </>
         )}
 
         {/* Open lines — the board starts straight at its WEEKLY/GAME labels
@@ -751,13 +731,6 @@ const styles = StyleSheet.create({
 
   viewToggle: { marginBottom: 20 },
 
-  sectionHeader: {
-    fontFamily: fonts.barlowCondensed,
-    fontSize: 11,
-    letterSpacing: 1.5,
-    color: colors.muted,
-    marginBottom: 8,
-  },
   card: {
     backgroundColor: colors.surface,
     borderRadius: radius.cardMd,
@@ -766,8 +739,8 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     overflow: 'hidden',
   },
-  // Separates the board from MY BETS now that it has no section header of its
-  // own — the WEEKLY/GAME labels lead directly.
+  // Separates the board from the mode toggle above it — the board has no section
+  // header of its own; the WEEKLY/GAME labels lead directly.
   board: { marginTop: 16 },
   gameLabel: {
     fontFamily: fonts.barlowCondensed,
