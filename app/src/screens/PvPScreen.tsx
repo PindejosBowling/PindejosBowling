@@ -40,7 +40,16 @@ export default function PvPScreen() {
   // covers the first paint; subsequent focus reloads are silent (no full-screen loader).
   useFocusEffect(useCallback(() => { reloadAll() }, [reloadAll]))
 
-  if (loading) return <LoadingView label="Loading…" />
+  // Transitions stay art-only: the backdrop paints immediately and the
+  // spinner appears only if loading drags past 5s.
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.safe} edges={['top']}>
+        <PvPShootoutBackdrop />
+        <LoadingView label="Loading…" transparent delayed />
+      </SafeAreaView>
+    )
+  }
 
   function openDetail(c: PvpChallengeView) {
     setDetailId(c.id)

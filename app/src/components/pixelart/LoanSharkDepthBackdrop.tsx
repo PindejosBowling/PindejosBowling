@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { StyleSheet, View } from 'react-native'
+import { StyleSheet, View, useWindowDimensions } from 'react-native'
 import { colors } from '../../theme'
 import PixelArt, { PixelGrid } from './PixelArt'
 import { BACKDROP_OPACITY, FIELD_PIXEL } from './config'
@@ -131,9 +131,14 @@ const PALETTE = {
 }
 
 export default function LoanSharkDepthBackdrop() {
+  // Window size is a first-frame fallback only (no pop-in); once onLayout
+  // reports the real content size it wins outright — the window is taller
+  // than the scroll area (tab bar), so clamping to it would draw the abyss
+  // past the bottom of the page.
+  const window = useWindowDimensions()
   const [size, setSize] = useState({ width: 0, height: 0 })
-  const cols = Math.ceil(size.width / PIXEL)
-  const rowCount = Math.ceil(size.height / PIXEL)
+  const cols = Math.ceil((size.width || window.width) / PIXEL)
+  const rowCount = Math.ceil((size.height || window.height) / PIXEL)
 
   const grid = useMemo<PixelGrid | null>(() => {
     if (cols < 10 || rowCount < 20) return null

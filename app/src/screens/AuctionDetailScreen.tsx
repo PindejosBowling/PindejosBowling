@@ -39,7 +39,7 @@ export default function AuctionDetailScreen() {
     return () => clearInterval(t)
   }, [ticking])
 
-  if (loading) return <LoadingView label="Loading…" />
+  if (loading) return <LoadingView label="Loading…" delayed />
   if (!auction) {
     return (
       <SafeAreaView style={styles.safe} edges={['top']}>

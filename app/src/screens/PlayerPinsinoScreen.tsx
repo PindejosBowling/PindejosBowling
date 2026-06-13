@@ -129,7 +129,7 @@ export default function PlayerPinsinoScreen() {
     })
   }
 
-  if (loading) return <LoadingView label="Loading…" />
+  if (loading) return <LoadingView label="Loading…" delayed />
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>

@@ -105,7 +105,16 @@ export default function LoanSharkScreen() {
     }
   }
 
-  if (loading) return <LoadingView label="Loading…" />
+  // The depth field mounts behind the spinner too, so the art is already
+  // painted when the content swaps in — no pop.
+  if (loading) {
+    return (
+      <View style={styles.safe}>
+        <LoanSharkDepthBackdrop />
+        <LoadingView label="Loading…" transparent delayed />
+      </View>
+    )
+  }
 
   return (
     <View style={styles.safe}>
@@ -240,7 +249,9 @@ export default function LoanSharkScreen() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.bg },
-  content: { paddingHorizontal: 16, paddingBottom: 40 },
+  // flexGrow keeps the scroll content (and the depth field measured from it)
+  // at least viewport-height when the loan list is short.
+  content: { paddingHorizontal: 16, paddingBottom: 40, flexGrow: 1 },
 
   balancePill: {
     flexDirection: 'row',

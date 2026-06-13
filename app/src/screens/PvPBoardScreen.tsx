@@ -50,7 +50,7 @@ export default function PvPBoardScreen() {
     return filter === 'All' ? mine : mine.filter(c => c.contractType === filter)
   }, [inbox.sent, filter])
 
-  if (loading) return <LoadingView label="Loading…" />
+  if (loading) return <LoadingView label="Loading…" delayed />
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>

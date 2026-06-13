@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react'
-import { StyleSheet, View } from 'react-native'
+import { useMemo } from 'react'
+import { StyleSheet, View, useWindowDimensions } from 'react-native'
 import { colors } from '../../theme'
 import PixelArt, { PixelGrid } from './PixelArt'
 import { Sprite, stamp } from './scenes'
@@ -11,7 +11,8 @@ import { BACKDROP_OPACITY, FIELD_PIXEL } from './config'
 // pair of red eyes glowing in the dark at the bottom.
 //
 // Mount as the first child inside the SafeAreaView (it fills the viewport and
-// content scrolls over it); it measures itself via onLayout.
+// content scrolls over it). Sized from useWindowDimensions — synchronous on
+// the first render, so the art commits in the same frame as the screen.
 
 const PIXEL = FIELD_PIXEL
 const OPACITY = BACKDROP_OPACITY.field
@@ -95,9 +96,9 @@ const PALETTE = {
 }
 
 export default function PinsinoNoirBackdrop() {
-  const [size, setSize] = useState({ width: 0, height: 0 })
-  const cols = Math.ceil(size.width / PIXEL)
-  const rowCount = Math.ceil(size.height / PIXEL)
+  const { width, height } = useWindowDimensions()
+  const cols = Math.ceil(width / PIXEL)
+  const rowCount = Math.ceil(height / PIXEL)
 
   const grid = useMemo<PixelGrid | null>(() => {
     if (cols < 10 || rowCount < 20) return null
@@ -105,11 +106,7 @@ export default function PinsinoNoirBackdrop() {
   }, [cols, rowCount])
 
   return (
-    <View
-      style={StyleSheet.absoluteFill}
-      pointerEvents="none"
-      onLayout={e => setSize(e.nativeEvent.layout)}
-    >
+    <View style={StyleSheet.absoluteFill} pointerEvents="none">
       {grid && (
         <View style={styles.field}>
           <PixelArt grid={grid} pixelSize={PIXEL} />

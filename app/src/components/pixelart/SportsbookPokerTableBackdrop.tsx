@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { StyleSheet, View } from 'react-native'
+import { StyleSheet, View, useWindowDimensions } from 'react-native'
 import { colors } from '../../theme'
 import PixelArt, { PixelGrid } from './PixelArt'
 import { Sprite, stamp } from './scenes'
@@ -145,9 +145,15 @@ const PALETTE = {
 }
 
 export default function SportsbookPokerTableBackdrop() {
+  // Window size is a first-frame fallback only (no pop-in); once onLayout
+  // reports the real content size it wins outright — the window is TALLER
+  // than the scroll area (tab bar), so clamping to it would push the bottom
+  // rail off-screen. The screen's flexGrow content guarantees at least
+  // viewport height when every section is collapsed.
+  const window = useWindowDimensions()
   const [size, setSize] = useState({ width: 0, height: 0 })
-  const cols = Math.ceil(size.width / PIXEL)
-  const rowCount = Math.ceil(size.height / PIXEL)
+  const cols = Math.ceil((size.width || window.width) / PIXEL)
+  const rowCount = Math.ceil((size.height || window.height) / PIXEL)
 
   const grid = useMemo<PixelGrid | null>(() => {
     if (cols < 10 || rowCount < 20) return null

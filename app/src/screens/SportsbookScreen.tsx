@@ -423,7 +423,16 @@ export default function SportsbookScreen() {
     )
   }
 
-  if (loading) return <LoadingView label="Loading…" />
+  // The poker table mounts behind the spinner too, so the art is already
+  // painted when the content swaps in — no pop.
+  if (loading) {
+    return (
+      <View style={styles.safe}>
+        <SportsbookPokerTableBackdrop />
+        <LoadingView label="Loading…" transparent delayed />
+      </View>
+    )
+  }
 
   return (
     <View style={styles.safe}>

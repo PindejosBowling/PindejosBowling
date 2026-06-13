@@ -20,7 +20,7 @@ export default function PinsinoLeaderboardScreen() {
   const { loading, leaderboard, reload } = usePinsinoData(playerId)
   const { refreshing, onRefresh } = useRefresh(reload)
 
-  if (loading) return <LoadingView label="Loading…" />
+  if (loading) return <LoadingView label="Loading…" delayed />
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>

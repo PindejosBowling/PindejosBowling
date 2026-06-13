@@ -57,7 +57,16 @@ export default function PinsinoScreen() {
     }, []),
   )
 
-  if (loading) return <LoadingView label="Loading…" />
+  // Transitions stay art-only: the backdrop paints immediately and the
+  // spinner appears only if loading drags past 5s.
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.safe} edges={['top']}>
+        <PinsinoNoirBackdrop />
+        <LoadingView label="Loading…" transparent delayed />
+      </SafeAreaView>
+    )
+  }
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>

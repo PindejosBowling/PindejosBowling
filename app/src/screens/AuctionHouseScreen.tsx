@@ -35,7 +35,16 @@ export default function AuctionHouseScreen() {
   const sections = useMemo(() => auctionSections(auctions), [auctions])
   const itemGroups = useMemo(() => groupInventory(myItems), [myItems])
 
-  if (loading) return <LoadingView label="Loading…" />
+  // Transitions stay art-only: the backdrop paints immediately and the
+  // spinner appears only if loading drags past 5s.
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.safe} edges={['top']}>
+        <AuctionBankBackdrop />
+        <LoadingView label="Loading…" transparent delayed />
+      </SafeAreaView>
+    )
+  }
 
   const auctionSection = (title: string, rows: AuctionView[]) =>
     rows.length > 0 ? (
