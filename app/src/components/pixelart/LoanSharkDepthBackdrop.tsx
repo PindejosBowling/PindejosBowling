@@ -6,8 +6,9 @@ import { BACKDROP_OPACITY, FIELD_PIXEL } from './config'
 
 // Full-bleed scrolling depth field for the Loan Shark screen. The art runs the
 // entire scrollable length and maps depth to loan risk top-to-bottom: a solid
-// beach band, the surf line, then open water that gets darker and more
-// threatening on the way down, ending in an abyss with eyes.
+// beach band (with pebbles, abandoned dice, and footprints walking into the
+// surf), the surf line, then open water that gets darker and more threatening
+// on the way down, ending in an abyss with eyes.
 //
 // The side gutters carry the densest speckle (they're always visible); behind
 // the loan cards the dots go sporadic so the field reads in the gaps without
@@ -41,11 +42,13 @@ function buildField(cols: number, rowCount: number): string[] {
     const f = y / rowCount
     for (let x = 0; x < cols; x++) {
       const h = hash(x, y) % 100
-      if (f < 0.045) {
-        rows[y][x] = 'n' // solid beach
+      if (f < 0.09) {
+        // Solid beach — roughly spans the transparent header zone, so the
+        // shoreline details below read in the open space around the title.
+        rows[y][x] = f > 0.045 && h < 3 ? 'o' : 'n' // pebbles in the lower sand
         continue
       }
-      if (f < 0.075) {
+      if (f < 0.12) {
         if (h < 70) rows[y][x] = h % 2 ? 'n' : 'v' // surf line, full width
         continue
       }
@@ -64,6 +67,29 @@ function buildField(cols: number, rowCount: number): string[] {
         else if (h < 48 * mult) rows[y][x] = h % 4 ? 'a' : 'm' // the abyss
       }
     }
+  }
+
+  // Beach details, stamped over the sand.
+  const stampSprite = (sprite: string[], ox: number, oy: number) => {
+    sprite.forEach((row, dy) =>
+      Array.from(row).forEach((ch, dx) => {
+        const x = ox + dx
+        const yy = oy + dy
+        if (ch !== '.' && yy >= 0 && yy < rowCount && x >= 0 && x < cols) rows[yy][x] = ch
+      }),
+    )
+  }
+
+  // A pair of dice abandoned in the sand (the desert-noir motif, washed
+  // ashore), right of the title.
+  stampSprite(['ooo', 'omo', 'ooo'], Math.floor(cols * 0.58), Math.floor(rowCount * 0.045))
+  stampSprite(['oom', 'ooo', 'moo'], Math.floor(cols * 0.58) + 4, Math.floor(rowCount * 0.045) + 1)
+
+  // Footprints down the right gutter that walk into the surf and don't
+  // come back.
+  const surfBottom = Math.floor(0.12 * rowCount)
+  for (let i = 0; 2 + i * 2 <= surfBottom + 1; i++) {
+    rows[2 + i * 2][cols - (i % 2 ? 1 : 2)] = 'm'
   }
 
   // Fins crest in the gutters; eye pairs wait at the bottom.
