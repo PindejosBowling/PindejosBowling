@@ -2,7 +2,7 @@
 -- (see context/db-verification.md).
 --
 -- Requires the Vault secret 'auction_bid_amount_key' (auction_bid_key()
--- raises its own message if missing) and the live 'safety_ticket' catalog row.
+-- raises its own message if missing) and the live 'golden_ticket' catalog row.
 --
 -- Flow:
 --   sweep open phase: scheduled auction with due opens_at → open + opened event
@@ -50,8 +50,8 @@ BEGIN
   IF v_week IS NULL THEN
     RAISE EXCEPTION 'PROBE_SETUP_FAILED: no open week in the active season';
   END IF;
-  IF NOT EXISTS (SELECT 1 FROM public.item_catalog WHERE key = 'safety_ticket' AND is_active) THEN
-    RAISE EXCEPTION 'PROBE_SETUP_FAILED: safety_ticket catalog row missing';
+  IF NOT EXISTS (SELECT 1 FROM public.item_catalog WHERE key = 'golden_ticket' AND is_active) THEN
+    RAISE EXCEPTION 'PROBE_SETUP_FAILED: golden_ticket catalog row missing';
   END IF;
 
   INSERT INTO public.pin_ledger (player_id, season_id, week_id, amount, type, description) VALUES
@@ -62,7 +62,7 @@ BEGIN
   PERFORM set_config('request.jwt.claims', json_build_object(
     'sub', v_u1, 'role', 'authenticated', 'app_metadata', json_build_object('role', 'admin'))::text, true);
 
-  SELECT public.create_auction('safety_ticket', 'probe auction',
+  SELECT public.create_auction('golden_ticket', 'probe auction',
                                100, now() + interval '1 hour', now() + interval '2 hours')
     INTO v_auction;
   IF (SELECT status FROM public.auctions WHERE id = v_auction) <> 'scheduled' THEN

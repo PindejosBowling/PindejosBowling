@@ -93,7 +93,7 @@ Acceptable auction assets include:
 
 | Asset Type | Examples |
 |---|---|
-| Merchant inventory item | Big Juicer, Safety Ticket, Parlay Rocket |
+| Merchant inventory item | Big Juicer, Golden Ticket, Parlay Rocket |
 | Access pass | High Roller Room Key, After Hours Pass |
 | Tournament seat | Reserved entry into a limited tournament |
 | Bounty license | Right to post one custom bounty |

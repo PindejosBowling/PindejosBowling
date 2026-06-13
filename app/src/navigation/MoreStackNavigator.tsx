@@ -22,6 +22,7 @@ import LoanSharkAdminScreen from '../screens/LoanSharkAdminScreen'
 import PvPAdminScreen from '../screens/PvPAdminScreen'
 import MarketMovesAdminScreen from '../screens/MarketMovesAdminScreen'
 import BountyAdminScreen from '../screens/BountyAdminScreen'
+import AuctionHouseAdminScreen from '../screens/AuctionHouseAdminScreen'
 import ArchivesScreen from '../screens/ArchivesScreen'
 import LanetalkImportAdminScreen from '../screens/LanetalkImportAdminScreen'
 
@@ -54,6 +55,7 @@ export default function MoreStackNavigator() {
       <Stack.Screen name="PvPAdmin" component={PvPAdminScreen} options={{ title: 'PvP Admin' }} />
       <Stack.Screen name="MarketMovesAdmin" component={MarketMovesAdminScreen} options={{ title: 'Market Moves Admin' }} />
       <Stack.Screen name="BountyAdmin" component={BountyAdminScreen} options={{ title: 'Bounty Admin' }} />
+      <Stack.Screen name="AuctionHouseAdmin" component={AuctionHouseAdminScreen} options={{ title: 'Auction House Admin' }} />
       <Stack.Screen name="Archives" component={ArchivesScreen} options={{ title: 'Archives' }} />
       <Stack.Screen name="LanetalkImportAdmin" component={LanetalkImportAdminScreen} options={{ title: 'Lanetalk Import' }} />
     </Stack.Navigator>

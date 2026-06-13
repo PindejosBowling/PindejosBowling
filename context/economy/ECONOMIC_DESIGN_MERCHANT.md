@@ -954,7 +954,7 @@ Losing insured bet:
 ```text
 Base result: Loss
 Base payout: 0
-Safety Ticket: +25 rebate
+Golden Ticket: +25 rebate
 Final payout: 25
 ```
 
@@ -1018,11 +1018,11 @@ Suggested listing defaults:
 | Max Stake | 250 |
 | Max Potential Payout | 1,000 |
 
-### 16.3 Safety Ticket
+### 16.3 Golden Ticket
 
 | Field | Value |
 |---|---|
-| Display Name | Safety Ticket |
+| Display Name | Golden Ticket |
 | Effect Key | `bet_loss_rebate` |
 | Eligible Target | `pinsino_bet` |
 | Eligible Bet Type | `single` |

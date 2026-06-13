@@ -576,7 +576,7 @@ export const bets = {
   // Place a house bet atomically (SECURITY DEFINER); O/U passes one selection id.
   // customLineId tags the bet with a special's identity (title/description/
   // category snapshotted server-side, so branding survives line edits/deletion).
-  // insuranceItemId attaches a Safety Ticket (consumed at placement, win or
+  // insuranceItemId attaches a Golden Ticket (consumed at placement, win or
   // lose; if the bet loses the stake refunds at settlement).
   place: (selectionIds: string[], stake: number, customLineId?: string, insuranceItemId?: string) =>
     // undefined is dropped from the RPC payload → the param's NULL default applies.
@@ -1029,11 +1029,45 @@ export const auctionLedger = {
       .eq('is_house', false),
 }
 
+export interface CatalogItemRpcInput {
+  name: string
+  description: string
+  icon: string
+  effectType: string
+  effectParams: Json
+  activationMode: string
+}
+
 export const itemCatalog = {
   // Create-modal picker + item display copy. Catalog rows are admin-curated;
   // functional columns are frozen once instances exist (the update RPC enforces).
   listActive: () =>
     supabase.from('item_catalog').select('*').eq('is_active', true).order('created_at'),
+  // Admin catalog list: every row (incl. retired) + instance count — count > 0
+  // means the functional columns are frozen (the UI mirrors the DB guard).
+  listAllWithCounts: () =>
+    supabase.from('item_catalog').select('*, player_inventory_items(count)').order('created_at'),
+  create: (key: string, c: CatalogItemRpcInput) =>
+    supabase.rpc('create_catalog_item', {
+      p_key: key,
+      p_name: c.name,
+      p_description: c.description,
+      p_icon: c.icon,
+      p_effect_type: c.effectType,
+      p_effect_params: c.effectParams,
+      p_activation_mode: c.activationMode,
+    }),
+  update: (catalogItemId: string, c: CatalogItemRpcInput, isActive: boolean) =>
+    supabase.rpc('update_catalog_item', {
+      p_catalog_item_id: catalogItemId,
+      p_name: c.name,
+      p_description: c.description,
+      p_icon: c.icon,
+      p_effect_type: c.effectType,
+      p_effect_params: c.effectParams,
+      p_activation_mode: c.activationMode,
+      p_is_active: isActive,
+    }),
 }
 
 export const inventoryItems = {
