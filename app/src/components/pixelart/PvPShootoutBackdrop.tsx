@@ -7,7 +7,8 @@ import { BACKDROP_OPACITY, FIELD_PIXEL } from './config'
 
 // Full-viewport hero field for the PvP screen: a high-noon duel. The whole
 // scene is dropped to the bottom of the viewport — two bowling-pin bandits
-// drawn down across a dusty street, a saguaro, a tumbleweed, and a dark
+// squared off across a dusty street, guns holstered on their hips and hands
+// hovering, the half-second before the draw — a saguaro, a tumbleweed, and a dark
 // doorway with red eyes watching from the shade — under a wide, deliberately
 // thin sky that carries only the blazing overhead sun and a pair of circling
 // buzzards. The two pins sit at the far left and right so the central column
@@ -20,12 +21,15 @@ import { BACKDROP_OPACITY, FIELD_PIXEL } from './config'
 const PIXEL = FIELD_PIXEL
 const OPACITY = BACKDROP_OPACITY.sceneHero
 
-// A bowling pin done up as a bandit, facing RIGHT. Unmistakably a pin — small
-// rounded head, the two classic neck stripes (doubling as a kerchief), a belly
-// that bulges wide and tapers to a narrow base — under a cowboy hat, with the
-// gun arm reaching toward the opponent and a gold muzzle glint at the barrel.
-// Mirror it for the duelist on the other side. 'w' is the body (rekeyed per
-// side); 'd' the bone-white stripes; 'h' the hat; 'g' the muzzle glint.
+// A bowling pin done up as a bandit, seen in profile, facing RIGHT.
+// Unmistakably a pin — small rounded head, the two classic neck stripes
+// (doubling as a kerchief), a belly that bulges wide and tapers to a narrow
+// base — under a cowboy hat. The gun is NOT yet drawn: a gold six-gun rides in
+// a hip holster on the body's near side, which in profile reads at the visual
+// CENTER of the belly — grip up, the round cylinder bulging at the middle, the
+// barrel hanging straight down. Mirror it for the other duelist. 'w' is the
+// body (rekeyed per side); 'd' the bone-white stripes; 'h' the hat; 'g' the
+// holstered revolver.
 const GUNSLINGER: Sprite = [
   '...hhh....',
   '.hhhhhhh..',
@@ -34,13 +38,13 @@ const GUNSLINGER: Sprite = [
   '...www....',
   '...ddd....',
   '..wwwww...',
-  '..wwwwwwwg',
+  '..wwwww...',
   '.wwwwwww..',
   '.wwwwwww..',
-  '.wwwwwww..',
-  '.wwwwwww..',
-  '.wwwwwww..',
-  '.wwwwwww..',
+  '.wwggwww..',
+  '.wwwggww..',
+  '.wwwwgww..',
+  '.wwwwgww..',
   '..wwwww...',
   '..wwwww...',
   '...www....',
@@ -131,8 +135,9 @@ function buildScene(cols: number, rowCount: number): string[] {
   stamp(canvas, SAGUARO, 1, ground - SAGUARO.length)
   stamp(canvas, DARK_DOOR, cols - DARK_DOOR[0].length - 1, ground - DARK_DOOR.length)
 
-  // The two duelists at the far left and right, drawn down on each other —
-  // gun arms (and their gold glints) facing toward the center.
+  // The two duelists at the far left and right, squared off — each with a
+  // holstered six-gun riding the near hip (centered on the belly in profile),
+  // hands hovering, not yet drawn.
   const leftPin = Math.floor(cols * 0.12)
   const rightPin = cols - leftPin - GUNSLINGER[0].length
   stamp(canvas, rekey(GUNSLINGER, { w: 'b' }), leftPin, duelTop)
