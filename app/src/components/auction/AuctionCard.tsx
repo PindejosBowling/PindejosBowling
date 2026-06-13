@@ -29,7 +29,9 @@ export default function AuctionCard({ auction: a, onPress }: Props) {
       activeOpacity={0.7}
     >
       <View style={styles.headerRow}>
-        <Text style={styles.title} numberOfLines={1}>{a.itemIcon} {a.itemName}</Text>
+        <Text style={styles.title} numberOfLines={1}>
+          {a.itemIcon} {a.itemName}{a.quantity > 1 ? ` ×${a.quantity}` : ''}
+        </Text>
         <Text style={[styles.status, open && styles.statusOpen]}>{STATUS_LABEL[a.status]}</Text>
       </View>
       <Text style={styles.description} numberOfLines={1}>{a.description}</Text>
@@ -58,7 +60,9 @@ export default function AuctionCard({ auction: a, onPress }: Props) {
       {done && (
         <Text style={styles.result}>
           {a.status === 'settled'
-            ? `Won by ${a.winnerName} — ${a.winningPrice?.toLocaleString()} pins`
+            ? a.quantity > 1
+              ? `${a.winners.length} of ${a.quantity} sold — top bid ${a.winningPrice?.toLocaleString()} pins`
+              : `Won by ${a.winnerName} — ${a.winningPrice?.toLocaleString()} pins`
             : 'No sale — no valid bids'}
           {a.bounces.length > 0
             ? ` · ${a.bounces.length} check${a.bounces.length === 1 ? '' : 's'} bounced 💸`
