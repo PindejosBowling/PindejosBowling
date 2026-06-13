@@ -3,7 +3,7 @@ import { View, Text, StyleSheet } from 'react-native'
 import { colors, fonts, radius } from '../../theme'
 import BetRow from './BetRow'
 import { resultBadge, betReturnText } from '../../utils/bets'
-import type { BetView } from '../../hooks/usePinsinoData'
+import { marketGroup, type BetView, type LineGroup } from '../../hooks/usePinsinoData'
 import EmptyCard from '../ui/EmptyCard'
 
 interface ActiveBetsViewProps {
@@ -27,8 +27,10 @@ interface ActiveBetsViewProps {
 }
 
 // Shared "Active Bets" surface: a wager summary plus this week's pending bets
-// grouped by game (parlays bucketed on their own). Rendered identically on the
-// public Pinsino tab (read-only) and the Pinsino Admin screen (with actions).
+// grouped by market section — GAME N / WEEKLY (night-scoped props) / SEASON via
+// the same `marketGroup` the Place Bets board uses, so no single bet falls
+// through (parlays bucketed on their own). Rendered identically on the public
+// Pinsino tab (read-only) and the Pinsino Admin screen (with actions).
 export default function ActiveBetsView({
   bets,
   myBets,
@@ -40,25 +42,25 @@ export default function ActiveBetsView({
 }: ActiveBetsViewProps) {
   const parlays = useMemo(() => bets.filter(b => b.legCount > 1), [bets])
 
-  const byGame = useMemo(() => {
-    const map: Record<number, BetView[]> = {}
+  // Single bets bucketed by their market section (GAME N / WEEKLY / SEASON),
+  // sorted in board order. Using `marketGroup` means game-less singles — e.g.
+  // night-scoped LaneTalk props — get a home instead of being dropped.
+  const singleGroups = useMemo(() => {
+    const map = new Map<string, { group: LineGroup; bets: BetView[] }>()
     for (const bet of bets) {
-      if (bet.legCount > 1 || bet.gameNumber == null) continue
-      if (!map[bet.gameNumber]) map[bet.gameNumber] = []
-      map[bet.gameNumber].push(bet)
+      if (bet.legCount > 1) continue
+      const group = marketGroup(bet.gameNumber, bet.marketType)
+      const entry = map.get(group.key)
+      if (entry) entry.bets.push(bet)
+      else map.set(group.key, { group, bets: [bet] })
     }
-    return map
+    return Array.from(map.values()).sort((a, b) => a.group.sortOrder - b.group.sortOrder)
   }, [bets])
-
-  const gameNumbers = useMemo(
-    () => Object.keys(byGame).map(Number).sort((a, b) => a - b),
-    [byGame],
-  )
 
   const totalWagered = useMemo(() => bets.reduce((s, b) => s + (b.stake ?? 0), 0), [bets])
   const uniqueBettors = useMemo(() => new Set(bets.map(b => b.playerId)).size, [bets])
 
-  if (gameNumbers.length === 0 && parlays.length === 0) {
+  if (singleGroups.length === 0 && parlays.length === 0) {
     return (
       <EmptyCard text="No bets placed yet this week" />
     )
@@ -103,15 +105,15 @@ export default function ActiveBetsView({
 
       {hint ? <Text style={styles.hint}>{hint}</Text> : null}
 
-      {gameNumbers.map(gameNum => (
-        <View key={gameNum}>
-          <Text style={styles.gameLabel}>GAME {gameNum}</Text>
+      {singleGroups.map(({ group, bets: groupBets }) => (
+        <View key={group.key}>
+          <Text style={styles.gameLabel}>{group.label}</Text>
           <View style={styles.card}>
-            {byGame[gameNum].map((bet, idx) => (
+            {groupBets.map((bet, idx) => (
               <BetRow
                 key={bet.id}
                 bet={bet}
-                isLast={idx === byGame[gameNum].length - 1}
+                isLast={idx === groupBets.length - 1}
                 badge={resultBadge(bet.status)}
                 betReturnText={betReturnText(bet, perspective)}
                 onPress={onBetPress ? () => onBetPress(bet) : undefined}
