@@ -9,6 +9,9 @@ import EmptyCard from '../ui/EmptyCard'
 interface ActiveBetsViewProps {
   // This week's still-pending bets (settled ones belong in SettledBetsView).
   bets: BetView[]
+  // The viewer's own pending bets — rendered as a MY BETS section above the
+  // community board. Omitted on the admin/house view (no personal section).
+  myBets?: BetView[]
   // Whose side the returns are shown from. 'house' (Pinsino Admin) negates each
   // signed return, so a pending bet reads as the house's exposure rather than the
   // bettor's potential winnings. Defaults to 'player' (the public Pinsino tab).
@@ -28,6 +31,7 @@ interface ActiveBetsViewProps {
 // public Pinsino tab (read-only) and the Pinsino Admin screen (with actions).
 export default function ActiveBetsView({
   bets,
+  myBets,
   perspective = 'player',
   hint,
   onBetPress,
@@ -62,6 +66,24 @@ export default function ActiveBetsView({
 
   return (
     <>
+      {myBets && myBets.length > 0 && (
+        <View>
+          <Text style={styles.gameLabel}>MY BETS</Text>
+          <View style={styles.card}>
+            {myBets.map((bet, idx) => (
+              <BetRow
+                key={bet.id}
+                bet={bet}
+                isLast={idx === myBets.length - 1}
+                badge={resultBadge(bet.status)}
+                betReturnText={betReturnText(bet, perspective)}
+                onPress={onBetPress ? () => onBetPress(bet) : undefined}
+              />
+            ))}
+          </View>
+        </View>
+      )}
+
       <View style={styles.summaryCard}>
         <View style={styles.summaryItem}>
           <Text style={styles.summaryValue}>{bets.length}</Text>
