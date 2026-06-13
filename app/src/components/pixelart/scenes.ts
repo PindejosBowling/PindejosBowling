@@ -144,35 +144,11 @@ const marketmoves: SceneDef = {
 // Loan Shark uses LoanSharkDepthBackdrop (a scrolling depth field) instead of
 // a fixed backdrop scene — the art length must track the scroll content.
 
-// Auction House: the gavel mid-strike, sparks flying off the sound block.
-const auction: SceneDef = {
-  anchor: 'bottomRight',
-  pixelSize: 6,
-  opacity: BACKDROP_OPACITY.scene,
-  grid: {
-    rows: compose(14, 13, [
-      { sprite: GAVEL_HEAD, x: 3, y: 0 },
-      { sprite: GAVEL_HANDLE, x: 6, y: 4 },
-      { sprite: STAR, x: 1, y: 7 },
-      { sprite: STAR, x: 12, y: 7 },
-      { sprite: STAR, x: 0, y: 9 },
-      { sprite: STAR, x: 13, y: 9 },
-      { sprite: SOUND_BLOCK, x: 2, y: 10 },
-      { sprite: ['n'.repeat(14)], x: 0, y: 12 },
-    ]),
-    palette: {
-      h: colors.pixelArt.sand,
-      l: colors.pixelArt.rose,
-      g: colors.gold,
-      k: colors.pixelArt.teal,
-      n: colors.pixelArt.sand,
-    },
-  },
-}
+// Auction House uses AuctionBankBackdrop (a full-viewport western bank
+// interior — sealed vault, manned teller cage) instead of a fixed scene.
 
 export const SCENES = {
   marketmoves,
-  auction,
 } satisfies Record<string, SceneDef>
 
 export type SceneName = keyof typeof SCENES

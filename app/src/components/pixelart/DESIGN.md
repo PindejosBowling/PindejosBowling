@@ -57,7 +57,7 @@ The soft `pixelArt` tints carry most of the area; gold/lime/red carry the accent
 | Market Moves | City skyline, lit windows, zigzag ticker with an up-arrow | The financial district of a town that shouldn't have one |
 | PvP | Texas shootout at midnight (full-viewport hero field): bezel-to-ground starfield with a shooting star, one bright star, and buzzards circling; two gunslinger pins drawn down across an empty street, gold holster glints, tumbleweed, saguaro, red eyes on the ridge | High-noon duel, hours after midnight |
 | Bounties | Full-viewport wooden notice board: dark-wood frame, dashed plank seams + knots; top third bare planks (the house bounty card displays there, unchallenged); lower two-thirds pinned — big poster with the sheriff star, small poster with red eyes, an empty nail with a torn scrap | The board itself — one bounty's already been collected |
-| Auction House | Gavel mid-strike, sparks, sound block | The hammer falling |
+| Auction House | Western bank interior (full-viewport field): pendant lamps hanging from the bezel, dust drifting in their light, a big sealed vault door bottom-left, a teller cage bottom-right with one open window — red eyes in the window, a small stack of gold coins on the counter | After hours at the territorial bank — the vault is sealed, but someone's still at the teller window |
 
 New screens should extend this world — same night, same town, new corner of it.
 
