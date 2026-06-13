@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { View, Text, ScrollView, StyleSheet, RefreshControl, TouchableOpacity, Alert } from 'react-native'
+import { View, Text, ScrollView, StyleSheet, RefreshControl, TouchableOpacity } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useNavigation, useRoute, useFocusEffect, RouteProp } from '@react-navigation/native'
 import { colors, fonts, radius } from '../theme'
@@ -10,11 +10,9 @@ import AuctionBidSheet from '../components/auction/AuctionBidSheet'
 import { useAuctionDetailData } from '../hooks/useAuctionDetailData'
 import { useRefresh } from '../hooks/useRefresh'
 import { useAuthStore } from '../stores/authStore'
-import { useUiStore } from '../stores/uiStore'
 import { formatCountdown } from '../utils/auction'
 import { formatCloseTime } from '../utils/bounty'
 import { PinsinoStackParamList } from '../navigation/types'
-import { auctions } from '../utils/supabase/db'
 
 type Route = RouteProp<PinsinoStackParamList, 'AuctionDetail'>
 
@@ -22,7 +20,6 @@ export default function AuctionDetailScreen() {
   const navigation = useNavigation()
   const { params } = useRoute<Route>()
   const playerId = useAuthStore(s => s.playerId)
-  const { showToast } = useUiStore()
 
   // Admin management lives on AuctionHouseAdmin (Pinsino Admin → Auction House).
   const { loading, balance, auction, reload } = useAuctionDetailData(params.auctionId, playerId)
@@ -60,27 +57,6 @@ export default function AuctionDetailScreen() {
   // Past closes_at but the sweep hasn't settled yet: cron lag as theater.
   const hammerFalling = open && countdown == null
 
-  function confirmCancelBid() {
-    Alert.alert(
-      'Cancel your bid?',
-      'Withdraw your sealed bid? You can bid again while the auction is open.',
-      [
-        { text: 'Keep it', style: 'cancel' },
-        {
-          text: 'Cancel bid',
-          style: 'destructive',
-          onPress: async () => {
-            const { error } = await auctions.cancelBid(a.id)
-            if (error) { showToast(error.message, 'error'); return }
-            showToast('Bid cancelled', 'success')
-            setBidRevealed(false)
-            reload()
-          },
-        },
-      ],
-    )
-  }
-
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <ScreenHeader title="Auction" subtitle={a.itemName} onBack={() => navigation.goBack()} />
@@ -104,23 +80,32 @@ export default function AuctionDetailScreen() {
           )}
         </View>
 
-        {/* Live countdown / hammer */}
+        {/* Live countdown / hammer — open auctions pair the clock with the
+            bidder count at equal prominence. */}
         {(open || scheduled) && (
           <View style={styles.countdownCard}>
             {hammerFalling ? (
-              <Text style={styles.hammer}>🔨 HAMMER FALLING…</Text>
-            ) : (
               <>
-                <Text style={styles.countdownLabel}>{open ? 'CLOSES IN' : 'OPENS IN'}</Text>
-                <Text style={styles.countdownValue}>{countdown}</Text>
+                <Text style={styles.hammer}>🔨 HAMMER FALLING…</Text>
+                <Text style={styles.bidderLine}>
+                  {a.bidderCount === 0
+                    ? 'No sealed bids yet'
+                    : `${a.bidderCount} sealed bid${a.bidderCount === 1 ? '' : 's'} in`}
+                </Text>
               </>
-            )}
-            {open && (
-              <Text style={styles.bidderLine}>
-                {a.bidderCount === 0
-                  ? 'No sealed bids yet'
-                  : `${a.bidderCount} sealed bid${a.bidderCount === 1 ? '' : 's'} in`}
-              </Text>
+            ) : (
+              <View style={styles.countdownRow}>
+                <View style={styles.countdownCell}>
+                  <Text style={styles.countdownLabel}>{open ? 'CLOSES IN' : 'OPENS IN'}</Text>
+                  <Text style={styles.countdownValue}>{countdown}</Text>
+                </View>
+                {open && (
+                  <View style={styles.countdownCell}>
+                    <Text style={styles.countdownLabel}>{a.bidderCount === 1 ? 'BIDDER' : 'BIDDERS'}</Text>
+                    <Text style={styles.countdownValue}>{a.bidderCount}</Text>
+                  </View>
+                )}
+              </View>
             )}
           </View>
         )}
@@ -133,7 +118,7 @@ export default function AuctionDetailScreen() {
               ? `${a.quantity} up for grabs — the top ${a.quantity} bids each take one. You can only win one.`
               : 'One winner — the highest bid takes it.',
             'Bids are secret. Nobody sees your number — only how many bids are in.',
-            'Change or cancel your bid any time before the hammer falls.',
+            `Once you're in, you're in. Change your bid any time before the hammer falls — but you can't take it back.`,
             `Win but can't cover your bid? Your check bounces and you're fined up to ${a.bounceFee} pins.`,
           ].map((line, i) => (
             // Hanging indent: wrapped lines align with the text, not the bullet.
@@ -209,9 +194,6 @@ export default function AuctionDetailScreen() {
               onPress={() => setBidOpen(true)}
               style={styles.cta}
             />
-            {a.myBidAmount != null && (
-              <Button variant="outline" tone="danger" label="Cancel Bid" onPress={confirmCancelBid} style={styles.cancelCta} />
-            )}
           </>
         )}
       </ScrollView>
@@ -252,6 +234,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 12,
   },
+  countdownRow: { flexDirection: 'row', alignSelf: 'stretch' },
+  countdownCell: { flex: 1, alignItems: 'center' },
   countdownLabel: { fontFamily: fonts.barlowCondensed, fontSize: 12, letterSpacing: 2, color: colors.muted },
   countdownValue: { fontFamily: fonts.barlowCondensedHeavy, fontSize: 34, color: colors.accent, marginTop: 2 },
   hammer: { fontFamily: fonts.barlowCondensedHeavy, fontSize: 22, color: colors.gold, letterSpacing: 1 },
@@ -275,7 +259,6 @@ const styles = StyleSheet.create({
   muted: { fontFamily: fonts.barlow, fontSize: 13, color: colors.muted, flex: 1, marginRight: 8 },
 
   cta: { marginTop: 6 },
-  cancelCta: { marginTop: 8 },
 
   emptyCard: {
     backgroundColor: colors.surface,

@@ -988,10 +988,10 @@ export const auctions = {
     supabase.from('auction_bids').select('id, auction_id, status').eq('status', 'active'),
   myBidAmount: (auctionId: string) =>
     supabase.rpc('my_bid_amount', { p_auction_id: auctionId }),
+  // Bids are commitments: placeBid also edits (>= minimum_bid). There is no
+  // cancel — the RPC was dropped (no-cancel decision, AUCTION_FINDINGS).
   placeBid: (auctionId: string, amount: number) =>
     supabase.rpc('place_auction_bid', { p_auction_id: auctionId, p_amount: amount }),
-  cancelBid: (auctionId: string) =>
-    supabase.rpc('cancel_auction_bid', { p_auction_id: auctionId }),
   create: (a: AuctionRpcInput) =>
     supabase.rpc('create_auction', {
       p_catalog_key: a.catalogKey,

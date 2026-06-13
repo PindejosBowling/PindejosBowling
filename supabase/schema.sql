@@ -2097,40 +2097,6 @@ END;
 $function$
 ;
 
-CREATE OR REPLACE FUNCTION public.cancel_auction_bid(p_auction_id uuid)
- RETURNS void
- LANGUAGE plpgsql
- SECURITY DEFINER
- SET search_path TO ''
-AS $function$
-DECLARE
-  v_player  uuid;
-  v_auction public.auctions;
-BEGIN
-  v_player := public.current_player_id();
-
-  SELECT * INTO v_auction FROM public.auctions WHERE id = p_auction_id FOR UPDATE;
-  IF v_auction.id IS NULL THEN
-    RAISE EXCEPTION 'Auction not found';
-  END IF;
-  IF v_auction.status <> 'open' OR now() >= v_auction.closes_at THEN
-    RAISE EXCEPTION 'Auction is not open';
-  END IF;
-
-  DELETE FROM public.auction_bids
-   WHERE auction_id = p_auction_id AND player_id = v_player AND status = 'active';
-  IF NOT FOUND THEN
-    RAISE EXCEPTION 'No bid to cancel';
-  END IF;
-
-  UPDATE public.auctions a
-     SET bidder_count = (SELECT count(*) FROM public.auction_bids b
-                          WHERE b.auction_id = a.id AND b.status = 'active')
-   WHERE a.id = p_auction_id;
-END;
-$function$
-;
-
 CREATE OR REPLACE FUNCTION public.cancel_bet(p_bet_id uuid)
  RETURNS void
  LANGUAGE plpgsql

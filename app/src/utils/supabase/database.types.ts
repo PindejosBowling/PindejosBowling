@@ -2531,7 +2531,6 @@ export type Database = {
       assert_admin: { Args: never; Returns: undefined }
       auction_bid_key: { Args: never; Returns: string }
       cancel_auction: { Args: { p_auction_id: string }; Returns: undefined }
-      cancel_auction_bid: { Args: { p_auction_id: string }; Returns: undefined }
       cancel_bet: { Args: { p_bet_id: string }; Returns: undefined }
       cancel_bounty: { Args: { p_bounty_post_id: string }; Returns: undefined }
       cancel_loan: { Args: { p_loan_id: string }; Returns: undefined }

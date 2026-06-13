@@ -106,7 +106,7 @@ DB superuser can ultimately extract the key — accepted risk, by decision.
 | `update_auction(id, …)` | auth | Admin; **scheduled only** — metadata frozen once open |
 | `open_auction_now(id)` | auth | Admin; stamps `opens_at = now()` + the one opening path (publishes `auction_opened`) |
 | `place_auction_bid(id, amount)` | auth | Owner upsert under the auction lock; `now() < closes_at` authoritative; `>= minimum_bid`, `<= pin_balance()`; **no-op edits skip** (tie-break clock preserved); recounts `bidder_count`; no ledger, no feed |
-| `cancel_auction_bid(id)` | auth | Owner hard delete pre-close; recounts |
+| ~~`cancel_auction_bid`~~ | — | **Dropped** (`…003000_auction_bids_no_cancel`): bids are commitments — editable via `place_auction_bid`, never withdrawable |
 | `my_bid_amount(id)` | auth | Decrypts the caller's own active bid (NULL if none) |
 | `settle_auction(id)` | auth | Admin **Settle Now** = stamp `closes_at = now()` under the lock → the internal path (truthful history; no override param exists) |
 | `settle_auction_internal(id)` | — | The one settlement path (cron + wrapper): idempotent; `status='open' AND closes_at <= now()` only; decrypt+rank (amount DESC, submitted_at ASC); **walks the list selling one unit per affordable bidder until `quantity` sold** (pay-as-bid; each winner → purchase pair + inventory grant + `won` + per-winner `auction_won` event; denorms = the FIRST/highest winner only); insolvent → bounce + continue; then `settled` + **delete non-won bids** + `auction_no_sale` only at zero winners (payload snapshots `bidder_count`/`bounce_count` for the all-bounce copy) |
@@ -136,7 +136,7 @@ cancel, and settle serialize on one lock.
 ## 8. Verification
 
 [probe-auctions.sql](../../supabase/verify/probe-auctions.sql) (in
-`run-all-probes.sh`): sweep-open, no-op/edit/cancel bids, ciphertext-at-rest,
+`run-all-probes.sh`): sweep-open, no-op/edit bids (+ cancel-RPC-absent assert), ciphertext-at-rest,
 bounce(40)→win(110) settlement, idempotent re-settle, foreign/consumed ticket
 rejections, insured-loss refund + double-refund guard, reverse blocked-while-
 consumed then zero-residue. The auction admin RPCs are in

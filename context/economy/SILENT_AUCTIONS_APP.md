@@ -11,7 +11,7 @@
 | db.ts objects | `auctions`, `auctionLedger`, `itemCatalog`, `inventoryItems`; `bets.place` gained the 4th `insuranceItemId` arg |
 | View types + pure helpers | `utils/auction.ts` — `AuctionView` / `InventoryItemView` / `InventoryGroupView` / `CatalogItemView`; `auctionSections`, `groupInventory`, `formatTimeRemaining`/`formatCountdown`, `isLargeBid` (≥50% of balance), `itemHowToUse`, `defaultAuctionCloseAt` (= bounties' next-Mon-7PM-ET) |
 | Hooks | `useAuctionHouseData` (list + My Items + balance), `useAuctionDetailData` (one auction + decoded own bid); normalizers exported from the house hook |
-| Screens | `AuctionHouseScreen` (OPEN → SCHEDULED → MY ITEMS → RECENTLY SETTLED), `AuctionDetailScreen` (ticking countdown, owner tap-to-reveal, bid/cancel CTAs, settlement reveal), `AuctionHouseAdminScreen` (More stack — all admin: auctions, catalog, grants) |
+| Screens | `AuctionHouseScreen` (OPEN → SCHEDULED → MY ITEMS → RECENTLY SETTLED), `AuctionDetailScreen` (ticking countdown + bidder count, owner tap-to-reveal, place/edit bid CTA — **no cancel; bids are commitments**, settlement reveal), `AuctionHouseAdminScreen` (More stack — all admin: auctions, catalog, grants) |
 | Components | `components/auction/` — see [COMPONENTS_INDEX.md](../COMPONENTS_INDEX.md) |
 | Cross-cutting | `GoldenTicketToggle` in all three Sportsbook wager flows; `auction` notification source; `auction_house` feed templates + filter pill + tap-through |
 | Flags | `SHOW_AUCTION_HOUSE` gates the Pinsino tile independently of `SHOW_PINSINO` |
@@ -34,10 +34,12 @@
 
 ## Mechanics surfaced in the UI
 
-- **Free re-pricing**: bid sheet prefills (min bid, or your current bid when
-  editing), no increment, separate destructive CANCEL BID; the edit hint warns
-  that editing resets the tie-break clock. §18.3 pledge copy always; stronger
-  warning at ≥50% of balance (`isLargeBid` — a warning, never a gate).
+- **Re-pricing without escape**: bid sheet prefills (min bid, or your current
+  bid when editing), no increment, **no cancel** — a placed bid is a
+  commitment, editable down to `minimum_bid` only; the edit hint warns that
+  editing resets the tie-break clock. §18.3 pledge copy always (incl. the
+  can't-take-it-back line); stronger warning at ≥50% of balance
+  (`isLargeBid` — a warning, never a gate).
 - **Countdown**: per-second tick on detail only; static minute-granularity on
   cards; past 0:00 while still open → `🔨 HAMMER FALLING…` (cron lag as
   theater) with the bid CTAs hidden.

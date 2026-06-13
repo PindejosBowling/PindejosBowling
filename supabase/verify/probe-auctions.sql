@@ -7,7 +7,8 @@
 -- Flow:
 --   sweep open phase: scheduled auction with due opens_at → open + opened event
 --   bids: p1 450 (after a no-op re-place of 400 and a real edit), p2 120 →
---         cancel → re-bid 110; bidder_count recounted throughout
+--         edit down to 110 (cancel_auction_bid no longer exists — bids are
+--         commitments); bidder_count recounted throughout
 --   drain p1 to 40 → admin Settle Now (stamps closes_at, one settlement path):
 --         p1 bounces for LEAST(40, 50) = 40, p2 wins at 110, item granted
 --   losers destroyed; idempotent re-settle is a no-op
@@ -124,11 +125,16 @@ BEGIN
   IF (SELECT bidder_count FROM public.auctions WHERE id = v_auction) <> 2 THEN
     RAISE EXCEPTION 'PROBE_FAIL: bidder_count after 2 bids';
   END IF;
-  PERFORM public.cancel_auction_bid(v_auction);
-  IF (SELECT bidder_count FROM public.auctions WHERE id = v_auction) <> 1 THEN
-    RAISE EXCEPTION 'PROBE_FAIL: bidder_count after cancel';
+  -- Bids are commitments: withdrawal is impossible by design — the RPC no
+  -- longer exists. Editing (>= minimum_bid) is the only move.
+  IF EXISTS (SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+             WHERE n.nspname = 'public' AND p.proname = 'cancel_auction_bid') THEN
+    RAISE EXCEPTION 'PROBE_FAIL: cancel_auction_bid still exists (bids must be uncancellable)';
   END IF;
-  PERFORM public.place_auction_bid(v_auction, 110);
+  PERFORM public.place_auction_bid(v_auction, 110);  -- edit down, still in
+  IF (SELECT bidder_count FROM public.auctions WHERE id = v_auction) <> 2 THEN
+    RAISE EXCEPTION 'PROBE_FAIL: bidder_count changed on edit';
+  END IF;
 
   -- Amounts at rest are ciphertext, not integers in disguise.
   IF EXISTS (SELECT 1 FROM public.auction_bids
