@@ -31,13 +31,13 @@ const TILE_WIDTH = (Dimensions.get('window').width - 32 - TILE_GAP * 2) / 3
 
 // Subpage menu tiles (groundwork for more Pinsino subpages — add one line each)
 const MENU_TILES: { icon: string; label: string; route: 'PinsinoLeaderboard' | 'Sportsbook' | 'LoanShark' | 'PvP' | 'MarketMoves' | 'BountyBoard' | 'AuctionHouse' }[] = [
-  { icon: '👀', label: 'Market Moves', route: 'MarketMoves' },
   { icon: '🏟️', label: 'Sportsbook', route: 'Sportsbook' },
   { icon: '⚔️', label: 'PvP', route: 'PvP' },
   { icon: '🎯', label: 'Bounties', route: 'BountyBoard' },
-  { icon: '🦈', label: 'Loan Shark', route: 'LoanShark' },
   // Mock-backed while the auction DB layer is built — flag-gated independently.
-  ...(SHOW_AUCTION_HOUSE ? [{ icon: '🔨', label: 'Auction House', route: 'AuctionHouse' as const }] : []),
+  ...(SHOW_AUCTION_HOUSE ? [{ icon: '📣', label: 'Auction House', route: 'AuctionHouse' as const }] : []),
+  { icon: '🦈', label: 'Loan Shark', route: 'LoanShark' },
+  { icon: '👀', label: 'Market Moves', route: 'MarketMoves' },
 ]
 
 export default function PinsinoScreen() {
