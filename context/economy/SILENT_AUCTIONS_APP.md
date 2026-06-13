@@ -22,9 +22,13 @@
   on the detail screen behind an owner-only **tap-to-reveal** (fed by the
   `my_bid_amount` RPC — the column is ciphertext; RLS means other players'
   rows never arrive at all).
-- The public signals are `bidder_count` while live, and the winner + price
-  denorms after. Bounces render as name + fee (the pledged amounts were
-  destroyed at settlement; `auctionLedger` player-side rows are the source).
+- The public signals are `bidder_count` while live, and the winners after:
+  the denorms hold the FIRST (highest) winner as the hammer-price headline,
+  while the full pay-as-bid winners list (`AuctionView.winners`) derives from
+  `auctionLedger` `auction_purchase` rows via `purchasesByAuction` — the same
+  fetch that powers bounces (name + fee; pledged amounts were destroyed at
+  settlement). Multi-unit (`quantity > 1`): card title `×N`, "k of N sold"
+  result line, detail lists every winner, bid sheet adds top-N pledge copy.
 - `normalizeAuction` synthesizes the display status `settled_no_winner` from
   `status='settled' AND winner == null` (the DB stores one terminal state).
 

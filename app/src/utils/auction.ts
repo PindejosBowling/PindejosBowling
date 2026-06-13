@@ -17,6 +17,13 @@ export interface AuctionBounceView {
   feePaid: number
 }
 
+// One settled winner (multi-unit: up to `quantity` of these, pay-as-bid).
+// Derived from pin_ledger 'auction_purchase' rows — public by design.
+export interface AuctionWinnerView {
+  playerName: string
+  price: number
+}
+
 export interface AuctionView {
   id: string
   status: AuctionStatus
@@ -30,11 +37,16 @@ export interface AuctionView {
   closesAt: string
   minimumBid: number
   bounceFee: number
+  // Units on the block: the top N sealed bidders each win one (pay-as-bid,
+  // one per player).
+  quantity: number
   // The only public bid signal while the auction is live (FINDINGS §9).
   bidderCount: number
-  // Settled-only denorms.
+  // Settled-only denorms — the hammer-price headline (first/highest winner).
   winnerName: string | null
   winningPrice: number | null
+  // Every winner (ledger-derived), highest price first. Empty until settled.
+  winners: AuctionWinnerView[]
   bounces: AuctionBounceView[]
   // Owner-only: present iff the viewer holds the active bid (RLS guarantees
   // other players' bids never arrive).

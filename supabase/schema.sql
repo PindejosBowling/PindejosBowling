@@ -630,7 +630,7 @@ ALTER TABLE auctions ADD CONSTRAINT auctions_minimum_bid_check CHECK ((minimum_b
 
 ALTER TABLE auctions ADD CONSTRAINT auctions_pkey PRIMARY KEY (id);
 
-ALTER TABLE auctions ADD CONSTRAINT auctions_quantity_check CHECK ((quantity = 1));
+ALTER TABLE auctions ADD CONSTRAINT auctions_quantity_check CHECK (((quantity >= 1) AND (quantity <= 50)));
 
 ALTER TABLE auctions ADD CONSTRAINT auctions_season_id_fkey FOREIGN KEY (season_id) REFERENCES seasons(id) ON DELETE CASCADE;
 
@@ -1097,9 +1097,9 @@ CREATE INDEX activity_feed_events_suppressed_by_admin_idx ON public.activity_fee
 
 CREATE INDEX activity_feed_events_week_id_idx ON public.activity_feed_events USING btree (week_id);
 
-CREATE UNIQUE INDEX activity_feed_unique_auction_bounce ON public.activity_feed_events USING btree (auction_id, event_type, actor_player_id) WHERE ((auction_id IS NOT NULL) AND (event_type = 'auction_check_bounce'::text));
+CREATE UNIQUE INDEX activity_feed_unique_auction_actor_event ON public.activity_feed_events USING btree (auction_id, event_type, actor_player_id) WHERE ((auction_id IS NOT NULL) AND (event_type = ANY (ARRAY['auction_check_bounce'::text, 'auction_won'::text])));
 
-CREATE UNIQUE INDEX activity_feed_unique_auction_event ON public.activity_feed_events USING btree (auction_id, event_type) WHERE ((auction_id IS NOT NULL) AND (event_type <> 'auction_check_bounce'::text));
+CREATE UNIQUE INDEX activity_feed_unique_auction_event ON public.activity_feed_events USING btree (auction_id, event_type) WHERE ((auction_id IS NOT NULL) AND (event_type <> ALL (ARRAY['auction_check_bounce'::text, 'auction_won'::text])));
 
 CREATE UNIQUE INDEX activity_feed_unique_bet_event ON public.activity_feed_events USING btree (sportsbook_bet_id, event_type) WHERE (sportsbook_bet_id IS NOT NULL);
 
@@ -2507,7 +2507,7 @@ END;
 $function$
 ;
 
-CREATE OR REPLACE FUNCTION public.create_auction(p_catalog_key text, p_description text, p_minimum_bid integer, p_opens_at timestamp with time zone, p_closes_at timestamp with time zone)
+CREATE OR REPLACE FUNCTION public.create_auction(p_catalog_key text, p_description text, p_minimum_bid integer, p_opens_at timestamp with time zone, p_closes_at timestamp with time zone, p_quantity integer DEFAULT 1)
  RETURNS uuid
  LANGUAGE plpgsql
  SECURITY DEFINER
@@ -2542,9 +2542,12 @@ BEGIN
   IF p_minimum_bid IS NULL OR p_minimum_bid <= 0 THEN
     RAISE EXCEPTION 'Minimum bid must be at least 1';
   END IF;
+  IF p_quantity IS NULL OR p_quantity NOT BETWEEN 1 AND 50 THEN
+    RAISE EXCEPTION 'Quantity must be between 1 and 50';
+  END IF;
 
-  INSERT INTO public.auctions (season_id, catalog_item_id, description, opens_at, closes_at, minimum_bid)
-    VALUES (v_season, v_cat.id, p_description, v_opens, p_closes_at, p_minimum_bid)
+  INSERT INTO public.auctions (season_id, catalog_item_id, description, opens_at, closes_at, minimum_bid, quantity)
+    VALUES (v_season, v_cat.id, p_description, v_opens, p_closes_at, p_minimum_bid, p_quantity)
     RETURNING id INTO v_id;
 
   -- "Opens now" creates open directly (same path as the sweep's open phase).
@@ -4578,7 +4581,6 @@ CREATE OR REPLACE FUNCTION public.reverse_settled_auction(p_auction_id uuid)
 AS $function$
 DECLARE
   v_auction public.auctions;
-  v_item    public.player_inventory_items;
 BEGIN
   PERFORM public.assert_admin();
 
@@ -4590,21 +4592,20 @@ BEGIN
     RAISE EXCEPTION 'Only settled auctions can be reversed';
   END IF;
 
-  -- Revoke the granted item by its provenance FK — never by heuristics.
-  IF v_auction.winner_player_id IS NOT NULL THEN
-    SELECT * INTO v_item FROM public.player_inventory_items WHERE auction_id = p_auction_id;
-    IF v_item.id IS NOT NULL THEN
-      IF v_item.consumed_at IS NOT NULL THEN
-        RAISE EXCEPTION 'The won item has already been used — this auction cannot be reversed';
-      END IF;
-      DELETE FROM public.player_inventory_items WHERE id = v_item.id;
-    END IF;
+  -- Revoke the granted items by their provenance FK — never by heuristics.
+  -- All or nothing: one consumed item blocks the whole reversal.
+  IF EXISTS (
+    SELECT 1 FROM public.player_inventory_items
+     WHERE auction_id = p_auction_id AND consumed_at IS NOT NULL
+  ) THEN
+    RAISE EXCEPTION 'A won item has already been used — this auction cannot be reversed';
   END IF;
+  DELETE FROM public.player_inventory_items WHERE auction_id = p_auction_id;
 
-  -- Claw back every pair (purchase + bounces) by the root ref.
+  -- Claw back every pair (purchases + bounces) by the root ref.
   DELETE FROM public.pin_ledger WHERE auction_id = p_auction_id;
 
-  -- Erase the auction; the won bid + feed rows cascade. As if it never happened.
+  -- Erase the auction; the won bids + feed rows cascade. As if it never happened.
   DELETE FROM public.auctions WHERE id = p_auction_id;
 END;
 $function$
@@ -4685,7 +4686,7 @@ DECLARE
   v_fee          integer;
   v_bidder_count integer;
   v_bounce_count integer := 0;
-  v_won          boolean := false;
+  v_sold         integer := 0;
 BEGIN
   SELECT * INTO v_auction FROM public.auctions WHERE id = p_auction_id FOR UPDATE;
   IF v_auction.id IS NULL THEN
@@ -4709,7 +4710,9 @@ BEGIN
   SELECT count(*) INTO v_bidder_count
     FROM public.auction_bids WHERE auction_id = p_auction_id AND status = 'active';
 
-  -- Rank: first-price, ties to whoever held their amount longest.
+  -- Rank: first-price, ties to whoever held their amount longest. Multi-unit:
+  -- pay-as-bid, sell-what-sells — each affordable bidder takes one unit (one
+  -- per player via the one-active-bid index) until quantity units are gone.
   FOR v_bid IN
     SELECT b.id, b.player_id,
            public.decrypt_bid_amount(b.bid_amount_enc) AS amount,
@@ -4735,11 +4738,16 @@ BEGIN
          SET status = 'won', settled_at = now()
        WHERE id = v_bid.id;
 
-      UPDATE public.auctions
-         SET winner_player_id = v_bid.player_id,
-             winning_bid_id   = v_bid.id,
-             winning_price    = v_bid.amount
-       WHERE id = p_auction_id;
+      v_sold := v_sold + 1;
+
+      -- The denorm headline is the hammer price: the first (highest) winner.
+      IF v_sold = 1 THEN
+        UPDATE public.auctions
+           SET winner_player_id = v_bid.player_id,
+               winning_bid_id   = v_bid.id,
+               winning_price    = v_bid.amount
+         WHERE id = p_auction_id;
+      END IF;
 
       PERFORM public.publish_activity_event(
         'auction_house', 'auction_won',
@@ -4752,8 +4760,7 @@ BEGIN
         NULL, now(),
         NULL, NULL, p_auction_id);
 
-      v_won := true;
-      EXIT;
+      EXIT WHEN v_sold >= v_auction.quantity;
     ELSE
       -- Check bounce: ledger-silent at zero fee, feed-loud always. The event
       -- names the player + fee — NEVER the pledged amount.
@@ -4788,7 +4795,7 @@ BEGIN
   DELETE FROM public.auction_bids
    WHERE auction_id = p_auction_id AND status <> 'won';
 
-  IF NOT v_won THEN
+  IF v_sold = 0 THEN
     PERFORM public.publish_activity_event(
       'auction_house', 'auction_no_sale',
       v_auction.season_id, v_week, NULL, NULL, NULL,
@@ -6647,7 +6654,7 @@ END;
 $function$
 ;
 
-CREATE OR REPLACE FUNCTION public.update_auction(p_auction_id uuid, p_catalog_key text, p_description text, p_minimum_bid integer, p_opens_at timestamp with time zone, p_closes_at timestamp with time zone)
+CREATE OR REPLACE FUNCTION public.update_auction(p_auction_id uuid, p_catalog_key text, p_description text, p_minimum_bid integer, p_opens_at timestamp with time zone, p_closes_at timestamp with time zone, p_quantity integer DEFAULT NULL::integer)
  RETURNS void
  LANGUAGE plpgsql
  SECURITY DEFINER
@@ -6677,13 +6684,17 @@ BEGIN
   IF p_minimum_bid IS NULL OR p_minimum_bid <= 0 THEN
     RAISE EXCEPTION 'Minimum bid must be at least 1';
   END IF;
+  IF p_quantity IS NOT NULL AND p_quantity NOT BETWEEN 1 AND 50 THEN
+    RAISE EXCEPTION 'Quantity must be between 1 and 50';
+  END IF;
 
   UPDATE public.auctions
      SET catalog_item_id = v_cat.id,
          description     = p_description,
          minimum_bid     = p_minimum_bid,
          opens_at        = COALESCE(p_opens_at, opens_at),
-         closes_at       = p_closes_at
+         closes_at       = p_closes_at,
+         quantity        = COALESCE(p_quantity, quantity)
    WHERE id = p_auction_id;
 END;
 $function$

@@ -968,6 +968,9 @@ export interface AuctionRpcInput {
   minimumBid: number
   opensAt: string
   closesAt: string
+  // Units on the block (1–50): the top N sealed bidders each win one,
+  // pay-as-bid.
+  quantity: number
 }
 
 export const auctions = {
@@ -996,6 +999,7 @@ export const auctions = {
       p_minimum_bid: a.minimumBid,
       p_opens_at: a.opensAt,
       p_closes_at: a.closesAt,
+      p_quantity: a.quantity,
     }),
   update: (auctionId: string, a: AuctionRpcInput) =>
     supabase.rpc('update_auction', {
@@ -1005,6 +1009,7 @@ export const auctions = {
       p_minimum_bid: a.minimumBid,
       p_opens_at: a.opensAt,
       p_closes_at: a.closesAt,
+      p_quantity: a.quantity,
     }),
   openNow: (auctionId: string) =>
     supabase.rpc('open_auction_now', { p_auction_id: auctionId }),

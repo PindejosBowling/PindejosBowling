@@ -128,6 +128,9 @@ export default function AuctionDetailScreen() {
         {/* Terms */}
         <Text style={styles.sectionLabel}>THE RULES</Text>
         <View style={styles.card}>
+          {a.quantity > 1 && (
+            <View style={styles.kv}><Text style={styles.muted}>Up for grabs</Text><Text style={styles.kvValue}>{a.quantity} units — one per player</Text></View>
+          )}
           <View style={styles.kv}><Text style={styles.muted}>Minimum bid</Text><Text style={styles.kvValue}>{a.minimumBid.toLocaleString()} pins</Text></View>
           <View style={styles.kv}><Text style={styles.muted}>Bids are sealed</Text><Text style={styles.kvValue}>only the count is public</Text></View>
           <View style={styles.kv}><Text style={styles.muted}>Edit / cancel</Text><Text style={styles.kvValue}>any time before close</Text></View>
@@ -155,12 +158,28 @@ export default function AuctionDetailScreen() {
             <Text style={styles.sectionLabel}>THE HAMMER FELL</Text>
             <View style={styles.card}>
               {a.status === 'settled' ? (
-                <View style={styles.kv}>
-                  <Text style={styles.muted}>Won by {a.winnerName}</Text>
-                  <Text style={styles.kvValue}>{a.winningPrice?.toLocaleString()} pins</Text>
-                </View>
+                a.winners.length > 0 ? (
+                  // Every winner, pay-as-bid (ledger-derived). Falls back to
+                  // the denorm row below when the ledger fetch raced.
+                  a.winners.map((w, i) => (
+                    <View key={i} style={styles.kv}>
+                      <Text style={styles.muted}>Won by {w.playerName}</Text>
+                      <Text style={styles.kvValue}>{w.price.toLocaleString()} pins</Text>
+                    </View>
+                  ))
+                ) : (
+                  <View style={styles.kv}>
+                    <Text style={styles.muted}>Won by {a.winnerName}</Text>
+                    <Text style={styles.kvValue}>{a.winningPrice?.toLocaleString()} pins</Text>
+                  </View>
+                )
               ) : (
                 <Text style={styles.muted}>No sale — no valid bids met the minimum.</Text>
+              )}
+              {a.status === 'settled' && a.quantity > 1 && a.winners.length < a.quantity && (
+                <Text style={styles.muted}>
+                  {a.quantity - a.winners.length} of {a.quantity} units went unsold.
+                </Text>
               )}
               {a.bounces.map((b, i) => (
                 <View key={i} style={styles.kv}>

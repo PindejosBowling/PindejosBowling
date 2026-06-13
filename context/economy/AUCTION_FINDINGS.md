@@ -46,9 +46,16 @@ Hard requirement: the auction settles **at the configured close time, immediatel
 - `archive_week` / `unarchive_week` never know auctions exist.
 - The bid RPC's time check (`now() < closes_at`) is authoritative independent of cron lag; both bid and settle take `FOR UPDATE` on the auction row to kill the close-boundary race.
 
-### 4. Single-item v1
+### 4. Multi-unit (as built — was: single-item v1)
 
-One item, one winner, first-price. Schema carries `quantity int DEFAULT 1 CHECK (quantity = 1)` so multi-unit is a later unlock, not a redesign.
+Originally one item, one winner, first-price, with `quantity int DEFAULT 1 CHECK (quantity = 1)` reserved as a later unlock. **Unlocked 2026-06-13** (migration `…20260613000500_auction_multi_unit`): quantity is 1–50 and the top N sealed bidders each win ONE unit. The mechanics:
+
+- **Pay-as-bid** — every winner pays their own sealed pledge (no uniform clearing price; consistent with the your-check-your-amount bounce model).
+- **Sell-what-sells** — settlement walks the same ranked list (amount DESC, submitted_at ASC); each affordable bidder takes one unit; broke bidders bounce and the cascade continues; `k < N` winners is a normal settle; `auction_no_sale` only at zero winners.
+- **One unit per player** — enforced by the existing one-active-bid-per-player index; no bid quantities, no partial fills.
+- **Winner denorms hold the FIRST (highest) winner** — the hammer-price headline. The full winners list is derived app-side from public `pin_ledger` `auction_purchase` rows (pay-as-bid prices were always public for the single winner; N winners reveal exactly as much).
+- **Feed:** one `auction_won` event per winner; the dedup index is actor-keyed (like bounces).
+- **Reverse is all-or-nothing:** any consumed item blocks the whole reversal; otherwise every granted item is revoked and the root-ref ledger claw-back covers all winners.
 
 ### 5. Reveal scope: winner + bounces only (tighter than the design doc)
 

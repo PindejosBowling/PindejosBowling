@@ -38,8 +38,8 @@ success); restore = set back to NULL (only `cancel_bet` does this).
 
 ### `auctions`
 `season_id` (**no week_id — week-agnostic**; `closes_at` is the settlement
-clock), `catalog_item_id`, `description`, `quantity = 1` (CHECKed; multi-unit
-is a later unlock), `status scheduled|open|settled` (**no draft, no
+clock), `catalog_item_id`, `description`, `quantity 1–50` (CHECKed; multi-unit as built: top-N
+pay-as-bid, one per player), `status scheduled|open|settled` (**no draft, no
 settled_no_winner** — no-sale derives from `winner_player_id IS NULL`),
 `opens_at`, `closes_at` (**truthful history** — "Settle Now" stamps it to
 `now()`), `minimum_bid`, `bounce_fee DEFAULT 50` (frozen per-row terms; no
@@ -109,10 +109,10 @@ DB superuser can ultimately extract the key — accepted risk, by decision.
 | `cancel_auction_bid(id)` | auth | Owner hard delete pre-close; recounts |
 | `my_bid_amount(id)` | auth | Decrypts the caller's own active bid (NULL if none) |
 | `settle_auction(id)` | auth | Admin **Settle Now** = stamp `closes_at = now()` under the lock → the internal path (truthful history; no override param exists) |
-| `settle_auction_internal(id)` | — | The one settlement path (cron + wrapper): idempotent; `status='open' AND closes_at <= now()` only; decrypt+rank (amount DESC, submitted_at ASC); winner → purchase pair + inventory grant + denorms + `won`; insolvent → bounce + continue; then `settled` + **delete non-won bids** + publish `auction_won` / `auction_no_sale` (payload snapshots `bidder_count`/`bounce_count` for the all-bounce copy) |
+| `settle_auction_internal(id)` | — | The one settlement path (cron + wrapper): idempotent; `status='open' AND closes_at <= now()` only; decrypt+rank (amount DESC, submitted_at ASC); **walks the list selling one unit per affordable bidder until `quantity` sold** (pay-as-bid; each winner → purchase pair + inventory grant + `won` + per-winner `auction_won` event; denorms = the FIRST/highest winner only); insolvent → bounce + continue; then `settled` + **delete non-won bids** + `auction_no_sale` only at zero winners (payload snapshots `bidder_count`/`bounce_count` for the all-bounce copy) |
 | `sweep_auctions()` | — | pg_cron, per-minute (`sweep_auctions_every_minute`): open phase + settle phase, **each auction in its own `BEGIN…EXCEPTION` sub-block** (poisoned auction → `RAISE WARNING` in `cron.job_run_details`, retries every tick, never blocks the others) |
 | `cancel_auction(id)` | auth | Admin, pre-settlement: hard delete (RAISEs if ledger rows exist — they can't) |
-| `reverse_settled_auction(id)` | auth | Admin: revoke the granted item by its `auction_id` FK (**RAISE if consumed**), delete ledger by root ref, delete the auction — as if it never happened |
+| `reverse_settled_auction(id)` | auth | Admin: revoke EVERY item granted by this auction via the `auction_id` FK (**all-or-nothing — RAISE if any is consumed**), delete ledger by root ref (all winners + bounces), delete the auction — as if it never happened |
 
 Lock ordering everywhere: **the auction row first** (`FOR UPDATE`) — bid,
 cancel, and settle serialize on one lock.

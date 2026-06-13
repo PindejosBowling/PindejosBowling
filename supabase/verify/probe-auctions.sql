@@ -21,14 +21,18 @@ DO $$
 DECLARE
   v_u1 uuid := gen_random_uuid();
   v_u2 uuid := gen_random_uuid();
-  v_p1 uuid; v_p2 uuid;
+  v_u3 uuid := gen_random_uuid();
+  v_p1 uuid; v_p2 uuid; v_p3 uuid;
   v_season uuid; v_week uuid;
   v_auction uuid;
+  v_auction2 uuid;
   v_item uuid;
+  v_item2 uuid;
   v_mkt uuid; v_sel uuid;
   v_bet uuid;
   c_seed1 constant int := 500;
   c_seed2 constant int := 120;
+  c_seed3 constant int := 300;
   v_got int;
   v_got2 int;
   v_caught boolean;
@@ -37,11 +41,14 @@ BEGIN
   ------------------------------------------------------------------ fixtures
   INSERT INTO auth.users (id, instance_id, aud, role, phone) VALUES
     (v_u1, '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', '10000000001'),
-    (v_u2, '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', '10000000002');
+    (v_u2, '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', '10000000002'),
+    (v_u3, '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', '10000000003');
   INSERT INTO public.players (first_name, last_name, phone, user_id)
     VALUES ('Probe', 'One', '+10000000001', v_u1) RETURNING id INTO v_p1;
   INSERT INTO public.players (first_name, last_name, phone, user_id)
     VALUES ('Probe', 'Two', '+10000000002', v_u2) RETURNING id INTO v_p2;
+  INSERT INTO public.players (first_name, last_name, phone, user_id)
+    VALUES ('Probe', 'Three', '+10000000003', v_u3) RETURNING id INTO v_p3;
 
   v_season := public.current_season_id();
   SELECT id INTO v_week FROM public.weeks
@@ -56,7 +63,8 @@ BEGIN
 
   INSERT INTO public.pin_ledger (player_id, season_id, week_id, amount, type, description) VALUES
     (v_p1, v_season, v_week, c_seed1, 'score_credit', 'PROBE FIXTURE seed'),
-    (v_p2, v_season, v_week, c_seed2, 'score_credit', 'PROBE FIXTURE seed');
+    (v_p2, v_season, v_week, c_seed2, 'score_credit', 'PROBE FIXTURE seed'),
+    (v_p3, v_season, v_week, c_seed3, 'score_credit', 'PROBE FIXTURE seed');
 
   ------------------------------------------------------------------ create + sweep open phase
   PERFORM set_config('request.jwt.claims', json_build_object(
@@ -67,6 +75,10 @@ BEGIN
     INTO v_auction;
   IF (SELECT status FROM public.auctions WHERE id = v_auction) <> 'scheduled' THEN
     RAISE EXCEPTION 'PROBE_FAIL: future-opening auction not scheduled';
+  END IF;
+  -- Back-compat: omitting p_quantity still means a single-unit auction.
+  IF (SELECT quantity FROM public.auctions WHERE id = v_auction) <> 1 THEN
+    RAISE EXCEPTION 'PROBE_FAIL: default quantity is not 1';
   END IF;
 
   -- Make it due and let the sweep open it (fixture UPDATE: probes run as the
@@ -285,10 +297,163 @@ BEGIN
     RAISE EXCEPTION 'PROBE_FAIL: reverse left residue';
   END IF;
 
+  ------------------------------------------------------------------ multi-unit
+  -- Quantity-2 auction: pay-as-bid, sell-what-sells, one unit per player.
+  -- Reseed p1 back to 500 (post-reverse balance is 40).
+  INSERT INTO public.pin_ledger (player_id, season_id, week_id, amount, type, description)
+    VALUES (v_p1, v_season, v_week, 460, 'score_credit', 'PROBE FIXTURE reseed');
+
+  -- (claims are still admin from the reverse section)
+  SELECT public.create_auction('golden_ticket', 'probe multi-unit',
+                               100, now() + interval '1 hour', now() + interval '2 hours', 2)
+    INTO v_auction2;
+  IF (SELECT quantity FROM public.auctions WHERE id = v_auction2) <> 2 THEN
+    RAISE EXCEPTION 'PROBE_FAIL: quantity 2 not stored';
+  END IF;
+
+  -- Bounds: 0 and 51 must both be rejected.
+  v_caught := false;
+  BEGIN
+    PERFORM public.create_auction('golden_ticket', 'x', 100, now() + interval '1 hour', now() + interval '2 hours', 0);
+  EXCEPTION WHEN OTHERS THEN v_caught := true; END;
+  IF NOT v_caught THEN RAISE EXCEPTION 'PROBE_FAIL: quantity 0 accepted'; END IF;
+  v_caught := false;
+  BEGIN
+    PERFORM public.create_auction('golden_ticket', 'x', 100, now() + interval '1 hour', now() + interval '2 hours', 51);
+  EXCEPTION WHEN OTHERS THEN v_caught := true; END;
+  IF NOT v_caught THEN RAISE EXCEPTION 'PROBE_FAIL: quantity 51 accepted'; END IF;
+
+  -- update_auction: NULL keeps the current quantity (a forgotten arg must
+  -- never reset a multi-unit auction); an explicit value changes it.
+  PERFORM public.update_auction(v_auction2, 'golden_ticket', 'probe multi-unit', 100,
+                                now() + interval '1 hour', now() + interval '2 hours');
+  IF (SELECT quantity FROM public.auctions WHERE id = v_auction2) <> 2 THEN
+    RAISE EXCEPTION 'PROBE_FAIL: update without p_quantity reset quantity';
+  END IF;
+  PERFORM public.update_auction(v_auction2, 'golden_ticket', 'probe multi-unit', 100,
+                                now() + interval '1 hour', now() + interval '2 hours', 3);
+  IF (SELECT quantity FROM public.auctions WHERE id = v_auction2) <> 3 THEN
+    RAISE EXCEPTION 'PROBE_FAIL: update_auction quantity knob dead';
+  END IF;
+  PERFORM public.update_auction(v_auction2, 'golden_ticket', 'probe multi-unit', 100,
+                                now() + interval '1 hour', now() + interval '2 hours', 2);
+
+  -- Open via the sweep.
+  UPDATE public.auctions SET opens_at = now() - interval '1 minute' WHERE id = v_auction2;
+  PERFORM public.sweep_auctions();
+  IF (SELECT status FROM public.auctions WHERE id = v_auction2) <> 'open' THEN
+    RAISE EXCEPTION 'PROBE_FAIL: sweep did not open the multi-unit auction';
+  END IF;
+
+  -- Bids: p1 400 (top, will be drained → bounce), p2 150, p3 130.
+  PERFORM set_config('request.jwt.claims', json_build_object(
+    'sub', v_u1, 'role', 'authenticated', 'app_metadata', json_build_object('role', 'player'))::text, true);
+  PERFORM public.place_auction_bid(v_auction2, 400);
+  PERFORM set_config('request.jwt.claims', json_build_object(
+    'sub', v_u2, 'role', 'authenticated', 'app_metadata', json_build_object('role', 'player'))::text, true);
+  PERFORM public.place_auction_bid(v_auction2, 150);
+  PERFORM set_config('request.jwt.claims', json_build_object(
+    'sub', v_u3, 'role', 'authenticated', 'app_metadata', json_build_object('role', 'player'))::text, true);
+  PERFORM public.place_auction_bid(v_auction2, 130);
+
+  -- Drain p1 to 40: the 400 pledge bounces for LEAST(40, 50) = 40 and the
+  -- cascade keeps selling to p2 and p3.
+  INSERT INTO public.pin_ledger (player_id, season_id, week_id, is_house, amount, type, description) VALUES
+    (v_p1, v_season, v_week, false, -460, 'bonus', 'PROBE FIXTURE drain'),
+    (NULL, v_season, v_week, true,   460, 'bonus', 'PROBE FIXTURE drain (house)');
+
+  PERFORM set_config('request.jwt.claims', json_build_object(
+    'sub', v_u1, 'role', 'authenticated', 'app_metadata', json_build_object('role', 'admin'))::text, true);
+  PERFORM public.settle_auction(v_auction2);
+
+  IF (SELECT status FROM public.auctions WHERE id = v_auction2) <> 'settled' THEN
+    RAISE EXCEPTION 'PROBE_FAIL: multi-unit auction not settled';
+  END IF;
+  -- Denorm headline = the FIRST (highest) winner: p2 at 150.
+  IF (SELECT winner_player_id FROM public.auctions WHERE id = v_auction2) <> v_p2
+     OR (SELECT winning_price FROM public.auctions WHERE id = v_auction2) <> 150 THEN
+    RAISE EXCEPTION 'PROBE_FAIL: multi-unit winner denorms wrong (expected first winner p2 @ 150)';
+  END IF;
+
+  -- Pay-as-bid money: p1 -40 bounce, p2 -150, p3 -130; nets to zero.
+  SELECT COALESCE(SUM(amount), 0) INTO v_got FROM public.pin_ledger
+   WHERE auction_id = v_auction2 AND player_id = v_p1;
+  IF v_got <> -40 THEN RAISE EXCEPTION 'PROBE_FAIL: multi bounce fee % (expected -40)', v_got; END IF;
+  SELECT COALESCE(SUM(amount), 0) INTO v_got FROM public.pin_ledger
+   WHERE auction_id = v_auction2 AND player_id = v_p2;
+  IF v_got <> -150 THEN RAISE EXCEPTION 'PROBE_FAIL: p2 paid % (expected -150)', v_got; END IF;
+  SELECT COALESCE(SUM(amount), 0) INTO v_got FROM public.pin_ledger
+   WHERE auction_id = v_auction2 AND player_id = v_p3;
+  IF v_got <> -130 THEN RAISE EXCEPTION 'PROBE_FAIL: p3 paid % (expected -130)', v_got; END IF;
+  SELECT COALESCE(SUM(amount), 0) INTO v_got FROM public.pin_ledger WHERE auction_id = v_auction2;
+  IF v_got <> 0 THEN RAISE EXCEPTION 'PROBE_FAIL: multi-unit movements net to % (expected 0)', v_got; END IF;
+
+  -- Two atomic items: one each for p2 and p3, unconsumed, auction-sourced.
+  IF (SELECT count(*) FROM public.player_inventory_items WHERE auction_id = v_auction2) <> 2
+     OR (SELECT count(*) FROM public.player_inventory_items
+         WHERE auction_id = v_auction2 AND player_id IN (v_p2, v_p3)
+           AND consumed_at IS NULL AND source = 'auction') <> 2 THEN
+    RAISE EXCEPTION 'PROBE_FAIL: expected exactly 2 granted items (p2 + p3)';
+  END IF;
+
+  -- Exactly the two won bid rows survive.
+  IF (SELECT count(*) FROM public.auction_bids WHERE auction_id = v_auction2) <> 2
+     OR (SELECT count(*) FROM public.auction_bids WHERE auction_id = v_auction2 AND status = 'won') <> 2 THEN
+    RAISE EXCEPTION 'PROBE_FAIL: expected exactly 2 won bid rows';
+  END IF;
+
+  -- Feed: TWO auction_won events with distinct actors (the actor-keyed dedup
+  -- index), one bounce (fee 40), no pledge leak, and no no-sale event.
+  IF (SELECT count(DISTINCT actor_player_id) FROM public.activity_feed_events
+      WHERE auction_id = v_auction2 AND event_type = 'auction_won') <> 2 THEN
+    RAISE EXCEPTION 'PROBE_FAIL: expected 2 auction_won events with distinct actors';
+  END IF;
+  IF (SELECT count(*) FROM public.activity_feed_events
+      WHERE auction_id = v_auction2 AND event_type = 'auction_check_bounce'
+        AND actor_player_id = v_p1 AND (public_payload ->> 'fee')::int = 40) <> 1 THEN
+    RAISE EXCEPTION 'PROBE_FAIL: multi bounce event missing or wrong fee';
+  END IF;
+  IF EXISTS (SELECT 1 FROM public.activity_feed_events
+             WHERE auction_id = v_auction2 AND public_payload::text LIKE '%400%') THEN
+    RAISE EXCEPTION 'PROBE_FAIL: multi-unit feed payload leaked a bid amount';
+  END IF;
+  IF EXISTS (SELECT 1 FROM public.activity_feed_events
+             WHERE auction_id = v_auction2 AND event_type = 'auction_no_sale') THEN
+    RAISE EXCEPTION 'PROBE_FAIL: no_sale published despite 2 winners';
+  END IF;
+
+  -- Idempotent re-settle.
+  SELECT count(*) INTO v_got FROM public.pin_ledger WHERE auction_id = v_auction2;
+  PERFORM public.settle_auction_internal(v_auction2);
+  SELECT count(*) INTO v_got2 FROM public.pin_ledger WHERE auction_id = v_auction2;
+  IF v_got <> v_got2 THEN RAISE EXCEPTION 'PROBE_FAIL: multi-unit re-settle moved money'; END IF;
+
+  -- Reverse: ONE consumed item (of two) blocks the whole reversal…
+  SELECT id INTO v_item2 FROM public.player_inventory_items
+   WHERE auction_id = v_auction2 AND player_id = v_p3;
+  UPDATE public.player_inventory_items SET consumed_at = now() WHERE id = v_item2;
+  v_caught := false;
+  BEGIN
+    PERFORM public.reverse_settled_auction(v_auction2);
+  EXCEPTION WHEN OTHERS THEN v_caught := true; END;
+  IF NOT v_caught THEN RAISE EXCEPTION 'PROBE_FAIL: multi reverse allowed with a consumed item'; END IF;
+
+  -- …and claws back BOTH winners once nothing is consumed.
+  UPDATE public.player_inventory_items SET consumed_at = NULL WHERE id = v_item2;
+  PERFORM public.reverse_settled_auction(v_auction2);
+  IF EXISTS (SELECT 1 FROM public.auctions WHERE id = v_auction2)
+     OR EXISTS (SELECT 1 FROM public.pin_ledger WHERE auction_id = v_auction2)
+     OR EXISTS (SELECT 1 FROM public.player_inventory_items WHERE auction_id = v_auction2)
+     OR EXISTS (SELECT 1 FROM public.auction_bids WHERE auction_id = v_auction2)
+     OR EXISTS (SELECT 1 FROM public.activity_feed_events WHERE auction_id = v_auction2) THEN
+    RAISE EXCEPTION 'PROBE_FAIL: multi-unit reverse left residue';
+  END IF;
+
   ------------------------------------------------------------------ capture
   SELECT jsonb_build_object(
     'bounce_fee', 40, 'winning_price', 110, 'insurance_refund', 50,
-    'reversed_clean', true
+    'reversed_clean', true,
+    'multi_winners', 2, 'multi_first_price', 150, 'multi_bounce_fee', 40
   ) INTO v_result;
 
   RAISE EXCEPTION 'PROBE_RESULT %', v_result;

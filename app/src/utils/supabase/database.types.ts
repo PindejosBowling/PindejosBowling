@@ -2566,6 +2566,7 @@ export type Database = {
           p_description: string
           p_minimum_bid: number
           p_opens_at: string
+          p_quantity?: number
         }
         Returns: string
       }
@@ -2870,6 +2871,7 @@ export type Database = {
           p_description: string
           p_minimum_bid: number
           p_opens_at: string
+          p_quantity?: number
         }
         Returns: undefined
       }

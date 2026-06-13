@@ -26,6 +26,7 @@ export default function AuctionCreateModal({ initial, onClose, onDone }: Props) 
   const [catalog, setCatalog] = useState<CatalogItemView[]>([])
   const [itemKey, setItemKey] = useState(initial?.itemKey ?? '')
   const [minimumBid, setMinimumBid] = useState(initial ? String(initial.minimumBid) : '')
+  const [quantityText, setQuantityText] = useState(initial ? String(initial.quantity) : '1')
   const [opensAt, setOpensAt] = useState<Date>(() => (initial ? new Date(initial.opensAt) : new Date()))
   const [closesAt, setClosesAt] = useState<Date>(() =>
     initial ? new Date(initial.closesAt) : defaultAuctionCloseAt())
@@ -50,6 +51,7 @@ export default function AuctionCreateModal({ initial, onClose, onDone }: Props) 
   }, [])
 
   const minBid = Number(minimumBid) || 0
+  const quantity = Number(quantityText) || 0
 
   // The auction's description is the item's catalog copy — derived, never
   // typed. The card and detail page pitch the item in its own voice.
@@ -58,10 +60,11 @@ export default function AuctionCreateModal({ initial, onClose, onDone }: Props) 
   const error = useMemo<string | null>(() => {
     if (!itemKey) return 'Pick an item'
     if (minBid <= 0) return 'Minimum bid must be at least 1'
+    if (quantity < 1 || quantity > 50) return 'Quantity must be 1–50'
     if (closesAt.getTime() <= Date.now()) return 'Close time must be in the future'
     if (closesAt.getTime() <= opensAt.getTime()) return 'Close time must be after open time'
     return null
-  }, [itemKey, minBid, opensAt, closesAt])
+  }, [itemKey, minBid, quantity, opensAt, closesAt])
 
   async function submit() {
     if (saving || error || !selectedItem) return
@@ -73,6 +76,7 @@ export default function AuctionCreateModal({ initial, onClose, onDone }: Props) 
         minimumBid: minBid,
         opensAt: opensAt.toISOString(),
         closesAt: closesAt.toISOString(),
+        quantity,
       }
       const { error: rpcErr } = editing ? await auctions.update(initial.id, input) : await auctions.create(input)
       if (rpcErr) { showToast(rpcErr.message, 'error'); return }
@@ -146,6 +150,21 @@ export default function AuctionCreateModal({ initial, onClose, onDone }: Props) 
         keyboardType="number-pad"
       />
 
+      <Text style={styles.label}>QUANTITY</Text>
+      <TextInput
+        style={styles.input}
+        value={quantityText}
+        onChangeText={t => setQuantityText(t.replace(/[^0-9]/g, ''))}
+        placeholder="1"
+        placeholderTextColor={colors.muted2}
+        keyboardType="number-pad"
+      />
+      {quantity > 1 && (
+        <Text style={styles.quantityNote}>
+          Top {quantity} sealed bids each win one — every winner pays their own pledge.
+        </Text>
+      )}
+
       <Text style={styles.label}>OPENS</Text>
       <TouchableOpacity style={styles.dateBtn} onPress={() => setPickerFor(p => (p === 'opens' ? null : 'opens'))} activeOpacity={0.8}>
         <Text style={styles.dateBtnText}>{formatCloseTime(opensAt.toISOString())}</Text>
@@ -193,6 +212,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14, paddingVertical: 12, fontFamily: fonts.barlow, fontSize: 15, color: colors.text,
   },
   itemCopy: { fontFamily: fonts.barlow, fontSize: 13, color: colors.muted, marginTop: 10, lineHeight: 18 },
+  quantityNote: { fontFamily: fonts.barlow, fontSize: 12, color: colors.muted, marginTop: 8, lineHeight: 17 },
   dateBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     backgroundColor: colors.surface2, borderRadius: radius.cardSm, borderWidth: 1, borderColor: colors.border2,

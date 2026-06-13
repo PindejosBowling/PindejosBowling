@@ -95,6 +95,7 @@ export default function AuctionBidSheet({ auction: a, balance, onClose, onDone }
         You are pledging {amount > 0 ? amount.toLocaleString() : 'these'} pins. No pins move now. If you
         win this auction and still have enough pins at settlement, you pay the House. If you can't pay,
         your check bounces and you immediately pay up to {a.bounceFee} pins.
+        {a.quantity > 1 ? ` The top ${a.quantity} bids each win one — one per player, every winner pays their own pledge.` : ''}
       </Text>
 
       {!error && isLargeBid(amount, balance) && (
