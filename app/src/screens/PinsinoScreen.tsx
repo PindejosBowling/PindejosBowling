@@ -20,6 +20,7 @@ import { usePinsinoData } from '../hooks/usePinsinoData'
 import { useRefresh } from '../hooks/useRefresh'
 import { useAuthStore } from '../stores/authStore'
 import { useNotificationStore } from '../stores/notificationStore'
+import { useUiStore } from '../stores/uiStore'
 import { countForRoute } from '../utils/notifications'
 import { SHOW_AUCTION_HOUSE } from '../utils/featureFlags'
 import { PinsinoStackParamList } from '../navigation/types'
@@ -43,6 +44,7 @@ const MENU_TILES: { icon: string; label: string; route: 'PinsinoLeaderboard' | '
 export default function PinsinoScreen() {
   const playerId = useAuthStore(s => s.playerId)
   const playerName = useAuthStore(s => s.playerName)
+  const artworkReveal = useUiStore(s => s.artworkReveal)
   const navigation = useNavigation<PinsinoNav>()
 
   const { loading, balance, debt, openAction, netWorth, leaderboard, reload } = usePinsinoData(playerId)
@@ -71,7 +73,8 @@ export default function PinsinoScreen() {
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <PinsinoNoirBackdrop />
-      <AppHeader />
+      <AppHeader artworkToggle />
+      {!artworkReveal && (
       <ScrollView
         contentContainerStyle={styles.content}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.muted} />}
@@ -150,6 +153,7 @@ export default function PinsinoScreen() {
           })}
         </View>
       </ScrollView>
+      )}
     </SafeAreaView>
   )
 }

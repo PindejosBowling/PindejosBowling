@@ -5,6 +5,7 @@ import { useNavigation, useFocusEffect } from '@react-navigation/native'
 import { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { colors, fonts, radius } from '../theme'
 import ScreenHeader from '../components/ui/ScreenHeader'
+import ArtworkToggle from '../components/ui/ArtworkToggle'
 import MarketMovesTownBackdrop from '../components/pixelart/MarketMovesTownBackdrop'
 import LoadingView from '../components/ui/LoadingView'
 import PillFilter from '../components/ui/PillFilter'
@@ -14,6 +15,7 @@ import PvpChallengeDetailModal from '../components/pvp/PvpChallengeDetailModal'
 import { useMarketMovesData, FeedFilter, WeekInfoById } from '../hooks/useMarketMovesData'
 import { useRefresh } from '../hooks/useRefresh'
 import { useAuthStore } from '../stores/authStore'
+import { useUiStore } from '../stores/uiStore'
 import { PinsinoStackParamList } from '../navigation/types'
 import { FeedEventView } from '../utils/activityFeedTemplates'
 import { bets } from '../utils/supabase/db'
@@ -74,6 +76,7 @@ function groupEventsByWeek(events: FeedEventView[], weekInfoById: WeekInfoById):
 export default function MarketMovesScreen() {
   const navigation = useNavigation<Nav>()
   const playerId = useAuthStore(s => s.playerId)
+  const artworkReveal = useUiStore(s => s.artworkReveal)
   const { loading, events, filter, setFilter, hasMore, loadMore, reload, weekInfoById, currentWeekId } = useMarketMovesData()
   const { refreshing, onRefresh } = useRefresh(reload)
 
@@ -159,7 +162,8 @@ export default function MarketMovesScreen() {
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <MarketMovesTownBackdrop />
-      <ScreenHeader title="Market Moves" subtitle="The Pinsino Newswire" onBack={() => navigation.goBack()} />
+      <ScreenHeader title="Market Moves" subtitle="The Pinsino Newswire" onBack={() => navigation.goBack()} right={<ArtworkToggle />} />
+      {!artworkReveal && (
       <View style={styles.pillBar}>
         <PillFilter
           items={FILTERS.map(f => f.key)}
@@ -168,6 +172,8 @@ export default function MarketMovesScreen() {
           renderLabel={item => LABEL_BY_KEY[item] ?? item}
         />
       </View>
+      )}
+      {!artworkReveal && (
       <FlatList
         data={groups}
         keyExtractor={g => g.key}
@@ -205,6 +211,7 @@ export default function MarketMovesScreen() {
           hasMore ? <ActivityIndicator color={colors.muted} style={styles.footer} /> : null
         }
       />
+      )}
       <BetDetailModal bet={detailBet} onClose={() => setDetailBet(null)} />
       {detailChallengeId && (
         <PvpChallengeDetailModal

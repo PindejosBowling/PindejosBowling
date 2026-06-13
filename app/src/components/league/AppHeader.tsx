@@ -6,8 +6,11 @@ import { useAuthStore } from '../../stores/authStore'
 import { useUiStore } from '../../stores/uiStore'
 import ProfileMenuModal from './ProfileMenuModal'
 import PlayerAvatar from '../ui/PlayerAvatar'
+import ArtworkToggle from '../ui/ArtworkToggle'
 
-export default function AppHeader() {
+// `artworkToggle` shows the Artwork reveal button next to the profile — only on
+// tab-home screens that actually have a pixel-art backdrop (the Pinsino landing).
+export default function AppHeader({ artworkToggle = false }: { artworkToggle?: boolean }) {
   const [weekNumber, setWeekNumber] = useState<number | null>(null)
   const [seasonNumber, setSeasonNumber] = useState<number | null>(null)
   const [showProfile, setShowProfile] = useState(false)
@@ -36,7 +39,8 @@ export default function AppHeader() {
         </View>
         <Text style={styles.subline}>{subline}</Text>
       </View>
-      <TouchableOpacity onPress={() => setShowProfile(true)} activeOpacity={0.7}>
+      {artworkToggle && <ArtworkToggle />}
+      <TouchableOpacity onPress={() => setShowProfile(true)} activeOpacity={0.7} style={styles.avatarBtn}>
         <PlayerAvatar name={playerName} playerId={playerId} size={45} />
       </TouchableOpacity>
       <ProfileMenuModal visible={showProfile} onClose={() => setShowProfile(false)} />
@@ -58,6 +62,7 @@ const styles = StyleSheet.create({
     fontSize: 24,
     marginRight: 8,
   },
+  avatarBtn: { marginLeft: 12 },
   left: {
     flex: 1,
   },

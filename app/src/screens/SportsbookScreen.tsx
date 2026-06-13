@@ -12,6 +12,7 @@ import { useNavigation } from '@react-navigation/native'
 import { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { colors, fonts, radius } from '../theme'
 import ScreenHeader from '../components/ui/ScreenHeader'
+import ArtworkToggle from '../components/ui/ArtworkToggle'
 import SportsbookPokerTableBackdrop from '../components/pixelart/SportsbookPokerTableBackdrop'
 import LoadingView from '../components/ui/LoadingView'
 import ToggleGroup from '../components/ui/ToggleGroup'
@@ -102,6 +103,7 @@ function withVisibleSelections(line: LineView): LineView {
 export default function SportsbookScreen() {
   const playerId = useAuthStore(s => s.playerId)
   const { showToast } = useUiStore()
+  const artworkReveal = useUiStore(s => s.artworkReveal)
   const navigation = useNavigation<PinsinoNav>()
 
   const { loading, balance, openLines, weekTeams, customLines, myBets, weekBets, settledBets, reload } = usePinsinoData(playerId)
@@ -447,8 +449,15 @@ export default function SportsbookScreen() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.muted} />}
       >
         <SportsbookPokerTableBackdrop />
-        <ScreenHeader title="Sportsbook" onBack={() => navigation.goBack()} />
+        <ScreenHeader title="Sportsbook" onBack={() => navigation.goBack()} right={<ArtworkToggle />} />
 
+        {/* Kept laid out (not unmounted) while artwork is revealed — only made
+            invisible + inert — so the poker table, which measures the scroll
+            content height, stays full-length instead of collapsing. */}
+        <View
+          pointerEvents={artworkReveal ? 'none' : 'auto'}
+          style={artworkReveal ? styles.artHidden : undefined}
+        >
         {/* View toggle */}
         <View style={styles.viewToggle}>
           <ToggleGroup options={VIEW_OPTIONS} value={view} onChange={setView} />
@@ -594,6 +603,7 @@ export default function SportsbookScreen() {
         {view === 'settled' && (
           <SettledBetsView bets={settledBets} onBetPress={setDetailModal} />
         )}
+        </View>
       </ScrollView>
 
       {/* Parlay bet slip (sticky) */}
@@ -737,6 +747,8 @@ export default function SportsbookScreen() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.bg },
+  // Artwork-reveal: hide the foreground but keep it laid out (see render note).
+  artHidden: { opacity: 0 },
   // flexGrow keeps the scroll content (and the poker-table border measured
   // from it) at least viewport-height when every group is collapsed.
   content: { paddingHorizontal: 16, paddingBottom: 40, flexGrow: 1 },

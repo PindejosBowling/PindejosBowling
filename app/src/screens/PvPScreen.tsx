@@ -5,6 +5,7 @@ import { useNavigation, useFocusEffect } from '@react-navigation/native'
 import { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { colors, fonts, radius } from '../theme'
 import ScreenHeader from '../components/ui/ScreenHeader'
+import ArtworkToggle from '../components/ui/ArtworkToggle'
 import PvPShootoutBackdrop from '../components/pixelart/PvPShootoutBackdrop'
 import LoadingView from '../components/ui/LoadingView'
 import PvpChallengeRow from '../components/pvp/PvpChallengeRow'
@@ -13,6 +14,7 @@ import Button from '../components/ui/Button'
 import { usePvpData, PvpChallengeView } from '../hooks/usePvpData'
 import { useRefresh } from '../hooks/useRefresh'
 import { useAuthStore } from '../stores/authStore'
+import { useUiStore } from '../stores/uiStore'
 import { useNotificationStore } from '../stores/notificationStore'
 import { PinsinoStackParamList } from '../navigation/types'
 
@@ -21,6 +23,7 @@ type Nav = NativeStackNavigationProp<PinsinoStackParamList>
 export default function PvPScreen() {
   const navigation = useNavigation<Nav>()
   const playerId = useAuthStore(s => s.playerId)
+  const artworkReveal = useUiStore(s => s.artworkReveal)
 
   const { loading, balance, inbox, openBoard, record, reload } = usePvpData(playerId)
 
@@ -84,7 +87,8 @@ export default function PvPScreen() {
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <PvPShootoutBackdrop />
-      <ScreenHeader title="PvP" subtitle="Challenge a rival, winner takes the pot" onBack={() => navigation.goBack()} />
+      <ScreenHeader title="PvP" subtitle="Challenge a rival, winner takes the pot" onBack={() => navigation.goBack()} right={<ArtworkToggle />} />
+      {!artworkReveal && (
       <ScrollView
         contentContainerStyle={styles.content}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.muted} />}
@@ -138,6 +142,7 @@ export default function PvPScreen() {
           </>
         )}
       </ScrollView>
+      )}
 
       {detailId && (
         <PvpChallengeDetailModal

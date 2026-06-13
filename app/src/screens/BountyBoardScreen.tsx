@@ -5,12 +5,14 @@ import { useNavigation, useFocusEffect } from '@react-navigation/native'
 import { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { colors, fonts, radius } from '../theme'
 import ScreenHeader from '../components/ui/ScreenHeader'
+import ArtworkToggle from '../components/ui/ArtworkToggle'
 import BountyBoardBackdrop from '../components/pixelart/BountyBoardBackdrop'
 import LoadingView from '../components/ui/LoadingView'
 import BountyCard from '../components/bounty/BountyCard'
 import { useBountyBoardData, BountyView } from '../hooks/useBountyBoardData'
 import { useRefresh } from '../hooks/useRefresh'
 import { useAuthStore } from '../stores/authStore'
+import { useUiStore } from '../stores/uiStore'
 import { PinsinoStackParamList } from '../navigation/types'
 
 type Nav = NativeStackNavigationProp<PinsinoStackParamList>
@@ -18,6 +20,7 @@ type Nav = NativeStackNavigationProp<PinsinoStackParamList>
 export default function BountyBoardScreen() {
   const navigation = useNavigation<Nav>()
   const playerId = useAuthStore(s => s.playerId)
+  const artworkReveal = useUiStore(s => s.artworkReveal)
 
   const { loading, balance, openBoard, mySponsored, myHunted, settled, reload } = useBountyBoardData(playerId)
   const { refreshing, onRefresh } = useRefresh(reload)
@@ -57,7 +60,8 @@ export default function BountyBoardScreen() {
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <BountyBoardBackdrop />
-      <ScreenHeader title="Bounties" subtitle="Join the hunt & prosper together" onBack={() => navigation.goBack()} />
+      <ScreenHeader title="Bounties" subtitle="Join the hunt & prosper together" onBack={() => navigation.goBack()} right={<ArtworkToggle />} />
+      {!artworkReveal && (
       <ScrollView
         contentContainerStyle={styles.content}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.muted} />}
@@ -85,6 +89,7 @@ export default function BountyBoardScreen() {
           </>
         )}
       </ScrollView>
+      )}
     </SafeAreaView>
   )
 }

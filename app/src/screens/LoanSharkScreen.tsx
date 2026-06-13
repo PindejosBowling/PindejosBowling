@@ -12,6 +12,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useNavigation } from '@react-navigation/native'
 import { colors, fonts, radius } from '../theme'
 import ScreenHeader from '../components/ui/ScreenHeader'
+import ArtworkToggle from '../components/ui/ArtworkToggle'
 import LoanSharkDepthBackdrop from '../components/pixelart/LoanSharkDepthBackdrop'
 import LoadingView from '../components/ui/LoadingView'
 import Toast from '../components/ui/Toast'
@@ -55,6 +56,7 @@ export default function LoanSharkScreen() {
   const navigation = useNavigation()
   const playerId = useAuthStore(s => s.playerId)
   const { showToast } = useUiStore()
+  const artworkReveal = useUiStore(s => s.artworkReveal)
 
   const { loading, balance, products, activeLoan, reload } = useLoanSharkData(playerId)
   const { refreshing, onRefresh } = useRefresh(reload)
@@ -127,7 +129,15 @@ export default function LoanSharkScreen() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.muted} />}
       >
         <LoanSharkDepthBackdrop />
-        <ScreenHeader title="Loan Shark" subtitle="Borrow at your own risk" onBack={() => navigation.goBack()} />
+        <ScreenHeader title="Loan Shark" subtitle="Borrow at your own risk" onBack={() => navigation.goBack()} right={<ArtworkToggle />} />
+        {/* Kept laid out (not unmounted) while artwork is revealed — only made
+            invisible + inert — so the depth field, which measures the scroll
+            content height, stays full-length and scrollable instead of
+            collapsing to the viewport. */}
+        <View
+          pointerEvents={artworkReveal ? 'none' : 'auto'}
+          style={artworkReveal ? styles.artHidden : undefined}
+        >
         <View style={styles.balancePill}>
           <Text style={styles.balancePillLabel}>BALANCE</Text>
           <Text style={styles.balancePillValue}>{balance.toLocaleString()} pins</Text>
@@ -233,6 +243,7 @@ export default function LoanSharkScreen() {
             )}
           </>
         )}
+        </View>
       </ScrollView>
 
       {confirmProduct && (
@@ -249,6 +260,8 @@ export default function LoanSharkScreen() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.bg },
+  // Artwork-reveal: hide the foreground but keep it laid out (see render note).
+  artHidden: { opacity: 0 },
   // flexGrow keeps the scroll content (and the depth field measured from it)
   // at least viewport-height when the loan list is short.
   content: { paddingHorizontal: 16, paddingBottom: 40, flexGrow: 1 },
