@@ -32,7 +32,7 @@ function compose(
 }
 
 /** Swap palette keys so one sprite can be reused in different colors. */
-function rekey(sprite: Sprite, map: Record<string, string>): Sprite {
+export function rekey(sprite: Sprite, map: Record<string, string>): Sprite {
   return sprite.map(row => Array.from(row).map(ch => map[ch] ?? ch).join(''))
 }
 
@@ -47,39 +47,6 @@ const SPARKLE: Sprite = [
 ]
 
 const STAR: Sprite = ['g']
-
-// A bowling pin in a cowboy hat — one half of the shootout. Symmetric; which
-// way it "faces" is implied by where its holster glint is stamped.
-const GUNSLINGER_PIN: Sprite = [
-  '..hhh..',
-  'hhhhhhh',
-  '..www..',
-  '..www..',
-  '...w...',
-  '...w...',
-  '..www..',
-  '.wwwww.',
-  '.wwwww.',
-  '.wwwww.',
-  '..www..',
-]
-
-const TUMBLEWEED: Sprite = [
-  '.uu.',
-  'u..u',
-  'u..u',
-  '.uu.',
-]
-
-const SAGUARO: Sprite = [
-  '..n..',
-  'n.n..',
-  'n.n.n',
-  'nnn.n',
-  '..nnn',
-  '..n..',
-  '..n..',
-]
 
 // Office tower with lit windows on a sparse grid.
 function building(w: number, h: number): Sprite {
@@ -185,54 +152,8 @@ const marketmoves: SceneDef = {
 // Sportsbook uses SportsbookMenuBoardBackdrop (a scroll-length marquee frame
 // sized to the header panel) instead of a fixed scene.
 
-// PvP: a Texas shootout at midnight — two gunslinger pins drawn down on each
-// other across an empty desert street, tumbleweed mid-roll, eyes on the ridge.
-// Tall hero scene: full-bleed, roughly the bottom half of the screen.
-const nightStar = rekey(STAR, { g: 's' })
-
-const pvpStars: { x: number; y: number }[] = [
-  { x: 3, y: 3 }, { x: 10, y: 7 }, { x: 15, y: 2 }, { x: 24, y: 5 },
-  { x: 33, y: 4 }, { x: 40, y: 7 }, { x: 45, y: 3 }, { x: 5, y: 14 },
-  { x: 13, y: 18 }, { x: 36, y: 15 }, { x: 44, y: 20 }, { x: 2, y: 24 },
-  { x: 46, y: 28 }, { x: 8, y: 29 },
-]
-
-const pvpDust: { x: number; y: number }[] = [
-  { x: 4, y: 48 }, { x: 11, y: 47 }, { x: 19, y: 49 },
-  { x: 27, y: 48 }, { x: 35, y: 47 }, { x: 43, y: 48 },
-]
-
-const pvp: SceneDef = {
-  anchor: 'bottom',
-  opacity: BACKDROP_OPACITY.sceneHero,
-  grid: {
-    rows: compose(48, 50, [
-      // Night sky — star scatter thinned over the central column.
-      ...pvpStars.map(({ x, y }) => ({ sprite: nightStar, x, y })),
-      { sprite: SAGUARO, x: 0, y: 39 },
-      { sprite: rekey(GUNSLINGER_PIN, { w: 'b' }), x: 6, y: 35 },
-      { sprite: rekey(GUNSLINGER_PIN, { w: 'r' }), x: 35, y: 35 },
-      // Holster glints — each hand hovering on the side facing the opponent.
-      { sprite: ['g'], x: 13, y: 42 },
-      { sprite: ['g'], x: 34, y: 42 },
-      { sprite: TUMBLEWEED, x: 22, y: 42 },
-      { sprite: ['e.e'], x: 44, y: 44 },
-      { sprite: ['f'.repeat(48)], x: 0, y: 46 },
-      ...pvpDust.map(({ x, y }) => ({ sprite: ['f'], x, y })),
-    ]),
-    palette: {
-      s: colors.text,
-      b: colors.pixelArt.purple,
-      r: colors.pixelArt.rose,
-      h: colors.muted,
-      g: colors.gold,
-      u: colors.pixelArt.sand,
-      n: colors.pixelArt.teal,
-      f: colors.pixelArt.sand,
-      e: colors.danger,
-    },
-  },
-}
+// PvP uses PvPShootoutBackdrop (a full-viewport midnight-shootout field with
+// a bezel-to-ground sky) instead of a fixed scene.
 
 // Bounties: a wanted poster with a sheriff-star centerpiece.
 const bounty: SceneDef = {
@@ -280,7 +201,6 @@ const auction: SceneDef = {
 
 export const SCENES = {
   marketmoves,
-  pvp,
   bounty,
   auction,
 } satisfies Record<string, SceneDef>

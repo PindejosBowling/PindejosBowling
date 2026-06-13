@@ -5,7 +5,7 @@ import { useNavigation, useFocusEffect } from '@react-navigation/native'
 import { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { colors, fonts, radius } from '../theme'
 import ScreenHeader from '../components/ui/ScreenHeader'
-import PixelArtBackdrop from '../components/pixelart/PixelArtBackdrop'
+import PvPShootoutBackdrop from '../components/pixelart/PvPShootoutBackdrop'
 import LoadingView from '../components/ui/LoadingView'
 import PvpChallengeRow from '../components/pvp/PvpChallengeRow'
 import PvpChallengeDetailModal from '../components/pvp/PvpChallengeDetailModal'
@@ -74,7 +74,7 @@ export default function PvPScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
-      <PixelArtBackdrop scene="pvp" />
+      <PvPShootoutBackdrop />
       <ScreenHeader title="PvP" subtitle="Challenge a rival, winner takes the pot" onBack={() => navigation.goBack()} />
       <ScrollView
         contentContainerStyle={styles.content}

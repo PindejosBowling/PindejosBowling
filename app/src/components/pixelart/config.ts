@@ -25,8 +25,8 @@ export const FIELD_PIXEL = 8
 export const BACKDROP_OPACITY = {
   /** Fixed scenes on sparse screens. */
   scene: 0.12,
-  /** Hero scenes — tall compositions that ARE the screen's ambience (e.g. the
-   *  PvP shootout filling the bottom half). The loudest fixed-scene rung. */
+  /** Hero scenes — compositions that ARE the screen's ambience (e.g. the
+   *  full-viewport PvP shootout). The loudest fixed-scene rung. */
   sceneHero: 0.18,
   /** Fixed scenes on dense screens (tables/ledgers) — the quietest. */
   sceneDense: 0.08,
