@@ -5,6 +5,7 @@ import {
   games as gamesDb,
   scores as scoresDb,
   players as playersDb,
+  weeks as weeksDb,
 } from '../utils/supabase/db'
 
 // ---------------------------------------------------------------------------
@@ -66,6 +67,7 @@ export interface WeekEditor {
   leagueAvg: number
   saving: boolean
   pendingCount: number
+  bowledAt: string | null   // the night these games were bowled (YYYY-MM-DD)
   games: EditableGameMeta[]
   roster: RosterPlayer[]
   participants: (gameNumber: number, teamId: string) => Participant[]
@@ -79,6 +81,7 @@ export interface WeekEditor {
   addPlayer: (gameNumber: number, teamId: string, player: RosterPlayer) => void
   addFill: (gameNumber: number, teamId: string) => void
   removeParticipant: (partId: string) => void
+  setBowledAt: (value: string) => void
   // lifecycle
   discard: () => void
   save: () => Promise<void>
@@ -98,7 +101,9 @@ export function useWeekEditor(
   const [games, setGames] = useState<EditableGameMeta[]>([])
   const [roster, setRoster] = useState<RosterPlayer[]>([])
   const [parts, setParts] = useState<PartRow[]>([])
+  const [bowledAt, setBowledAtState] = useState<string | null>(null)
 
+  const originalBowledAtRef = useRef<string | null>(null)
   const originalPartsRef = useRef<PartRow[]>([])
   const originalSlotsRef = useRef<Map<string, SlotMeta>>(new Map())
   const originalScoreRef = useRef<Map<string, string>>(new Map()) // `${slotId}:${gameNumber}` → score string
@@ -110,21 +115,26 @@ export function useWeekEditor(
 
   const load = useCallback(async () => {
     if (!weekId) {
-      setGames([]); setRoster([]); setParts([])
+      setGames([]); setRoster([]); setParts([]); setBowledAtState(null)
       originalPartsRef.current = []
       originalSlotsRef.current = new Map()
       originalScoreRef.current = new Map()
+      originalBowledAtRef.current = null
       return
     }
     setLoading(true)
     try {
-      const [teamsRes, slotsRes, gamesRes, scoresRes, rosterRes] = await Promise.all([
+      const [teamsRes, slotsRes, gamesRes, scoresRes, rosterRes, weekRes] = await Promise.all([
         teamsDb.listByWeek(weekId),
         teamSlots.listByWeek(weekId),
         gamesDb.listByWeek(weekId),
         scoresDb.listByWeek(weekId),
         playersDb.list(),
+        weeksDb.getById(weekId),
       ])
+
+      const weekBowledAt = (weekRes.data as any)?.bowled_at ?? null
+      originalBowledAtRef.current = weekBowledAt
 
       const teamNumberById = new Map<string, number>(
         ((teamsRes.data ?? []) as any[]).map(t => [t.id, t.team_number]),
@@ -209,6 +219,7 @@ export function useWeekEditor(
       setGames(gameMetas)
       setRoster(((rosterRes.data ?? []) as any[]).map(p => ({ id: p.id, name: p.name })))
       setParts(partRows)
+      setBowledAtState(weekBowledAt)
     } finally {
       setLoading(false)
     }
@@ -299,8 +310,13 @@ export function useWeekEditor(
     setParts(prev => prev.filter(p => p.partId !== partId))
   }, [])
 
+  const setBowledAt = useCallback((value: string) => {
+    setBowledAtState(value)
+  }, [])
+
   const discard = useCallback(() => {
     setParts(clone(originalPartsRef.current))
+    setBowledAtState(originalBowledAtRef.current)
   }, [])
 
   // ----- pending count ------------------------------------------------------
@@ -317,14 +333,21 @@ export function useWeekEditor(
     for (const o of originalPartsRef.current) {
       if (!draftIds.has(o.partId)) count++
     }
+    if (bowledAt !== originalBowledAtRef.current) count++
     return count
-  }, [parts])
+  }, [parts, bowledAt])
 
   // ----- save / reconcile ---------------------------------------------------
 
   const save = useCallback(async () => {
     setSaving(true)
     try {
+      // Persist a changed bowling date before reconciling rosters/scores.
+      if (weekId && bowledAt !== originalBowledAtRef.current) {
+        const { error } = await weeksDb.update(weekId, { bowled_at: bowledAt })
+        if (error) throw error
+      }
+
       const originalSlots = originalSlotsRef.current
       const originalScore = originalScoreRef.current
       const gameIdByNumberTeam = gameIdByNumberTeamRef.current
@@ -446,7 +469,7 @@ export function useWeekEditor(
     } finally {
       setSaving(false)
     }
-  }, [parts, load, onSaved])
+  }, [parts, bowledAt, weekId, load, onSaved])
 
   return {
     loading,
@@ -454,6 +477,7 @@ export function useWeekEditor(
     leagueAvg,
     saving,
     pendingCount,
+    bowledAt,
     games,
     roster,
     participants,
@@ -466,6 +490,7 @@ export function useWeekEditor(
     addPlayer,
     addFill,
     removeParticipant,
+    setBowledAt,
     discard,
     save,
   }

@@ -1,7 +1,9 @@
 import { useState } from 'react'
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Modal } from 'react-native'
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, Modal, Platform } from 'react-native'
+import DateTimePicker from '@react-native-community/datetimepicker'
 import { colors, fonts, radius } from '../../theme'
 import { WeekEditor, Participant, RosterPlayer } from '../../hooks/useWeekEditor'
+import { toISO, fromISO, formatDateLong } from '../../utils/helpers'
 import PlayerPickerModal from '../ui/PlayerPickerModal'
 
 // ---------------------------------------------------------------------------
@@ -27,6 +29,18 @@ export default function EditableWeek({ editor }: Props) {
   const { games, roster, leagueAvg } = editor
   const [menuPartId, setMenuPartId] = useState<string | null>(null)
   const [picker, setPicker] = useState<Picker>(null)
+  const [showDatePicker, setShowDatePicker] = useState(false)
+
+  const bowledDate = fromISO(editor.bowledAt) ?? new Date()
+
+  function onDateChange(_event: unknown, selected?: Date) {
+    if (Platform.OS === 'android') setShowDatePicker(false)
+    if (selected) editor.setBowledAt(toISO(selected))
+  }
+
+  function onDatePickerDismiss() {
+    if (Platform.OS === 'android') setShowDatePicker(false)
+  }
 
   // Resolve the participant behind the open action menu (search every game/team).
   const menuCtx = menuPartId ? findPart(editor, menuPartId) : null
@@ -49,6 +63,31 @@ export default function EditableWeek({ editor }: Props) {
 
   return (
     <View>
+      <View style={styles.dateCard}>
+        <Text style={styles.dateLabel}>Date bowled</Text>
+        <TouchableOpacity
+          style={[styles.dateBtn, showDatePicker && styles.dateBtnActive]}
+          onPress={() => setShowDatePicker(v => !v)}
+          activeOpacity={0.8}
+        >
+          <Text style={[styles.dateBtnText, !editor.bowledAt && styles.dateBtnPlaceholder]}>
+            {editor.bowledAt ? formatDateLong(bowledDate) : 'Set a date'}
+          </Text>
+          <Text style={styles.dateBtnChevron}>›</Text>
+        </TouchableOpacity>
+        {showDatePicker && (
+          <DateTimePicker
+            value={bowledDate}
+            mode="date"
+            display={Platform.OS === 'ios' ? 'inline' : 'default'}
+            onValueChange={onDateChange}
+            onDismiss={onDatePickerDismiss}
+            style={Platform.OS === 'ios' ? styles.iosPicker : undefined}
+            themeVariant="dark"
+          />
+        )}
+      </View>
+
       {games.map(game => (
         <View key={game.gameId} style={styles.gameCard}>
           <Text style={styles.gameTitle}>
@@ -215,6 +254,38 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     paddingVertical: 24,
   },
+  dateCard: {
+    backgroundColor: colors.surface,
+    borderRadius: radius.card,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: 12,
+    marginBottom: 12,
+  },
+  dateLabel: {
+    fontFamily: fonts.barlowCondensed,
+    fontSize: 11,
+    color: colors.muted,
+    letterSpacing: 1.5,
+    textTransform: 'uppercase',
+    marginBottom: 6,
+  },
+  dateBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: colors.surface2,
+    borderRadius: radius.cardSm,
+    borderWidth: 1,
+    borderColor: colors.border2,
+    paddingHorizontal: 12,
+    paddingVertical: 11,
+  },
+  dateBtnActive: { borderColor: colors.accent },
+  dateBtnText: { fontFamily: fonts.barlow, fontSize: 15, color: colors.text },
+  dateBtnPlaceholder: { color: colors.muted2 },
+  dateBtnChevron: { fontFamily: fonts.barlow, fontSize: 18, color: colors.muted, marginTop: -1 },
+  iosPicker: { marginTop: 8, tintColor: colors.accent },
   gameCard: {
     backgroundColor: colors.surface,
     borderRadius: radius.card,
