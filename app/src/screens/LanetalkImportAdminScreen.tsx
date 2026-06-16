@@ -90,6 +90,8 @@ export default function LanetalkImportAdminScreen() {
   // rows currently being saved (to disable their toggle while in flight).
   const [classEdits, setClassEdits] = useState<Record<string, Classification>>({})
   const [savingIds, setSavingIds] = useState<Set<string>>(new Set())
+  // Week currently being reprocessed (re-matched from stored data), if any.
+  const [reprocessingWeek, setReprocessingWeek] = useState<string | null>(null)
 
   const weekGroups = useMemo<WeekGroup[]>(() => {
     // Two-level grouping: by the league week each import resolved to, then within
@@ -193,6 +195,27 @@ export default function LanetalkImportAdminScreen() {
       showToast(e?.message ?? 'Could not update classification', 'error')
     } finally {
       setSavingIds(s => { const n = new Set(s); n.delete(game.id); return n })
+    }
+  }
+
+  // Re-derive a week's imports from their stored payloads — re-matches games to
+  // official scores and renumbers across links (fixes a lane-split night without
+  // needing to clear/re-import the links). Gated in the UI to unconfirmed weeks.
+  async function reprocess(weekId: string, title: string) {
+    if (reprocessingWeek) return
+    setReprocessingWeek(weekId)
+    try {
+      const res = await lanetalkImports.reprocessWeek(weekId)
+      if (!res.ok) { showToast(res.message ?? 'Reprocess failed', 'error'); return }
+      showToast(
+        `Reprocessed ${title} · ${res.officialCount ?? 0} official across ${res.players ?? 0} player${res.players === 1 ? '' : 's'}`,
+        'success',
+      )
+      await reload()
+    } catch (e: any) {
+      showToast(e?.message ?? 'Reprocess failed', 'error')
+    } finally {
+      setReprocessingWeek(null)
     }
   }
 
@@ -309,6 +332,25 @@ export default function LanetalkImportAdminScreen() {
                       <Text style={styles.confirmBtnText}>
                         Confirm LaneTalk Data ({propsByWeek.get(wg.weekKey)!.length} props pending)
                       </Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+
+                {/* Reprocess: re-match this week's stored games to official scores
+                    and renumber across links. Hidden once props are confirmed
+                    (re-matching after settlement would desync the official set)
+                    and on the "no week" bucket (no real week to reprocess). */}
+                {expanded && wg.weekKey !== 'unassigned' && !propsConfirmed && (
+                  <View style={styles.confirmRow}>
+                    <TouchableOpacity
+                      style={[styles.reprocessBtn, reprocessingWeek === wg.weekKey && styles.buttonDisabled]}
+                      onPress={() => reprocess(wg.weekKey, title)}
+                      disabled={reprocessingWeek != null}
+                      activeOpacity={0.7}
+                    >
+                      {reprocessingWeek === wg.weekKey
+                        ? <ActivityIndicator color={colors.muted} />
+                        : <Text style={styles.reprocessBtnText}>Reprocess &amp; Re-match Games</Text>}
                     </TouchableOpacity>
                   </View>
                 )}
@@ -461,6 +503,20 @@ const styles = StyleSheet.create({
     fontFamily: fonts.barlowCondensed,
     fontSize: 14,
     color: colors.accent,
+    letterSpacing: 0.4,
+  },
+  reprocessBtn: {
+    backgroundColor: colors.surface2,
+    borderRadius: radius.cardSm,
+    borderWidth: 1,
+    borderColor: colors.border2,
+    paddingVertical: 10,
+    alignItems: 'center',
+  },
+  reprocessBtnText: {
+    fontFamily: fonts.barlowCondensed,
+    fontSize: 14,
+    color: colors.muted,
     letterSpacing: 0.4,
   },
   statusBadge: {

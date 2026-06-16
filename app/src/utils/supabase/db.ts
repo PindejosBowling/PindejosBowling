@@ -1333,6 +1333,11 @@ export interface LanetalkImportSummary {
   officialCount?: number
   recreationalCount?: number
   message?: string
+  /** Reprocess mode: true when this summary came from re-deriving a stored week. */
+  reprocessed?: boolean
+  /** Reprocess mode: matched players / rows recomputed. */
+  players?: number
+  rowCount?: number
   /** Failure stage tag from the Edge Function (e.g. 'fetch_status', 'auth_not_admin'). */
   stage?: string
   /** Per-request id — present on every response; grep the function logs by it. */
@@ -1341,29 +1346,34 @@ export interface LanetalkImportSummary {
   debug?: Record<string, unknown>
 }
 
-export const lanetalkImports = {
-  // Invoke the Edge Function to fetch, parse, match and write a link's games.
-  // The function returns recoverable failures as 200 { ok:false, … } but auth
-  // (403) and server (500) failures as non-2xx — for those, supabase-js puts a
-  // generic FunctionsHttpError in `error` and the real JSON body (with stage /
-  // message / debug) on error.context. Normalize both into one summary so the
-  // caller always sees the function's actual message and diagnostics.
-  run: async (url: string): Promise<LanetalkImportSummary> => {
-    const { data, error } = await supabase.functions.invoke<LanetalkImportSummary>(
-      'lanetalk-import', { body: { url } },
-    )
-    if (error) {
-      const ctx = (error as { context?: unknown }).context
-      if (ctx instanceof Response) {
-        try {
-          const body = await ctx.json()
-          if (body && typeof body === 'object') return body as LanetalkImportSummary
-        } catch { /* body wasn't JSON — fall through to the generic message */ }
-      }
-      return { ok: false, stage: 'invoke', message: error.message ?? 'Import failed' }
+// Invoke the lanetalk-import Edge Function and normalize its response. The
+// function returns recoverable failures as 200 { ok:false, … } but auth (403)
+// and server (500) failures as non-2xx — for those, supabase-js puts a generic
+// FunctionsHttpError in `error` and the real JSON body (with stage / message /
+// debug) on error.context. Normalize both so the caller always sees the
+// function's actual message and diagnostics.
+async function invokeLanetalk(body: Record<string, unknown>): Promise<LanetalkImportSummary> {
+  const { data, error } = await supabase.functions.invoke<LanetalkImportSummary>('lanetalk-import', { body })
+  if (error) {
+    const ctx = (error as { context?: unknown }).context
+    if (ctx instanceof Response) {
+      try {
+        const parsed = await ctx.json()
+        if (parsed && typeof parsed === 'object') return parsed as LanetalkImportSummary
+      } catch { /* body wasn't JSON — fall through to the generic message */ }
     }
-    return data ?? { ok: false, stage: 'invoke', message: 'Import failed (empty response)' }
-  },
+    return { ok: false, stage: 'invoke', message: error.message ?? 'Request failed' }
+  }
+  return data ?? { ok: false, stage: 'invoke', message: 'Empty response' }
+}
+
+export const lanetalkImports = {
+  // Fetch, parse, match and write a single link's games.
+  run: (url: string): Promise<LanetalkImportSummary> => invokeLanetalk({ url }),
+  // Re-derive an already-imported week from its stored payloads (no link fetch):
+  // re-matches games to official scores and renumbers across links. The fix for
+  // a lane-split night the admin can't clear and re-import cleanly.
+  reprocessWeek: (weekId: string): Promise<LanetalkImportSummary> => invokeLanetalk({ reprocessWeekId: weekId }),
   listRecent: () =>
     supabase
       .from('lanetalk_game_imports')

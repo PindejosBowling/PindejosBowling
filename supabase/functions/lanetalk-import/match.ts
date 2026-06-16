@@ -5,8 +5,6 @@
 //  2. Classify each parsed game Official vs Recreational by matching its total
 //     score against the player's recorded official scores for the week.
 
-import type { LanetalkGame } from './parseLanetalk.ts'
-
 export interface SlotCandidate {
   playerId: string
   teamSlotId: string
@@ -130,23 +128,15 @@ export interface SlotOfficialScores {
   officialScores: OfficialScore[]
 }
 
-/** Play order: by played_at (nulls last), then the Lanetalk session position. */
-function byPlayOrder(a: LanetalkGame, b: LanetalkGame): number {
-  const ta = a.played_at ?? ''
-  const tb = b.played_at ?? ''
-  if (ta !== tb) return ta < tb ? -1 : 1
-  return a.game_number - b.game_number
-}
-
 /**
- * Pick which of a matched player's slots a single Lanetalk session belongs to.
+ * Pick which of a matched player's slots a Lanetalk night belongs to.
  * One slot → that slot (unchanged behaviour). Multiple slots (player bowled on
- * two teams) → the slot whose recorded official scores best overlap this
- * session's game totals, since the session is one team's set of games. Ties or
- * no signal fall back to the first slot (stable input order).
+ * two teams) → the slot whose recorded official scores best overlap the night's
+ * game totals. Ties or no signal fall back to the first slot (stable input
+ * order). Pass the *combined* night's games (across every link), not one link's.
  */
 export function chooseSlot(
-  games: LanetalkGame[],
+  games: { score: number | null }[],
   slots: SlotOfficialScores[],
 ): SlotOfficialScores | null {
   if (slots.length === 0) return null
@@ -166,52 +156,79 @@ export function chooseSlot(
   return best
 }
 
-export interface ClassifiedGame {
-  game: LanetalkGame
+/** One game in a player's combined night, drawn from any of their links. */
+export interface NightGameInput {
+  /** Stable identity for mapping the result back (e.g. `${sourceUrl}#${pos}`). */
+  key: string
+  /** The link this game came from. */
+  sourceUrl: string
+  /** Raw Lanetalk position within its own session (1..N per link). */
+  sessionPosition: number
+  score: number | null
+  /** Session start time (per-link in Lanetalk, not per-game). */
+  playedAt: string | null
+}
+
+export interface NightAssignment {
+  key: string
   classification: 'official' | 'recreational'
   /**
-   * The game's resolved number. Official games take their league game number
-   * (from the matched recorded score); recreational games are numbered
-   * sequentially after the highest official number, in play order. Unique within
-   * a session, so it can be stored directly as game_number.
+   * Resolved game number, unique across the player's whole week. Official games
+   * take their league game number; recreational games are numbered sequentially
+   * after the highest official number, in night order.
    */
   gameNumber: number
 }
 
 /**
- * Classify + number games against the slot's official scores by an ordered
- * (positional) subsequence match rather than an any-position value match. Walk
- * the session's games in play order alongside the official scores in league game
- * order: each game whose total equals the next still-unmatched official score is
- * Official and takes that league game number; the pointer then advances.
- * Everything else is Recreational and, in a second pass, is numbered sequentially
- * starting just past the highest official game number. Because the league
- * ordering is authoritative, duplicate totals resolve positionally — official
- * games never "conflict". With no official scores (e.g. unmatched player) every
- * game is Recreational, numbered 1..N in play order.
+ * Global play order across one player's links for a single league night: by
+ * played_at (nulls last), then source url, then session position. Lane-switch
+ * nights split a player's games across several links, each with its own session
+ * clock — this stitches them into one stable order.
  */
-export function classifyGames(games: LanetalkGame[], officialScores: OfficialScore[]): ClassifiedGame[] {
-  const ordered = [...games].sort(byPlayOrder)
-  const result = new Map<LanetalkGame, ClassifiedGame>()
-  // Pass 1: official subsequence match — officials take their league game number.
-  let ptr = 0
+function byNightOrder(a: NightGameInput, b: NightGameInput): number {
+  const ta = a.playedAt ?? '￿'
+  const tb = b.playedAt ?? '￿'
+  if (ta !== tb) return ta < tb ? -1 : 1
+  if (a.sourceUrl !== b.sourceUrl) return a.sourceUrl < b.sourceUrl ? -1 : 1
+  return a.sessionPosition - b.sessionPosition
+}
+
+/**
+ * Classify + number a player's *entire* league night (every link combined)
+ * against their recorded official scores. Matching is value-based, not
+ * positional: for each official score in league game-number order, the earliest
+ * still-unmatched game in night order with that exact total is Official and
+ * takes that league game number. This is what makes a lane-switch night work —
+ * an official game on the 2nd link is found regardless of where that link sits
+ * in the order, and duplicate totals (e.g. 132 / 132) resolve to consecutive
+ * league numbers. Everything unmatched is Recreational, numbered sequentially
+ * after the highest official number, in night order. With no official scores
+ * (e.g. unmatched player) every game is Recreational, numbered 1..N.
+ *
+ * Numbers are unique across the combined input, so the (source_url, game_number)
+ * uniqueness on lanetalk_game_imports never collides across a player's links.
+ */
+export function classifyNight(games: NightGameInput[], officialScores: OfficialScore[]): NightAssignment[] {
+  const ordered = [...games].sort(byNightOrder)
+  const matched = new Set<string>()
+  const result = new Map<string, NightAssignment>()
   let maxOfficial = 0
-  for (const game of ordered) {
-    if (ptr < officialScores.length && game.score != null && game.score === officialScores[ptr].score) {
-      const gameNumber = officialScores[ptr].gameNumber
-      result.set(game, { game, classification: 'official', gameNumber })
-      if (gameNumber > maxOfficial) maxOfficial = gameNumber
-      ptr++
-    } else {
-      result.set(game, { game, classification: 'recreational', gameNumber: 0 })
-    }
+  // Official pass: value match in league game-number order; earliest unmatched wins.
+  const officials = [...officialScores].sort((a, b) => a.gameNumber - b.gameNumber)
+  for (const off of officials) {
+    const hit = ordered.find(g => !matched.has(g.key) && g.score != null && g.score === off.score)
+    if (!hit) continue
+    matched.add(hit.key)
+    result.set(hit.key, { key: hit.key, classification: 'official', gameNumber: off.gameNumber })
+    if (off.gameNumber > maxOfficial) maxOfficial = off.gameNumber
   }
-  // Pass 2: number recreational games sequentially after the last official one.
+  // Recreational pass: number leftovers after the last official, in night order.
   let recNext = maxOfficial + 1
-  for (const game of ordered) {
-    const c = result.get(game)!
-    if (c.classification === 'recreational') c.gameNumber = recNext++
+  for (const g of ordered) {
+    if (matched.has(g.key)) continue
+    result.set(g.key, { key: g.key, classification: 'recreational', gameNumber: recNext++ })
   }
-  // Preserve the caller's original game order in the output.
-  return games.map(g => result.get(g)!)
+  // Preserve the caller's original input order in the output.
+  return games.map(g => result.get(g.key)!)
 }
