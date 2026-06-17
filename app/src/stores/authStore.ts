@@ -70,11 +70,18 @@ export const useAuthStore = create<AuthStore>((set) => ({
           const resolved = await resolveSession(data.user.id)
           set({ ...resolved, userId: data.user.id, isReadOnly: true, isHydrated: true })
         } else {
-          // Guest creds missing/invalid: surface the locked-out state rather
-          // than spinning forever.
+          // Sign-in failed despite creds being present (bad password, account
+          // missing). Surface the locked-out state rather than spinning forever.
+          console.warn('[authStore] Guest sign-in failed:', error?.message)
           set({ isReadOnly: true, isHydrated: true })
         }
       } else {
+        // Creds undefined in the bundle — almost always means the dev server
+        // wasn't restarted after EXPO_PUBLIC_GUEST_* were added to .env.local
+        // (EXPO_PUBLIC_* are inlined at build time). Restart: expo start --clear.
+        console.warn(
+          '[authStore] READ_ONLY_MODE is on but EXPO_PUBLIC_GUEST_EMAIL/PASSWORD are missing from the bundle. Restart Expo with --clear.',
+        )
         set({ isReadOnly: true, isHydrated: true })
       }
     } else {
