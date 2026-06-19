@@ -13,12 +13,14 @@ import { useNavigation, useFocusEffect } from '@react-navigation/native'
 import { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { colors, fonts, radius } from '../theme'
 import AppHeader from '../components/league/AppHeader'
+import PinsinoNoirBackdrop from '../components/pixelart/PinsinoNoirBackdrop'
 import LoadingView from '../components/ui/LoadingView'
 import PinsinoLeaderboardTable from '../components/betting/PinsinoLeaderboardTable'
 import { usePinsinoData } from '../hooks/usePinsinoData'
 import { useRefresh } from '../hooks/useRefresh'
 import { useAuthStore } from '../stores/authStore'
 import { useNotificationStore } from '../stores/notificationStore'
+import { useUiStore } from '../stores/uiStore'
 import { countForRoute } from '../utils/notifications'
 import { SHOW_AUCTION_HOUSE } from '../utils/featureFlags'
 import { PinsinoStackParamList } from '../navigation/types'
@@ -30,18 +32,19 @@ const TILE_WIDTH = (Dimensions.get('window').width - 32 - TILE_GAP * 2) / 3
 
 // Subpage menu tiles (groundwork for more Pinsino subpages — add one line each)
 const MENU_TILES: { icon: string; label: string; route: 'PinsinoLeaderboard' | 'Sportsbook' | 'LoanShark' | 'PvP' | 'MarketMoves' | 'BountyBoard' | 'AuctionHouse' }[] = [
-  { icon: '👀', label: 'Market Moves', route: 'MarketMoves' },
   { icon: '🏟️', label: 'Sportsbook', route: 'Sportsbook' },
   { icon: '⚔️', label: 'PvP', route: 'PvP' },
   { icon: '🎯', label: 'Bounties', route: 'BountyBoard' },
-  { icon: '🦈', label: 'Loan Shark', route: 'LoanShark' },
   // Mock-backed while the auction DB layer is built — flag-gated independently.
-  ...(SHOW_AUCTION_HOUSE ? [{ icon: '🔨', label: 'Auction House', route: 'AuctionHouse' as const }] : []),
+  ...(SHOW_AUCTION_HOUSE ? [{ icon: '📣', label: 'Auction House', route: 'AuctionHouse' as const }] : []),
+  { icon: '🦈', label: 'Loan Shark', route: 'LoanShark' },
+  { icon: '👀', label: 'Market Moves', route: 'MarketMoves' },
 ]
 
 export default function PinsinoScreen() {
   const playerId = useAuthStore(s => s.playerId)
   const playerName = useAuthStore(s => s.playerName)
+  const artworkReveal = useUiStore(s => s.artworkReveal)
   const navigation = useNavigation<PinsinoNav>()
 
   const { loading, balance, debt, openAction, netWorth, leaderboard, reload } = usePinsinoData(playerId)
@@ -56,11 +59,22 @@ export default function PinsinoScreen() {
     }, []),
   )
 
-  if (loading) return <LoadingView label="Loading…" />
+  // Transitions stay art-only: the backdrop paints immediately and the
+  // spinner appears only if loading drags past 5s.
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.safe} edges={['top']}>
+        <PinsinoNoirBackdrop />
+        <LoadingView label="Loading…" transparent delayed />
+      </SafeAreaView>
+    )
+  }
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
-      <AppHeader />
+      <PinsinoNoirBackdrop />
+      <AppHeader artworkToggle />
+      {!artworkReveal && (
       <ScrollView
         contentContainerStyle={styles.content}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.muted} />}
@@ -139,6 +153,7 @@ export default function PinsinoScreen() {
           })}
         </View>
       </ScrollView>
+      )}
     </SafeAreaView>
   )
 }

@@ -22,7 +22,7 @@ export default function PinsinoLeaderboardScreen() {
   const { refreshing, onRefresh } = useRefresh(reload)
   const [rulesOpen, setRulesOpen] = useState(false)
 
-  if (loading) return <LoadingView label="Loading…" />
+  if (loading) return <LoadingView label="Loading…" delayed />
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>

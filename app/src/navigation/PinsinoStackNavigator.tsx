@@ -26,6 +26,10 @@ export default function PinsinoStackNavigator() {
       screenOptions={{
         headerShown: false,
         contentStyle: { backgroundColor: colors.bg },
+        // Tiles open their screens instantly — no slide-in. The swipe-back
+        // gesture stays enabled (it pops without animating).
+        animation: 'none',
+        gestureEnabled: true,
       }}
     >
       <Stack.Screen name="PinsinoHome" component={PinsinoScreen} options={{ title: 'Pinsino' }} />

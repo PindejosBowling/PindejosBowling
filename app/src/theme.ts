@@ -16,6 +16,16 @@ export const colors = {
   success:   '#4ade80',
   danger:    '#ff4f6d',
   overlay:   'rgba(0,0,0,0.7)',
+
+  // Soft desaturated tints reserved for the ambient pixel-art backdrops
+  // (components/pixelart/) — not for UI chrome.
+  pixelArt: {
+    teal:   '#6fa8a3',
+    purple: '#8d7fb8',
+    rose:   '#c2899c',
+    sand:   '#c4ad85',
+    wood:   '#5c4433', // dark wood — table rails, furniture silhouettes
+  },
 }
 
 export const spacing = {

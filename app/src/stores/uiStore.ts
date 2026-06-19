@@ -20,6 +20,9 @@ interface UiStore {
   h2hP1: string | null
   h2hP2: string | null
   historySeason: string | null
+  // When true, art screens hide their foreground UI so the pixel-art backdrop
+  // shows in full. Toggled by the header Artwork button; reset on screen blur.
+  artworkReveal: boolean
   toasts: Toast[]
   // Bumped by useWeekClock (Realtime `weeks` events / app foreground) so
   // week-derived UI (AppHeader) refetches the current week from the DB.
@@ -43,6 +46,7 @@ export const useUiStore = create<UiStore>((set, get) => ({
   h2hP1: null,
   h2hP2: null,
   historySeason: null,
+  artworkReveal: false,
   toasts: [],
   weekVersion: 0,
   set: (partial) => set(partial),

@@ -5,6 +5,8 @@ import { useNavigation, useFocusEffect } from '@react-navigation/native'
 import { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { colors, fonts, radius } from '../theme'
 import ScreenHeader from '../components/ui/ScreenHeader'
+import ArtworkToggle from '../components/ui/ArtworkToggle'
+import AuctionBankBackdrop from '../components/pixelart/AuctionBankBackdrop'
 import LoadingView from '../components/ui/LoadingView'
 import AuctionCard from '../components/auction/AuctionCard'
 import MyItemRow from '../components/auction/MyItemRow'
@@ -12,6 +14,7 @@ import ItemInfoSheet from '../components/auction/ItemInfoSheet'
 import { useAuctionHouseData } from '../hooks/useAuctionHouseData'
 import { useRefresh } from '../hooks/useRefresh'
 import { useAuthStore } from '../stores/authStore'
+import { useUiStore } from '../stores/uiStore'
 import { AuctionView, InventoryGroupView, auctionSections, groupInventory } from '../utils/auction'
 import { PinsinoStackParamList } from '../navigation/types'
 
@@ -20,6 +23,7 @@ type Nav = NativeStackNavigationProp<PinsinoStackParamList>
 export default function AuctionHouseScreen() {
   const navigation = useNavigation<Nav>()
   const playerId = useAuthStore(s => s.playerId)
+  const artworkReveal = useUiStore(s => s.artworkReveal)
 
   // Admin controls live on AuctionHouseAdmin (Pinsino Admin → Auction House) —
   // this screen is purely the player-facing floor.
@@ -34,7 +38,16 @@ export default function AuctionHouseScreen() {
   const sections = useMemo(() => auctionSections(auctions), [auctions])
   const itemGroups = useMemo(() => groupInventory(myItems), [myItems])
 
-  if (loading) return <LoadingView label="Loading…" />
+  // Transitions stay art-only: the backdrop paints immediately and the
+  // spinner appears only if loading drags past 5s.
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.safe} edges={['top']}>
+        <AuctionBankBackdrop />
+        <LoadingView label="Loading…" transparent delayed />
+      </SafeAreaView>
+    )
+  }
 
   const auctionSection = (title: string, rows: AuctionView[]) =>
     rows.length > 0 ? (
@@ -54,7 +67,9 @@ export default function AuctionHouseScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
-      <ScreenHeader title="Auction House" subtitle="Sealed bids · the hammer falls on its own" onBack={() => navigation.goBack()} />
+      <AuctionBankBackdrop />
+      <ScreenHeader title="Auction House" subtitle="Sealed bids · the hammer falls on its own" onBack={() => navigation.goBack()} right={<ArtworkToggle />} />
+      {!artworkReveal && (
       <ScrollView
         contentContainerStyle={styles.content}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.muted} />}
@@ -86,6 +101,7 @@ export default function AuctionHouseScreen() {
 
         {auctionSection('RECENTLY SETTLED', sections.settled)}
       </ScrollView>
+      )}
 
       {infoGroup && (
         <ItemInfoSheet group={infoGroup} onClose={() => setInfoGroup(null)} />

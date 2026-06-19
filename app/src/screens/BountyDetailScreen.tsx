@@ -50,7 +50,7 @@ export default function BountyDetailScreen() {
     return !hunters.some(h => h.playerId === playerId)
   }, [bounty, hunters, playerId])
 
-  if (loading) return <LoadingView label="Loading…" />
+  if (loading) return <LoadingView label="Loading…" delayed />
 
   if (!bounty) {
     return (

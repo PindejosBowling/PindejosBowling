@@ -7,12 +7,14 @@ import {
   StyleSheet,
   RefreshControl,
 } from 'react-native'
-import { SafeAreaView } from 'react-native-safe-area-context'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useNavigation } from '@react-navigation/native'
 import { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { colors, fonts, radius } from '../theme'
 import ScreenHeader from '../components/ui/ScreenHeader'
-import LoadingView from '../components/ui/LoadingView'
+import ArtworkToggle from '../components/ui/ArtworkToggle'
+import SportsbookPokerTableBackdrop from '../components/pixelart/SportsbookPokerTableBackdrop'
+import ScreenBackdrop from '../components/pixelart/ScreenBackdrop'
 import ToggleGroup from '../components/ui/ToggleGroup'
 import ActiveBetsView from '../components/betting/ActiveBetsView'
 import SettledBetsView from '../components/betting/SettledBetsView'
@@ -99,10 +101,12 @@ function withVisibleSelections(line: LineView): LineView {
 export default function SportsbookScreen() {
   const playerId = useAuthStore(s => s.playerId)
   const { showToast } = useUiStore()
+  const artworkReveal = useUiStore(s => s.artworkReveal)
   const navigation = useNavigation<PinsinoNav>()
 
   const { loading, balance, openLines, weekTeams, customLines, weekBets, settledBets, reload } = usePinsinoData(playerId)
   const { refreshing, onRefresh } = useRefresh(reload)
+  const insets = useSafeAreaInsets()
 
   const [view, setView] = useState<View2>('place')
   const [placeMode, setPlaceMode] = useState<PlaceMode>('single')
@@ -423,19 +427,34 @@ export default function SportsbookScreen() {
     )
   }
 
-  if (loading) return <LoadingView label="Loading…" />
-
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
+    <View style={styles.safe}>
+      {/* Safe-area inset is content padding rather than a SafeAreaView edge so
+          the poker-table field paints under the status bar to the bezel.
+          ScreenBackdrop keeps the one poker-table instance mounted across the
+          load→ready swap — see pixelart/config.ts. */}
       <ScrollView
         contentContainerStyle={[
           styles.content,
+          { paddingTop: insets.top },
           view === 'place' && placeMode === 'parlay' && parlayLegs.length > 0 && { paddingBottom: 96 },
         ]}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.muted} />}
+        refreshControl={
+          loading ? undefined : (
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.muted} />
+          )
+        }
       >
-        <ScreenHeader title="Sportsbook" onBack={() => navigation.goBack()} />
+        <ScreenBackdrop backdrop={<SportsbookPokerTableBackdrop />} loading={loading}>
+        <ScreenHeader title="Sportsbook" onBack={() => navigation.goBack()} right={<ArtworkToggle />} />
 
+        {/* Kept laid out (not unmounted) while artwork is revealed — only made
+            invisible + inert — so the poker table, which measures the scroll
+            content height, stays full-length instead of collapsing. */}
+        <View
+          pointerEvents={artworkReveal ? 'none' : 'auto'}
+          style={artworkReveal ? styles.artHidden : undefined}
+        >
         {/* View toggle */}
         <View style={styles.viewToggle}>
           <ToggleGroup options={VIEW_OPTIONS} value={view} onChange={setView} />
@@ -540,9 +559,9 @@ export default function SportsbookScreen() {
                   <LineRowContainer
                     title={title}
                     count={lineCount}
-                    // Game 1 opens the board ready to bet; everything else
-                    // starts as a collapsed summary bar.
-                    defaultCollapsed={group.key !== 'game-1'}
+                    // Every group starts as a collapsed summary bar — the
+                    // board opens as a stack of headers over the poker table.
+                    defaultCollapsed
                     disabled={gameInProgress}
                     rows={containerRows}
                   />
@@ -559,6 +578,8 @@ export default function SportsbookScreen() {
         {view === 'settled' && (
           <SettledBetsView bets={settledBets} onBetPress={setDetailModal} />
         )}
+        </View>
+        </ScreenBackdrop>
       </ScrollView>
 
       {/* Parlay bet slip (sticky) */}
@@ -696,13 +717,17 @@ export default function SportsbookScreen() {
 
       {/* Bet details modal */}
       <BetDetailModal bet={detailModal} onClose={() => setDetailModal(null)} />
-    </SafeAreaView>
+    </View>
   )
 }
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.bg },
-  content: { paddingHorizontal: 16, paddingBottom: 40 },
+  // Artwork-reveal: hide the foreground but keep it laid out (see render note).
+  artHidden: { opacity: 0 },
+  // flexGrow keeps the scroll content (and the poker-table border measured
+  // from it) at least viewport-height when every group is collapsed.
+  content: { paddingHorizontal: 16, paddingBottom: 40, flexGrow: 1 },
 
   viewToggle: { marginBottom: 20 },
 

@@ -248,7 +248,7 @@ export default function PvPCreateScreen() {
     }
   }
 
-  if (loading) return <LoadingView label="Loading…" />
+  if (loading) return <LoadingView label="Loading…" delayed />
 
   const pot = validStake ? stakeNum + oppStakeNum : 0
 

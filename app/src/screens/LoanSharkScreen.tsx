@@ -8,11 +8,13 @@ import {
   StyleSheet,
   RefreshControl,
 } from 'react-native'
-import { SafeAreaView } from 'react-native-safe-area-context'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useNavigation } from '@react-navigation/native'
 import { colors, fonts, radius } from '../theme'
 import ScreenHeader from '../components/ui/ScreenHeader'
-import LoadingView from '../components/ui/LoadingView'
+import ArtworkToggle from '../components/ui/ArtworkToggle'
+import LoanSharkDepthBackdrop from '../components/pixelart/LoanSharkDepthBackdrop'
+import ScreenBackdrop from '../components/pixelart/ScreenBackdrop'
 import Toast from '../components/ui/Toast'
 import BorrowConfirmModal from '../components/economy/BorrowConfirmModal'
 import Button from '../components/ui/Button'
@@ -54,9 +56,11 @@ export default function LoanSharkScreen() {
   const navigation = useNavigation()
   const playerId = useAuthStore(s => s.playerId)
   const { showToast } = useUiStore()
+  const artworkReveal = useUiStore(s => s.artworkReveal)
 
   const { loading, balance, products, activeLoan, reload } = useLoanSharkData(playerId)
   const { refreshing, onRefresh } = useRefresh(reload)
+  const insets = useSafeAreaInsets()
 
   const [confirmProduct, setConfirmProduct] = useState<LoanProductView | null>(null)
   const [repayAmount, setRepayAmount] = useState('')
@@ -103,15 +107,32 @@ export default function LoanSharkScreen() {
     }
   }
 
-  if (loading) return <LoadingView label="Loading…" />
-
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
-      <ScreenHeader title="Loan Shark" subtitle="Borrow at your own risk" onBack={() => navigation.goBack()} />
+    <View style={styles.safe}>
+      {/* The depth field mounts inside the ScrollView (a scroll-length field —
+          see pixelart/config.ts) so it measures the full scroll content, with
+          the header inside the scroll too and the safe-area inset as content
+          padding so the art paints under the status bar to the bezel.
+          ScreenBackdrop keeps that one backdrop instance mounted across the
+          load→ready swap. */}
       <ScrollView
-        contentContainerStyle={styles.content}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.muted} />}
+        contentContainerStyle={[styles.content, { paddingTop: insets.top }]}
+        refreshControl={
+          loading ? undefined : (
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.muted} />
+          )
+        }
       >
+        <ScreenBackdrop backdrop={<LoanSharkDepthBackdrop />} loading={loading}>
+        <ScreenHeader title="Loan Shark" subtitle="Borrow at your own risk" onBack={() => navigation.goBack()} right={<ArtworkToggle />} />
+        {/* Kept laid out (not unmounted) while artwork is revealed — only made
+            invisible + inert — so the depth field, which measures the scroll
+            content height, stays full-length and scrollable instead of
+            collapsing to the viewport. */}
+        <View
+          pointerEvents={artworkReveal ? 'none' : 'auto'}
+          style={artworkReveal ? styles.artHidden : undefined}
+        >
         <View style={styles.balancePill}>
           <Text style={styles.balancePillLabel}>BALANCE</Text>
           <Text style={styles.balancePillValue}>{balance.toLocaleString()} pins</Text>
@@ -217,6 +238,8 @@ export default function LoanSharkScreen() {
             )}
           </>
         )}
+        </View>
+        </ScreenBackdrop>
       </ScrollView>
 
       {confirmProduct && (
@@ -227,13 +250,17 @@ export default function LoanSharkScreen() {
         />
       )}
       <Toast />
-    </SafeAreaView>
+    </View>
   )
 }
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.bg },
-  content: { paddingHorizontal: 16, paddingBottom: 40 },
+  // Artwork-reveal: hide the foreground but keep it laid out (see render note).
+  artHidden: { opacity: 0 },
+  // flexGrow keeps the scroll content (and the depth field measured from it)
+  // at least viewport-height when the loan list is short.
+  content: { paddingHorizontal: 16, paddingBottom: 40, flexGrow: 1 },
 
   balancePill: {
     flexDirection: 'row',
