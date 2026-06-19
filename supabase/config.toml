@@ -254,7 +254,9 @@ otp_expiry = 3600
 enable_signup = false
 # If enabled, users need to confirm their phone number before signing in.
 enable_confirmations = false
-# Template for sending OTP to users
+# Template for sending OTP to users. NOTE: ignored when the provider is
+# `twilio_verify` — Twilio Verify owns the code/message template (set it in the
+# Verify Service in the Twilio Console).
 template = "Your code is {{ .Code }}"
 # Controls the minimum amount of time that must pass before sending another sms otp.
 max_frequency = "5s"
@@ -281,8 +283,14 @@ max_frequency = "5s"
 # uri = "pg-functions://<database>/<schema>/<hook_name>"
 
 # Configure one of the supported SMS providers: `twilio`, `twilio_verify`, `messagebird`, `textlocal`, `vonage`.
-[auth.sms.twilio]
-enabled = false
+# We use `twilio_verify` (Twilio Verify) for OTP login: it is exempt from US A2P
+# 10DLC / toll-free verification and needs no purchased Twilio number. For the
+# `twilio_verify` provider, `message_service_sid` holds the Verify Service SID
+# (the `VA…` id), NOT a Messaging Service SID. The live (hosted) switch is made
+# in the Supabase Dashboard → Authentication → Phone; this block keeps local dev
+# in parity. See supabase/AUTH.md.
+[auth.sms.twilio_verify]
+enabled = true
 account_sid = ""
 message_service_sid = ""
 # DO NOT commit your Twilio auth token to git. Use environment variable substitution instead:
