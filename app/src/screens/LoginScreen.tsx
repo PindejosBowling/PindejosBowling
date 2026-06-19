@@ -13,6 +13,7 @@ import { colors, fonts, radius } from '../theme'
 import { supabase } from '../utils/supabase/client'
 import { players } from '../utils/supabase/db'
 import Button from '../components/ui/Button'
+import { READ_ONLY_MODE } from '../utils/featureFlags'
 
 type Step = 'phone' | 'otp'
 
@@ -68,6 +69,26 @@ export default function LoginScreen() {
       setError(verifyErr.message)
     }
     // On success the auth state change listener in authStore handles the transition.
+  }
+
+  // Compliance read-only mode: never offer OTP login. (Normally the app
+  // auto-signs-in as the guest and this screen isn't reached; this covers the
+  // edge case where the guest session can't be established.)
+  if (READ_ONLY_MODE) {
+    return (
+      <SafeAreaView style={styles.safe}>
+        <View style={styles.center}>
+          <View style={styles.card}>
+            <Text style={styles.logo}>🎳</Text>
+            <Text style={styles.title}>PINDEJOS</Text>
+            <Text style={styles.subtitle}>BOWLING LEAGUE</Text>
+            <Text style={[styles.label, { textAlign: 'center', alignSelf: 'center' }]}>
+              Login is temporarily unavailable for compliance. The app is in read-only mode.
+            </Text>
+          </View>
+        </View>
+      </SafeAreaView>
+    )
   }
 
   return (

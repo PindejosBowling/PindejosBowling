@@ -4,6 +4,32 @@
 
 Auth is Supabase Phone OTP via Twilio. Users receive a 6-digit SMS code, verify it, and get a Supabase session. There is no email/password auth.
 
+## SMS provider: Twilio Verify
+
+OTP SMS are sent through **Twilio Verify** (`twilio_verify`), not Twilio Programmable
+Messaging. Verify is purpose-built for OTP and is **exempt from US A2P 10DLC / toll-free
+verification**, and it requires **no purchased Twilio number** — Twilio runs the carrier and
+compliance layer. (The Programmable Messaging path forces A2P/toll-free verification, which
+repeatedly rejected with error 30530.)
+
+The app code is provider-agnostic: `LoginScreen` just calls
+`supabase.auth.signInWithOtp({ phone })` then `supabase.auth.verifyOtp({ phone, token, type: 'sms' })`.
+Swapping providers is config-only — no app or DB changes.
+
+Configuration:
+- **Live (hosted) project:** Supabase Dashboard → Authentication → Phone → SMS provider =
+  **Twilio Verify**. Fill: Account SID (`AC…`), Auth Token, and **Message Service SID =
+  the Verify Service SID (`VA…`)**. Keep "Enable phone signup" off (login-only).
+- **Local dev / repo parity:** the `[auth.sms.twilio_verify]` block in
+  [config.toml](./config.toml). For this provider, `message_service_sid` holds the **Verify
+  Service SID**, not a Messaging Service SID. The auth token comes from
+  `env(SUPABASE_AUTH_SMS_TWILIO_AUTH_TOKEN)` — never commit it.
+
+Note: the OTP message text/template is owned by the **Twilio Verify Service** (Twilio
+Console), so Supabase's `auth.sms.template` is ignored under this provider. Verify is metered
+per attempt; on a trial account it only delivers to Twilio-verified caller-ID numbers until a
+balance is added. General (non-OTP) SMS would still require A2P 10DLC and is out of scope.
+
 ## Roles
 
 Two roles exist: `player` (default) and `admin`. Role is stored directly on the `players` table as `players.role`. To promote a player to admin:
