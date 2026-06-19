@@ -7,6 +7,16 @@ export const SHOW_PINSINO = true
 // Pinsino can re-ship without leaking a half-wired Auction House.
 export const SHOW_AUCTION_HOUSE = true
 
+// Screenshot/demo switch. When true, every player name returned from Supabase
+// is replaced with a deterministic fictitious name before it reaches the UI,
+// so App Store / marketing screenshots contain no real PII. The same real
+// player always maps to the same fake name, so relationships stay coherent
+// across standings, matchups, the activity feed, etc. Display-only transform on
+// read responses — no writes, no database changes. Flip to false for normal
+// operation. Applied centrally in app/src/utils/supabase/client.ts via
+// redactPlayerNames(); see app/src/utils/demoNames.ts.
+export const DEMO_NAMES = false
+
 // Temporary compliance switch. When true, OTP login is disabled: the app
 // auto-signs-in to a single read-only "guest" account (so authenticated reads
 // + avatars keep working) and forces global read-only mode — every write

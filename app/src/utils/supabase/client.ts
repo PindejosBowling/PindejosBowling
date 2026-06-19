@@ -2,6 +2,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
 import { createClient } from '@supabase/supabase-js'
 import type { Database } from './database.types'
 import { isReadOnlyNow } from '../readOnlyGate'
+import { DEMO_NAMES } from '../featureFlags'
+import { redactPlayerNames } from '../demoNames'
 
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL
 const supabaseKey = process.env.EXPO_PUBLIC_SUPABASE_API_KEY
@@ -45,7 +47,30 @@ const guardedFetch: typeof fetch = (input, init) => {
       }),
     )
   }
-  return fetch(input as RequestInfo, init)
+  const res = fetch(input as RequestInfo, init)
+  return DEMO_NAMES && url.includes('/rest/v1/') ? res.then(redactNamesInResponse) : res
+}
+
+// DEMO_NAMES only: rewrite player names in a PostgREST JSON response before it
+// reaches the data layer, so screenshots carry no real PII. Resilient — any
+// non-JSON / parse failure returns the original body untouched. Headers (incl.
+// content-range used for counts) are preserved by reusing the original Response
+// init. Objects without a `first_name` are passed through unchanged, so RPC
+// reads that return scalars (is_registered_player, my_bid_amount) are no-ops.
+async function redactNamesInResponse(res: Response): Promise<Response> {
+  if (!res.ok || !(res.headers.get('content-type') ?? '').includes('application/json')) return res
+  const body = await res.text()
+  try {
+    const data = JSON.parse(body)
+    redactPlayerNames(data)
+    return new Response(JSON.stringify(data), {
+      status: res.status,
+      statusText: res.statusText,
+      headers: res.headers,
+    })
+  } catch {
+    return new Response(body, { status: res.status, statusText: res.statusText, headers: res.headers })
+  }
 }
 
 export const supabase = createClient<Database>(supabaseUrl, supabaseKey, {
