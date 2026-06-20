@@ -25,27 +25,69 @@ import { useWeekClock } from './src/hooks/useWeekClock'
 
 const BASE = 'PindejosBowling'
 
+// Every screen MUST have an explicit path string prefixed with BASE. React
+// Navigation auto-generates a prefix-less path (e.g. `/FrameStats`) for any
+// screen omitted here, which lands outside the GitHub Pages project base
+// (`/PindejosBowling/`) and 404s on refresh. Keep this in sync with the
+// navigators (StandingsStack / Pinsino / MoreStack) — a missing entry is a bug.
 const linking = {
   prefixes: [typeof window !== 'undefined' && window.location ? window.location.origin : ''],
   config: {
     screens: {
       Standings: {
+        initialRouteName: 'StandingsList',
         screens: {
           StandingsList: `${BASE}/standings`,
           PlayerDetail: `${BASE}/standings/player/:name`,
+          FrameStats: `${BASE}/standings/player/:name/frames/:playerId`,
         },
       },
       RSVP: `${BASE}/rsvp`,
       Matchups: `${BASE}/matchups`,
+      Pinsino: {
+        initialRouteName: 'PinsinoHome',
+        screens: {
+          PinsinoHome: `${BASE}/pinsino`,
+          PinsinoLeaderboard: `${BASE}/pinsino/leaderboard`,
+          Sportsbook: `${BASE}/pinsino/sportsbook`,
+          LoanShark: `${BASE}/pinsino/loan-shark`,
+          PlayerPinsino: `${BASE}/pinsino/player/:playerId`,
+          PvP: `${BASE}/pinsino/pvp`,
+          PvPBoard: `${BASE}/pinsino/pvp/board`,
+          PvPCreate: `${BASE}/pinsino/pvp/create`,
+          MarketMoves: `${BASE}/pinsino/market-moves`,
+          BountyBoard: `${BASE}/pinsino/bounties`,
+          BountyCreate: `${BASE}/pinsino/bounties/create`,
+          BountyDetail: `${BASE}/pinsino/bounties/:bountyId`,
+          AuctionHouse: `${BASE}/pinsino/auctions`,
+          AuctionDetail: `${BASE}/pinsino/auctions/:auctionId`,
+        },
+      },
       More: {
+        initialRouteName: 'MoreHome',
         screens: {
           MoreHome: `${BASE}/more`,
           LeagueRecords: `${BASE}/more/records`,
           HeadToHead: `${BASE}/more/head-to-head`,
           Chemistry: `${BASE}/more/chemistry`,
-          SeasonHistory: `${BASE}/more/season-history`,
+          History: `${BASE}/more/history`,
           TrashBoard: `${BASE}/more/trash-board`,
           Playoffs: `${BASE}/more/playoffs`,
+          PlayerManagement: `${BASE}/more/player-management`,
+          ProfilePictures: `${BASE}/more/profile-pictures`,
+          Registration: `${BASE}/more/registration`,
+          RegistrationAdmin: `${BASE}/more/registration-admin`,
+          SeasonRegistration: `${BASE}/more/season-registration`,
+          PinsinoAdmin: `${BASE}/more/pinsino-admin`,
+          PinsinoAccounting: `${BASE}/more/pinsino-accounting`,
+          AdminSportsbook: `${BASE}/more/sportsbook-admin`,
+          LoanSharkAdmin: `${BASE}/more/loan-shark-admin`,
+          PvPAdmin: `${BASE}/more/pvp-admin`,
+          MarketMovesAdmin: `${BASE}/more/market-moves-admin`,
+          BountyAdmin: `${BASE}/more/bounty-admin`,
+          AuctionHouseAdmin: `${BASE}/more/auction-house-admin`,
+          Archives: `${BASE}/more/archives`,
+          LanetalkImportAdmin: `${BASE}/more/lanetalk-import`,
         },
       },
     },
