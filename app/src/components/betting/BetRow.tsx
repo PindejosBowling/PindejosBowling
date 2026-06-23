@@ -43,7 +43,7 @@ export default function BetRow({
                 {leg.subjectName} · {leg.pick?.toUpperCase()}
                 {betLineSuffix(leg.marketType, leg.line, leg.statKey)}
                 {leg.gameNumber != null ? ` (G${leg.gameNumber})` : ''}
-                {leg.result ? ` — ${leg.result.toUpperCase()}` : ''}
+                {leg.result ? ` — ${leg.result === 'crutched' ? 'SAVED 🩼' : leg.result.toUpperCase()}` : ''}
               </Text>
             ))}
             <Text style={styles.betDetails}>

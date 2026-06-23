@@ -21,6 +21,7 @@ import SettledBetsView from '../components/betting/SettledBetsView'
 import BetDetailModal from '../components/betting/BetDetailModal'
 import WagerSheet from '../components/betting/WagerSheet'
 import GoldenTicketToggle from '../components/auction/GoldenTicketToggle'
+import WinnersCrutchToggle from '../components/auction/WinnersCrutchToggle'
 import LineRow from '../components/betting/LineRow'
 import LineRowContainer from '../components/betting/LineRowContainer'
 import CustomLineRow from '../components/betting/CustomLineRow'
@@ -125,17 +126,21 @@ export default function SportsbookScreen() {
   const [tickets, setTickets] = useState<string[]>([])
   const [insureBet, setInsureBet] = useState(false)
 
+  // Winner's Crutches (auction-won parlay insurance): unconsumed attach_to_bet
+  // items, oldest first — the toggle consumes crutches[0]. Parlay flows only.
+  const [crutches, setCrutches] = useState<string[]>([])
+  const [useCrutch, setUseCrutch] = useState(false)
+
   const reloadTickets = useCallback(async () => {
-    if (!playerId) { setTickets([]); return }
+    if (!playerId) { setTickets([]); setCrutches([]); return }
     const { data: season } = await seasons.getCurrent()
-    if (!season) { setTickets([]); return }
+    if (!season) { setTickets([]); setCrutches([]); return }
     const { data } = await inventoryItems.listByPlayerSeason(playerId, season.id)
-    const usable = (data ?? [])
-      .filter((i: any) => i.consumed_at == null
-        && i.item_catalog?.effect_type === 'bet_insurance'
-        && i.item_catalog?.activation_mode === 'attach_to_bet')
+    const attachable = (data ?? [])
+      .filter((i: any) => i.consumed_at == null && i.item_catalog?.activation_mode === 'attach_to_bet')
       .sort((a: any, b: any) => a.granted_at.localeCompare(b.granted_at))
-    setTickets(usable.map((i: any) => i.id))
+    setTickets(attachable.filter((i: any) => i.item_catalog?.effect_type === 'bet_insurance').map((i: any) => i.id))
+    setCrutches(attachable.filter((i: any) => i.item_catalog?.effect_type === 'parlay_crutch').map((i: any) => i.id))
   }, [playerId])
 
   useEffect(() => { reloadTickets() }, [reloadTickets])
@@ -289,6 +294,7 @@ export default function SportsbookScreen() {
     if (customLineSelfTank(line, playerId)) { showToast("Believe in yourself man", 'error'); return }
     if (balance < 10) return
     setInsureBet(false)
+    setUseCrutch(false)
     setTakeModal({ line, wager: '' })
   }
 
@@ -303,8 +309,10 @@ export default function SportsbookScreen() {
       // Same atomic RPC as singles/parlays — the special is just its bundle of
       // selections; payout falls out of the legs' combined odds server-side.
       // The lineId tag snapshots the special's title/description onto the bet.
+      // A crutch only applies to a multi-leg special (it's already a parlay).
+      const crutchId = useCrutch && takeModal.line.legs.length > 1 ? crutches[0] : undefined
       const { error } = await bets.place(
-        takeModal.line.selectionIds, wagerNum, takeModal.line.lineId, insureBet ? tickets[0] : undefined)
+        takeModal.line.selectionIds, wagerNum, takeModal.line.lineId, insureBet ? tickets[0] : undefined, crutchId)
       if (error) { showToast(error.message, 'error'); return }
       showToast(insureBet ? 'Bet placed — Golden Ticket attached!' : 'Bet placed!', 'success')
       setTakeModal(null)
@@ -360,7 +368,8 @@ export default function SportsbookScreen() {
     setPlacing(true)
     try {
       const { error } = await bets.place(
-        parlayLegs.map(l => l.selectionId), wagerNum, undefined, insureBet ? tickets[0] : undefined)
+        parlayLegs.map(l => l.selectionId), wagerNum, undefined,
+        insureBet ? tickets[0] : undefined, useCrutch ? crutches[0] : undefined)
       if (error) { showToast(error.message, 'error'); return }
       showToast(insureBet ? 'Parlay placed — Golden Ticket attached!' : 'Parlay placed!', 'success')
       setParlayModalOpen(false)
@@ -596,7 +605,7 @@ export default function SportsbookScreen() {
           <Button variant="ghost" label="Clear" onPress={() => setParlayLegs([])} style={styles.slipClear} />
           <Button
             label={parlayLegs.length < 2 ? 'Add 2+' : 'Build'}
-            onPress={() => { if (parlayLegs.length >= 2) { setInsureBet(false); setParlayModalOpen(true) } }}
+            onPress={() => { if (parlayLegs.length >= 2) { setInsureBet(false); setUseCrutch(false); setParlayModalOpen(true) } }}
             disabled={parlayLegs.length < 2}
             style={styles.slipBuild}
           />
@@ -682,6 +691,7 @@ export default function SportsbookScreen() {
             ))}
           </View>
           <GoldenTicketToggle ticketCount={tickets.length} enabled={insureBet} onToggle={setInsureBet} disabled={placing} />
+          <WinnersCrutchToggle crutchCount={crutches.length} enabled={useCrutch} onToggle={setUseCrutch} disabled={placing} />
         </WagerSheet>
       )}
 
@@ -712,6 +722,9 @@ export default function SportsbookScreen() {
             ))}
           </View>
           <GoldenTicketToggle ticketCount={tickets.length} enabled={insureBet} onToggle={setInsureBet} disabled={placing} />
+          {takeModal.line.legs.length > 1 && (
+            <WinnersCrutchToggle crutchCount={crutches.length} enabled={useCrutch} onToggle={setUseCrutch} disabled={placing} />
+          )}
         </WagerSheet>
       )}
 

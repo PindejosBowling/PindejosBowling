@@ -192,7 +192,7 @@ export interface LegView {
   statKey: string | null    // LaneTalk stat key for prop legs (display suffix)
   gameNumber: number | null
   actualScore: number | null
-  result: string | null     // won | lost | push | void | null (pending)
+  result: string | null     // won | lost | push | void | crutched | null (pending)
 }
 
 // A flattened O/U bet. Single bets carry one leg; a parlay carries N. The

@@ -112,7 +112,7 @@ export interface CatalogItemAdminView {
 }
 
 // The DB check constraints on item_catalog, mirrored for the admin form chips.
-export const CATALOG_EFFECT_TYPES = ['bet_insurance', 'cosmetic', 'access_pass', 'custom'] as const
+export const CATALOG_EFFECT_TYPES = ['bet_insurance', 'parlay_crutch', 'cosmetic', 'access_pass', 'custom'] as const
 export const CATALOG_ACTIVATION_MODES = ['attach_to_bet', 'passive', 'admin_honored'] as const
 
 export const SOURCE_LABEL: Record<InventoryItemSource, string> = {
