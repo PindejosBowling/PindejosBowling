@@ -1,6 +1,7 @@
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native'
 import { colors, fonts, radius } from '../../theme'
 import { AuctionView, formatTimeRemaining } from '../../utils/auction'
+import { formatPins } from '../../utils/formatting'
 
 interface Props {
   auction: AuctionView
@@ -38,7 +39,7 @@ export default function AuctionCard({ auction: a, onPress }: Props) {
 
       <View style={styles.amountRow}>
         <View style={styles.amountCell}>
-          <Text style={styles.amountValue}>{a.minimumBid.toLocaleString()}</Text>
+          <Text style={styles.amountValue}>{formatPins(a.minimumBid)}</Text>
           <Text style={styles.amountLabel}>MIN BID</Text>
         </View>
         {open && (
@@ -61,8 +62,8 @@ export default function AuctionCard({ auction: a, onPress }: Props) {
         <Text style={styles.result}>
           {a.status === 'settled'
             ? a.quantity > 1
-              ? `${a.winners.length} of ${a.quantity} sold — top bid ${a.winningPrice?.toLocaleString()} pins`
-              : `Won by ${a.winnerName} — ${a.winningPrice?.toLocaleString()} pins`
+              ? `${a.winners.length} of ${a.quantity} sold — top bid ${formatPins(a.winningPrice ?? 0)} pins`
+              : `Won by ${a.winnerName} — ${formatPins(a.winningPrice ?? 0)} pins`
             : 'No sale — no valid bids'}
           {a.bounces.length > 0
             ? ` · ${a.bounces.length} check${a.bounces.length === 1 ? '' : 's'} bounced 💸`

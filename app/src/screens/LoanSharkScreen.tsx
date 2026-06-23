@@ -24,6 +24,7 @@ import { useAuthStore } from '../stores/authStore'
 import { useUiStore } from '../stores/uiStore'
 import { loans } from '../utils/supabase/db'
 import EmptyCard from '../components/ui/EmptyCard'
+import { formatPins } from '../utils/formatting'
 
 // loan_ledger type → display label for the payment history.
 const DEBT_TYPE_LABEL: Record<string, string> = {
@@ -97,7 +98,7 @@ export default function LoanSharkScreen() {
     try {
       const { error } = await loans.repay(activeLoan.loanId, amount)
       if (error) { showToast(error.message, 'error'); return }
-      showToast(`Repaid ${amount.toLocaleString()} pins`, 'success')
+      showToast(`Repaid ${formatPins(amount)} pins`, 'success')
       setRepayAmount('')
       await reload()
     } catch {
@@ -135,14 +136,14 @@ export default function LoanSharkScreen() {
         >
         <View style={styles.balancePill}>
           <Text style={styles.balancePillLabel}>BALANCE</Text>
-          <Text style={styles.balancePillValue}>{balance.toLocaleString()} pins</Text>
+          <Text style={styles.balancePillValue}>{formatPins(balance)} pins</Text>
         </View>
 
         {activeLoan ? (
           <View style={styles.loanCard}>
             <Text style={styles.loanCardTitle}>{activeLoan.product.display_name}</Text>
             <Text style={styles.outstandingLabel}>OUTSTANDING DEBT</Text>
-            <Text style={styles.outstandingValue}>−{activeLoan.outstanding.toLocaleString()}</Text>
+            <Text style={styles.outstandingValue}>−{formatPins(activeLoan.outstanding)}</Text>
 
             <View style={styles.rateRow}>
               <Text style={styles.rateText}>
@@ -196,7 +197,7 @@ export default function LoanSharkScreen() {
                         )}
                       </View>
                       <Text style={[styles.historyAmount, e.amount < 0 ? styles.amountNeg : styles.amountPos]}>
-                        {e.amount > 0 ? '+' : ''}{e.amount.toLocaleString()}
+                        {formatPins(e.amount, { signed: true })}
                       </Text>
                     </View>
                   ))
@@ -218,7 +219,7 @@ export default function LoanSharkScreen() {
                       {p.risk_level.toUpperCase()}
                     </Text>
                   </View>
-                  <Text style={styles.productAmount}>{p.borrow_amount.toLocaleString()} pins</Text>
+                  <Text style={styles.productAmount}>{formatPins(p.borrow_amount)} pins</Text>
                   <View style={styles.productRates}>
                     <Text style={styles.productRate}>
                       {Math.round(p.weekly_interest_rate * 100)}% pinterest/week

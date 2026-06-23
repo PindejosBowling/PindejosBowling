@@ -4,6 +4,7 @@ import { colors, fonts, radius } from '../../theme'
 import PlayerAvatar from '../ui/PlayerAvatar'
 import { timeAgo } from '../../utils/helpers'
 import { renderFeedEvent, FeedEventView } from '../../utils/activityFeedTemplates'
+import { formatPins } from '../../utils/formatting'
 
 interface Props {
   event: FeedEventView
@@ -55,7 +56,7 @@ export default function MarketMoveCard({ event, onPress }: Props) {
                 parts.amount.tone === 'positive' ? styles.amountPositive : styles.amountNeutral,
               ]}
             >
-              +{parts.amount.value.toLocaleString()}
+              +{formatPins(parts.amount.value)}
             </Text>
           </View>
         )}

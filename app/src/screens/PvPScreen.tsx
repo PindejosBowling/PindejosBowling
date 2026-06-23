@@ -17,6 +17,7 @@ import { useAuthStore } from '../stores/authStore'
 import { useUiStore } from '../stores/uiStore'
 import { useNotificationStore } from '../stores/notificationStore'
 import { PinsinoStackParamList } from '../navigation/types'
+import { formatPins } from '../utils/formatting'
 
 type Nav = NativeStackNavigationProp<PinsinoStackParamList>
 
@@ -102,7 +103,7 @@ export default function PvPScreen() {
 
         <View style={styles.balancePill}>
           <Text style={styles.balancePillLabel}>BALANCE</Text>
-          <Text style={styles.balancePillValue}>{balance.toLocaleString()} pins</Text>
+          <Text style={styles.balancePillValue}>{formatPins(balance)} pins</Text>
         </View>
 
         {/* Entry points */}

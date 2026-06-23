@@ -3,6 +3,7 @@ import { colors, fonts, radius } from '../../theme'
 import ConfirmActionSheet from '../ui/ConfirmActionSheet'
 import { loans } from '../../utils/supabase/db'
 import type { LoanProductView } from '../../hooks/useLoanSharkData'
+import { formatPins } from '../../utils/formatting'
 
 interface BorrowConfirmModalProps {
   // The product being borrowed. Mount conditionally (`{product && <… />}`) so the
@@ -25,16 +26,16 @@ export default function BorrowConfirmModal({ product, onClose, onBorrowed }: Bor
     <ConfirmActionSheet
       title={product.display_name}
       subtitle="CONFIRM YOUR DEAL WITH THE SHARK"
-      confirmLabel={`Borrow ${product.borrow_amount.toLocaleString()} Pins`}
+      confirmLabel={`Borrow ${formatPins(product.borrow_amount)} Pins`}
       action={() => loans.take(product.id)}
-      successMessage={`Borrowed ${product.borrow_amount.toLocaleString()} pins`}
+      successMessage={`Borrowed ${formatPins(product.borrow_amount)} pins`}
       failureMessage="Failed to take loan"
       onClose={onClose}
       onDone={onBorrowed}
     >
       <View style={styles.statRow}>
         <Text style={styles.statLabel}>BORROW</Text>
-        <Text style={styles.statValueBig}>{product.borrow_amount.toLocaleString()} pins</Text>
+        <Text style={styles.statValueBig}>{formatPins(product.borrow_amount)} pins</Text>
       </View>
       <View style={styles.statGrid}>
         <View style={styles.statCell}>

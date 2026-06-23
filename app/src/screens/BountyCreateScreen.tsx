@@ -21,6 +21,7 @@ import {
   sponsorMaxLiability, defaultBountyCloseAt, formatCloseTime,
 } from '../utils/bounty'
 import { PinsinoStackParamList } from '../navigation/types'
+import { formatPins } from '../utils/formatting'
 
 type Nav = NativeStackNavigationProp<PinsinoStackParamList>
 
@@ -75,7 +76,7 @@ export default function BountyCreateScreen() {
     if (R < MIN_REWARD_PER_HUNTER) return `Reward per hunter must be at least ${MIN_REWARD_PER_HUNTER}`
     if (H < MIN_HUNTER_STAKE) return `Hunter stake must be at least ${MIN_HUNTER_STAKE}`
     if (m < MIN_MAX_HUNTERS || m > MAX_MAX_HUNTERS) return `Max hunters must be between ${MIN_MAX_HUNTERS} and ${MAX_MAX_HUNTERS}`
-    if (escrow > balance) return `You'd escrow ${escrow.toLocaleString()} pins — more than your balance`
+    if (escrow > balance) return `You'd escrow ${formatPins(escrow)} pins — more than your balance`
     if (closesAt.getTime() <= Date.now()) return 'Close time must be in the future'
     return null
   }, [title, description, R, H, m, escrow, balance, closesAt])
@@ -119,7 +120,7 @@ export default function BountyCreateScreen() {
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <View style={styles.balancePill}>
           <Text style={styles.balancePillLabel}>YOUR BALANCE</Text>
-          <Text style={styles.balancePillValue}>{balance.toLocaleString()} pins</Text>
+          <Text style={styles.balancePillValue}>{formatPins(balance)} pins</Text>
         </View>
 
         <Text style={styles.label}>TITLE</Text>
@@ -199,10 +200,10 @@ export default function BountyCreateScreen() {
         {R >= MIN_REWARD_PER_HUNTER && m >= MIN_MAX_HUNTERS && (
           <View style={styles.previewCard}>
             <Text style={styles.previewTitle}>HOW IT PAYS OUT</Text>
-            <Text style={styles.previewLine}>You take on up to {m.toLocaleString()} hunters. Each stakes {H.toLocaleString()} pins to join.</Text>
-            <Text style={styles.previewLine}>Every hunter wins the same: their stake back + {R.toLocaleString()} reward. Join order doesn't matter and more hunters never shrink anyone's payout.</Text>
-            <Text style={styles.previewLine}>If the hunters win, you pay {R.toLocaleString()} per hunter who joined. If you win, you collect every stake.</Text>
-            <Text style={styles.previewLine}>You escrow {escrow.toLocaleString()} pins now ({R.toLocaleString()} × {m.toLocaleString()}); any unused amount is returned at settlement.</Text>
+            <Text style={styles.previewLine}>You take on up to {formatPins(m)} hunters. Each stakes {formatPins(H)} pins to join.</Text>
+            <Text style={styles.previewLine}>Every hunter wins the same: their stake back + {formatPins(R)} reward. Join order doesn't matter and more hunters never shrink anyone's payout.</Text>
+            <Text style={styles.previewLine}>If the hunters win, you pay {formatPins(R)} per hunter who joined. If you win, you collect every stake.</Text>
+            <Text style={styles.previewLine}>You escrow {formatPins(escrow)} pins now ({formatPins(R)} × {formatPins(m)}); any unused amount is returned at settlement.</Text>
             <Text style={styles.disclaimer}>This does not affect bowling gameplay.</Text>
           </View>
         )}

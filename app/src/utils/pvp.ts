@@ -2,6 +2,12 @@
 // contract-type / status vocabulary in one place so every screen labels them the
 // same way. Winner takes the whole pot — there is no rake, so payout = pot.
 
+import { formatHandicap, formatStakes } from './formatting'
+
+// `formatHandicap` / `formatStakes` now live in utils/formatting.ts; re-exported
+// here for back-compat.
+export { formatHandicap, formatStakes }
+
 export const PVP_MIN_STAKE = 10
 
 export type PvpContractType = 'line_duel' | 'prop_duel' | 'head_to_head' | 'custom'
@@ -39,13 +45,6 @@ export const CONTRACT_TYPE_OPTIONS: { key: PvpContractType; label: string }[] = 
   { key: 'custom', label: 'Custom' },
 ]
 
-// Display a signed Head-to-Head handicap (pins added to a player's raw score).
-// 0 = no handicap; positives add, negatives subtract.
-export function formatHandicap(n: number): string {
-  if (!n) return 'Scratch'
-  return n > 0 ? `+${n}` : `${n}`
-}
-
 // Sanitize a handicap text input to a signed integer string: digits with an
 // optional single leading minus ("" and "-" are valid in-progress values → 0).
 export function sanitizeHandicap(v: string): string {
@@ -56,14 +55,6 @@ export function sanitizeHandicap(v: string): string {
 // True when the two sides put up different amounts (asymmetric stakes).
 export function isAsymmetricStakes(creatorStake: number, counterpartyStake: number): boolean {
   return creatorStake !== counterpartyStake
-}
-
-// Compact stake label: a single number when equal, "creator / counterparty" when
-// the sides differ. Used in list rows + the negotiation trail where space is tight.
-export function formatStakes(creatorStake: number, counterpartyStake: number): string {
-  return isAsymmetricStakes(creatorStake, counterpartyStake)
-    ? `${creatorStake.toLocaleString()} / ${counterpartyStake.toLocaleString()}`
-    : creatorStake.toLocaleString()
 }
 
 // status → { label, color-key }. The screen maps the color key to a theme color.

@@ -10,6 +10,11 @@
 // raise everyone's odds. The House only subsidizes a House-sponsored bounty that
 // loses to the hunters.
 
+import { formatCloseTime } from './formatting'
+
+// `formatCloseTime` now lives in utils/formatting.ts; re-exported here for back-compat.
+export { formatCloseTime }
+
 // Client-side mirrors of the RPC validation thresholds.
 export const MIN_REWARD_PER_HUNTER = 25
 export const MIN_HUNTER_STAKE = 25
@@ -92,13 +97,4 @@ export function defaultBountyCloseAt(now: Date = new Date()): Date {
     target = etWallToUtc(et.getUTCFullYear(), et.getUTCMonth(), et.getUTCDate() + daysToMon + 7, 19, 0)
   }
   return target
-}
-
-// Human-readable close time in ET for cards/detail (e.g. "Mon, Jun 9, 7:00 PM ET").
-export function formatCloseTime(iso: string): string {
-  return new Date(iso).toLocaleString('en-US', {
-    timeZone: ET_TZ,
-    weekday: 'short', month: 'short', day: 'numeric',
-    hour: 'numeric', minute: '2-digit',
-  }) + ' ET'
 }

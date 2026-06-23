@@ -6,6 +6,11 @@
 // shapes and the components don't change.
 
 import { defaultBountyCloseAt } from './bounty'
+import { formatTimeRemaining, formatCountdown } from './formatting'
+
+// `formatTimeRemaining` / `formatCountdown` now live in utils/formatting.ts;
+// re-exported here for back-compat.
+export { formatTimeRemaining, formatCountdown }
 
 // No `draft` ("auctions either exist or they don't") and no `cancelled`
 // (pre-settlement cancel is a hard delete) — AUCTION_FINDINGS.md §10.
@@ -201,31 +206,3 @@ export function groupInventory(items: InventoryItemView[]): InventoryGroupView[]
   return [...all.filter(g => !g.expired), ...all.filter(g => g.expired)]
 }
 
-// Static minute-granularity remaining time for list cards ("3h 12m", "4d 2h").
-// Detail-screen ticking uses formatCountdown instead.
-export function formatTimeRemaining(iso: string, now: Date = new Date()): string {
-  const ms = new Date(iso).getTime() - now.getTime()
-  if (ms <= 0) return 'now'
-  const mins = Math.floor(ms / 60000)
-  const days = Math.floor(mins / 1440)
-  const hours = Math.floor((mins % 1440) / 60)
-  const rem = mins % 60
-  if (days > 0) return `${days}d ${hours}h`
-  if (hours > 0) return `${hours}h ${rem}m`
-  return `${Math.max(rem, 1)}m`
-}
-
-// Ticking countdown for the detail screen: "01:23:45" (h:mm:ss), with a day
-// prefix when needed. Returns null once past zero (the HAMMER FALLING window).
-export function formatCountdown(targetIso: string, now: Date = new Date()): string | null {
-  const ms = new Date(targetIso).getTime() - now.getTime()
-  if (ms <= 0) return null
-  const total = Math.floor(ms / 1000)
-  const days = Math.floor(total / 86400)
-  const h = Math.floor((total % 86400) / 3600)
-  const m = Math.floor((total % 3600) / 60)
-  const s = total % 60
-  const pad = (n: number) => String(n).padStart(2, '0')
-  if (days > 0) return `${days}d ${pad(h)}:${pad(m)}:${pad(s)}`
-  return `${pad(h)}:${pad(m)}:${pad(s)}`
-}

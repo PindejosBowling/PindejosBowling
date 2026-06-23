@@ -2,6 +2,10 @@
 // the Active/Settled bet views, and the accounting screens.
 import { colors } from '../theme'
 import type { BetView } from '../hooks/usePinsinoData'
+import { signed } from './formatting'
+
+// `signed` now lives in utils/formatting.ts; re-exported here for back-compat.
+export { signed }
 
 // Badge from the bet's own status (the target model resolves outcome per bet).
 export function resultBadge(status: string) {
@@ -29,11 +33,6 @@ export function betReturn(bet: BetView): number | null {
   if (bet.status === 'push' || bet.status === 'void') return bet.stake
   if (bet.status === 'lost') return 0
   return null // pending
-}
-
-// Signed string for `n`, '+' on positives, bare '-' on negatives, '0' for zero.
-export function signed(n: number): string {
-  return `${n > 0 ? '+' : ''}${n.toLocaleString()}`
 }
 
 // The realized return as a player-facing string — `Pending` until the bet settles.

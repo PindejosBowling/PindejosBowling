@@ -4,6 +4,7 @@ import ConfirmActionSheet from '../ui/ConfirmActionSheet'
 import { pvpChallenges } from '../../utils/supabase/db'
 import { CONTRACT_TYPE_LABEL, CONTRACT_TYPE_RULE } from '../../utils/pvp'
 import type { PvpChallengeView } from '../../hooks/usePvpData'
+import { formatPins } from '../../utils/formatting'
 
 interface Props {
   // Mount conditionally so it resets between opens. Confirm → accept RPC → toast +
@@ -25,7 +26,7 @@ export default function PvpAcceptModal({ challenge: c, viewerId, onClose, onDone
     <ConfirmActionSheet
       title={`Accept ${CONTRACT_TYPE_LABEL[c.contractType]}`}
       subtitle={`vs ${c.creatorName} · ${c.gameNumber != null ? `Game ${c.gameNumber}` : 'Series'}`}
-      confirmLabel={`Accept & Stake ${myStake.toLocaleString()}`}
+      confirmLabel={`Accept & Stake ${formatPins(myStake)}`}
       action={() => pvpChallenges.accept(c.id)}
       successMessage="Challenge accepted"
       failureMessage="Failed to accept"
@@ -35,19 +36,19 @@ export default function PvpAcceptModal({ challenge: c, viewerId, onClose, onDone
     >
       <View style={styles.row}>
         <Text style={styles.rowLabel}>Your stake</Text>
-        <Text style={styles.rowValue}>{myStake.toLocaleString()} pins</Text>
+        <Text style={styles.rowValue}>{formatPins(myStake)} pins</Text>
       </View>
       <View style={styles.row}>
         <Text style={styles.rowLabel}>Opponent's stake</Text>
-        <Text style={styles.rowValue}>{oppStake.toLocaleString()} pins</Text>
+        <Text style={styles.rowValue}>{formatPins(oppStake)} pins</Text>
       </View>
       <View style={styles.row}>
         <Text style={styles.rowLabel}>Total pot</Text>
-        <Text style={styles.rowValueAccent}>{c.totalPot.toLocaleString()} pins</Text>
+        <Text style={styles.rowValueAccent}>{formatPins(c.totalPot)} pins</Text>
       </View>
       <View style={styles.row}>
         <Text style={styles.rowLabel}>Winner's payout</Text>
-        <Text style={styles.rowValueAccent}>{c.payoutAmount.toLocaleString()} pins</Text>
+        <Text style={styles.rowValueAccent}>{formatPins(c.payoutAmount)} pins</Text>
       </View>
       <Text style={styles.rule}>{CONTRACT_TYPE_RULE[c.contractType]}</Text>
       <Text style={styles.note}>

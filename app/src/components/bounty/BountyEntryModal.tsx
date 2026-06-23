@@ -4,6 +4,7 @@ import ConfirmActionSheet from '../ui/ConfirmActionSheet'
 import { bountyPosts } from '../../utils/supabase/db'
 import { hunterPayout } from '../../utils/bounty'
 import type { BountyView } from '../../hooks/useBountyBoardData'
+import { formatPins } from '../../utils/formatting'
 
 interface Props {
   // Mount conditionally so it resets between opens. Confirm → enter RPC → toast +
@@ -24,7 +25,7 @@ export default function BountyEntryModal({ bounty: b, onClose, onDone }: Props) 
     <ConfirmActionSheet
       title="Join the Hunt"
       subtitle={b.title}
-      confirmLabel={`Join & Stake ${stake.toLocaleString()}`}
+      confirmLabel={`Join & Stake ${formatPins(stake)}`}
       action={() => bountyPosts.enter(b.id)}
       successMessage="You joined the hunt"
       failureMessage="Failed to join"
@@ -33,10 +34,10 @@ export default function BountyEntryModal({ bounty: b, onClose, onDone }: Props) 
       onDone={onDone}
     >
       <Text style={styles.copy}>You are joining as <Text style={styles.bold}>Hunter #{n}</Text> ({b.hunterCount}/{b.maxHunters} in so far).</Text>
-      <Text style={styles.copy}>You will stake <Text style={styles.bold}>{stake.toLocaleString()}</Text> pins.</Text>
+      <Text style={styles.copy}>You will stake <Text style={styles.bold}>{formatPins(stake)}</Text> pins.</Text>
       <Text style={styles.copy}>
-        If the hunters win, you receive <Text style={styles.bold}>{total.toLocaleString()}</Text> pins total
-        (your stake back + <Text style={styles.bold}>{reward.toLocaleString()}</Text> reward).
+        If the hunters win, you receive <Text style={styles.bold}>{formatPins(total)}</Text> pins total
+        (your stake back + <Text style={styles.bold}>{formatPins(reward)}</Text> reward).
       </Text>
       <Text style={styles.copy}>Every hunter gets the same reward — more hunters never reduce your payout.</Text>
       <Text style={styles.copy}>If <Text style={styles.bold}>any</Text> hunter pulls it off, the whole pack wins. Bringing friends only helps.</Text>

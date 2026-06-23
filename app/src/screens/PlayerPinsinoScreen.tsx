@@ -17,6 +17,7 @@ import { useRefresh } from '../hooks/useRefresh'
 import { usePlayerPinsinoData, LedgerEntry } from '../hooks/usePlayerPinsinoData'
 import { BetView } from '../hooks/usePinsinoData'
 import EmptyCard from '../components/ui/EmptyCard'
+import { formatPins } from '../utils/formatting'
 
 type PlayerPinsinoRoute = RouteProp<
   { PlayerPinsino: { playerId: string; name: string } },
@@ -144,33 +145,33 @@ export default function PlayerPinsinoScreen() {
           <View style={[styles.summaryRow, styles.summaryRowBorder]}>
             <Text style={styles.summaryLabel}>PINCOME</Text>
             <Text style={[styles.summaryValue, { color: colors.success }]}>
-              +{summary.pincome.toLocaleString()}
+              +{formatPins(summary.pincome)}
             </Text>
           </View>
           <View style={[styles.summaryRow, styles.summaryRowBorder]}>
             <Text style={styles.summaryLabel}>PINS WAGERED</Text>
             <Text style={[styles.summaryValue, { color: colors.danger }]}>
-              {summary.wagered.toLocaleString()}
+              {formatPins(summary.wagered)}
             </Text>
           </View>
           <View style={[styles.summaryRow, styles.summaryRowBorder]}>
             <Text style={styles.summaryLabel}>PINS WON</Text>
             <Text style={[styles.summaryValue, { color: colors.success }]}>
-              +{summary.won.toLocaleString()}
+              +{formatPins(summary.won)}
             </Text>
           </View>
           {summary.bonus !== 0 && (
             <View style={[styles.summaryRow, styles.summaryRowBorder]}>
               <Text style={styles.summaryLabel}>BONUSES</Text>
               <Text style={[styles.summaryValue, { color: colors.gold }]}>
-                +{summary.bonus.toLocaleString()}
+                +{formatPins(summary.bonus)}
               </Text>
             </View>
           )}
           <View style={styles.summaryRow}>
             <Text style={[styles.summaryLabel, styles.summaryLabelTotal]}>PIN BALANCE</Text>
             <Text style={[styles.summaryValue, styles.summaryValueTotal]}>
-              {balance.toLocaleString()}
+              {formatPins(balance)}
             </Text>
           </View>
         </View>
