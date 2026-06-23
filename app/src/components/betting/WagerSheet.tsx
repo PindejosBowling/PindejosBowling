@@ -26,6 +26,10 @@ interface WagerSheetProps {
   onClose: () => void
   // Bet-specific body above the wager input (pick toggle, leg list, …).
   children?: ReactNode
+  // When an Energy Drink (odds_boost) is attached, the multiplier applied to
+  // profit (payout − wager) — the House-funded bonus. Undefined = no boost. Drives
+  // a highlighted, boosted "To win" preview that mirrors the server's settlement.
+  boostPct?: number
 }
 
 // The shared bet-confirmation sheet: title → "… PAYS ×odds" → caller's body →
@@ -46,8 +50,17 @@ export default function WagerSheet({
   busy,
   onClose,
   children,
+  boostPct,
 }: WagerSheetProps) {
   const wagerNum = parseInt(wager, 10)
+
+  // Live to-win preview mirrors the server's payout math. With an Energy Drink
+  // attached, the House adds floor(profit × boostPct) on a win (profit = payout −
+  // wager), so the boosted total = payout + bonus (boostPct 1.0 doubles profit).
+  const payout = !isNaN(wagerNum) ? Math.floor(wagerNum * odds) : 0
+  const boostBonus = boostPct != null && !isNaN(wagerNum) ? Math.floor((payout - wagerNum) * boostPct) : 0
+  const boosted = boostBonus > 0
+  const toWin = payout + boostBonus
 
   return (
     <BottomSheet
@@ -81,10 +94,18 @@ export default function WagerSheet({
       />
       <Text style={styles.wagerHint}>
         Balance: {balance} pins  ·  Min: 10
-        {!isNaN(wagerNum)
-          ? `  ·  To win: ${formatPins(Math.floor(wagerNum * odds))}`
-          : ''}
+        {!isNaN(wagerNum) ? '  ·  To win: ' : ''}
+        {!isNaN(wagerNum) && (
+          <Text style={boosted ? styles.toWinBoosted : undefined}>
+            {formatPins(toWin)}{boosted ? ' ⚡️' : ''}
+          </Text>
+        )}
       </Text>
+      {boosted && (
+        <Text style={styles.boostNote}>
+          Energy Drink ⚡️ doubles your profit — {formatPins(payout)} payout + {formatPins(boostBonus)} bonus.
+        </Text>
+      )}
       <Text style={styles.warning}>⚠ Bets can't be canceled once placed.</Text>
     </BottomSheet>
   )
@@ -116,6 +137,18 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: colors.muted,
     marginTop: 6,
+  },
+  // Boosted "To win" — gold to flag the Energy Drink's House-funded uplift.
+  toWinBoosted: {
+    fontFamily: fonts.barlowCondensed,
+    color: colors.gold,
+    letterSpacing: 0.3,
+  },
+  boostNote: {
+    fontFamily: fonts.barlow,
+    fontSize: 12,
+    color: colors.gold,
+    marginTop: 4,
   },
   warning: {
     fontFamily: fonts.barlow,

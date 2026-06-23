@@ -17,13 +17,29 @@ prize is a real inventory item (the league's first item framework).
 
 ### `item_catalog`
 `key` (unique), `name`, `description`, `icon`, `effect_type`
-(`bet_insurance|cosmetic|access_pass|custom` — each value promises a code hook
-or admin honor), `effect_params jsonb` (per-type parameters; Golden Ticket:
-`{"refund_share": 1.0}`), `activation_mode`
+(`bet_insurance|parlay_crutch|odds_boost|cosmetic|access_pass|custom` — each value
+promises a code hook or admin honor), `effect_params jsonb` (per-type parameters;
+Golden Ticket: `{"refund_share": 1.0}`; Energy Drink: `{"boost_pct": 1.0, "base":
+"profit"}`), `activation_mode`
 (`attach_to_bet|passive|admin_honored` — drives the UI affordance only),
 `is_active`. **Functional columns freeze once an instance exists**
 (`update_catalog_item` RAISEs); `name`/`description`/`icon` stay editable;
 changed behavior = new key (`golden_ticket_v2`). No `domain`, no `charges`.
+
+**Wired Sportsbook items** all share one rail — a per-item nullable slot on
+`bets` (`insurance_item_id`, `crutch_item_id`, `boost_item_id`), validated +
+consumed at placement in `place_house_bet`, settled in
+`finalize_bets_for_market`, un-spent in `cancel_bet`; they stack freely (one slot
+each). The three live `effect_type`s:
+- `bet_insurance` (Golden Ticket) — on a **loss**, House refunds
+  `floor(stake × refund_share)`.
+- `parlay_crutch` (Winner's Crutch) — a parlay missing by exactly one leg cancels
+  that leg (`bet_legs.result='crutched'`, a drop-out) and pays the survivors at
+  reduced odds.
+- `odds_boost` (Energy Drink) — on a **win**, House pays a bonus
+  `floor(profit × boost_pct)` (`profit = payout − stake`; `boost_pct=1.0` doubles
+  the profit, 1:1 → 2:1) as a bet-linked, week-stamped `bet_odds_boost` ledger row.
+  Publishes a `sportsbook_boost_hit` feed event.
 
 ### `player_inventory_items`
 **Atomic single-use rows — quantity is ALWAYS row count** (grants, pack sales,

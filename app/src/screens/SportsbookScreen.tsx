@@ -22,6 +22,7 @@ import BetDetailModal from '../components/betting/BetDetailModal'
 import WagerSheet from '../components/betting/WagerSheet'
 import GoldenTicketToggle from '../components/auction/GoldenTicketToggle'
 import WinnersCrutchToggle from '../components/auction/WinnersCrutchToggle'
+import EnergyDrinkToggle from '../components/auction/EnergyDrinkToggle'
 import LineRow from '../components/betting/LineRow'
 import LineRowContainer from '../components/betting/LineRowContainer'
 import CustomLineRow from '../components/betting/CustomLineRow'
@@ -131,16 +132,27 @@ export default function SportsbookScreen() {
   const [crutches, setCrutches] = useState<string[]>([])
   const [useCrutch, setUseCrutch] = useState(false)
 
+  // Energy Drinks (auction-won profit doubler): unconsumed attach_to_bet items,
+  // oldest first — the toggle consumes boosts[0]. Works on any bet. boostPct is
+  // the oldest drink's profit multiplier (catalog effect_params), driving the
+  // boosted to-win preview.
+  const [boosts, setBoosts] = useState<string[]>([])
+  const [boostPct, setBoostPct] = useState(1)
+  const [useBoost, setUseBoost] = useState(false)
+
   const reloadTickets = useCallback(async () => {
-    if (!playerId) { setTickets([]); setCrutches([]); return }
+    if (!playerId) { setTickets([]); setCrutches([]); setBoosts([]); return }
     const { data: season } = await seasons.getCurrent()
-    if (!season) { setTickets([]); setCrutches([]); return }
+    if (!season) { setTickets([]); setCrutches([]); setBoosts([]); return }
     const { data } = await inventoryItems.listByPlayerSeason(playerId, season.id)
     const attachable = (data ?? [])
       .filter((i: any) => i.consumed_at == null && i.item_catalog?.activation_mode === 'attach_to_bet')
       .sort((a: any, b: any) => a.granted_at.localeCompare(b.granted_at))
     setTickets(attachable.filter((i: any) => i.item_catalog?.effect_type === 'bet_insurance').map((i: any) => i.id))
     setCrutches(attachable.filter((i: any) => i.item_catalog?.effect_type === 'parlay_crutch').map((i: any) => i.id))
+    const boostRows = attachable.filter((i: any) => i.item_catalog?.effect_type === 'odds_boost')
+    setBoosts(boostRows.map((i: any) => i.id))
+    setBoostPct(boostRows.length ? Number((boostRows[0].item_catalog?.effect_params as any)?.boost_pct ?? 1) : 1)
   }, [playerId])
 
   useEffect(() => { reloadTickets() }, [reloadTickets])
@@ -254,6 +266,7 @@ export default function SportsbookScreen() {
     if (isSelfTank(line, sel)) { showToast("Believe in yourself man", 'error'); return }
     if (balance < 10) return
     setInsureBet(false)
+    setUseBoost(false)
     setModal({ line, selectedId: sel.selectionId, wager: '' })
   }
 
@@ -273,7 +286,8 @@ export default function SportsbookScreen() {
       // resolved from the JWT and the double-entry stake ledger pair is written in
       // the same transaction — the client no longer writes any betting rows.
       const { error: betErr } = await bets.place(
-        [sel.selectionId], wagerNum, undefined, insureBet ? tickets[0] : undefined)
+        [sel.selectionId], wagerNum, undefined,
+        insureBet ? tickets[0] : undefined, undefined, useBoost ? boosts[0] : undefined)
       if (betErr) { showToast(betErr.message, 'error'); return }
 
       showToast(insureBet ? 'Bet placed — Golden Ticket attached!' : 'Bet placed!', 'success')
@@ -295,6 +309,7 @@ export default function SportsbookScreen() {
     if (balance < 10) return
     setInsureBet(false)
     setUseCrutch(false)
+    setUseBoost(false)
     setTakeModal({ line, wager: '' })
   }
 
@@ -312,7 +327,8 @@ export default function SportsbookScreen() {
       // A crutch only applies to a multi-leg special (it's already a parlay).
       const crutchId = useCrutch && takeModal.line.legs.length > 1 ? crutches[0] : undefined
       const { error } = await bets.place(
-        takeModal.line.selectionIds, wagerNum, takeModal.line.lineId, insureBet ? tickets[0] : undefined, crutchId)
+        takeModal.line.selectionIds, wagerNum, takeModal.line.lineId,
+        insureBet ? tickets[0] : undefined, crutchId, useBoost ? boosts[0] : undefined)
       if (error) { showToast(error.message, 'error'); return }
       showToast(insureBet ? 'Bet placed — Golden Ticket attached!' : 'Bet placed!', 'success')
       setTakeModal(null)
@@ -369,7 +385,8 @@ export default function SportsbookScreen() {
     try {
       const { error } = await bets.place(
         parlayLegs.map(l => l.selectionId), wagerNum, undefined,
-        insureBet ? tickets[0] : undefined, useCrutch ? crutches[0] : undefined)
+        insureBet ? tickets[0] : undefined, useCrutch ? crutches[0] : undefined,
+        useBoost ? boosts[0] : undefined)
       if (error) { showToast(error.message, 'error'); return }
       showToast(insureBet ? 'Parlay placed — Golden Ticket attached!' : 'Parlay placed!', 'success')
       setParlayModalOpen(false)
@@ -605,7 +622,7 @@ export default function SportsbookScreen() {
           <Button variant="ghost" label="Clear" onPress={() => setParlayLegs([])} style={styles.slipClear} />
           <Button
             label={parlayLegs.length < 2 ? 'Add 2+' : 'Build'}
-            onPress={() => { if (parlayLegs.length >= 2) { setInsureBet(false); setUseCrutch(false); setParlayModalOpen(true) } }}
+            onPress={() => { if (parlayLegs.length >= 2) { setInsureBet(false); setUseCrutch(false); setUseBoost(false); setParlayModalOpen(true) } }}
             disabled={parlayLegs.length < 2}
             style={styles.slipBuild}
           />
@@ -629,6 +646,7 @@ export default function SportsbookScreen() {
           balance={balance}
           ctaLabel="Place Bet"
           onSubmit={placeBet}
+          boostPct={useBoost ? boostPct : undefined}
           busy={placing}
           onClose={() => setModal(null)}
         >
@@ -659,6 +677,7 @@ export default function SportsbookScreen() {
             })}
           </View>
           <GoldenTicketToggle ticketCount={tickets.length} enabled={insureBet} onToggle={setInsureBet} disabled={placing} />
+          <EnergyDrinkToggle boostCount={boosts.length} enabled={useBoost} onToggle={setUseBoost} disabled={placing} />
         </WagerSheet>
       )}
 
@@ -673,6 +692,7 @@ export default function SportsbookScreen() {
           balance={balance}
           ctaLabel="Place Parlay"
           onSubmit={placeParlay}
+          boostPct={useBoost ? boostPct : undefined}
           busy={placing}
           onClose={() => setParlayModalOpen(false)}
         >
@@ -692,6 +712,7 @@ export default function SportsbookScreen() {
           </View>
           <GoldenTicketToggle ticketCount={tickets.length} enabled={insureBet} onToggle={setInsureBet} disabled={placing} />
           <WinnersCrutchToggle crutchCount={crutches.length} enabled={useCrutch} onToggle={setUseCrutch} disabled={placing} />
+          <EnergyDrinkToggle boostCount={boosts.length} enabled={useBoost} onToggle={setUseBoost} disabled={placing} />
         </WagerSheet>
       )}
 
@@ -707,6 +728,7 @@ export default function SportsbookScreen() {
           balance={balance}
           ctaLabel="Take It"
           onSubmit={placeCustom}
+          boostPct={useBoost ? boostPct : undefined}
           busy={placing}
           onClose={() => setTakeModal(null)}
         >
@@ -725,6 +747,7 @@ export default function SportsbookScreen() {
           {takeModal.line.legs.length > 1 && (
             <WinnersCrutchToggle crutchCount={crutches.length} enabled={useCrutch} onToggle={setUseCrutch} disabled={placing} />
           )}
+          <EnergyDrinkToggle boostCount={boosts.length} enabled={useBoost} onToggle={setUseBoost} disabled={placing} />
         </WagerSheet>
       )}
 

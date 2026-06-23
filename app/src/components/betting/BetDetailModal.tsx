@@ -17,6 +17,11 @@ export default function BetDetailModal({ bet, onClose }: BetDetailModalProps) {
   // the reason a missed parlay still paid (or pushed) — surfaced explicitly below.
   const crutchSaved = bet.legs.some(leg => leg.result === 'crutched')
 
+  // An Energy Drink was attached at placement (odds_boost). On a win it paid a
+  // House-funded bonus doubling the profit (1:1 → 2:1); on a loss/push it was
+  // simply spent — surfaced explicitly below.
+  const boosted = bet.boostItemId != null
+
   return (
     <Modal visible transparent animationType="fade" onRequestClose={onClose}>
       <TouchableOpacity style={styles.backdrop} activeOpacity={1} onPress={onClose} />
@@ -101,6 +106,21 @@ export default function BetDetailModal({ bet, onClose }: BetDetailModalProps) {
                 {bet.status === 'won'
                   ? ' — the rest of the parlay cashed at reduced odds.'
                   : ' — with no surviving legs, your stake was refunded.'}
+              </Text>
+            </View>
+          )}
+
+          {/* Energy Drink: doubled the profit on a win; spent for nothing otherwise. */}
+          {boosted && (
+            <View style={styles.row}>
+              <Text style={styles.label}>ENERGY DRINK ⚡️</Text>
+              <Text style={[styles.value, { color: colors.gold }]}>
+                {bet.status === 'won' ? 'Profit doubled' : 'Spent'}
+              </Text>
+              <Text style={styles.customDescription}>
+                {bet.status === 'won'
+                  ? 'An Energy Drink doubled your profit — the House paid a bonus on top of the payout (1:1 became 2:1).'
+                  : 'An Energy Drink was attached but only pays on a win — it was spent at placement.'}
               </Text>
             </View>
           )}
