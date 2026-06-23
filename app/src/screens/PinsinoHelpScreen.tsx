@@ -27,8 +27,7 @@ export default function PinsinoHelpScreen() {
           <Text style={styles.introTitle}>IT ALL RUNS ON PINS</Text>
           <Text style={styles.introBody}>
             Pins are the league currency. You earn them by bowling, then win or lose them across
-            the Pinsino. Your balance is real money on the table — you can never wager more pins
-            than you're holding, and everyone starts fresh when the season resets.
+            the Pinsino. You can never wager more pins than you're holding, and everyone starts from a clean slate when the season resets.
           </Text>
         </View>
 
