@@ -13,6 +13,10 @@ interface BetDetailModalProps {
 export default function BetDetailModal({ bet, onClose }: BetDetailModalProps) {
   if (!bet) return null
 
+  // A Winner's Crutch fired iff a leg lost but was cancelled ('crutched'). That's
+  // the reason a missed parlay still paid (or pushed) — surfaced explicitly below.
+  const crutchSaved = bet.legs.some(leg => leg.result === 'crutched')
+
   return (
     <Modal visible transparent animationType="fade" onRequestClose={onClose}>
       <TouchableOpacity style={styles.backdrop} activeOpacity={1} onPress={onClose} />
@@ -75,9 +79,31 @@ export default function BetDetailModal({ bet, onClose }: BetDetailModalProps) {
                     </Text>
                   </>
                 )}
+                {/* A crutched leg lost on the scoreboard but was cancelled — call it
+                    out so the leg's muted score doesn't read as a normal result. */}
+                {leg.result === 'crutched' && (
+                  <Text style={{ color: colors.gold }}> · {resultBadge('crutched')?.label}</Text>
+                )}
               </Text>
             ))}
           </View>
+
+          {/* Why a missed parlay still paid: the Winner's Crutch cancelled the
+              losing leg and settled the rest at reduced odds. */}
+          {crutchSaved && (
+            <View style={styles.row}>
+              <Text style={styles.label}>WINNER'S CRUTCH 🩼</Text>
+              <Text style={[styles.value, { color: colors.gold }]}>
+                {bet.status === 'won' ? 'Salvaged this bet' : 'Cancelled the missed leg'}
+              </Text>
+              <Text style={styles.customDescription}>
+                A leg missed but was cancelled by your Winner's Crutch
+                {bet.status === 'won'
+                  ? ' — the rest of the parlay cashed at reduced odds.'
+                  : ' — with no surviving legs, your stake was refunded.'}
+              </Text>
+            </View>
+          )}
 
           <View style={styles.row}>
             <Text style={styles.label}>WAGER</Text>

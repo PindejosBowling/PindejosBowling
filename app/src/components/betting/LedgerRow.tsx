@@ -58,7 +58,10 @@ export default function LedgerRow({ entry, perspective, isLast }: LedgerRowProps
     entry.type === 'bonus' ? colors.gold : isPositive ? colors.success : colors.danger
 
   // Meta line: the action, plus the bettor on the house side (whose bet moved us).
+  // A 🩼 marker flags a payout/refund that only happened because a Winner's Crutch
+  // cancelled a missed leg (a leg result of 'crutched').
   const metaParts = [actionLabel(entry.type, perspective)]
+  if (bet?.legs?.some(leg => leg.result === 'crutched')) metaParts.push('🩼 CRUTCH')
   if (perspective === 'house' && bet) metaParts.push(bet.bettorName)
   const meta = metaParts.join(' · ')
 
