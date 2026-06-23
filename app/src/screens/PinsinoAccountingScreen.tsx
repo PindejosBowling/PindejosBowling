@@ -15,6 +15,7 @@ import { useAuthStore } from '../stores/authStore'
 import { LedgerEntry } from '../hooks/usePlayerPinsinoData'
 import { signed } from '../utils/bets'
 import EmptyCard from '../components/ui/EmptyCard'
+import { formatPins } from '../utils/formatting'
 
 type Nav = NativeStackNavigationProp<MoreStackParamList>
 type AccountingView = 'activity' | 'pnl'
@@ -85,18 +86,18 @@ export default function PinsinoAccountingScreen() {
               </View>
               <View style={[styles.summaryRow, styles.summaryRowBorder]}>
                 <Text style={styles.summaryLabel}>BETS SETTLED</Text>
-                <Text style={styles.summaryValue}>{stats.settledCount.toLocaleString()}</Text>
+                <Text style={styles.summaryValue}>{formatPins(stats.settledCount)}</Text>
               </View>
               <View style={[styles.summaryRow, styles.summaryRowBorder]}>
                 <Text style={styles.summaryLabel}>BIGGEST PAYOUT</Text>
                 <Text style={[styles.summaryValue, { color: colors.danger }]}>
-                  {stats.biggestPayout > 0 ? `−${stats.biggestPayout.toLocaleString()}` : '—'}
+                  {stats.biggestPayout > 0 ? `−${formatPins(stats.biggestPayout)}` : '—'}
                 </Text>
               </View>
               <View style={[styles.summaryRow, styles.summaryRowBorder]}>
                 <Text style={styles.summaryLabel}>BIGGEST TAKE</Text>
                 <Text style={[styles.summaryValue, { color: colors.success }]}>
-                  {stats.biggestTake > 0 ? `+${stats.biggestTake.toLocaleString()}` : '—'}
+                  {stats.biggestTake > 0 ? `+${formatPins(stats.biggestTake)}` : '—'}
                 </Text>
               </View>
               <View style={[styles.summaryRow, styles.summaryRowBorder]}>
@@ -107,7 +108,7 @@ export default function PinsinoAccountingScreen() {
               </View>
               <View style={styles.summaryRow}>
                 <Text style={styles.summaryLabel}>EXPOSURE (THIS WEEK)</Text>
-                <Text style={[styles.summaryValue, { color: colors.muted }]}>−{exposure.toLocaleString()}</Text>
+                <Text style={[styles.summaryValue, { color: colors.muted }]}>−{formatPins(exposure)}</Text>
               </View>
 
               {/* ── divider: stats above, ledger flows below ───── */}
@@ -139,7 +140,7 @@ export default function PinsinoAccountingScreen() {
               HOUSE BALANCE {statementExpanded ? '▴' : '▾'}
             </Text>
             <Text style={[styles.summaryValue, styles.summaryValueTotal, { color: balance >= 0 ? colors.accent : colors.danger }]}>
-              {balance.toLocaleString()}
+              {formatPins(balance)}
             </Text>
           </TouchableOpacity>
         </View>

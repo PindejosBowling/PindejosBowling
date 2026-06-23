@@ -13,6 +13,7 @@ import { useRefresh } from '../hooks/useRefresh'
 import { useAuthStore } from '../stores/authStore'
 import { bountyEconomics, hunterPayout, formatCloseTime } from '../utils/bounty'
 import { PinsinoStackParamList } from '../navigation/types'
+import { formatPins } from '../utils/formatting'
 
 type Nav = NativeStackNavigationProp<PinsinoStackParamList>
 type Rt = RouteProp<PinsinoStackParamList, 'BountyDetail'>
@@ -78,11 +79,11 @@ export default function BountyDetailScreen() {
 
         <View style={styles.amountRow}>
           <View style={styles.amountCell}>
-            <Text style={styles.amountValue}>{bounty.hunterStakeAmount.toLocaleString()}</Text>
+            <Text style={styles.amountValue}>{formatPins(bounty.hunterStakeAmount)}</Text>
             <Text style={styles.amountLabel}>HUNTER STAKE</Text>
           </View>
           <View style={styles.amountCell}>
-            <Text style={styles.amountValue}>+{bounty.rewardPerHunter.toLocaleString()}</Text>
+            <Text style={styles.amountValue}>+{formatPins(bounty.rewardPerHunter)}</Text>
             <Text style={styles.amountLabel}>REWARD EACH</Text>
           </View>
           <View style={styles.amountCell}>
@@ -100,7 +101,7 @@ export default function BountyDetailScreen() {
             {hunters.map((h, i) => (
               <View key={h.id} style={[styles.listRow, i < hunters.length - 1 && styles.listRowBorder]}>
                 <Text style={styles.listPrimary}>#{h.entryNumber} · {h.playerName ?? 'Hunter'}</Text>
-                <Text style={styles.listValue}>+{bounty.rewardPerHunter.toLocaleString()} reward</Text>
+                <Text style={styles.listValue}>+{formatPins(bounty.rewardPerHunter)} reward</Text>
               </View>
             ))}
           </View>
@@ -109,9 +110,9 @@ export default function BountyDetailScreen() {
         {/* Pot economics */}
         {econ && (
           <View style={styles.card}>
-            <View style={styles.kv}><Text style={styles.muted}>Reward per hunter</Text><Text style={styles.kvValue}>+{bounty.rewardPerHunter.toLocaleString()}</Text></View>
-            <View style={styles.kv}><Text style={styles.muted}>Total reward if hunters win</Text><Text style={styles.kvValue}>{econ.totalReward.toLocaleString()}</Text></View>
-            <View style={styles.kv}><Text style={styles.muted}>Total paid to hunters</Text><Text style={styles.kvAccent}>{(settlement?.totalPot ?? econ.totalHunterPayout).toLocaleString()}</Text></View>
+            <View style={styles.kv}><Text style={styles.muted}>Reward per hunter</Text><Text style={styles.kvValue}>+{formatPins(bounty.rewardPerHunter)}</Text></View>
+            <View style={styles.kv}><Text style={styles.muted}>Total reward if hunters win</Text><Text style={styles.kvValue}>{formatPins(econ.totalReward)}</Text></View>
+            <View style={styles.kv}><Text style={styles.muted}>Total paid to hunters</Text><Text style={styles.kvAccent}>{formatPins((settlement?.totalPot ?? econ.totalHunterPayout))}</Text></View>
           </View>
         )}
 
@@ -120,11 +121,11 @@ export default function BountyDetailScreen() {
           <>
             <Text style={styles.sectionLabel}>IF IT SETTLES NOW</Text>
             <View style={styles.card}>
-              <View style={styles.kv}><Text style={styles.muted}>Sponsor wins → sponsor keeps</Text><Text style={styles.kvValue}>{econ.sponsorTakeOnWin.toLocaleString()}</Text></View>
+              <View style={styles.kv}><Text style={styles.muted}>Sponsor wins → sponsor keeps</Text><Text style={styles.kvValue}>{formatPins(econ.sponsorTakeOnWin)}</Text></View>
               {hunters.map(h => (
                 <View key={h.id} style={styles.kv}>
                   <Text style={styles.muted}>Hunters win → {h.playerName ?? `Hunter #${h.entryNumber}`}</Text>
-                  <Text style={styles.kvValue}>{hunterPayout(h.stakeAmount, bounty.rewardPerHunter).toLocaleString()}</Text>
+                  <Text style={styles.kvValue}>{formatPins(hunterPayout(h.stakeAmount, bounty.rewardPerHunter))}</Text>
                 </View>
               ))}
             </View>
@@ -138,19 +139,19 @@ export default function BountyDetailScreen() {
             <View style={styles.card}>
               <Text style={styles.reasoningLabel}>ADMIN REASONING</Text>
               <Text style={styles.reasoning}>{settlement.reasoning}</Text>
-              <View style={[styles.kv, { marginTop: 10 }]}><Text style={styles.muted}>Total hunter stakes</Text><Text style={styles.kvValue}>{settlement.totalHunterStakes.toLocaleString()}</Text></View>
-              <View style={styles.kv}><Text style={styles.muted}>Total reward paid</Text><Text style={styles.kvValue}>{settlement.totalReward.toLocaleString()}</Text></View>
+              <View style={[styles.kv, { marginTop: 10 }]}><Text style={styles.muted}>Total hunter stakes</Text><Text style={styles.kvValue}>{formatPins(settlement.totalHunterStakes)}</Text></View>
+              <View style={styles.kv}><Text style={styles.muted}>Total reward paid</Text><Text style={styles.kvValue}>{formatPins(settlement.totalReward)}</Text></View>
               {settlement.houseSeed > 0 && (
-                <View style={styles.kv}><Text style={styles.muted}>House subsidy</Text><Text style={styles.kvValue}>{settlement.houseSeed.toLocaleString()}</Text></View>
+                <View style={styles.kv}><Text style={styles.muted}>House subsidy</Text><Text style={styles.kvValue}>{formatPins(settlement.houseSeed)}</Text></View>
               )}
-              <View style={styles.kv}><Text style={styles.muted}>{settlement.outcome === 'sponsor_win' ? 'Sponsor winnings' : 'Total paid to hunters'}</Text><Text style={styles.kvAccent}>{settlement.totalPot.toLocaleString()}</Text></View>
+              <View style={styles.kv}><Text style={styles.muted}>{settlement.outcome === 'sponsor_win' ? 'Sponsor winnings' : 'Total paid to hunters'}</Text><Text style={styles.kvAccent}>{formatPins(settlement.totalPot)}</Text></View>
             </View>
             {payouts.filter(p => !p.isHouse).length > 0 && (
               <View style={styles.card}>
                 {payouts.filter(p => !p.isHouse).map((p, i, arr) => (
                   <View key={p.id} style={[styles.kv, i < arr.length - 1 && styles.listRowBorder]}>
                     <Text style={styles.muted}>{p.playerName ?? 'Player'}</Text>
-                    <Text style={styles.kvAccent}>+{p.amount.toLocaleString()}</Text>
+                    <Text style={styles.kvAccent}>+{formatPins(p.amount)}</Text>
                   </View>
                 ))}
               </View>
@@ -169,7 +170,7 @@ export default function BountyDetailScreen() {
                     {LEDGER_LABEL[r.type] ?? r.type} · {r.isHouse ? 'House' : (r.playerName ?? 'Player')}
                   </Text>
                   <Text style={[styles.kvValue, { color: r.amount >= 0 ? colors.success : colors.danger }]}>
-                    {r.amount >= 0 ? '+' : ''}{r.amount.toLocaleString()}
+                    {r.amount >= 0 ? '+' : ''}{formatPins(r.amount)}
                   </Text>
                 </View>
               ))}

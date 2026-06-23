@@ -6,6 +6,7 @@ import Button from '../ui/Button'
 import { useUiStore } from '../../stores/uiStore'
 import { AuctionView, isLargeBid } from '../../utils/auction'
 import { auctions } from '../../utils/supabase/db'
+import { formatPins } from '../../utils/formatting'
 
 interface Props {
   // Place or edit the viewer's sealed bid (free re-pricing — no increment,
@@ -27,7 +28,7 @@ export default function AuctionBidSheet({ auction: a, balance, onClose, onDone }
 
   const error = useMemo<string | null>(() => {
     if (amount <= 0) return 'Enter your pledge'
-    if (amount < a.minimumBid) return `Minimum bid is ${a.minimumBid.toLocaleString()}`
+    if (amount < a.minimumBid) return `Minimum bid is ${formatPins(a.minimumBid)}`
     if (amount > balance) return 'Bid exceeds your balance'
     return null
   }, [amount, a.minimumBid, balance])
@@ -51,14 +52,14 @@ export default function AuctionBidSheet({ auction: a, balance, onClose, onDone }
   return (
     <BottomSheet
       title={editing ? 'Edit Your Bid' : 'Place a Sealed Bid'}
-      subtitle={`${a.itemIcon} ${a.itemName} · min ${a.minimumBid.toLocaleString()}`}
+      subtitle={`${a.itemIcon} ${a.itemName} · min ${formatPins(a.minimumBid)}`}
       onClose={onClose}
       busy={saving}
       keyboardAvoiding
       footer={
         <>
           <Button
-            label={error ? 'Pledge' : `Pledge ${amount.toLocaleString()} pins`}
+            label={error ? 'Pledge' : `Pledge ${formatPins(amount)} pins`}
             size="lg"
             onPress={submit}
             loading={saving}
@@ -71,7 +72,7 @@ export default function AuctionBidSheet({ auction: a, balance, onClose, onDone }
     >
       <View style={styles.balanceRow}>
         <Text style={styles.balanceLabel}>YOUR BALANCE</Text>
-        <Text style={styles.balanceValue}>{balance.toLocaleString()} pins</Text>
+        <Text style={styles.balanceValue}>{formatPins(balance)} pins</Text>
       </View>
 
       <Text style={styles.label}>YOUR PLEDGE</Text>
@@ -85,14 +86,14 @@ export default function AuctionBidSheet({ auction: a, balance, onClose, onDone }
       />
       {editing && (
         <Text style={styles.editHint}>
-          Your current bid is {a.myBidAmount?.toLocaleString()}. Editing replaces it — and resets your
+          Your current bid is {formatPins(a.myBidAmount ?? 0)}. Editing replaces it — and resets your
           tie-break clock.
         </Text>
       )}
 
       {/* §18.3 pledge copy — always shown. */}
       <Text style={styles.pledgeCopy}>
-        You are pledging {amount > 0 ? amount.toLocaleString() : 'these'} pins. No pins move now. If you
+        You are pledging {amount > 0 ? formatPins(amount) : 'these'} pins. No pins move now. If you
         win this auction and still have enough pins at settlement, you pay the House. If you can't pay,
         your check bounces and you immediately pay up to {a.bounceFee} pins. You can change your number
         until close, but you can't take it back.

@@ -24,6 +24,7 @@ import { useUiStore } from '../stores/uiStore'
 import { countForRoute } from '../utils/notifications'
 import { SHOW_AUCTION_HOUSE } from '../utils/featureFlags'
 import { PinsinoStackParamList } from '../navigation/types'
+import { formatPins } from '../utils/formatting'
 
 type PinsinoNav = NativeStackNavigationProp<PinsinoStackParamList>
 
@@ -89,24 +90,24 @@ export default function PinsinoScreen() {
           disabled={!playerId}
         >
           <Text style={styles.balanceLabel}>YOUR BALANCE</Text>
-          <Text style={styles.balanceValue}>{balance.toLocaleString()}</Text>
+          <Text style={styles.balanceValue}>{formatPins(balance)}</Text>
           <Text style={styles.balanceUnit}>PINS</Text>
           {(debt > 0 || openAction > 0) && (
             <View style={styles.netRow}>
               {openAction > 0 && (
                 <>
-                  <Text style={styles.openActionText}>OPEN {openAction.toLocaleString()}</Text>
+                  <Text style={styles.openActionText}>OPEN {formatPins(openAction)}</Text>
                   <Text style={styles.netDivider}>·</Text>
                 </>
               )}
               {debt > 0 && (
                 <>
-                  <Text style={styles.owedText}>OWED −{debt.toLocaleString()}</Text>
+                  <Text style={styles.owedText}>OWED −{formatPins(debt)}</Text>
                   <Text style={styles.netDivider}>·</Text>
                 </>
               )}
               <Text style={[styles.netText, netWorth < 0 && styles.netTextNeg]}>
-                NET {netWorth.toLocaleString()}
+                NET {formatPins(netWorth)}
               </Text>
             </View>
           )}

@@ -10,6 +10,7 @@ import { useAdminAction } from '../../hooks/useAdminAction'
 import { bountyPosts } from '../../utils/supabase/db'
 import { bountyEconomics, hunterPayout } from '../../utils/bounty'
 import type { BountyView } from '../../hooks/useBountyBoardData'
+import { formatPins } from '../../utils/formatting'
 
 interface Props {
   // Mount conditionally so it resets between opens. Each action → RPC → toast +
@@ -100,15 +101,15 @@ export default function BountyAdminActionModal({ bounty: b, onClose, onDone }: P
           />
 
           <View style={styles.previewCard}>
-            <View style={styles.kv}><Text style={styles.muted}>Sponsor wins → sponsor keeps</Text><Text style={styles.kvValue}>{econ.sponsorTakeOnWin.toLocaleString()}</Text></View>
+            <View style={styles.kv}><Text style={styles.muted}>Sponsor wins → sponsor keeps</Text><Text style={styles.kvValue}>{formatPins(econ.sponsorTakeOnWin)}</Text></View>
             {b.hunters.map(h => (
               <View key={h.id} style={styles.kv}>
                 <Text style={styles.muted}>Hunters win → {h.playerName ?? `Hunter #${h.entryNumber}`}</Text>
-                <Text style={styles.kvValue}>{hunterPayout(h.stakeAmount, b.rewardPerHunter).toLocaleString()}</Text>
+                <Text style={styles.kvValue}>{formatPins(hunterPayout(h.stakeAmount, b.rewardPerHunter))}</Text>
               </View>
             ))}
             {b.bountyType === 'house_bounty' && (
-              <View style={styles.kv}><Text style={styles.muted}>House subsidy (hunter win)</Text><Text style={styles.kvValue}>{econ.totalReward.toLocaleString()}</Text></View>
+              <View style={styles.kv}><Text style={styles.muted}>House subsidy (hunter win)</Text><Text style={styles.kvValue}>{formatPins(econ.totalReward)}</Text></View>
             )}
           </View>
 

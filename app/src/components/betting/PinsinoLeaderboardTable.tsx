@@ -2,6 +2,7 @@ import { View, Text, TouchableOpacity, StyleSheet } from 'react-native'
 import { colors, fonts, radius } from '../../theme'
 import { LeaderboardEntry } from '../../hooks/usePinsinoData'
 import EmptyCard from '../ui/EmptyCard'
+import { formatPins } from '../../utils/formatting'
 
 type Props = {
   leaderboard: LeaderboardEntry[]
@@ -67,9 +68,9 @@ export default function PinsinoLeaderboardTable({
             </Text>
             {!isSummary && (
               <>
-                <Text style={styles.sbBalance}>{p.balance.toLocaleString()}</Text>
-                <Text style={styles.sbWager}>{p.openAction > 0 ? p.openAction.toLocaleString() : ''}</Text>
-                <Text style={styles.sbDebt}>{p.debt > 0 ? `−${p.debt.toLocaleString()}` : ''}</Text>
+                <Text style={styles.sbBalance}>{formatPins(p.balance)}</Text>
+                <Text style={styles.sbWager}>{p.openAction > 0 ? formatPins(p.openAction) : ''}</Text>
+                <Text style={styles.sbDebt}>{p.debt > 0 ? `−${formatPins(p.debt)}` : ''}</Text>
               </>
             )}
             <Text
@@ -79,7 +80,7 @@ export default function PinsinoLeaderboardTable({
                 p.netWorth < 0 && styles.sbNetNegative,
               ]}
             >
-              {p.netWorth.toLocaleString()}
+              {formatPins(p.netWorth)}
             </Text>
           </TouchableOpacity>
         )

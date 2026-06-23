@@ -9,6 +9,7 @@ import LineDuelLines from './LineDuelLines'
 import GamePicker from '../ui/GamePicker'
 import { PVP_MIN_STAKE, CONTRACT_TYPE_LABEL, formatHandicap, sanitizeHandicap } from '../../utils/pvp'
 import type { PvpChallengeView } from '../../hooks/usePvpData'
+import { formatPins } from '../../utils/formatting'
 
 // Names in this sheet sit in tight spots (a column header above an input, inline
 // labels) where a full name wraps and displaces the fields — use the first name only.
@@ -174,7 +175,7 @@ export default function PvpCounterModal({ challenge: c, viewerId, balance, onClo
         placeholderTextColor={colors.muted2}
         maxLength={7}
       />
-      <Text style={styles.help}>Balance: {balance.toLocaleString()} pins</Text>
+      <Text style={styles.help}>Balance: {formatPins(balance)} pins</Text>
 
       {customStakes && (
         <>
@@ -258,7 +259,7 @@ export default function PvpCounterModal({ challenge: c, viewerId, balance, onClo
 
       <View style={styles.potRow}>
         <Text style={styles.potLabel}>New pot (winner takes all)</Text>
-        <Text style={styles.potValue}>{pot.toLocaleString()} pins</Text>
+        <Text style={styles.potValue}>{formatPins(pot)} pins</Text>
       </View>
     </BottomSheet>
   )

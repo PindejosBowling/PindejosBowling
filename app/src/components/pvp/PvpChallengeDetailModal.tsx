@@ -17,6 +17,7 @@ import { seasons, pinLedger, pvpChallenges } from '../../utils/supabase/db'
 import { CONTRACT_TYPE_LABEL, CONTRACT_TYPE_RULE, STATUS_LABEL, statusKind, formatStakes, isAsymmetricStakes, formatHandicap } from '../../utils/pvp'
 import { PinsinoStackParamList } from '../../navigation/types'
 import EmptyCard from '../ui/EmptyCard'
+import { formatPins } from '../../utils/formatting'
 
 type Nav = NativeStackNavigationProp<PinsinoStackParamList>
 
@@ -178,22 +179,22 @@ export default function PvpChallengeDetailModal({ challengeId, onClose, onChange
                 <View style={styles.termCell}>
                   <Text style={styles.termLabel}>{asymmetric ? 'STAKES' : 'STAKE EACH'}</Text>
                   <Text style={asymmetric ? styles.termValueSm : styles.termValue}>
-                    {asymmetric ? formatStakes(c.creatorStake, c.counterpartyStake) : c.creatorStake.toLocaleString()}
+                    {asymmetric ? formatStakes(c.creatorStake, c.counterpartyStake) : formatPins(c.creatorStake)}
                   </Text>
                 </View>
                 <View style={styles.termCell}>
                   <Text style={styles.termLabel}>POT</Text>
-                  <Text style={styles.termValueAccent}>{c.totalPot.toLocaleString()}</Text>
+                  <Text style={styles.termValueAccent}>{formatPins(c.totalPot)}</Text>
                 </View>
                 <View style={styles.termCell}>
                   <Text style={styles.termLabel}>WINNER GETS</Text>
-                  <Text style={styles.termValueAccent}>{c.payoutAmount.toLocaleString()}</Text>
+                  <Text style={styles.termValueAccent}>{formatPins(c.payoutAmount)}</Text>
                 </View>
               </View>
 
               {asymmetric ? (
                 <Text style={styles.sides}>
-                  Stakes — {c.creatorName}: {c.creatorStake.toLocaleString()} · {c.counterpartyName ?? 'Taker'}: {c.counterpartyStake.toLocaleString()}
+                  Stakes — {c.creatorName}: {formatPins(c.creatorStake)} · {c.counterpartyName ?? 'Taker'}: {formatPins(c.counterpartyStake)}
                 </Text>
               ) : null}
 
@@ -309,7 +310,7 @@ export default function PvpChallengeDetailModal({ challengeId, onClose, onChange
                     <View key={e.id} style={[styles.ledgerRow, i < ledger.length - 1 && styles.offerBorder]}>
                       <Text style={styles.ledgerType}>{LEDGER_LABEL[e.type] ?? e.type.toUpperCase()}</Text>
                       <Text style={[styles.ledgerAmt, { color: e.amount >= 0 ? colors.success : colors.danger }]}>
-                        {e.amount >= 0 ? '+' : ''}{e.amount.toLocaleString()}
+                        {e.amount >= 0 ? '+' : ''}{formatPins(e.amount)}
                       </Text>
                     </View>
                   ))}

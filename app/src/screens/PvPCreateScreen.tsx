@@ -26,6 +26,7 @@ import {
   formatHandicap, sanitizeHandicap,
 } from '../utils/pvp'
 import { PinsinoStackParamList } from '../navigation/types'
+import { formatPins } from '../utils/formatting'
 
 type Nav = NativeStackNavigationProp<PinsinoStackParamList>
 type Rt = RouteProp<PinsinoStackParamList, 'PvPCreate'>
@@ -427,7 +428,7 @@ export default function PvPCreateScreen() {
           placeholderTextColor={colors.muted2}
           maxLength={7}
         />
-        <Text style={styles.helpText}>Balance: {balance.toLocaleString()} pins</Text>
+        <Text style={styles.helpText}>Balance: {formatPins(balance)} pins</Text>
 
         {customStakes && (
           <>
@@ -491,21 +492,21 @@ export default function PvPCreateScreen() {
           )}
           <View style={styles.confirmRow}>
             <Text style={styles.confirmLabel}>Your stake</Text>
-            <Text style={styles.confirmValue}>{validMyStake ? stakeNum.toLocaleString() : '—'} pins</Text>
+            <Text style={styles.confirmValue}>{validMyStake ? formatPins(stakeNum) : '—'} pins</Text>
           </View>
           {customStakes && (
             <View style={styles.confirmRow}>
               <Text style={styles.confirmLabel}>Opponent's stake</Text>
-              <Text style={styles.confirmValue}>{validOppStake ? oppStakeNum.toLocaleString() : '—'} pins</Text>
+              <Text style={styles.confirmValue}>{validOppStake ? formatPins(oppStakeNum) : '—'} pins</Text>
             </View>
           )}
           <View style={styles.confirmRow}>
             <Text style={styles.confirmLabel}>Total pot</Text>
-            <Text style={styles.confirmValueAccent}>{pot.toLocaleString()} pins</Text>
+            <Text style={styles.confirmValueAccent}>{formatPins(pot)} pins</Text>
           </View>
           <View style={styles.confirmRow}>
             <Text style={styles.confirmLabel}>Winner's payout</Text>
-            <Text style={styles.confirmValueAccent}>{pot.toLocaleString()} pins</Text>
+            <Text style={styles.confirmValueAccent}>{formatPins(pot)} pins</Text>
           </View>
           <Text style={styles.confirmRule}>{CONTRACT_TYPE_RULE[contractType]}</Text>
           <Text style={styles.confirmNote}>

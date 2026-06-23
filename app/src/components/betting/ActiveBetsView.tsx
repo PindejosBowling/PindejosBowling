@@ -5,6 +5,7 @@ import BetRow from './BetRow'
 import { resultBadge, betReturnText } from '../../utils/bets'
 import { marketGroup, type BetView, type LineGroup } from '../../hooks/usePinsinoData'
 import EmptyCard from '../ui/EmptyCard'
+import { formatPins } from '../../utils/formatting'
 
 interface ActiveBetsViewProps {
   // This week's still-pending bets (settled ones belong in SettledBetsView).
@@ -93,7 +94,7 @@ export default function ActiveBetsView({
         </View>
         <View style={styles.summaryDivider} />
         <View style={styles.summaryItem}>
-          <Text style={styles.summaryValue}>{totalWagered.toLocaleString()}</Text>
+          <Text style={styles.summaryValue}>{formatPins(totalWagered)}</Text>
           <Text style={styles.summaryLabel}>PINS WAGERED</Text>
         </View>
         <View style={styles.summaryDivider} />

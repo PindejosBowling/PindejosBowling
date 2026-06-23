@@ -11,6 +11,7 @@ import { useAuthStore } from '../stores/authStore'
 import { useUiStore } from '../stores/uiStore'
 import { seasons, loans, loanLedger } from '../utils/supabase/db'
 import EmptyCard from '../components/ui/EmptyCard'
+import { formatPins } from '../utils/formatting'
 
 interface AdminLoanRow {
   loanId: string
@@ -125,7 +126,7 @@ export default function LoanSharkAdminScreen() {
                     <Text style={styles.paidBadgeText}>Paid Off</Text>
                   </View>
                 ) : (
-                  <Text style={styles.outstanding}>−{r.outstanding.toLocaleString()}</Text>
+                  <Text style={styles.outstanding}>−{formatPins(r.outstanding)}</Text>
                 )}
                 <TouchableOpacity
                   style={styles.cancelBtn}

@@ -9,6 +9,7 @@ import { useAdminAction } from '../../hooks/useAdminAction'
 import { pvpChallenges } from '../../utils/supabase/db'
 import { CONTRACT_TYPE_LABEL, STATUS_LABEL } from '../../utils/pvp'
 import type { PvpChallengeView } from '../../hooks/usePvpData'
+import { formatPins } from '../../utils/formatting'
 
 interface Props {
   // Mount conditionally so it resets between opens. Each action → RPC → toast +
@@ -33,7 +34,7 @@ export default function PvpAdminActionModal({ challenge: c, onClose, onDone }: P
   return (
     <BottomSheet
       title={(c.contractType === 'custom' && c.customTitle) || CONTRACT_TYPE_LABEL[c.contractType] || 'Challenge'}
-      subtitle={`${c.creatorName} vs ${c.counterpartyName ?? 'Open'} · ${(STATUS_LABEL[c.status] ?? c.status).toUpperCase()} · Pot ${c.totalPot.toLocaleString()}`}
+      subtitle={`${c.creatorName} vs ${c.counterpartyName ?? 'Open'} · ${(STATUS_LABEL[c.status] ?? c.status).toUpperCase()} · Pot ${formatPins(c.totalPot)}`}
       onClose={onClose}
       busy={saving}
       keyboardAvoiding

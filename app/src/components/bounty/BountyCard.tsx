@@ -2,6 +2,7 @@ import { View, Text, TouchableOpacity, StyleSheet } from 'react-native'
 import { colors, fonts, radius } from '../../theme'
 import { formatCloseTime } from '../../utils/bounty'
 import type { BountyView } from '../../hooks/useBountyBoardData'
+import { formatPins } from '../../utils/formatting'
 
 interface Props {
   bounty: BountyView
@@ -36,11 +37,11 @@ export default function BountyCard({ bounty: b, viewerId, onPress, manageHint }:
 
       <View style={styles.amountRow}>
         <View style={styles.amountCell}>
-          <Text style={styles.amountValue}>{b.hunterStakeAmount.toLocaleString()}</Text>
+          <Text style={styles.amountValue}>{formatPins(b.hunterStakeAmount)}</Text>
           <Text style={styles.amountLabel}>STAKE</Text>
         </View>
         <View style={styles.amountCell}>
-          <Text style={styles.amountValue}>+{b.rewardPerHunter.toLocaleString()}</Text>
+          <Text style={styles.amountValue}>+{formatPins(b.rewardPerHunter)}</Text>
           <Text style={styles.amountLabel}>REWARD EACH</Text>
         </View>
         <View style={styles.amountCell}>
@@ -56,7 +57,7 @@ export default function BountyCard({ bounty: b, viewerId, onPress, manageHint }:
         <Text style={[styles.nextTerms, b.slotsRemaining === 0 && styles.full]}>
           {b.slotsRemaining === 0
             ? 'Full — no slots left'
-            : `Every hunter wins +${b.rewardPerHunter.toLocaleString()} · ${b.slotsRemaining} slot${b.slotsRemaining === 1 ? '' : 's'} left`}
+            : `Every hunter wins +${formatPins(b.rewardPerHunter)} · ${b.slotsRemaining} slot${b.slotsRemaining === 1 ? '' : 's'} left`}
         </Text>
       ) : null}
     </TouchableOpacity>

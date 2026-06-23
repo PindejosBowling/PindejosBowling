@@ -13,6 +13,7 @@ import { useAuthStore } from '../stores/authStore'
 import { formatCountdown } from '../utils/auction'
 import { formatCloseTime } from '../utils/bounty'
 import { PinsinoStackParamList } from '../navigation/types'
+import { formatPins } from '../utils/formatting'
 
 type Route = RouteProp<PinsinoStackParamList, 'AuctionDetail'>
 
@@ -128,7 +129,7 @@ export default function AuctionDetailScreen() {
             </View>
           ))}
           <View style={styles.ruleDivider} />
-          <View style={styles.kv}><Text style={styles.muted}>Minimum bid</Text><Text style={styles.kvValue}>{a.minimumBid.toLocaleString()} pins</Text></View>
+          <View style={styles.kv}><Text style={styles.muted}>Minimum bid</Text><Text style={styles.kvValue}>{formatPins(a.minimumBid)} pins</Text></View>
           <View style={styles.kv}><Text style={styles.muted}>Opens</Text><Text style={styles.kvValue}>{formatCloseTime(a.opensAt)}</Text></View>
           <View style={styles.kv}><Text style={styles.muted}>Closes</Text><Text style={styles.kvValue}>{formatCloseTime(a.closesAt)}</Text></View>
         </View>
@@ -140,7 +141,7 @@ export default function AuctionDetailScreen() {
             <TouchableOpacity style={styles.card} onPress={() => setBidRevealed(r => !r)} activeOpacity={0.8}>
               <View style={styles.kv}>
                 <Text style={styles.muted}>{bidRevealed ? 'Your pledge' : 'Tap to reveal'}</Text>
-                <Text style={styles.kvValue}>{bidRevealed ? `${a.myBidAmount.toLocaleString()} pins` : '•••'}</Text>
+                <Text style={styles.kvValue}>{bidRevealed ? `${formatPins(a.myBidAmount)} pins` : '•••'}</Text>
               </View>
             </TouchableOpacity>
           </>
@@ -158,13 +159,13 @@ export default function AuctionDetailScreen() {
                   a.winners.map((w, i) => (
                     <View key={i} style={styles.kv}>
                       <Text style={styles.muted}>Won by {w.playerName}</Text>
-                      <Text style={styles.kvValue}>{w.price.toLocaleString()} pins</Text>
+                      <Text style={styles.kvValue}>{formatPins(w.price)} pins</Text>
                     </View>
                   ))
                 ) : (
                   <View style={styles.kv}>
                     <Text style={styles.muted}>Won by {a.winnerName}</Text>
-                    <Text style={styles.kvValue}>{a.winningPrice?.toLocaleString()} pins</Text>
+                    <Text style={styles.kvValue}>{formatPins(a.winningPrice ?? 0)} pins</Text>
                   </View>
                 )
               ) : (
@@ -178,7 +179,7 @@ export default function AuctionDetailScreen() {
               {a.bounces.map((b, i) => (
                 <View key={i} style={styles.kv}>
                   <Text style={styles.muted}>💸 {b.playerName}'s check bounced</Text>
-                  <Text style={styles.kvValue}>-{b.feePaid.toLocaleString()} pins</Text>
+                  <Text style={styles.kvValue}>-{formatPins(b.feePaid)} pins</Text>
                 </View>
               ))}
             </View>

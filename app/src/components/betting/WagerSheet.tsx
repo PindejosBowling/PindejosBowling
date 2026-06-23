@@ -3,6 +3,7 @@ import { Text, TextInput, StyleSheet } from 'react-native'
 import { colors, fonts, radius } from '../../theme'
 import BottomSheet from '../ui/BottomSheet'
 import Button from '../ui/Button'
+import { formatPins } from '../../utils/formatting'
 
 interface WagerSheetProps {
   title: string
@@ -81,7 +82,7 @@ export default function WagerSheet({
       <Text style={styles.wagerHint}>
         Balance: {balance} pins  ·  Min: 10
         {!isNaN(wagerNum)
-          ? `  ·  To win: ${Math.floor(wagerNum * odds).toLocaleString()}`
+          ? `  ·  To win: ${formatPins(Math.floor(wagerNum * odds))}`
           : ''}
       </Text>
       <Text style={styles.warning}>⚠ Bets can't be canceled once placed.</Text>
