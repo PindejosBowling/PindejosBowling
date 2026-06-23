@@ -4,6 +4,7 @@ import { colors } from '../theme'
 import { PinsinoStackParamList } from './types'
 
 import PinsinoScreen from '../screens/PinsinoScreen'
+import PinsinoHelpScreen from '../screens/PinsinoHelpScreen'
 import PinsinoLeaderboardScreen from '../screens/PinsinoLeaderboardScreen'
 import SportsbookScreen from '../screens/SportsbookScreen'
 import LoanSharkScreen from '../screens/LoanSharkScreen'
@@ -33,6 +34,7 @@ export default function PinsinoStackNavigator() {
       }}
     >
       <Stack.Screen name="PinsinoHome" component={PinsinoScreen} options={{ title: 'Pinsino' }} />
+      <Stack.Screen name="PinsinoHelp" component={PinsinoHelpScreen} options={{ title: 'How It Works' }} />
       <Stack.Screen name="PinsinoLeaderboard" component={PinsinoLeaderboardScreen} options={{ title: 'Leaderboard' }} />
       <Stack.Screen name="Sportsbook" component={SportsbookScreen} options={{ title: 'Sportsbook' }} />
       <Stack.Screen name="LoanShark" component={LoanSharkScreen} options={{ title: 'Loan Shark' }} />

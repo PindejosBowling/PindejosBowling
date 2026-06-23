@@ -74,7 +74,7 @@ export default function PinsinoScreen() {
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <PinsinoNoirBackdrop />
-      <AppHeader artworkToggle />
+      <AppHeader artworkToggle onHelp={() => navigation.navigate('PinsinoHelp')} />
       {!artworkReveal && (
       <ScrollView
         contentContainerStyle={styles.content}
