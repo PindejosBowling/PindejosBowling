@@ -170,7 +170,7 @@ export default function BountyDetailScreen() {
                     {LEDGER_LABEL[r.type] ?? r.type} · {r.isHouse ? 'House' : (r.playerName ?? 'Player')}
                   </Text>
                   <Text style={[styles.kvValue, { color: r.amount >= 0 ? colors.success : colors.danger }]}>
-                    {r.amount >= 0 ? '+' : ''}{formatPins(r.amount)}
+                    {formatPins(r.amount, { signed: true })}
                   </Text>
                 </View>
               ))}

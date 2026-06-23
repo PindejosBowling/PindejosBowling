@@ -197,7 +197,7 @@ export default function LoanSharkScreen() {
                         )}
                       </View>
                       <Text style={[styles.historyAmount, e.amount < 0 ? styles.amountNeg : styles.amountPos]}>
-                        {e.amount > 0 ? '+' : ''}{formatPins(e.amount)}
+                        {formatPins(e.amount, { signed: true })}
                       </Text>
                     </View>
                   ))

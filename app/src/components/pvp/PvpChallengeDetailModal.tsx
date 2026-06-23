@@ -310,7 +310,7 @@ export default function PvpChallengeDetailModal({ challengeId, onClose, onChange
                     <View key={e.id} style={[styles.ledgerRow, i < ledger.length - 1 && styles.offerBorder]}>
                       <Text style={styles.ledgerType}>{LEDGER_LABEL[e.type] ?? e.type.toUpperCase()}</Text>
                       <Text style={[styles.ledgerAmt, { color: e.amount >= 0 ? colors.success : colors.danger }]}>
-                        {e.amount >= 0 ? '+' : ''}{formatPins(e.amount)}
+                        {formatPins(e.amount, { signed: true })}
                       </Text>
                     </View>
                   ))}
