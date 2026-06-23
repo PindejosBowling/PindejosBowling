@@ -31,6 +31,7 @@ export type StandingsStackParamList = {
 
 export type PinsinoStackParamList = {
   PinsinoHome: undefined
+  PinsinoHelp: undefined
   PinsinoLeaderboard: undefined
   Sportsbook: undefined
   LoanShark: undefined
