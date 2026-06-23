@@ -7,11 +7,15 @@ import { signed } from './formatting'
 // `signed` now lives in utils/formatting.ts; re-exported here for back-compat.
 export { signed }
 
-// Badge from the bet's own status (the target model resolves outcome per bet).
+// Badge from the bet's own status (the target model resolves outcome per bet),
+// or from an individual leg's result (which adds 'crutched').
 export function resultBadge(status: string) {
   if (status === 'push') return { label: 'PUSH', color: colors.muted }
   if (status === 'won') return { label: 'WON', color: colors.success }
   if (status === 'lost') return { label: 'LOST', color: colors.danger }
+  // A leg that lost but was cancelled by a Winner's Crutch (dropped from the
+  // payout, like a push). Bet status is never 'crutched' — only a leg's result.
+  if (status === 'crutched') return { label: 'SAVED 🩼', color: colors.muted }
   return null
 }
 

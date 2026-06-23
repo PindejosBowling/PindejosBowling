@@ -61,6 +61,7 @@ const EVENT_IMPORTANCE: Record<string, Importance> = {
   sportsbook_big_ticket_placed: 'highlight',
   sportsbook_big_win: 'highlight',
   sportsbook_parlay_hit: 'highlight',
+  sportsbook_crutch_save: 'highlight',
   loan_shark_loan_repaid: 'highlight',
   pvp_challenge_settled: 'highlight',
   bounty_board_bounty_posted: 'highlight',
@@ -190,6 +191,14 @@ export function renderFeedEvent(row: FeedEventView): FeedRenderParts {
         ...meta,
         line: `${actorOf(row)} hit a ${num(p.legs)}-leg parlay and won ${num(p.payout).toLocaleString()} pins.`,
         amount: { value: num(p.payout), tone: 'positive', label: 'WON' },
+      }
+
+    case 'sportsbook.crutch_save':
+      // The Winner's Crutch cancelled the one losing leg and salvaged a payout.
+      return {
+        ...meta,
+        line: `${actorOf(row)}'s parlay missed by a leg — the Winner's Crutch 🩼 salvaged ${num(p.payout).toLocaleString()} pins.`,
+        amount: { value: num(p.payout), tone: 'positive', label: 'SAVED' },
       }
 
     case 'sportsbook.weekly_house_result': {
