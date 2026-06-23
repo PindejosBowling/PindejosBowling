@@ -579,10 +579,12 @@ export const bets = {
   // insuranceItemId attaches a Golden Ticket (consumed at placement, win or
   // lose; if the bet loses the stake refunds at settlement). crutchItemId
   // attaches a Winner's Crutch (parlays only; cancels the lone losing leg and
-  // pays the survivors at reduced odds). Both are spent at placement and stack.
-  place: (selectionIds: string[], stake: number, customLineId?: string, insuranceItemId?: string, crutchItemId?: string) =>
+  // pays the survivors at reduced odds). boostItemId attaches an Energy Drink
+  // (any bet; on a win the House pays a bonus = profit × boost_pct, doubling the
+  // profit 1:1 → 2:1). All three are spent at placement and stack.
+  place: (selectionIds: string[], stake: number, customLineId?: string, insuranceItemId?: string, crutchItemId?: string, boostItemId?: string) =>
     // undefined is dropped from the RPC payload → the param's NULL default applies.
-    supabase.rpc('place_house_bet', { p_selection_ids: selectionIds, p_stake: stake, p_custom_line_id: customLineId, p_insurance_item_id: insuranceItemId, p_crutch_item_id: crutchItemId }),
+    supabase.rpc('place_house_bet', { p_selection_ids: selectionIds, p_stake: stake, p_custom_line_id: customLineId, p_insurance_item_id: insuranceItemId, p_crutch_item_id: crutchItemId, p_boost_item_id: boostItemId }),
   // Admin: total undo of a placed bet (removes ledger rows + bet, re-opens market).
   cancel: (betId: string) =>
     supabase.rpc('cancel_bet', { p_bet_id: betId }),
@@ -1082,7 +1084,7 @@ export const inventoryItems = {
   // grouping/sorting is pure compute (utils/auction.ts groupInventory).
   listByPlayerSeason: (playerId: string, seasonId: string) =>
     supabase.from('player_inventory_items')
-      .select('*, item_catalog(key, name, description, icon, effect_type, activation_mode)')
+      .select('*, item_catalog(key, name, description, icon, effect_type, effect_params, activation_mode)')
       .eq('player_id', playerId)
       .eq('season_id', seasonId)
       .order('granted_at', { ascending: false }),

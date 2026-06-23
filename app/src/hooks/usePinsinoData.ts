@@ -227,6 +227,10 @@ export interface BetView {
   customLineTitle: string | null
   customLineDescription: string | null
   customLineCategory: string | null
+  // The inventory item attached as an Energy Drink (odds_boost) at placement, if
+  // any. Non-null ⇒ a winning bet was paid a House-funded profit-doubling bonus
+  // (its own bet_odds_boost ledger row). Surfaced in the Bet Details overlay.
+  boostItemId: string | null
 }
 
 // One row in the season pin-balance scoreboard (Titans of Pindustry).
@@ -297,6 +301,7 @@ export function normalizeBet(b: any): BetView {
     customLineTitle: b.custom_line_title ?? null,
     customLineDescription: b.custom_line_description ?? null,
     customLineCategory: b.custom_line_category ?? null,
+    boostItemId: b.boost_item_id ?? null,
   }
 }
 

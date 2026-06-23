@@ -136,7 +136,8 @@ CREATE TABLE bets (
   custom_line_category text,
   week_id uuid,
   insurance_item_id uuid,
-  crutch_item_id uuid
+  crutch_item_id uuid,
+  boost_item_id uuid
 );
 
 CREATE TABLE board_posts (
@@ -681,6 +682,8 @@ ALTER TABLE bet_selections ADD CONSTRAINT bet_selections_pkey PRIMARY KEY (id);
 
 ALTER TABLE bet_selections ADD CONSTRAINT bet_selections_result_check CHECK ((result = ANY (ARRAY['won'::text, 'lost'::text, 'push'::text, 'void'::text])));
 
+ALTER TABLE bets ADD CONSTRAINT bets_boost_item_id_fkey FOREIGN KEY (boost_item_id) REFERENCES player_inventory_items(id);
+
 ALTER TABLE bets ADD CONSTRAINT bets_crutch_item_id_fkey FOREIGN KEY (crutch_item_id) REFERENCES player_inventory_items(id);
 
 ALTER TABLE bets ADD CONSTRAINT bets_custom_line_id_fkey FOREIGN KEY (custom_line_id) REFERENCES custom_lines(id) ON DELETE SET NULL;
@@ -787,7 +790,7 @@ ALTER TABLE games ADD CONSTRAINT games_team_b_id_fkey FOREIGN KEY (team_b_id) RE
 
 ALTER TABLE item_catalog ADD CONSTRAINT item_catalog_activation_mode_check CHECK ((activation_mode = ANY (ARRAY['attach_to_bet'::text, 'passive'::text, 'admin_honored'::text])));
 
-ALTER TABLE item_catalog ADD CONSTRAINT item_catalog_effect_type_check CHECK ((effect_type = ANY (ARRAY['bet_insurance'::text, 'parlay_crutch'::text, 'cosmetic'::text, 'access_pass'::text, 'custom'::text])));
+ALTER TABLE item_catalog ADD CONSTRAINT item_catalog_effect_type_check CHECK ((effect_type = ANY (ARRAY['bet_insurance'::text, 'parlay_crutch'::text, 'odds_boost'::text, 'cosmetic'::text, 'access_pass'::text, 'custom'::text])));
 
 ALTER TABLE item_catalog ADD CONSTRAINT item_catalog_key_key UNIQUE (key);
 
@@ -861,7 +864,7 @@ ALTER TABLE pin_ledger ADD CONSTRAINT pin_ledger_pvp_ledger_id_fkey FOREIGN KEY 
 
 ALTER TABLE pin_ledger ADD CONSTRAINT pin_ledger_season_id_fkey FOREIGN KEY (season_id) REFERENCES seasons(id) ON DELETE CASCADE;
 
-ALTER TABLE pin_ledger ADD CONSTRAINT pin_ledger_type_check CHECK ((type = ANY (ARRAY['bonus'::text, 'score_credit'::text, 'bet_stake'::text, 'bet_payout'::text, 'bet_refund'::text, 'loan_issued'::text, 'loan_manual_repayment'::text, 'loan_weekly_garnishment'::text, 'loan_season_close_settlement'::text, 'pvp_stake'::text, 'pvp_payout'::text, 'pvp_refund'::text, 'pvp_rake'::text, 'bounty_sponsor_stake'::text, 'bounty_hunter_stake'::text, 'bounty_payout'::text, 'auction_purchase'::text, 'auction_check_bounce'::text, 'bet_insurance_refund'::text])));
+ALTER TABLE pin_ledger ADD CONSTRAINT pin_ledger_type_check CHECK ((type = ANY (ARRAY['bonus'::text, 'score_credit'::text, 'bet_stake'::text, 'bet_payout'::text, 'bet_refund'::text, 'loan_issued'::text, 'loan_manual_repayment'::text, 'loan_weekly_garnishment'::text, 'loan_season_close_settlement'::text, 'pvp_stake'::text, 'pvp_payout'::text, 'pvp_refund'::text, 'pvp_rake'::text, 'bounty_sponsor_stake'::text, 'bounty_hunter_stake'::text, 'bounty_payout'::text, 'auction_purchase'::text, 'auction_check_bounce'::text, 'bet_insurance_refund'::text, 'bet_odds_boost'::text])));
 
 ALTER TABLE pin_ledger ADD CONSTRAINT pin_ledger_week_id_fkey FOREIGN KEY (week_id) REFERENCES weeks(id) ON DELETE SET NULL;
 
@@ -2128,6 +2131,10 @@ BEGIN
      SET consumed_at = NULL
    WHERE id = (SELECT crutch_item_id FROM public.bets WHERE id = p_bet_id)
      AND consumed_at IS NOT NULL;
+  UPDATE public.player_inventory_items
+     SET consumed_at = NULL
+   WHERE id = (SELECT boost_item_id FROM public.bets WHERE id = p_bet_id)
+     AND consumed_at IS NOT NULL;
 
   DELETE FROM public.pin_ledger WHERE bet_id = p_bet_id;
   DELETE FROM public.bets WHERE id = p_bet_id;
@@ -3199,20 +3206,22 @@ CREATE OR REPLACE FUNCTION public.finalize_bets_for_market(p_market_id uuid)
  SET search_path TO ''
 AS $function$
 DECLARE
-  v_bet      record;
-  v_leg      record;
-  v_odds     numeric;
-  v_payout   integer;
-  v_week_id  uuid;
-  v_share    numeric;
-  v_refund   integer;
-  v_crutched boolean;
-  v_won_legs integer;
+  v_bet       record;
+  v_leg       record;
+  v_odds      numeric;
+  v_payout    integer;
+  v_week_id   uuid;
+  v_share     numeric;
+  v_refund    integer;
+  v_crutched  boolean;
+  v_won_legs  integer;
+  v_boost_pct numeric;
+  v_bonus     integer;
 BEGIN
   SELECT week_id INTO v_week_id FROM public.bet_markets WHERE id = p_market_id;
 
   FOR v_bet IN
-    SELECT DISTINCT b.id, b.player_id, b.season_id, b.stake, b.insurance_item_id, b.crutch_item_id
+    SELECT DISTINCT b.id, b.player_id, b.season_id, b.stake, b.insurance_item_id, b.crutch_item_id, b.boost_item_id
     FROM public.bets b
     JOIN public.bet_legs       l ON l.bet_id = b.id
     JOIN public.bet_selections s ON s.id = l.selection_id
@@ -3303,6 +3312,39 @@ BEGIN
       PERFORM public.pin_ledger_double_entry(
         v_bet.player_id, v_bet.season_id, v_week_id,
         v_payout, 'bet_payout', 'Bet won', NULL, v_bet.id);
+
+      -- Energy Drink: House-funded bonus on the win = floor(profit × boost_pct),
+      -- where profit = payout - stake (boost_pct = 1.0 ⇒ profit doubled, 1:1 → 2:1).
+      -- Bet-linked + week-stamped, so archive/unarchive handle it like every other
+      -- bet movement. NOT-EXISTS guard keeps re-settlement idempotent.
+      IF v_bet.boost_item_id IS NOT NULL THEN
+        SELECT COALESCE((c.effect_params ->> 'boost_pct')::numeric, 1.0) INTO v_boost_pct
+          FROM public.player_inventory_items i
+          JOIN public.item_catalog c ON c.id = i.catalog_item_id
+         WHERE i.id = v_bet.boost_item_id;
+
+        v_bonus := FLOOR((v_payout - v_bet.stake) * COALESCE(v_boost_pct, 1.0));
+
+        IF v_bonus > 0 AND NOT EXISTS (
+          SELECT 1 FROM public.pin_ledger
+           WHERE bet_id = v_bet.id AND type = 'bet_odds_boost'
+        ) THEN
+          PERFORM public.pin_ledger_double_entry(
+            v_bet.player_id, v_bet.season_id, v_week_id,
+            v_bonus, 'bet_odds_boost', 'Energy Drink bonus', NULL, v_bet.id);
+
+          -- A boost that actually paid out → news. Deduped per (bet, event_type)
+          -- by activity_feed_unique_bet_event, so re-settlement never doubles up.
+          PERFORM public.publish_activity_event(
+            'sportsbook', 'sportsbook_boost_hit',
+            v_bet.season_id, v_week_id, v_bet.player_id, NULL, NULL,
+            v_bet.id, NULL,
+            'sportsbook.boost_hit',
+            jsonb_build_object('payout', v_payout, 'bonus', v_bonus),
+            jsonb_build_object('bet_id', v_bet.id),
+            NULL, now());
+        END IF;
+      END IF;
 
       -- The Crutch actually saved a payout → news. Deduped per (bet, event_type)
       -- by activity_feed_unique_bet_event, so re-settlement never doubles up.
@@ -3642,7 +3684,7 @@ END;
 $function$
 ;
 
-CREATE OR REPLACE FUNCTION public.place_house_bet(p_selection_ids uuid[], p_stake integer, p_custom_line_id uuid DEFAULT NULL::uuid, p_insurance_item_id uuid DEFAULT NULL::uuid, p_crutch_item_id uuid DEFAULT NULL::uuid)
+CREATE OR REPLACE FUNCTION public.place_house_bet(p_selection_ids uuid[], p_stake integer, p_custom_line_id uuid DEFAULT NULL::uuid, p_insurance_item_id uuid DEFAULT NULL::uuid, p_crutch_item_id uuid DEFAULT NULL::uuid, p_boost_item_id uuid DEFAULT NULL::uuid)
  RETURNS uuid
  LANGUAGE plpgsql
  SECURITY DEFINER
@@ -3791,12 +3833,38 @@ BEGIN
     END IF;
   END IF;
 
+  -- Energy Drink: same consume posture; its own effect_type, no leg floor (a
+  -- boost helps any winning bet, single or parlay). Spent at placement, win or
+  -- lose; the bonus is paid at settlement on a win.
+  IF p_boost_item_id IS NOT NULL THEN
+    IF NOT EXISTS (
+      SELECT 1
+        FROM public.player_inventory_items i
+        JOIN public.item_catalog c ON c.id = i.catalog_item_id
+       WHERE i.id = p_boost_item_id
+         AND c.effect_type = 'odds_boost'
+         AND c.activation_mode = 'attach_to_bet'
+    ) THEN
+      RAISE EXCEPTION 'That item is not an attachable Energy Drink';
+    END IF;
+
+    UPDATE public.player_inventory_items
+       SET consumed_at = now()
+     WHERE id = p_boost_item_id
+       AND player_id = v_player_id
+       AND season_id = v_season_id
+       AND consumed_at IS NULL;
+    IF NOT FOUND THEN
+      RAISE EXCEPTION 'Energy Drink is not usable (already spent, wrong season, or not yours)';
+    END IF;
+  END IF;
+
   INSERT INTO public.bets (player_id, season_id, week_id, stake, potential_payout, status,
                            custom_line_id, custom_line_title, custom_line_description, custom_line_category,
-                           insurance_item_id, crutch_item_id)
+                           insurance_item_id, crutch_item_id, boost_item_id)
     VALUES (v_player_id, v_season_id, v_week_id, p_stake, v_payout, 'pending',
             v_line.id, v_line.title, v_line.description, v_line.category,
-            p_insurance_item_id, p_crutch_item_id)
+            p_insurance_item_id, p_crutch_item_id, p_boost_item_id)
     RETURNING id INTO v_bet_id;
 
   INSERT INTO public.bet_legs (bet_id, selection_id, side, odds_at_placement, line_at_placement)
