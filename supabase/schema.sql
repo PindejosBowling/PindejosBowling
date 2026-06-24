@@ -77,6 +77,19 @@ CREATE TABLE auctions (
   updated_at timestamp with time zone NOT NULL DEFAULT now()
 );
 
+CREATE TABLE bet_haunts (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  bet_id uuid NOT NULL,
+  haunter_player_id uuid NOT NULL,
+  inventory_item_id uuid NOT NULL,
+  season_id uuid NOT NULL,
+  week_id uuid,
+  attached_at timestamp with time zone NOT NULL DEFAULT now(),
+  payout_amount integer,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now()
+);
+
 CREATE TABLE bet_legs (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   bet_id uuid NOT NULL,
@@ -642,6 +655,20 @@ ALTER TABLE auctions ADD CONSTRAINT auctions_winner_player_id_fkey FOREIGN KEY (
 
 ALTER TABLE auctions ADD CONSTRAINT auctions_winning_bid_id_fkey FOREIGN KEY (winning_bid_id) REFERENCES auction_bids(id) ON DELETE SET NULL;
 
+ALTER TABLE bet_haunts ADD CONSTRAINT bet_haunts_bet_id_fkey FOREIGN KEY (bet_id) REFERENCES bets(id) ON DELETE CASCADE;
+
+ALTER TABLE bet_haunts ADD CONSTRAINT bet_haunts_bet_id_haunter_player_id_key UNIQUE (bet_id, haunter_player_id);
+
+ALTER TABLE bet_haunts ADD CONSTRAINT bet_haunts_haunter_player_id_fkey FOREIGN KEY (haunter_player_id) REFERENCES players(id) ON DELETE CASCADE;
+
+ALTER TABLE bet_haunts ADD CONSTRAINT bet_haunts_inventory_item_id_fkey FOREIGN KEY (inventory_item_id) REFERENCES player_inventory_items(id);
+
+ALTER TABLE bet_haunts ADD CONSTRAINT bet_haunts_pkey PRIMARY KEY (id);
+
+ALTER TABLE bet_haunts ADD CONSTRAINT bet_haunts_season_id_fkey FOREIGN KEY (season_id) REFERENCES seasons(id) ON DELETE CASCADE;
+
+ALTER TABLE bet_haunts ADD CONSTRAINT bet_haunts_week_id_fkey FOREIGN KEY (week_id) REFERENCES weeks(id) ON DELETE SET NULL;
+
 ALTER TABLE bet_legs ADD CONSTRAINT bet_legs_bet_id_fkey FOREIGN KEY (bet_id) REFERENCES bets(id) ON DELETE CASCADE;
 
 ALTER TABLE bet_legs ADD CONSTRAINT bet_legs_bet_id_selection_id_key UNIQUE (bet_id, selection_id);
@@ -788,9 +815,9 @@ ALTER TABLE games ADD CONSTRAINT games_team_a_id_fkey FOREIGN KEY (team_a_id) RE
 
 ALTER TABLE games ADD CONSTRAINT games_team_b_id_fkey FOREIGN KEY (team_b_id) REFERENCES teams(id) ON DELETE CASCADE;
 
-ALTER TABLE item_catalog ADD CONSTRAINT item_catalog_activation_mode_check CHECK ((activation_mode = ANY (ARRAY['attach_to_bet'::text, 'passive'::text, 'admin_honored'::text])));
+ALTER TABLE item_catalog ADD CONSTRAINT item_catalog_activation_mode_check CHECK ((activation_mode = ANY (ARRAY['attach_to_bet'::text, 'attach_to_foreign_bet'::text, 'passive'::text, 'admin_honored'::text])));
 
-ALTER TABLE item_catalog ADD CONSTRAINT item_catalog_effect_type_check CHECK ((effect_type = ANY (ARRAY['bet_insurance'::text, 'parlay_crutch'::text, 'odds_boost'::text, 'cosmetic'::text, 'access_pass'::text, 'custom'::text])));
+ALTER TABLE item_catalog ADD CONSTRAINT item_catalog_effect_type_check CHECK ((effect_type = ANY (ARRAY['bet_insurance'::text, 'parlay_crutch'::text, 'odds_boost'::text, 'haunt'::text, 'cosmetic'::text, 'access_pass'::text, 'custom'::text])));
 
 ALTER TABLE item_catalog ADD CONSTRAINT item_catalog_key_key UNIQUE (key);
 
@@ -864,7 +891,7 @@ ALTER TABLE pin_ledger ADD CONSTRAINT pin_ledger_pvp_ledger_id_fkey FOREIGN KEY 
 
 ALTER TABLE pin_ledger ADD CONSTRAINT pin_ledger_season_id_fkey FOREIGN KEY (season_id) REFERENCES seasons(id) ON DELETE CASCADE;
 
-ALTER TABLE pin_ledger ADD CONSTRAINT pin_ledger_type_check CHECK ((type = ANY (ARRAY['bonus'::text, 'score_credit'::text, 'bet_stake'::text, 'bet_payout'::text, 'bet_refund'::text, 'loan_issued'::text, 'loan_manual_repayment'::text, 'loan_weekly_garnishment'::text, 'loan_season_close_settlement'::text, 'pvp_stake'::text, 'pvp_payout'::text, 'pvp_refund'::text, 'pvp_rake'::text, 'bounty_sponsor_stake'::text, 'bounty_hunter_stake'::text, 'bounty_payout'::text, 'auction_purchase'::text, 'auction_check_bounce'::text, 'bet_insurance_refund'::text, 'bet_odds_boost'::text])));
+ALTER TABLE pin_ledger ADD CONSTRAINT pin_ledger_type_check CHECK ((type = ANY (ARRAY['bonus'::text, 'score_credit'::text, 'bet_stake'::text, 'bet_payout'::text, 'bet_refund'::text, 'loan_issued'::text, 'loan_manual_repayment'::text, 'loan_weekly_garnishment'::text, 'loan_season_close_settlement'::text, 'pvp_stake'::text, 'pvp_payout'::text, 'pvp_refund'::text, 'pvp_rake'::text, 'bounty_sponsor_stake'::text, 'bounty_hunter_stake'::text, 'bounty_payout'::text, 'auction_purchase'::text, 'auction_check_bounce'::text, 'bet_insurance_refund'::text, 'bet_odds_boost'::text, 'bet_haunt_steal'::text])));
 
 ALTER TABLE pin_ledger ADD CONSTRAINT pin_ledger_week_id_fkey FOREIGN KEY (week_id) REFERENCES weeks(id) ON DELETE SET NULL;
 
@@ -1131,6 +1158,12 @@ CREATE INDEX auctions_status_opens_idx ON public.auctions USING btree (status, o
 
 CREATE INDEX auctions_winner_idx ON public.auctions USING btree (winner_player_id) WHERE (winner_player_id IS NOT NULL);
 
+CREATE INDEX bet_haunts_bet_idx ON public.bet_haunts USING btree (bet_id);
+
+CREATE INDEX bet_haunts_haunter_idx ON public.bet_haunts USING btree (haunter_player_id);
+
+CREATE INDEX bet_haunts_season_idx ON public.bet_haunts USING btree (season_id);
+
 CREATE INDEX bets_custom_line_idx ON public.bets USING btree (custom_line_id);
 
 CREATE INDEX bets_insurance_item_idx ON public.bets USING btree (insurance_item_id) WHERE (insurance_item_id IS NOT NULL);
@@ -1330,6 +1363,15 @@ ALTER TABLE auctions ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "authenticated can read auctions" ON auctions AS PERMISSIVE FOR SELECT TO authenticated
   USING (true);
+
+ALTER TABLE bet_haunts ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "haunter, admin, or revealed-on-win can read" ON bet_haunts AS PERMISSIVE FOR SELECT TO authenticated
+  USING ((( SELECT is_admin() AS is_admin) OR (haunter_player_id IN ( SELECT p.id
+   FROM players p
+  WHERE (p.user_id = ( SELECT auth.uid() AS uid)))) OR (EXISTS ( SELECT 1
+   FROM bets b
+  WHERE ((b.id = bet_haunts.bet_id) AND (b.status = 'won'::text))))));
 
 ALTER TABLE bet_legs ENABLE ROW LEVEL SECURITY;
 
@@ -2134,6 +2176,14 @@ BEGIN
   UPDATE public.player_inventory_items
      SET consumed_at = NULL
    WHERE id = (SELECT boost_item_id FROM public.bets WHERE id = p_bet_id)
+     AND consumed_at IS NOT NULL;
+
+  -- Restore every ghost's ticket too — a haunt on a cancelled bet never resolved,
+  -- so the haunter gets their Ghost back. The bet_haunts rows themselves cascade
+  -- away with the bet delete below.
+  UPDATE public.player_inventory_items
+     SET consumed_at = NULL
+   WHERE id IN (SELECT inventory_item_id FROM public.bet_haunts WHERE bet_id = p_bet_id)
      AND consumed_at IS NOT NULL;
 
   DELETE FROM public.pin_ledger WHERE bet_id = p_bet_id;
@@ -3217,6 +3267,12 @@ DECLARE
   v_won_legs  integer;
   v_boost_pct numeric;
   v_bonus     integer;
+  v_haunt_n   integer;
+  v_profit    integer;
+  v_haunt     record;
+  v_idx       integer;
+  v_cut       integer;
+  v_haunters  jsonb;
 BEGIN
   SELECT week_id INTO v_week_id FROM public.bet_markets WHERE id = p_market_id;
 
@@ -3289,7 +3345,8 @@ BEGIN
       SELECT 1 FROM public.bet_legs WHERE bet_id = v_bet.id AND result NOT IN ('push', 'void', 'crutched')
     ) THEN
       -- All legs push/void/crutched → refund the stake (double-entry). A Crutch
-      -- that removes the only loss but leaves no survivor lands here.
+      -- that removes the only loss but leaves no survivor lands here. Any haunts
+      -- get nothing (no profit existed); their tickets stay spent.
       UPDATE public.bets SET status = 'push', settled_at = now() WHERE id = v_bet.id;
       PERFORM public.pin_ledger_double_entry(
         v_bet.player_id, v_bet.season_id, v_week_id,
@@ -3309,14 +3366,75 @@ BEGIN
       UPDATE public.bets
         SET status = 'won', potential_payout = v_payout, settled_at = now()
         WHERE id = v_bet.id;
-      PERFORM public.pin_ledger_double_entry(
-        v_bet.player_id, v_bet.season_id, v_week_id,
-        v_payout, 'bet_payout', 'Bet won', NULL, v_bet.id);
+
+      SELECT count(*) INTO v_haunt_n FROM public.bet_haunts WHERE bet_id = v_bet.id;
+
+      IF v_haunt_n > 0 THEN
+        -- Haunted win: the owner keeps only their stake; the ghosts eat the profit.
+        -- Owner stake-back stays on 'bet_payout' (identical accounting/tooling).
+        PERFORM public.pin_ledger_double_entry(
+          v_bet.player_id, v_bet.season_id, v_week_id,
+          v_bet.stake, 'bet_payout', 'Bet won (haunted — stake returned)', NULL, v_bet.id);
+
+        v_profit := v_payout - v_bet.stake;
+
+        -- Split the profit across the N ghosts ordered by attached_at: each gets
+        -- floor(profit/N); the earliest r = profit mod N get +1. Owner ends at
+        -- EXACTLY stake; the books net to zero. Guard keeps re-settlement idempotent.
+        IF v_profit > 0 AND NOT EXISTS (
+          SELECT 1 FROM public.pin_ledger WHERE bet_id = v_bet.id AND type = 'bet_haunt_steal'
+        ) THEN
+          v_idx := 0;
+          FOR v_haunt IN
+            SELECT id, haunter_player_id
+              FROM public.bet_haunts
+             WHERE bet_id = v_bet.id
+             ORDER BY attached_at, id
+          LOOP
+            v_cut := v_profit / v_haunt_n;                 -- integer floor (profit > 0)
+            IF v_idx < (v_profit % v_haunt_n) THEN
+              v_cut := v_cut + 1;                          -- remainder to the earliest
+            END IF;
+            v_idx := v_idx + 1;
+
+            IF v_cut > 0 THEN
+              PERFORM public.pin_ledger_double_entry(
+                v_haunt.haunter_player_id, v_bet.season_id, v_week_id,
+                v_cut, 'bet_haunt_steal', 'Ghost in the Slip — profit stolen', NULL, v_bet.id);
+            END IF;
+            UPDATE public.bet_haunts SET payout_amount = v_cut WHERE id = v_haunt.id;
+          END LOOP;
+
+          -- One aggregate reveal per haunted win. The haunters ride in the payload
+          -- (a feed row has a single subject = the victim). Deduped per (bet,
+          -- event_type) by activity_feed_unique_bet_event → no double-up.
+          SELECT jsonb_agg(jsonb_build_object('name', p.name, 'cut', bh.payout_amount) ORDER BY bh.attached_at, bh.id)
+            INTO v_haunters
+            FROM public.bet_haunts bh
+            JOIN public.players p ON p.id = bh.haunter_player_id
+           WHERE bh.bet_id = v_bet.id;
+
+          PERFORM public.publish_activity_event(
+            'sportsbook', 'sportsbook_haunt_hit',
+            v_bet.season_id, v_week_id, NULL, v_bet.player_id, NULL,
+            v_bet.id, NULL,
+            'sportsbook.haunt_hit',
+            jsonb_build_object('payout', v_payout, 'stake', v_bet.stake, 'profit', v_profit,
+                               'ghost_count', v_haunt_n, 'haunters', v_haunters),
+            jsonb_build_object('bet_id', v_bet.id),
+            NULL, now());
+        END IF;
+      ELSE
+        -- Unhaunted win: full payout to the owner.
+        PERFORM public.pin_ledger_double_entry(
+          v_bet.player_id, v_bet.season_id, v_week_id,
+          v_payout, 'bet_payout', 'Bet won', NULL, v_bet.id);
+      END IF;
 
       -- Energy Drink: House-funded bonus on the win = floor(profit × boost_pct),
       -- where profit = payout - stake (boost_pct = 1.0 ⇒ profit doubled, 1:1 → 2:1).
-      -- Bet-linked + week-stamped, so archive/unarchive handle it like every other
-      -- bet movement. NOT-EXISTS guard keeps re-settlement idempotent.
+      -- ALWAYS credits the OWNER — their own item, their reward — even when ghosts
+      -- ate the base profit. Bet-linked + week-stamped; NOT-EXISTS guard idempotent.
       IF v_bet.boost_item_id IS NOT NULL THEN
         SELECT COALESCE((c.effect_params ->> 'boost_pct')::numeric, 1.0) INTO v_boost_pct
           FROM public.player_inventory_items i
@@ -3414,6 +3532,72 @@ BEGIN
   INSERT INTO public.player_inventory_items (player_id, catalog_item_id, season_id, source)
     SELECT p_player_id, v_cat.id, v_season, 'admin_grant'
       FROM generate_series(1, p_quantity);
+END;
+$function$
+;
+
+CREATE OR REPLACE FUNCTION public.haunt_bet(p_target_bet_id uuid, p_item_id uuid)
+ RETURNS uuid
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+DECLARE
+  v_player_id uuid;
+  v_bet       public.bets%ROWTYPE;
+  v_haunt_id  uuid;
+BEGIN
+  v_player_id := public.current_player_id();
+
+  SELECT * INTO v_bet FROM public.bets WHERE id = p_target_bet_id;
+  IF v_bet.id IS NULL THEN
+    RAISE EXCEPTION 'Bet not found';
+  END IF;
+  IF v_bet.status <> 'pending' THEN
+    RAISE EXCEPTION 'You can only haunt a pending bet';
+  END IF;
+  IF v_bet.player_id = v_player_id THEN
+    RAISE EXCEPTION 'You cannot haunt your own bet';
+  END IF;
+
+  -- One haunt per haunter per bet (nice message before the consume; the UNIQUE
+  -- constraint is the structural backstop).
+  IF EXISTS (
+    SELECT 1 FROM public.bet_haunts
+     WHERE bet_id = p_target_bet_id AND haunter_player_id = v_player_id
+  ) THEN
+    RAISE EXCEPTION 'You have already haunted this bet';
+  END IF;
+
+  -- Validate the catalog contract before spending the item.
+  IF NOT EXISTS (
+    SELECT 1
+      FROM public.player_inventory_items i
+      JOIN public.item_catalog c ON c.id = i.catalog_item_id
+     WHERE i.id = p_item_id
+       AND c.effect_type = 'haunt'
+       AND c.activation_mode = 'attach_to_foreign_bet'
+  ) THEN
+    RAISE EXCEPTION 'That item is not a Ghost in the Slip';
+  END IF;
+
+  -- Consume the atomic ticket in one guarded UPDATE (owner + unconsumed + the
+  -- bet's season — rowcount 0 means one of those failed). Spent win or lose.
+  UPDATE public.player_inventory_items
+     SET consumed_at = now()
+   WHERE id = p_item_id
+     AND player_id = v_player_id
+     AND season_id = v_bet.season_id
+     AND consumed_at IS NULL;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Ghost in the Slip is not usable (already spent, wrong season, or not yours)';
+  END IF;
+
+  INSERT INTO public.bet_haunts (bet_id, haunter_player_id, inventory_item_id, season_id, week_id)
+    VALUES (p_target_bet_id, v_player_id, p_item_id, v_bet.season_id, v_bet.week_id)
+    RETURNING id INTO v_haunt_id;
+
+  RETURN v_haunt_id;
 END;
 $function$
 ;
@@ -6924,6 +7108,8 @@ CREATE TRIGGER set_updated_at BEFORE UPDATE ON public.activity_feed_events FOR E
 CREATE TRIGGER set_updated_at BEFORE UPDATE ON public.auction_bids FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
 CREATE TRIGGER set_updated_at BEFORE UPDATE ON public.auctions FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+CREATE TRIGGER set_updated_at BEFORE UPDATE ON public.bet_haunts FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
 CREATE TRIGGER bet_legs_no_self_tank BEFORE INSERT OR UPDATE ON public.bet_legs FOR EACH ROW EXECUTE FUNCTION prevent_self_tank();
 

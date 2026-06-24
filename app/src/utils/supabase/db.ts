@@ -590,6 +590,28 @@ export const bets = {
     supabase.rpc('cancel_bet', { p_bet_id: betId }),
 }
 
+// ── Ghost in the Slip (bet_haunts) ──────────────────────────────────────────
+// The adversarial item: a player secretly attaches a Ghost to ANOTHER player's
+// pending bet. If it wins, the ghosts split the profit and the bettor keeps only
+// their stake (settled in finalize_bets_for_market). RLS keeps a pending haunt
+// visible only to its haunter; it goes public once the target bet has WON.
+export const haunts = {
+  // The viewer's own haunts (RLS returns only the caller's rows) — used to mark
+  // bets they've already haunted so the CTA disables. Returns bet_ids.
+  listMine: (playerId: string) =>
+    supabase.from('bet_haunts').select('bet_id').eq('haunter_player_id', playerId),
+  // Haunters on one bet, oldest first. RLS reveals foreign rows ONLY once the bet
+  // has won (or to the haunter themselves) — drives the Bet Details reveal.
+  listForBet: (betId: string) =>
+    supabase.from('bet_haunts')
+      .select('payout_amount, attached_at, players(name)')
+      .eq('bet_id', betId)
+      .order('attached_at', { ascending: true }),
+  // Secretly haunt a foreign pending bet (SECURITY DEFINER; consumes the item).
+  create: (targetBetId: string, itemId: string) =>
+    supabase.rpc('haunt_bet', { p_target_bet_id: targetBetId, p_item_id: itemId }),
+}
+
 // ── Custom lines ("Specials") ────────────────────────────────────────────────
 // Admin-authored templates bundling existing bet_selections under a custom
 // title. Legs are abstract specs ({kind, player_id, game_number, pick}) resolved

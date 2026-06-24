@@ -25,6 +25,8 @@ function actionLabel(type: string, perspective: 'player' | 'house'): string {
       return perspective === 'house' ? 'ENERGY DRINK BONUS' : 'ENERGY DRINK ⚡️'
     case 'bet_insurance_refund':
       return perspective === 'house' ? 'GOLDEN TICKET REFUND' : 'GOLDEN TICKET 🎫'
+    case 'bet_haunt_steal':
+      return perspective === 'house' ? 'GHOST PAYOUT' : 'GHOST IN THE SLIP 👻'
     case 'score_credit':
       return 'PINCOME'
     case 'bonus':

@@ -63,6 +63,7 @@ const EVENT_IMPORTANCE: Record<string, Importance> = {
   sportsbook_parlay_hit: 'highlight',
   sportsbook_crutch_save: 'highlight',
   sportsbook_boost_hit: 'highlight',
+  sportsbook_haunt_hit: 'highlight',
   loan_shark_loan_repaid: 'highlight',
   pvp_challenge_settled: 'highlight',
   bounty_board_bounty_posted: 'highlight',
@@ -209,6 +210,30 @@ export function renderFeedEvent(row: FeedEventView): FeedRenderParts {
         line: `${actorOf(row)} cracked an Energy Drink ⚡️ and doubled their winnings — a ${num(p.bonus).toLocaleString()}-pin bonus on top.`,
         amount: { value: num(p.bonus), tone: 'positive', label: 'BONUS' },
       }
+
+    case 'sportsbook.haunt_hit': {
+      // A Ghost in the Slip cashed: the bettor's winning bet had its profit stolen
+      // by one or more secretly-attached ghosts. Subject = the victim; the haunters
+      // ride in the payload (a feed row has a single subject). The drama of a
+      // successful haunt is the whole point — name everyone involved.
+      const victim = row.subjectName ?? 'A player'
+      const ghosts: any[] = Array.isArray(p.haunters) ? p.haunters : []
+      const names = ghosts.map(g => g?.name).filter(Boolean)
+      const who =
+        names.length === 0
+          ? 'A ghost'
+          : names.length === 1
+            ? names[0]
+            : names.length === 2
+              ? `${names[0]} and ${names[1]}`
+              : `${names.slice(0, -1).join(', ')}, and ${names[names.length - 1]}`
+      const verb = ghosts.length > 1 ? 'slipped in and split' : 'slipped in and took'
+      return {
+        ...meta,
+        line: `👻 ${victim}'s winning bet was haunted — ${who} ${verb} ${num(p.profit).toLocaleString()} pins. They kept only their stake.`,
+        amount: { value: num(p.profit), tone: 'positive', label: 'STOLEN' },
+      }
+    }
 
     case 'sportsbook.weekly_house_result': {
       const houseNet = num(p.house_net)

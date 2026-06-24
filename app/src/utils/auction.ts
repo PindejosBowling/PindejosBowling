@@ -112,8 +112,8 @@ export interface CatalogItemAdminView {
 }
 
 // The DB check constraints on item_catalog, mirrored for the admin form chips.
-export const CATALOG_EFFECT_TYPES = ['bet_insurance', 'parlay_crutch', 'odds_boost', 'cosmetic', 'access_pass', 'custom'] as const
-export const CATALOG_ACTIVATION_MODES = ['attach_to_bet', 'passive', 'admin_honored'] as const
+export const CATALOG_EFFECT_TYPES = ['bet_insurance', 'parlay_crutch', 'odds_boost', 'haunt', 'cosmetic', 'access_pass', 'custom'] as const
+export const CATALOG_ACTIVATION_MODES = ['attach_to_bet', 'attach_to_foreign_bet', 'passive', 'admin_honored'] as const
 
 export const SOURCE_LABEL: Record<InventoryItemSource, string> = {
   auction: 'Won at auction',
@@ -126,6 +126,8 @@ export function itemHowToUse(activationMode: string): string {
   switch (activationMode) {
     case 'attach_to_bet':
       return 'Toggle it on when placing a bet in the Sportsbook. The item is spent at placement, win or lose.'
+    case 'attach_to_foreign_bet':
+      return "Open another player's pending bet in the Sportsbook and tap “Haunt this bet.” It attaches in secret and is spent the moment you use it, win or lose."
     case 'passive':
       return 'Always active while you own it.'
     default:

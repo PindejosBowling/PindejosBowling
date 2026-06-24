@@ -25,6 +25,8 @@ interface ActiveBetsViewProps {
   onParlayPress?: (bet: BetView) => void
   // When provided, each row gets an inline cancel (✕) affordance (admin only).
   onCancelBet?: (bet: BetView) => void
+  // Bets the viewer is secretly haunting (Ghost in the Slip) — outlined in gold.
+  hauntedBetIds?: Set<string>
 }
 
 // Shared "Active Bets" surface: a wager summary plus this week's pending bets
@@ -40,6 +42,7 @@ export default function ActiveBetsView({
   onBetPress,
   onParlayPress,
   onCancelBet,
+  hauntedBetIds,
 }: ActiveBetsViewProps) {
   const parlays = useMemo(() => bets.filter(b => b.legCount > 1), [bets])
 
@@ -119,6 +122,7 @@ export default function ActiveBetsView({
                 betReturnText={betReturnText(bet, perspective)}
                 onPress={onBetPress ? () => onBetPress(bet) : undefined}
                 onCancelPress={onCancelBet ? () => onCancelBet(bet) : undefined}
+                haunted={hauntedBetIds?.has(bet.id)}
               />
             ))}
           </View>
@@ -138,6 +142,7 @@ export default function ActiveBetsView({
                 betReturnText={betReturnText(bet, perspective)}
                 onPress={onParlayPress ? () => onParlayPress(bet) : undefined}
                 onCancelPress={onCancelBet ? () => onCancelBet(bet) : undefined}
+                haunted={hauntedBetIds?.has(bet.id)}
               />
             ))}
           </View>

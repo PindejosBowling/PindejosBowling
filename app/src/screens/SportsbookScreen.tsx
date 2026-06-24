@@ -27,6 +27,7 @@ import LineRow from '../components/betting/LineRow'
 import LineRowContainer from '../components/betting/LineRowContainer'
 import CustomLineRow from '../components/betting/CustomLineRow'
 import Button from '../components/ui/Button'
+import ConfirmActionSheet from '../components/ui/ConfirmActionSheet'
 import {
   usePinsinoData,
   selectionBetsAgainstSubject,
@@ -47,7 +48,7 @@ import {
 import { useRefresh } from '../hooks/useRefresh'
 import { useAuthStore } from '../stores/authStore'
 import { useUiStore } from '../stores/uiStore'
-import { bets, inventoryItems, seasons } from '../utils/supabase/db'
+import { bets, haunts, inventoryItems, seasons } from '../utils/supabase/db'
 import { PinsinoStackParamList } from '../navigation/types'
 import EmptyCard from '../components/ui/EmptyCard'
 
@@ -140,22 +141,41 @@ export default function SportsbookScreen() {
   const [boostPct, setBoostPct] = useState(1)
   const [useBoost, setUseBoost] = useState(false)
 
+  // Ghosts in the Slip (auction-won adversarial item): unconsumed
+  // attach_to_foreign_bet items, oldest first — a haunt spends ghosts[0]. Unlike
+  // the others these attach to ANOTHER player's pending bet, from Bet Details.
+  const [ghosts, setGhosts] = useState<string[]>([])
+  // Bets the viewer has already haunted (RLS returns only their own rows) — the
+  // CTA disables on these. Plus the screen-level confirm sheet for a new haunt.
+  const [hauntedBetIds, setHauntedBetIds] = useState<Set<string>>(new Set())
+  const [hauntModal, setHauntModal] = useState<BetView | null>(null)
+
   const reloadTickets = useCallback(async () => {
-    if (!playerId) { setTickets([]); setCrutches([]); setBoosts([]); return }
+    if (!playerId) { setTickets([]); setCrutches([]); setBoosts([]); setGhosts([]); return }
     const { data: season } = await seasons.getCurrent()
-    if (!season) { setTickets([]); setCrutches([]); setBoosts([]); return }
+    if (!season) { setTickets([]); setCrutches([]); setBoosts([]); setGhosts([]); return }
     const { data } = await inventoryItems.listByPlayerSeason(playerId, season.id)
-    const attachable = (data ?? [])
-      .filter((i: any) => i.consumed_at == null && i.item_catalog?.activation_mode === 'attach_to_bet')
+    const unconsumed = (data ?? [])
+      .filter((i: any) => i.consumed_at == null)
       .sort((a: any, b: any) => a.granted_at.localeCompare(b.granted_at))
+    const attachable = unconsumed.filter((i: any) => i.item_catalog?.activation_mode === 'attach_to_bet')
     setTickets(attachable.filter((i: any) => i.item_catalog?.effect_type === 'bet_insurance').map((i: any) => i.id))
     setCrutches(attachable.filter((i: any) => i.item_catalog?.effect_type === 'parlay_crutch').map((i: any) => i.id))
     const boostRows = attachable.filter((i: any) => i.item_catalog?.effect_type === 'odds_boost')
     setBoosts(boostRows.map((i: any) => i.id))
     setBoostPct(boostRows.length ? Number((boostRows[0].item_catalog?.effect_params as any)?.boost_pct ?? 1) : 1)
+    setGhosts(unconsumed.filter((i: any) => i.item_catalog?.effect_type === 'haunt').map((i: any) => i.id))
   }, [playerId])
 
   useEffect(() => { reloadTickets() }, [reloadTickets])
+
+  const reloadHaunts = useCallback(async () => {
+    if (!playerId) { setHauntedBetIds(new Set()); return }
+    const { data } = await haunts.listMine(playerId)
+    setHauntedBetIds(new Set((data ?? []).map((r: any) => r.bet_id)))
+  }, [playerId])
+
+  useEffect(() => { reloadHaunts() }, [reloadHaunts])
 
   // Active = this week's still-pending bets (settled ones move to Settled Bets).
   // The public tab is read-only: Active/Settled rows just open the details overlay
@@ -493,6 +513,7 @@ export default function SportsbookScreen() {
             myBets={myActiveBets}
             onBetPress={setDetailModal}
             onParlayPress={setDetailModal}
+            hauntedBetIds={hauntedBetIds}
           />
         )}
 
@@ -752,7 +773,41 @@ export default function SportsbookScreen() {
       )}
 
       {/* Bet details modal */}
-      <BetDetailModal bet={detailModal} onClose={() => setDetailModal(null)} />
+      <BetDetailModal
+        bet={detailModal}
+        onClose={() => setDetailModal(null)}
+        canHaunt={
+          !!detailModal &&
+          detailModal.status === 'pending' &&
+          detailModal.playerId !== playerId &&
+          ghosts.length > 0 &&
+          !hauntedBetIds.has(detailModal.id)
+        }
+        alreadyHaunted={!!detailModal && hauntedBetIds.has(detailModal.id)}
+        onRequestHaunt={() => { const b = detailModal; setDetailModal(null); setHauntModal(b) }}
+      />
+
+      {/* Ghost in the Slip — screen-level confirm (kept out of the detail modal to
+          avoid nesting BottomSheet inside an RN Modal). */}
+      {hauntModal && (
+        <ConfirmActionSheet
+          title="Ghost in the Slip 👻"
+          subtitle={`Secretly haunt ${hauntModal.bettorName}'s bet`}
+          confirmLabel="Haunt this bet"
+          confirmVariant="gold"
+          action={() => haunts.create(hauntModal.id, ghosts[0])}
+          successMessage="👻 The slip is haunted — you'll cash if it wins"
+          failureMessage="Couldn't haunt this bet"
+          onClose={() => setHauntModal(null)}
+          onDone={() => { reloadTickets(); reloadHaunts() }}
+        >
+          <Text style={styles.hauntSheetCopy}>
+            Spend 1 Ghost in the Slip to secretly attach it to this pending bet. If the bet
+            wins, you take the profit — the bettor keeps only their stake. If other ghosts are
+            on it too, the profit splits evenly. Spent the moment you attach it, win or lose.
+          </Text>
+        </ConfirmActionSheet>
+      )}
     </View>
   )
 }
@@ -847,6 +902,12 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: colors.text,
     letterSpacing: 0.3,
+  },
+  hauntSheetCopy: {
+    fontFamily: fonts.barlow,
+    fontSize: 14,
+    lineHeight: 20,
+    color: colors.muted,
   },
   parlayLegRemove: {
     fontFamily: fonts.barlowCondensed,

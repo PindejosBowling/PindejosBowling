@@ -73,6 +73,7 @@ Product/design references and per-feature implementation specs for the pin econo
 | [context/economy/AUCTION_FINDINGS.md](context/economy/AUCTION_FINDINGS.md) | Silent Auctions **decision record** (grilling sessions) — bid mechanics overrides, item-framework doctrine (atomic single-use items), week-stamping + archive exemption, encryption posture, all-RPC writes |
 | [context/economy/SILENT_AUCTIONS_DB.md](context/economy/SILENT_AUCTIONS_DB.md) | Silent Auctions + item framework **database** spec (as built) — `auctions`/`auction_bids`/`item_catalog`/`player_inventory_items`, encrypted bids, pg_cron sweep, Golden Ticket hooks. Read before touching any `auction_*` / `item_*` DB code |
 | [context/economy/SILENT_AUCTIONS_APP.md](context/economy/SILENT_AUCTIONS_APP.md) | Silent Auctions **app-layer** spec (the "Auction House" Pinsino tile) — sealed-bid display contract, Golden Ticket toggle, badge + feed wiring |
+| [context/economy/GHOST_IN_THE_SLIP.md](context/economy/GHOST_IN_THE_SLIP.md) | **Ghost in the Slip** — the first ADVERSARIAL item: secretly haunt another player's pending bet; on a win the ghosts split the profit and the bettor keeps only their stake (House-neutral). The `bet_haunts` link table + RLS reveal-on-win, `haunt_bet` RPC, the `finalize_bets_for_market` diversion + `bet_haunt_steal` ledger type, cancel-refund, and the `BetDetailModal` CTA/reveal. Read before touching any `haunt`/`bet_haunts` code |
 
 ## External source-of-truth docs
 
