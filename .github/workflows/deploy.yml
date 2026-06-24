@@ -47,6 +47,37 @@ jobs:
           EXPO_PUBLIC_GUEST_EMAIL: ${{ secrets.EXPO_PUBLIC_GUEST_EMAIL }}
           EXPO_PUBLIC_GUEST_PASSWORD: ${{ secrets.EXPO_PUBLIC_GUEST_PASSWORD }}
 
+      # Pindejos has no Expo Router, so `expo export` gives a plain index.html
+      # with no head-injection hook. We splice in the add-to-home-screen tags
+      # here: an apple-touch-icon (the App Store icon, served from public/icons)
+      # plus the manifest + standalone meta so iOS treats it as an installed app
+      # instead of falling back to a page-screenshot icon. Runs before the 404
+      # copy below so the SPA fallback inherits the same head.
+      - name: Inject add-to-home-screen tags into index.html
+        run: |
+          node - <<'EOF'
+          const fs = require('fs');
+          const base = '/PindejosBowling';
+          const tags = `
+            <meta name="apple-mobile-web-app-capable" content="yes" />
+            <meta name="mobile-web-app-capable" content="yes" />
+            <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+            <meta name="apple-mobile-web-app-title" content="Pindejos" />
+            <meta name="application-name" content="Pindejos" />
+            <meta name="theme-color" content="#0a0a0c" />
+            <link rel="apple-touch-icon" href="${base}/icons/apple-touch-icon.png" />
+            <link rel="manifest" href="${base}/manifest.json" />
+          `;
+          const file = 'dist/index.html';
+          let html = fs.readFileSync(file, 'utf8');
+          if (!html.includes('</head>')) {
+            throw new Error('No </head> found in ' + file + '; cannot inject home-screen tags');
+          }
+          html = html.replace('</head>', tags + '</head>');
+          fs.writeFileSync(file, html);
+          console.log('Injected add-to-home-screen tags into ' + file);
+          EOF
+
       - name: Copy index.html to 404.html for SPA routing
         run: cp dist/index.html dist/404.html
 
