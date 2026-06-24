@@ -1,16 +1,41 @@
+import { useEffect, useState } from 'react'
 import { Modal, View, Text, TouchableOpacity, StyleSheet } from 'react-native'
 import { colors, fonts, radius } from '../../theme'
 import { betLineSuffix, type BetView } from '../../hooks/usePinsinoData'
 import { resultBadge, betPayout, betReturn, betReturnDisplay } from '../../utils/bets'
+import { haunts } from '../../utils/supabase/db'
 
 interface BetDetailModalProps {
   bet: BetView | null
   onClose: () => void
+  // Ghost in the Slip affordance (only wired from the Sportsbook board, which
+  // shows every player's pending bets). When canHaunt is true the "haunt this
+  // bet" CTA renders; pressing it asks the parent to open the confirm sheet at
+  // screen level (avoids nesting a BottomSheet inside this RN Modal).
+  canHaunt?: boolean
+  alreadyHaunted?: boolean
+  onRequestHaunt?: () => void
 }
 
 // Shared "Bet Details" overlay — the canonical breakdown of a single bet, opened
 // from BetRow (Active/Settled Bets) and from LedgerRow (ledger activity).
-export default function BetDetailModal({ bet, onClose }: BetDetailModalProps) {
+export default function BetDetailModal({ bet, onClose, canHaunt, alreadyHaunted, onRequestHaunt }: BetDetailModalProps) {
+  // Reveal: once a bet has WON, RLS exposes any Ghost in the Slip haunts on it.
+  // (Hooks run unconditionally — the early null-return lives below them.)
+  const [haunters, setHaunters] = useState<{ name: string; cut: number | null }[]>([])
+  useEffect(() => {
+    let active = true
+    if (bet && bet.status === 'won') {
+      haunts.listForBet(bet.id).then(({ data }) => {
+        if (!active) return
+        setHaunters((data ?? []).map((r: any) => ({ name: r.players?.name ?? '—', cut: r.payout_amount })))
+      })
+    } else {
+      setHaunters([])
+    }
+    return () => { active = false }
+  }, [bet?.id, bet?.status])
+
   if (!bet) return null
 
   // A Winner's Crutch fired iff a leg lost but was cancelled ('crutched'). That's
@@ -110,6 +135,22 @@ export default function BetDetailModal({ bet, onClose }: BetDetailModalProps) {
             </View>
           )}
 
+          {/* Ghost in the Slip reveal: once won, who slipped in and took the profit. */}
+          {haunters.length > 0 && (
+            <View style={styles.row}>
+              <Text style={styles.label}>HAUNTED 👻</Text>
+              <Text style={[styles.value, { color: colors.gold }]}>
+                {haunters.length === 1 ? 'A ghost stole the profit' : `${haunters.length} ghosts split the profit`}
+              </Text>
+              {haunters.map((h, i) => (
+                <Text key={i} style={styles.customDescription}>
+                  {h.name} — {h.cut ?? 0} pins
+                </Text>
+              ))}
+              <Text style={styles.customDescription}>The bettor kept only their stake.</Text>
+            </View>
+          )}
+
           {/* Energy Drink: doubled the profit on a win; spent for nothing otherwise. */}
           {boosted && (
             <View style={styles.row}>
@@ -152,6 +193,20 @@ export default function BetDetailModal({ bet, onClose }: BetDetailModalProps) {
               <Text style={styles.value}>{betReturnDisplay(bet)} pins</Text>
             )}
           </View>
+
+          {/* Ghost in the Slip CTA — only on someone else's pending bet when the
+              viewer holds a Ghost and hasn't haunted it yet. The confirm sheet is
+              opened by the parent at screen level (no nested modals). */}
+          {canHaunt && (
+            <TouchableOpacity style={styles.hauntBtn} onPress={onRequestHaunt}>
+              <Text style={styles.hauntBtnText}>👻 Haunt this bet</Text>
+            </TouchableOpacity>
+          )}
+          {alreadyHaunted && bet.status === 'pending' && (
+            <Text style={[styles.customDescription, styles.hauntingNote]}>
+              👻 You're haunting this bet
+            </Text>
+          )}
         </View>
       </View>
     </Modal>
@@ -214,5 +269,25 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: colors.muted,
     marginTop: 4,
+  },
+  hauntBtn: {
+    marginTop: 8,
+    backgroundColor: colors.surface2,
+    borderRadius: radius.cardSm,
+    borderWidth: 1,
+    borderColor: colors.gold,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  hauntBtnText: {
+    fontFamily: fonts.barlowCondensed,
+    fontSize: 16,
+    letterSpacing: 0.5,
+    color: colors.gold,
+  },
+  hauntingNote: {
+    textAlign: 'center',
+    color: colors.gold,
+    marginTop: 12,
   },
 })

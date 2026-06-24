@@ -1,5 +1,5 @@
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native'
-import { colors, fonts } from '../../theme'
+import { colors, fonts, radius } from '../../theme'
 import { betLineSuffix, type BetView } from '../../hooks/usePinsinoData'
 
 interface BetRowProps {
@@ -9,6 +9,9 @@ interface BetRowProps {
   betReturnText: string
   onPress?: () => void
   onCancelPress?: () => void
+  // The viewer has a Ghost in the Slip on this bet — outline it in gold so they
+  // can pick their haunts out of the active board (still secret to everyone else).
+  haunted?: boolean
 }
 
 // Presentational: the row is tappable when given an `onPress`, and shows a cancel
@@ -21,6 +24,7 @@ export default function BetRow({
   betReturnText,
   onPress,
   onCancelPress,
+  haunted,
 }: BetRowProps) {
   const isPressable = !!onPress
   const showCancelBtn = !!onCancelPress
@@ -79,7 +83,9 @@ export default function BetRow({
       style={[
         styles.betRow,
         bet.customLineCategory === 'special' && styles.betRowSpecial,
-        !isLast && styles.lineRowBorder,
+        // Gold outline wins over the row divider so it reads as a clean chip.
+        !isLast && !haunted && styles.lineRowBorder,
+        haunted && styles.betRowHaunted,
       ]}
     >
       {isPressable ? (
@@ -121,6 +127,14 @@ const styles = StyleSheet.create({
   },
   // Special-branded bets carry the gold wash through their placed-bet rows.
   betRowSpecial: { backgroundColor: colors.goldTint },
+  // A bet the viewer is secretly haunting — gold outline, inset as a chip.
+  betRowHaunted: {
+    borderWidth: 1,
+    borderColor: colors.gold,
+    borderRadius: radius.cardSm,
+    marginHorizontal: 6,
+    marginVertical: 4,
+  },
   betSubject: {
     fontFamily: fonts.barlowCondensed,
     fontSize: 14,

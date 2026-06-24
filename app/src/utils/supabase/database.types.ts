@@ -381,6 +381,81 @@ export type Database = {
           },
         ]
       }
+      bet_haunts: {
+        Row: {
+          attached_at: string
+          bet_id: string
+          created_at: string
+          haunter_player_id: string
+          id: string
+          inventory_item_id: string
+          payout_amount: number | null
+          season_id: string
+          updated_at: string
+          week_id: string | null
+        }
+        Insert: {
+          attached_at?: string
+          bet_id: string
+          created_at?: string
+          haunter_player_id: string
+          id?: string
+          inventory_item_id: string
+          payout_amount?: number | null
+          season_id: string
+          updated_at?: string
+          week_id?: string | null
+        }
+        Update: {
+          attached_at?: string
+          bet_id?: string
+          created_at?: string
+          haunter_player_id?: string
+          id?: string
+          inventory_item_id?: string
+          payout_amount?: number | null
+          season_id?: string
+          updated_at?: string
+          week_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bet_haunts_bet_id_fkey"
+            columns: ["bet_id"]
+            isOneToOne: false
+            referencedRelation: "bets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bet_haunts_haunter_player_id_fkey"
+            columns: ["haunter_player_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bet_haunts_inventory_item_id_fkey"
+            columns: ["inventory_item_id"]
+            isOneToOne: false
+            referencedRelation: "player_inventory_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bet_haunts_season_id_fkey"
+            columns: ["season_id"]
+            isOneToOne: false
+            referencedRelation: "seasons"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bet_haunts_week_id_fkey"
+            columns: ["week_id"]
+            isOneToOne: false
+            referencedRelation: "weeks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       bet_legs: {
         Row: {
           bet_id: string
@@ -561,7 +636,9 @@ export type Database = {
       }
       bets: {
         Row: {
+          boost_item_id: string | null
           created_at: string
+          crutch_item_id: string | null
           custom_line_category: string | null
           custom_line_description: string | null
           custom_line_id: string | null
@@ -579,7 +656,9 @@ export type Database = {
           week_id: string | null
         }
         Insert: {
+          boost_item_id?: string | null
           created_at?: string
+          crutch_item_id?: string | null
           custom_line_category?: string | null
           custom_line_description?: string | null
           custom_line_id?: string | null
@@ -597,7 +676,9 @@ export type Database = {
           week_id?: string | null
         }
         Update: {
+          boost_item_id?: string | null
           created_at?: string
+          crutch_item_id?: string | null
           custom_line_category?: string | null
           custom_line_description?: string | null
           custom_line_id?: string | null
@@ -615,6 +696,20 @@ export type Database = {
           week_id?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "bets_boost_item_id_fkey"
+            columns: ["boost_item_id"]
+            isOneToOne: false
+            referencedRelation: "player_inventory_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bets_crutch_item_id_fkey"
+            columns: ["crutch_item_id"]
+            isOneToOne: false
+            referencedRelation: "player_inventory_items"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "bets_custom_line_id_fkey"
             columns: ["custom_line_id"]
@@ -2657,6 +2752,10 @@ export type Database = {
         }
         Returns: undefined
       }
+      haunt_bet: {
+        Args: { p_item_id: string; p_target_bet_id: string }
+        Returns: string
+      }
       is_admin: { Args: never; Returns: boolean }
       is_registered_player: { Args: { phone: string }; Returns: boolean }
       lanetalk_game_stats: {
@@ -2711,6 +2810,8 @@ export type Database = {
       }
       place_house_bet: {
         Args: {
+          p_boost_item_id?: string
+          p_crutch_item_id?: string
           p_custom_line_id?: string
           p_insurance_item_id?: string
           p_selection_ids: string[]
