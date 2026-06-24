@@ -293,6 +293,26 @@ Tiles go in either `leagueToolsTiles` (read-only views) or `adminTiles` (write o
 { icon: '🔧', label: 'My Screen', onPress: () => navigation.navigate('MyScreen') }
 ```
 
+### Step 4 — Register the deep-link path in `App.tsx` (REQUIRED — web routing)
+
+⚠️ **Every screen MUST be added to the `linking.config.screens` object in [`App.tsx`](../app/App.tsx) with a `${BASE}/...`-prefixed path.** `BASE` is `PindejosBowling` (the GitHub Pages project base). If you skip this, React Navigation auto-generates a **prefix-less** URL from the screen name (e.g. `/MyScreen`), which on the deployed web app lands *outside* the project base (`jordanreticker.github.io/MyScreen`) and returns a hard GitHub 404 on refresh — the page works on first navigation but cannot be reloaded or shared.
+
+Add the new screen under its stack's `screens` block, mirroring its registered screen name:
+
+```ts
+More: {
+  initialRouteName: 'MoreHome',
+  screens: {
+    // ... existing screens
+    MyScreen: `${BASE}/more/my-screen`,        // params become path segments or query string
+  },
+},
+```
+
+Notes:
+- Keep the nested-stack `initialRouteName` (already present on `Standings`/`Pinsino`/`More`) — it places the parent screen beneath the target in the back stack so the back button returns to the stack home rather than falling out to the first tab.
+- Screen-name keys here must match the `name=` on the `<Stack.Screen>` exactly (a mismatch silently makes the route dead).
+
 ### Navigating to `PlayerDetail` from outside the Standings tab
 
 `PlayerDetail` lives in a different stack. Use the cross-tab pattern:
@@ -317,5 +337,6 @@ Tiles go in either `leagueToolsTiles` (read-only views) or `adminTiles` (write o
 - [ ] `ScreenHeader` with `onBack` for inner screens
 - [ ] Route added to `MoreStackParamList` in `types.ts`
 - [ ] Screen registered in `MoreStackNavigator.tsx`
+- [ ] **Deep-link path added to `linking.config.screens` in `App.tsx` with a `${BASE}/...` prefix** (skipping this 404s the page on web refresh)
 - [ ] Tile added to `MoreHomeScreen.tsx` in the correct section
 - [ ] Write operations call `reload()` after success and show a toast

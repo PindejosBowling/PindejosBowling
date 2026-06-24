@@ -48,6 +48,7 @@ const linking = {
         initialRouteName: 'PinsinoHome',
         screens: {
           PinsinoHome: `${BASE}/pinsino`,
+          PinsinoHelp: `${BASE}/pinsino/help`,
           PinsinoLeaderboard: `${BASE}/pinsino/leaderboard`,
           Sportsbook: `${BASE}/pinsino/sportsbook`,
           LoanShark: `${BASE}/pinsino/loan-shark`,
