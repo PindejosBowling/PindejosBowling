@@ -18,6 +18,7 @@ import ScreenBackdrop from '../components/pixelart/ScreenBackdrop'
 import Toast from '../components/ui/Toast'
 import BorrowConfirmModal from '../components/economy/BorrowConfirmModal'
 import Button from '../components/ui/Button'
+import BalancePill from '../components/ui/BalancePill'
 import { useLoanSharkData, LoanProductView, DebtLedgerEntry } from '../hooks/useLoanSharkData'
 import { useRefresh } from '../hooks/useRefresh'
 import { useAuthStore } from '../stores/authStore'
@@ -134,10 +135,7 @@ export default function LoanSharkScreen() {
           pointerEvents={artworkReveal ? 'none' : 'auto'}
           style={artworkReveal ? styles.artHidden : undefined}
         >
-        <View style={styles.balancePill}>
-          <Text style={styles.balancePillLabel}>BALANCE</Text>
-          <Text style={styles.balancePillValue}>{formatPins(balance)} pins</Text>
-        </View>
+        <BalancePill balance={balance} style={styles.balanceMargin} />
 
         {activeLoan ? (
           <View style={styles.loanCard}>
@@ -263,30 +261,7 @@ const styles = StyleSheet.create({
   // at least viewport-height when the loan list is short.
   content: { paddingHorizontal: 16, paddingBottom: 40, flexGrow: 1 },
 
-  balancePill: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    justifyContent: 'space-between',
-    backgroundColor: colors.surface,
-    borderRadius: radius.cardMd,
-    borderWidth: 1,
-    borderColor: colors.border,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    marginTop: 8,
-    marginBottom: 20,
-  },
-  balancePillLabel: {
-    fontFamily: fonts.barlowCondensed,
-    fontSize: 12,
-    letterSpacing: 1.5,
-    color: colors.muted,
-  },
-  balancePillValue: {
-    fontFamily: fonts.barlowCondensedHeavy,
-    fontSize: 20,
-    color: colors.accent,
-  },
+  balanceMargin: { marginBottom: 20 },
 
   // Active loan card
   loanCard: {
