@@ -23,7 +23,7 @@ const MENU_TILES: { icon: string; label: string; route: 'PinsinoAccounting' | 'A
   { icon: '⚔️', label: 'PvP', route: 'PvPAdmin' },
   { icon: '🎯', label: 'Bounties', route: 'BountyAdmin' },
   { icon: '🦈', label: 'Loan Shark', route: 'LoanSharkAdmin' },
-  { icon: '🔨', label: 'Auction House', route: 'AuctionHouseAdmin' },
+  { icon: '📣', label: 'Auction House', route: 'AuctionHouseAdmin' },
 ]
 
 export default function PinsinoAdminScreen() {

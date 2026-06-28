@@ -5,7 +5,7 @@
 // When the auction schema lands, the real hooks map generated rows into these
 // shapes and the components don't change.
 
-import { defaultBountyCloseAt } from './bounty'
+import { upcomingMondayCloseAt } from './bounty'
 import { formatTimeRemaining, formatCountdown } from './formatting'
 
 // `formatTimeRemaining` / `formatCountdown` now live in utils/formatting.ts;
@@ -147,8 +147,10 @@ export function isLargeBid(amount: number, balance: number): boolean {
   return balance > 0 && amount >= balance * LARGE_BID_BALANCE_SHARE
 }
 
-// Auctions close when bounties close: next Monday 7pm ET (league night).
-export const defaultAuctionCloseAt = defaultBountyCloseAt
+// Auctions default-close the closest upcoming Monday at 6pm ET — an hour before
+// bounties (7pm) / league night.
+export const defaultAuctionCloseAt = (now: Date = new Date()): Date =>
+  upcomingMondayCloseAt(18, now)
 
 export interface AuctionSections {
   open: AuctionView[]

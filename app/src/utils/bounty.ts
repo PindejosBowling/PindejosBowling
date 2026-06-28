@@ -88,13 +88,19 @@ function etWallToUtc(y: number, mo: number, d: number, h: number, mi: number): D
   return new Date(asUTC - off * 60000)
 }
 
-export function defaultBountyCloseAt(now: Date = new Date()): Date {
+// The upcoming Monday at `hourEt` o'clock ET: this week's Monday if `now` is
+// before it, otherwise the following Monday.
+export function upcomingMondayCloseAt(hourEt: number, now: Date = new Date()): Date {
   const et = new Date(now.getTime() + etOffsetMinutes(now) * 60000)
   const dow = et.getUTCDay() // 0 = Sun … 1 = Mon … 6 = Sat
   const daysToMon = (1 - dow + 7) % 7
-  let target = etWallToUtc(et.getUTCFullYear(), et.getUTCMonth(), et.getUTCDate() + daysToMon, 19, 0)
+  let target = etWallToUtc(et.getUTCFullYear(), et.getUTCMonth(), et.getUTCDate() + daysToMon, hourEt, 0)
   if (target.getTime() <= now.getTime()) {
-    target = etWallToUtc(et.getUTCFullYear(), et.getUTCMonth(), et.getUTCDate() + daysToMon + 7, 19, 0)
+    target = etWallToUtc(et.getUTCFullYear(), et.getUTCMonth(), et.getUTCDate() + daysToMon + 7, hourEt, 0)
   }
   return target
+}
+
+export function defaultBountyCloseAt(now: Date = new Date()): Date {
+  return upcomingMondayCloseAt(19, now)
 }
