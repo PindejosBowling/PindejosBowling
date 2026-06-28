@@ -1,5 +1,6 @@
-import { auctions, pvpChallenges } from './supabase/db'
+import { auctions, pvpChallenges, bountyPosts } from './supabase/db'
 import { normalizeChallenge, isReceivedForPlayer } from '../hooks/usePvpData'
+import { normalizeBounty } from '../hooks/useBountyBoardData'
 import { PinsinoStackParamList } from '../navigation/types'
 
 // A pending-action notification source for the Pinsino. Each source is
@@ -40,6 +41,22 @@ export const NOTIFICATION_SOURCES: NotificationSource[] = [
       ])
       const bidOn = new Set((bidRows ?? []).map((b: any) => b.auction_id))
       return (auctionRows ?? []).filter((a: any) => a.status === 'open' && !bidOn.has(a.id)).length
+    },
+  },
+  {
+    key: 'bounty',
+    route: 'BountyBoard',
+    // Open bounties the player could still join: not sponsoring, not already a
+    // hunter, and a slot is free. A full bounty isn't actionable, so it doesn't count.
+    fetchCount: async (playerId, seasonId) => {
+      const { data } = await bountyPosts.listOpenBySeason(seasonId)
+      return (data ?? [])
+        .map(normalizeBounty)
+        .filter(b => {
+          if (b.status !== 'open' || b.slotsRemaining <= 0) return false
+          if (b.sponsorPlayerId === playerId) return false
+          return !b.hunters.some(h => h.playerId === playerId)
+        }).length
     },
   },
 ]

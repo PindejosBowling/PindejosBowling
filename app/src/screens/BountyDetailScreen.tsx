@@ -11,7 +11,8 @@ import Button from '../components/ui/Button'
 import { useBountyDetail } from '../hooks/useBountyDetail'
 import { useRefresh } from '../hooks/useRefresh'
 import { useAuthStore } from '../stores/authStore'
-import { bountyEconomics, hunterPayout, formatCloseTime } from '../utils/bounty'
+import { useNotificationStore } from '../stores/notificationStore'
+import { bountyEconomics, formatCloseTime } from '../utils/bounty'
 import { PinsinoStackParamList } from '../navigation/types'
 import { formatPins } from '../utils/formatting'
 
@@ -35,6 +36,13 @@ export default function BountyDetailScreen() {
   const [entryOpen, setEntryOpen] = useState(false)
 
   useFocusEffect(useCallback(() => { reload() }, [reload]))
+
+  // After a join, refresh both the detail and the Pinsino badge so the count drops
+  // immediately rather than waiting for the next hub focus (mirrors the PvP pattern).
+  const onEntryDone = useCallback(
+    () => Promise.all([reload(), useNotificationStore.getState().refresh()]).then(() => {}),
+    [reload],
+  )
 
   // Live economics over the current hunters (pre-settlement estimate, design §34.4).
   const econ = useMemo(
@@ -116,22 +124,6 @@ export default function BountyDetailScreen() {
           </View>
         )}
 
-        {/* Payout previews (pre-settlement) */}
-        {!settlement && econ && (
-          <>
-            <Text style={styles.sectionLabel}>IF IT SETTLES NOW</Text>
-            <View style={styles.card}>
-              <View style={styles.kv}><Text style={styles.muted}>Sponsor wins → sponsor keeps</Text><Text style={styles.kvValue}>{formatPins(econ.sponsorTakeOnWin)}</Text></View>
-              {hunters.map(h => (
-                <View key={h.id} style={styles.kv}>
-                  <Text style={styles.muted}>Hunters win → {h.playerName ?? `Hunter #${h.entryNumber}`}</Text>
-                  <Text style={styles.kvValue}>{formatPins(hunterPayout(h.stakeAmount, bounty.rewardPerHunter))}</Text>
-                </View>
-              ))}
-            </View>
-          </>
-        )}
-
         {/* Settlement result */}
         {settlement && (
           <>
@@ -184,7 +176,7 @@ export default function BountyDetailScreen() {
       </ScrollView>
 
       {entryOpen && (
-        <BountyEntryModal bounty={bounty} onClose={() => setEntryOpen(false)} onDone={reload} />
+        <BountyEntryModal bounty={bounty} onClose={() => setEntryOpen(false)} onDone={onEntryDone} />
       )}
     </SafeAreaView>
   )
