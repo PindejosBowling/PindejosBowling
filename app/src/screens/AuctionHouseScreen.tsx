@@ -11,13 +11,13 @@ import LoadingView from '../components/ui/LoadingView'
 import AuctionCard from '../components/auction/AuctionCard'
 import MyItemRow from '../components/auction/MyItemRow'
 import ItemInfoSheet from '../components/auction/ItemInfoSheet'
+import BalancePill from '../components/ui/BalancePill'
 import { useAuctionHouseData } from '../hooks/useAuctionHouseData'
 import { useRefresh } from '../hooks/useRefresh'
 import { useAuthStore } from '../stores/authStore'
 import { useUiStore } from '../stores/uiStore'
 import { AuctionView, InventoryGroupView, auctionSections, groupInventory } from '../utils/auction'
 import { PinsinoStackParamList } from '../navigation/types'
-import { formatPins } from '../utils/formatting'
 
 type Nav = NativeStackNavigationProp<PinsinoStackParamList>
 
@@ -75,10 +75,7 @@ export default function AuctionHouseScreen() {
         contentContainerStyle={styles.content}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.muted} />}
       >
-        <View style={styles.balancePill}>
-          <Text style={styles.balancePillLabel}>BALANCE</Text>
-          <Text style={styles.balancePillValue}>{formatPins(balance)} pins</Text>
-        </View>
+        <BalancePill balance={balance} />
 
         {noAuctions ? (
           <View style={styles.emptyCard}>
@@ -115,21 +112,6 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.bg },
   content: { paddingHorizontal: 16, paddingBottom: 40 },
 
-  balancePill: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    justifyContent: 'space-between',
-    backgroundColor: colors.surface,
-    borderRadius: radius.cardMd,
-    borderWidth: 1,
-    borderColor: colors.border,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    marginTop: 8,
-    marginBottom: 12,
-  },
-  balancePillLabel: { fontFamily: fonts.barlowCondensed, fontSize: 12, letterSpacing: 1.5, color: colors.muted },
-  balancePillValue: { fontFamily: fonts.barlowCondensedHeavy, fontSize: 20, color: colors.accent },
 
   sectionLabel: {
     fontFamily: fonts.barlowCondensed,

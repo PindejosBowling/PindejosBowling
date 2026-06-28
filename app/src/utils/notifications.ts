@@ -8,7 +8,7 @@ import { PinsinoStackParamList } from '../navigation/types'
 //
 // To add a notification to a new tile: append one entry below with a `fetchCount`.
 // The store fans out over every source, the hub badges by `route`, and the tab
-// bar sums them all — nothing else changes. See references/notifications.md.
+// bar sums them all — nothing else changes. See context/notifications.md.
 export interface NotificationSource {
   key: string                          // stable id, e.g. 'pvp'
   route: keyof PinsinoStackParamList   // the hub tile this badge sits on

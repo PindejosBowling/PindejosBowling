@@ -11,13 +11,13 @@ import ScreenBackdrop from '../components/pixelart/ScreenBackdrop'
 import PvpChallengeRow from '../components/pvp/PvpChallengeRow'
 import PvpChallengeDetailModal from '../components/pvp/PvpChallengeDetailModal'
 import Button from '../components/ui/Button'
+import BalancePill from '../components/ui/BalancePill'
 import { usePvpData, PvpChallengeView } from '../hooks/usePvpData'
 import { useRefresh } from '../hooks/useRefresh'
 import { useAuthStore } from '../stores/authStore'
 import { useUiStore } from '../stores/uiStore'
 import { useNotificationStore } from '../stores/notificationStore'
 import { PinsinoStackParamList } from '../navigation/types'
-import { formatPins } from '../utils/formatting'
 
 type Nav = NativeStackNavigationProp<PinsinoStackParamList>
 
@@ -101,10 +101,7 @@ export default function PvPScreen() {
           </View>
         </View>
 
-        <View style={styles.balancePill}>
-          <Text style={styles.balancePillLabel}>BALANCE</Text>
-          <Text style={styles.balancePillValue}>{formatPins(balance)} pins</Text>
-        </View>
+        <BalancePill balance={balance} style={styles.balanceMargin} />
 
         {/* Entry points */}
         <View style={styles.actions}>
@@ -166,20 +163,7 @@ const styles = StyleSheet.create({
   recordValue: { fontFamily: fonts.barlowCondensedHeavy, fontSize: 32, color: colors.accent },
   recordLabel: { fontFamily: fonts.barlowCondensed, fontSize: 11, letterSpacing: 1.5, color: colors.muted, marginTop: 2 },
 
-  balancePill: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    justifyContent: 'space-between',
-    backgroundColor: colors.surface,
-    borderRadius: radius.cardMd,
-    borderWidth: 1,
-    borderColor: colors.border,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    marginBottom: 16,
-  },
-  balancePillLabel: { fontFamily: fonts.barlowCondensed, fontSize: 12, letterSpacing: 1.5, color: colors.muted },
-  balancePillValue: { fontFamily: fonts.barlowCondensedHeavy, fontSize: 20, color: colors.accent },
+  balanceMargin: { marginTop: 0, marginBottom: 16 },
 
   actions: { flexDirection: 'row', gap: 8, marginBottom: 24 },
   primaryBtn: { paddingVertical: 14 },

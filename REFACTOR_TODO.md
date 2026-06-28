@@ -31,11 +31,11 @@ Re-derive this table from the `Verify` commands if in doubt — do not trust it 
 | Tier | Task | Status |
 |---|---|---|
 | 1 | 1.1 `utils/formatting.ts` | [x] |
-| 1 | 1.2 `<BalancePill>` | [ ] |
+| 1 | 1.2 `<BalancePill>` | [x] |
 | 1 | 1.3 `computeBalance` / `utils/ledger.ts` | [ ] |
 | 1 | 1.4 theme tint/shadow tokens | [ ] |
 | 1 | 1.5 `useDatePicker` | [ ] |
-| 1 | 1.6 doc-rot (`references/` path) | [ ] |
+| 1 | 1.6 doc-rot (`references/` path) | [x] |
 | 2 | 2.1 `<EconomyCard>` | [ ] |
 | 2 | 2.2 `<StatRow>` | [ ] |
 | 2 | 2.3 `<PinAmountInput>` | [ ] |
@@ -65,8 +65,8 @@ _Baseline: none started — every task below was identified by the audit; no ref
 - **Manual check:** open Bounties/Auction/PvP screens; amounts and countdowns render identically.
 
 ### 1.2 — `<BalancePill>` component  ↪ §1.2
-- [ ] Create `app/src/components/ui/BalancePill.tsx` (`balance: number`), using `formatPins` from 1.1.
-- [ ] Replace the inline pill + `balancePill*` styles in the 5 screens with `<BalancePill balance={…} />`.
+- [x] Create `app/src/components/ui/BalancePill.tsx` (`balance: number`, optional `label`/`style`), using `formatPins` from 1.1.
+- [x] Replace the inline pill + `balancePill*` styles in the 5 screens with `<BalancePill balance={…} />`.
 - **Depends on:** 1.1.
 - **Verify:** `grep -rln "balancePill" app/src/screens | wc -l` → `0` _(was: 5: BountyBoard, AuctionHouse, PvP, LoanShark, BountyCreate)_.
 
@@ -87,8 +87,8 @@ _Baseline: none started — every task below was identified by the audit; no ref
 - **Verify:** `grep -rln "useDatePicker" app/src | wc -l` → `≥4` (hook + 3 callers).
 
 ### 1.6 — Doc-rot: stale `references/` path  ↪ §1.6
-- [ ] Fix the `references/notifications.md` comment in `app/src/utils/notifications.ts` → `context/notifications.md`.
-- [ ] Grep the tree for other stale `references/` mentions and fix any.
+- [x] Fix the `references/notifications.md` comment in `app/src/utils/notifications.ts` → `context/notifications.md`.
+- [x] Grep the tree for other stale `references/` mentions and fix any.
 - **Verify:** `grep -rn "references/" app/src | wc -l` → `0`.
 
 ---

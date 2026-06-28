@@ -11,6 +11,7 @@ import ScreenHeader from '../components/ui/ScreenHeader'
 import LoadingView from '../components/ui/LoadingView'
 import Toast from '../components/ui/Toast'
 import Button from '../components/ui/Button'
+import BalancePill from '../components/ui/BalancePill'
 import { useRefresh } from '../hooks/useRefresh'
 import { useAuthStore } from '../stores/authStore'
 import { useUiStore } from '../stores/uiStore'
@@ -118,10 +119,7 @@ export default function BountyCreateScreen() {
     <SafeAreaView style={styles.safe} edges={['top']}>
       <ScreenHeader title="Post a Bounty" subtitle="Risk pins, draw the hunters" onBack={() => navigation.goBack()} />
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-        <View style={styles.balancePill}>
-          <Text style={styles.balancePillLabel}>YOUR BALANCE</Text>
-          <Text style={styles.balancePillValue}>{formatPins(balance)} pins</Text>
-        </View>
+        <BalancePill balance={balance} label="YOUR BALANCE" />
 
         <Text style={styles.label}>TITLE</Text>
         <TextInput
@@ -227,13 +225,6 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.bg },
   content: { paddingHorizontal: 16, paddingBottom: 40 },
 
-  balancePill: {
-    flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between',
-    backgroundColor: colors.surface, borderRadius: radius.cardMd, borderWidth: 1, borderColor: colors.border,
-    paddingHorizontal: 16, paddingVertical: 12, marginTop: 8, marginBottom: 12,
-  },
-  balancePillLabel: { fontFamily: fonts.barlowCondensed, fontSize: 12, letterSpacing: 1.5, color: colors.muted },
-  balancePillValue: { fontFamily: fonts.barlowCondensedHeavy, fontSize: 20, color: colors.accent },
 
   label: { fontFamily: fonts.barlowCondensed, fontSize: 12, letterSpacing: 1.5, color: colors.muted, marginTop: 14, marginBottom: 8 },
   input: {
