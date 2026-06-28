@@ -37,6 +37,7 @@ export default function PinsinoLeaderboardTable({
     <View style={styles.sbCard}>
       <View style={styles.sbHeaderRow}>
         <Text style={[styles.sbHeaderCell, styles.sbRankCell]}>#</Text>
+        <View style={styles.sbMoveCell} />
         <Text style={[styles.sbHeaderCell, styles.sbNameCell]}>Titan</Text>
         {!isSummary && (
           <>
@@ -61,10 +62,12 @@ export default function PinsinoLeaderboardTable({
             <View style={[styles.sbIconBox, index < 3 && styles.sbIconBoxTop]}>
               <Text style={[styles.sbRankText, index < 3 && styles.sbRankTextTop]}>{index + 1}</Text>
             </View>
+            <View style={styles.sbMoveBox}>
+              {p.movement === 'up' && <Text style={styles.moveUp}>▲</Text>}
+              {p.movement === 'down' && <Text style={styles.moveDown}>▼</Text>}
+            </View>
             <Text style={[styles.sbName, isMe && styles.sbNameMe]} numberOfLines={1}>
               {p.name}
-              {p.movement === 'up' && <Text style={styles.moveUp}> ▲</Text>}
-              {p.movement === 'down' && <Text style={styles.moveDown}> ▼</Text>}
             </Text>
             {!isSummary && (
               <>
@@ -115,6 +118,7 @@ const styles = StyleSheet.create({
     letterSpacing: 1.5,
   },
   sbRankCell: { width: 32 },
+  sbMoveCell: { width: 16, marginRight: 6 },
   sbNameCell: { flex: 1 },
   sbBalCell: { width: 56, textAlign: 'right' },
   sbWagerCell: { width: 56, textAlign: 'right' },
@@ -141,6 +145,7 @@ const styles = StyleSheet.create({
   sbIconBoxTop: { backgroundColor: colors.accentDim },
   sbRankText: { fontFamily: fonts.barlowCondensed, fontSize: 12, color: colors.muted },
   sbRankTextTop: { color: colors.accent },
+  sbMoveBox: { width: 16, marginRight: 6, alignItems: 'center', justifyContent: 'center' },
   sbName: { flex: 1, fontFamily: fonts.barlow, fontSize: 15, color: colors.text },
   sbNameMe: { color: colors.accent },
   sbBalance: {
