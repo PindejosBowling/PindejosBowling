@@ -28,7 +28,7 @@ import { formatPins } from '../utils/formatting'
 
 type PinsinoNav = NativeStackNavigationProp<PinsinoStackParamList>
 
-const TILE_GAP = 16
+const TILE_GAP = 12
 const TILE_WIDTH = (Dimensions.get('window').width - 32 - TILE_GAP * 2) / 3
 
 // Subpage menu tiles (groundwork for more Pinsino subpages — add one line each)
@@ -161,7 +161,7 @@ export default function PinsinoScreen() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.bg },
-  content: { flexGrow: 1, paddingHorizontal: 16, paddingBottom: 32 },
+  content: { flexGrow: 1, paddingHorizontal: 16, paddingBottom: 16 },
 
   balanceCard: {
     backgroundColor: colors.surface,
@@ -169,9 +169,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
     alignItems: 'center',
-    paddingVertical: 24,
-    marginTop: 8,
-    marginBottom: 24,
+    paddingVertical: 16,
+    marginTop: 4,
+    marginBottom: 16,
   },
   balanceLabel: {
     fontFamily: fonts.barlowCondensed,
@@ -182,9 +182,9 @@ const styles = StyleSheet.create({
   },
   balanceValue: {
     fontFamily: fonts.barlowCondensedHeavy,
-    fontSize: 56,
+    fontSize: 48,
     color: colors.accent,
-    lineHeight: 60,
+    lineHeight: 52,
   },
   balanceUnit: {
     fontFamily: fonts.barlowCondensed,
@@ -224,7 +224,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 10,
+    marginBottom: 8,
   },
   sectionLabel: {
     fontFamily: fonts.barlowCondensed,
