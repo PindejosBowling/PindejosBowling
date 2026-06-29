@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native'
 import { colors, fonts, radius } from '../../theme'
 import { LeaderboardEntry } from '../../hooks/usePinsinoData'
@@ -30,8 +31,11 @@ export default function PinsinoLeaderboardTable({
     )
   }
 
+  const [expanded, setExpanded] = useState(false)
+
   const rows = limit ? leaderboard.slice(0, limit) : leaderboard
   const isSummary = mode === 'summary'
+  const showCols = !isSummary && expanded
 
   return (
     <View style={styles.sbCard}>
@@ -39,16 +43,25 @@ export default function PinsinoLeaderboardTable({
         <Text style={[styles.sbHeaderCell, styles.sbRankCell]}>#</Text>
         <View style={styles.sbMoveCell} />
         <Text style={[styles.sbHeaderCell, styles.sbNameCell]}>Titan</Text>
-        {!isSummary && (
+        {showCols && (
           <>
             <Text style={[styles.sbHeaderCell, styles.sbBalCell]}>Pins</Text>
             <Text style={[styles.sbHeaderCell, styles.sbWagerCell]}>Open</Text>
             <Text style={[styles.sbHeaderCell, styles.sbDebtCell]}>Debt</Text>
           </>
         )}
-        <Text style={[styles.sbHeaderCell, isSummary ? styles.sbNetSummaryCell : styles.sbNetCell]}>
-          {isSummary ? 'Current Pin Worth' : 'Net'}
-        </Text>
+        {isSummary ? (
+          <Text style={[styles.sbHeaderCell, styles.sbNetSummaryCell]}>Current Pin Worth</Text>
+        ) : (
+          <TouchableOpacity
+            style={[styles.sbNetCell, styles.sbNetToggle]}
+            onPress={() => setExpanded(o => !o)}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.sbHeaderCell}>Net</Text>
+            <Text style={styles.sbNetChevron}>{expanded ? '▾' : '▸'}</Text>
+          </TouchableOpacity>
+        )}
       </View>
       {rows.map((p, index) => {
         const isMe = p.playerId === playerId
@@ -69,7 +82,7 @@ export default function PinsinoLeaderboardTable({
             <Text style={[styles.sbName, isMe && styles.sbNameMe]} numberOfLines={1}>
               {p.name}
             </Text>
-            {!isSummary && (
+            {showCols && (
               <>
                 <Text style={styles.sbBalance}>{formatPins(p.balance)}</Text>
                 <Text style={styles.sbWager}>{p.openAction > 0 ? formatPins(p.openAction) : ''}</Text>
@@ -124,6 +137,17 @@ const styles = StyleSheet.create({
   sbWagerCell: { width: 56, textAlign: 'right' },
   sbDebtCell: { width: 56, textAlign: 'right' },
   sbNetCell: { width: 56, textAlign: 'right' },
+  sbNetToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+  },
+  sbNetChevron: {
+    fontFamily: fonts.barlow,
+    fontSize: 11,
+    color: colors.muted,
+    marginLeft: 4,
+  },
   // Wider net column for the summary view so "Current Networth" fits unclipped.
   sbNetSummaryCell: { width: 130, textAlign: 'right' },
   sbRow: {
