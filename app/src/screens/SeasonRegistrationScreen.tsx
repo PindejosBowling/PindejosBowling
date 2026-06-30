@@ -16,7 +16,7 @@ import { useUiStore } from '../stores/uiStore'
 import { useAuthStore } from '../stores/authStore'
 import { useRegistrationData, SeasonOption } from '../hooks/useRegistrationData'
 import { useRefresh } from '../hooks/useRefresh'
-import { registrations, seasons } from '../utils/supabase/db'
+import { registrations, seasons, weeks } from '../utils/supabase/db'
 import { MoreStackParamList } from '../navigation/types'
 import LoadingView from '../components/ui/LoadingView'
 import ScreenHeader from '../components/ui/ScreenHeader'
@@ -117,6 +117,15 @@ export default function SeasonRegistrationScreen() {
     try {
       const { error } = await seasons.update(activeSeason.id, { registration_open: false, is_active: true })
       if (error) { showToast(error.message, 'error'); return }
+      // Activating the season is not enough: RSVPs and team generation read
+      // weeks.getCurrent(), so the season needs Week 1 to exist before anyone
+      // can RSVP. Seed it now (idempotent — only if the season has no weeks).
+      const existing = await weeks.listBySeason(activeSeason.id)
+      if (existing.error) { showToast(existing.error.message, 'error'); return }
+      if ((existing.data ?? []).length === 0) {
+        const { error: weekErr } = await weeks.insert({ season_id: activeSeason.id, week_number: 1 })
+        if (weekErr) { showToast(weekErr.message, 'error'); return }
+      }
       showToast(`Registration closed for Season ${activeSeason.number}`, 'success')
       await reload()
     } catch {
