@@ -42,6 +42,9 @@ export function useHousePinsinoData() {
   const [exposure, setExposure] = useState(0)
   const [stats, setStats] = useState<HouseStats>(EMPTY_STATS)
   const [seasonNumber, setSeasonNumber] = useState<number | null>(null)
+  // True when no season is live and we're showing the most-recently-ended
+  // season's frozen final outcome.
+  const [seasonConcluded, setSeasonConcluded] = useState(false)
   // Current season/week ids, exposed for admin surfaces that scope writes
   // (e.g. the Specials manager's week pickers).
   const [currentSeasonId, setCurrentSeasonId] = useState<string | null>(null)
@@ -54,9 +57,12 @@ export function useHousePinsinoData() {
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const seasonRes = await seasons.getCurrent()
+      // Falls back to the most-recently-ended season between seasons so the
+      // House's final accounting stays visible until the next season starts.
+      const seasonRes = await seasons.getCurrentOrLastEnded()
       const seasonId = seasonRes.data?.id ?? null
       setSeasonNumber(seasonRes.data?.number ?? null)
+      setSeasonConcluded(seasonRes.concluded)
       setCurrentSeasonId(seasonId)
 
       if (!seasonId) {
@@ -170,5 +176,5 @@ export function useHousePinsinoData() {
 
   useEffect(() => { load() }, [load])
 
-  return { loading, balance, ledger, summary, weekPnl, exposure, stats, seasonNumber, currentSeasonId, currentWeekId, weekBets, settledBets, reload: load }
+  return { loading, balance, ledger, summary, weekPnl, exposure, stats, seasonNumber, seasonConcluded, currentSeasonId, currentWeekId, weekBets, settledBets, reload: load }
 }

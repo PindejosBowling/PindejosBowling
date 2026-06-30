@@ -523,6 +523,11 @@ export function usePinsinoData(playerId: string | null) {
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([])
   const [currentWeekId, setCurrentWeekId] = useState<string | null>(null)
   const [currentSeasonId, setCurrentSeasonId] = useState<string | null>(null)
+  // The displayed season's number, and whether it is a concluded season being
+  // shown as a frozen final outcome (no live season active). Drives the
+  // "Final Results" banner between season close and the next season's start.
+  const [seasonNumber, setSeasonNumber] = useState<number | null>(null)
+  const [seasonConcluded, setSeasonConcluded] = useState(false)
   // Set of market ids the current player has already placed a bet on
   const [myBetMarketIds, setMyBetMarketIds] = useState<Set<string>>(new Set())
   // Admin custom lines ("Specials") resolved + available this week.
@@ -544,13 +549,18 @@ export function usePinsinoData(playerId: string | null) {
     try {
       const [weekRes, seasonRes] = await Promise.all([
         weeks.getCurrent(),
-        seasons.getCurrent(),
+        seasons.getCurrentOrLastEnded(),
       ])
 
+      // Week stays current-only (null between seasons → live board correctly
+      // empty); the season falls back to the most-recently-ended one so its
+      // final outcome stays visible until the next season starts.
       const weekId = weekRes.data?.id ?? null
       const seasonId = seasonRes.data?.id ?? null
       setCurrentWeekId(weekId)
       setCurrentSeasonId(seasonId)
+      setSeasonNumber(seasonRes.data?.number ?? null)
+      setSeasonConcluded(seasonRes.concluded)
 
       const fetches: PromiseLike<any>[] = []
 
@@ -875,5 +885,5 @@ export function usePinsinoData(playerId: string | null) {
 
   useEffect(() => { load() }, [load])
 
-  return { loading, balance, debt, openAction, netWorth: balance + openAction - debt, activeLoan, openLines, weekTeams, customLines: customLineViews, myBets, weekBets, settledBets, leaderboard, myBetMarketIds, currentWeekId, currentSeasonId, reload: load }
+  return { loading, balance, debt, openAction, netWorth: balance + openAction - debt, activeLoan, openLines, weekTeams, customLines: customLineViews, myBets, weekBets, settledBets, leaderboard, myBetMarketIds, currentWeekId, currentSeasonId, seasonNumber, seasonConcluded, reload: load }
 }

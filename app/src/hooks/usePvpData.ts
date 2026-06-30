@@ -108,7 +108,13 @@ export function usePvpData(playerId: string | null) {
   const [balance, setBalance] = useState(0)
   const [inbox, setInbox] = useState<PvpInbox>(EMPTY_INBOX)
   const [openBoard, setOpenBoard] = useState<PvpChallengeView[]>([])
+  // Every settled challenge leaguewide for the displayed season, newest first —
+  // a public results feed (the "Challenges Won" board).
+  const [wonBoard, setWonBoard] = useState<PvpChallengeView[]>([])
   const [record, setRecord] = useState<PvpRecord>(EMPTY_RECORD)
+  // True when no season is live and we're showing the most-recently-ended
+  // season's frozen state (mirrors the Pinsino between-seasons behavior).
+  const [seasonConcluded, setSeasonConcluded] = useState(false)
   // Only the first load shows the full-screen LoadingView; later reloads (focus,
   // pull-to-refresh) update silently — pull-to-refresh has its own RefreshControl spinner.
   const loadedOnce = useRef(false)
@@ -117,24 +123,29 @@ export function usePvpData(playerId: string | null) {
     if (!loadedOnce.current) setLoading(true)
     try {
       if (!playerId) {
-        setBalance(0); setInbox(EMPTY_INBOX); setOpenBoard([]); setRecord(EMPTY_RECORD)
+        setBalance(0); setInbox(EMPTY_INBOX); setOpenBoard([]); setWonBoard([]); setRecord(EMPTY_RECORD); setSeasonConcluded(false)
         return
       }
 
-      const seasonRes = await seasons.getCurrent()
+      // Falls back to the most-recently-ended season between seasons so results
+      // (and the Challenges Won board) stay visible until the next season starts.
+      const seasonRes = await seasons.getCurrentOrLastEnded()
       const seasonId = seasonRes.data?.id ?? null
+      setSeasonConcluded(seasonRes.concluded)
       if (!seasonId) {
-        setBalance(0); setInbox(EMPTY_INBOX); setOpenBoard([]); setRecord(EMPTY_RECORD)
+        setBalance(0); setInbox(EMPTY_INBOX); setOpenBoard([]); setWonBoard([]); setRecord(EMPTY_RECORD)
         return
       }
 
       let ledgerData: any[] = []
       let mineData: any[] = []
       let boardData: any[] = []
+      let wonData: any[] = []
       await Promise.all([
         pinLedger.listByPlayerSeason(playerId, seasonId).then(({ data }) => { ledgerData = data ?? [] }),
         pvpChallenges.listByPlayerSeason(playerId, seasonId).then(({ data }) => { mineData = data ?? [] }),
         pvpChallenges.listOpenBySeason(seasonId).then(({ data }) => { boardData = data ?? [] }),
+        pvpChallenges.listWonBySeason(seasonId).then(({ data }) => { wonData = data ?? [] }),
       ])
 
       setBalance(ledgerData.reduce((sum, e) => sum + e.amount, 0))
@@ -166,6 +177,7 @@ export function usePvpData(playerId: string | null) {
 
       setInbox(next)
       setOpenBoard(board)
+      setWonBoard(wonData.map(normalizeChallenge))
       setRecord(rec)
     } catch (e) {
       console.error('usePvpData error:', e)
@@ -177,5 +189,5 @@ export function usePvpData(playerId: string | null) {
 
   useEffect(() => { load() }, [load])
 
-  return { loading, balance, inbox, openBoard, record, reload: load }
+  return { loading, balance, inbox, openBoard, wonBoard, record, seasonConcluded, reload: load }
 }

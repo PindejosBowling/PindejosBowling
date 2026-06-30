@@ -283,6 +283,17 @@ export const seasons = {
       .order('number', { ascending: false })
       .limit(1)
       .maybeSingle(),
+  // The season the Pinsino should display: the live season if one is active,
+  // otherwise the most-recently-ended season so its final outcome stays visible
+  // in the gap between season close and the next season's start. The `concluded`
+  // flag lets screens show a "Final Results" banner. Returns null data only
+  // before the very first season ever ends.
+  getCurrentOrLastEnded: async () => {
+    const current = await seasons.getCurrent()
+    if (current.data) return { data: current.data, concluded: false }
+    const ended = await seasons.getLastEnded()
+    return { data: ended.data ?? null, concluded: !!ended.data }
+  },
   insert: (data: TablesInsert<'seasons'>) =>
     supabase.from('seasons').insert(data),
   update: (id: string, data: TablesUpdate<'seasons'>) =>
@@ -805,6 +816,17 @@ export const pvpChallenges = {
       .is('counterparty_player_id', null)
       .eq('status', 'pending')
       .order('created_at', { ascending: false }),
+
+  // Challenges Won board: every settled contract leaguewide for the season,
+  // newest result first. `status='settled'` implies a winner (pushed/voided
+  // carry a null winner_player_id), so these are wins by definition. Both party
+  // names are embedded so the public board can name winner and loser.
+  listWonBySeason: (seasonId: string) =>
+    supabase.from('pvp_challenges')
+      .select(CHALLENGE_PARTIES)
+      .eq('season_id', seasonId)
+      .eq('status', 'settled')
+      .order('settled_at', { ascending: false }),
 
   // Admin: active/locked + still-negotiating + settled contracts for the season.
   // Settled contracts are included so an admin can review and cancel them.

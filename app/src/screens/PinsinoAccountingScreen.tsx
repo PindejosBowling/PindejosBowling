@@ -29,7 +29,7 @@ export default function PinsinoAccountingScreen() {
   const navigation = useNavigation<Nav>()
   const isAdmin = useAuthStore(s => s.role) === 'admin'
 
-  const { loading, balance, ledger, summary, weekPnl, exposure, stats, seasonNumber, reload } = useHousePinsinoData()
+  const { loading, balance, ledger, summary, weekPnl, exposure, stats, seasonNumber, seasonConcluded, reload } = useHousePinsinoData()
   const { refreshing, onRefresh } = useRefresh(reload)
 
   const [view, setView] = useState<AccountingView>('activity')
@@ -72,7 +72,11 @@ export default function PinsinoAccountingScreen() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.muted} />}
       >
         <ScreenHeader title="Accounting" onBack={() => navigation.goBack()} />
-        {seasonNumber != null && <Text style={styles.subtitle}>SEASON {seasonNumber} · THE HOUSE</Text>}
+        {seasonNumber != null && (
+          <Text style={styles.subtitle}>
+            SEASON {seasonNumber} · THE HOUSE{seasonConcluded ? ' · FINAL' : ''}
+          </Text>
+        )}
 
         {/* House card — the house's side of the ledger. Tap HOUSE BALANCE to
             collapse/expand the full breakdown (financials + betting record). */}

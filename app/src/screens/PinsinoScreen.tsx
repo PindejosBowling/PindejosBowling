@@ -48,7 +48,7 @@ export default function PinsinoScreen() {
   const artworkReveal = useUiStore(s => s.artworkReveal)
   const navigation = useNavigation<PinsinoNav>()
 
-  const { loading, balance, debt, openAction, netWorth, leaderboard, reload } = usePinsinoData(playerId)
+  const { loading, balance, debt, openAction, netWorth, leaderboard, seasonNumber, seasonConcluded, reload } = usePinsinoData(playerId)
   const { refreshing, onRefresh } = useRefresh(reload)
 
   // Pending-action counts for the tile badges. Refresh on focus so they reflect
@@ -80,6 +80,19 @@ export default function PinsinoScreen() {
         contentContainerStyle={styles.content}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.muted} />}
       >
+        {/* Between seasons: the most-recently-ended season is frozen here as a
+            final outcome until the next season starts. */}
+        {seasonConcluded && (
+          <View style={styles.finalBanner}>
+            <Text style={styles.finalBannerText}>
+              SEASON {seasonNumber} · FINAL RESULTS
+            </Text>
+            <Text style={styles.finalBannerSub}>
+              Betting is closed until next season begins.
+            </Text>
+          </View>
+        )}
+
         {/* Balance card — tap to view your own betting record */}
         <TouchableOpacity
           style={styles.balanceCard}
@@ -162,6 +175,30 @@ export default function PinsinoScreen() {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.bg },
   content: { flexGrow: 1, paddingHorizontal: 16, paddingBottom: 16 },
+
+  finalBanner: {
+    backgroundColor: colors.surface,
+    borderRadius: radius.card,
+    borderWidth: 1,
+    borderColor: colors.accent,
+    alignItems: 'center',
+    paddingVertical: 10,
+    marginTop: 4,
+    marginBottom: 12,
+  },
+  finalBannerText: {
+    fontFamily: fonts.barlowCondensedHeavy,
+    fontSize: 14,
+    letterSpacing: 2,
+    color: colors.accent,
+  },
+  finalBannerSub: {
+    fontFamily: fonts.barlowCondensed,
+    fontSize: 11,
+    letterSpacing: 1,
+    color: colors.muted,
+    marginTop: 2,
+  },
 
   balanceCard: {
     backgroundColor: colors.surface,

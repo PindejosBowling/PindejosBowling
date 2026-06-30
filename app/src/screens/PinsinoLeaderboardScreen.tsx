@@ -18,7 +18,7 @@ export default function PinsinoLeaderboardScreen() {
   const playerId = useAuthStore(s => s.playerId)
   const navigation = useNavigation<PinsinoNav>()
 
-  const { loading, leaderboard, reload } = usePinsinoData(playerId)
+  const { loading, leaderboard, seasonNumber, seasonConcluded, reload } = usePinsinoData(playerId)
   const { refreshing, onRefresh } = useRefresh(reload)
   const [rulesOpen, setRulesOpen] = useState(false)
 
@@ -31,6 +31,16 @@ export default function PinsinoLeaderboardScreen() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.muted} />}
       >
         <ScreenHeader title="Titans of Pindustry" onBack={() => navigation.goBack()} />
+
+        {/* Between seasons: this board is the frozen final standing until the
+            next season starts. */}
+        {seasonConcluded && (
+          <View style={styles.finalBanner}>
+            <Text style={styles.finalBannerText}>
+              SEASON {seasonNumber} · FINAL STANDINGS
+            </Text>
+          </View>
+        )}
 
         <View style={styles.rulesCard}>
           <TouchableOpacity
@@ -74,6 +84,21 @@ export default function PinsinoLeaderboardScreen() {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.bg },
   content: { paddingHorizontal: 16, paddingBottom: 40 },
+  finalBanner: {
+    backgroundColor: colors.surface,
+    borderRadius: radius.card,
+    borderWidth: 1,
+    borderColor: colors.accent,
+    alignItems: 'center',
+    paddingVertical: 10,
+    marginBottom: 12,
+  },
+  finalBannerText: {
+    fontFamily: fonts.barlowCondensedHeavy,
+    fontSize: 14,
+    letterSpacing: 2,
+    color: colors.accent,
+  },
   rulesCard: {
     backgroundColor: colors.surface,
     borderRadius: radius.card,

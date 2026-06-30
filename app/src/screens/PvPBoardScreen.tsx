@@ -16,20 +16,40 @@ import { usePvpData, PvpChallengeView } from '../hooks/usePvpData'
 import { useRefresh } from '../hooks/useRefresh'
 import { useAuthStore } from '../stores/authStore'
 import { CONTRACT_TYPE_LABEL } from '../utils/pvp'
+import { formatPins } from '../utils/formatting'
 import { PinsinoStackParamList } from '../navigation/types'
 
 type Nav = NativeStackNavigationProp<PinsinoStackParamList>
 
-const FILTERS = ['All', 'line_duel', 'head_to_head']
+// The contract-type filters share the pill row with a "Challenges Won" results
+// view; 'won' is a distinct mode (not a contract type), so selecting it swaps
+// the open board for the leaguewide settled-results feed.
+const WON = 'won'
+const FILTERS = ['All', 'line_duel', 'head_to_head', WON]
+
+function filterLabel(item: string): string {
+  if (item === 'All') return 'All'
+  if (item === WON) return 'Challenges Won'
+  return CONTRACT_TYPE_LABEL[item] ?? item
+}
+
+// A settled challenge's outcome, named so it reads regardless of who's viewing:
+// "🏆 Winner def. Loser · won N".
+function wonCta(c: PvpChallengeView): string {
+  const winnerName = c.winnerId === c.creatorId ? c.creatorName : c.counterpartyName
+  const loserName = c.winnerId === c.creatorId ? c.counterpartyName : c.creatorName
+  return `🏆 ${winnerName ?? '—'} def. ${loserName ?? '—'} · won ${formatPins(c.payoutAmount)}`
+}
 
 export default function PvPBoardScreen() {
   const navigation = useNavigation<Nav>()
   const playerId = useAuthStore(s => s.playerId)
 
-  const { loading, balance, openBoard, inbox, reload } = usePvpData(playerId)
+  const { loading, balance, openBoard, wonBoard, inbox, reload } = usePvpData(playerId)
   const { refreshing, onRefresh } = useRefresh(reload)
 
   const [filter, setFilter] = useState('All')
+  const showingWon = filter === WON
   const [acceptTarget, setAcceptTarget] = useState<PvpChallengeView | null>(null)
   const [counterTarget, setCounterTarget] = useState<PvpChallengeView | null>(null)
   const [detailId, setDetailId] = useState<string | null>(null)
@@ -54,19 +74,43 @@ export default function PvPBoardScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
-      <ScreenHeader title="Challenge Board" subtitle="Open contracts — first to accept locks it" onBack={() => navigation.goBack()} />
+      <ScreenHeader
+        title="Challenge Board"
+        subtitle={showingWon ? 'Settled results — this season' : 'Open contracts — first to accept locks it'}
+        onBack={() => navigation.goBack()}
+      />
 
       <PillFilter
         items={FILTERS}
         value={filter}
         onChange={setFilter}
-        renderLabel={item => (item === 'All' ? 'All' : CONTRACT_TYPE_LABEL[item] ?? item)}
+        renderLabel={filterLabel}
       />
 
       <ScrollView
         contentContainerStyle={styles.content}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.muted} />}
       >
+        {showingWon ? (
+          // Challenges Won: every settled contract leaguewide this season, a
+          // public results feed. Read-only (no accept/counter); tap for detail.
+          wonBoard.length === 0 ? (
+            <View style={styles.emptyCard}>
+              <Text style={styles.emptyText}>No challenges have been settled yet this season.</Text>
+            </View>
+          ) : (
+            wonBoard.map(c => (
+              <PvpChallengeRow
+                key={c.id}
+                challenge={c}
+                viewerId={playerId}
+                onPress={() => setDetailId(c.id)}
+                cta={wonCta(c)}
+              />
+            ))
+          )
+        ) : (
+        <>
         <Button
           label="+ Post Open Challenge"
           onPress={() => navigation.navigate('PvPCreate', { openBoard: true })}
@@ -113,6 +157,8 @@ export default function PvPBoardScreen() {
               </View>
             </View>
           ))
+        )}
+        </>
         )}
       </ScrollView>
 

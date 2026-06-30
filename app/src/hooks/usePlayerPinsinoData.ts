@@ -18,6 +18,8 @@ export function usePlayerPinsinoData(playerId: string | null) {
   const [ledger, setLedger] = useState<LedgerEntry[]>([])
   const [openBets, setOpenBets] = useState<BetView[]>([])
   const [settledBets, setSettledBets] = useState<BetView[]>([])
+  const [seasonNumber, setSeasonNumber] = useState<number | null>(null)
+  const [seasonConcluded, setSeasonConcluded] = useState(false)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -30,8 +32,12 @@ export function usePlayerPinsinoData(playerId: string | null) {
         return
       }
 
-      const seasonRes = await seasons.getCurrent()
+      // Falls back to the most-recently-ended season between seasons so the
+      // player's final ledger/balance stays visible until the next one starts.
+      const seasonRes = await seasons.getCurrentOrLastEnded()
       const seasonId = seasonRes.data?.id ?? null
+      setSeasonNumber(seasonRes.data?.number ?? null)
+      setSeasonConcluded(seasonRes.concluded)
 
       const fetches: PromiseLike<any>[] = []
 
@@ -101,5 +107,5 @@ export function usePlayerPinsinoData(playerId: string | null) {
     load()
   }, [load])
 
-  return { loading, balance, ledger, openBets, settledBets, reload: load }
+  return { loading, balance, ledger, openBets, settledBets, seasonNumber, seasonConcluded, reload: load }
 }
