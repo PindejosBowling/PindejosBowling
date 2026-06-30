@@ -9,6 +9,7 @@ import LoadingView from '../components/ui/LoadingView'
 import BountyEntryModal from '../components/bounty/BountyEntryModal'
 import Button from '../components/ui/Button'
 import { useBountyDetail } from '../hooks/useBountyDetail'
+import { usePinsinoSeasonContext } from '../hooks/usePinsinoSeasonContext'
 import { useRefresh } from '../hooks/useRefresh'
 import { useAuthStore } from '../stores/authStore'
 import { useNotificationStore } from '../stores/notificationStore'
@@ -31,6 +32,7 @@ export default function BountyDetailScreen() {
   const playerId = useAuthStore(s => s.playerId)
   const { bountyId } = route.params
 
+  const { readOnly } = usePinsinoSeasonContext()
   const { loading, bounty, hunters, settlement, payouts, ledger, reload } = useBountyDetail(bountyId)
   const { refreshing, onRefresh } = useRefresh(reload)
   const [entryOpen, setEntryOpen] = useState(false)
@@ -53,11 +55,12 @@ export default function BountyDetailScreen() {
   // The viewer can join when the bounty is open, has a free slot, they aren't the
   // sponsor, and they haven't already entered (design §29.2).
   const canJoin = useMemo(() => {
+    if (readOnly) return false
     if (!bounty || bounty.status !== 'open' || !playerId) return false
     if (bounty.slotsRemaining <= 0) return false
     if (bounty.sponsorPlayerId === playerId) return false
     return !hunters.some(h => h.playerId === playerId)
-  }, [bounty, hunters, playerId])
+  }, [bounty, hunters, playerId, readOnly])
 
   if (loading) return <LoadingView label="Loading…" delayed />
 

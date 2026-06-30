@@ -26,17 +26,21 @@ export interface ActiveLoanView {
 // One player's loan-shark state: their balance, what they can borrow (when no
 // active loan), and their current loan + payment history. No memoization in the
 // hook (project rule) — the screen derives display via useMemo.
-export function useLoanSharkData(playerId: string | null) {
+export function useLoanSharkData(playerId: string | null, viewSeasonId?: string | null) {
   const [loading, setLoading] = useState(true)
   const [balance, setBalance] = useState(0)
   const [products, setProducts] = useState<LoanProductView[]>([])
   const [activeLoan, setActiveLoan] = useState<ActiveLoanView | null>(null)
 
+  // True when reviewing a specific prior season — nothing is borrowable.
+  const readOnly = viewSeasonId != null
+
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const seasonRes = await seasons.getCurrent()
-      const seasonId = seasonRes.data?.id ?? null
+      const seasonId = viewSeasonId
+        ? (await seasons.getById(viewSeasonId)).data?.id ?? null
+        : (await seasons.getCurrent()).data?.id ?? null
 
       const fetches: PromiseLike<any>[] = []
 
@@ -94,7 +98,8 @@ export function useLoanSharkData(playerId: string | null) {
         const fromOk = !p.available_from || new Date(p.available_from).getTime() <= now
         const untilOk = !p.available_until || new Date(p.available_until).getTime() >= now
         const seasonOk = p.season_id == null || p.season_id === seasonId
-        return { ...p, available: !active && fromOk && untilOk && seasonOk }
+        // Past-season review is read-only: nothing is borrowable.
+        return { ...p, available: !readOnly && !active && fromOk && untilOk && seasonOk }
       })
 
       setBalance(playerBalance)
@@ -105,9 +110,9 @@ export function useLoanSharkData(playerId: string | null) {
     } finally {
       setLoading(false)
     }
-  }, [playerId])
+  }, [playerId, viewSeasonId])
 
   useEffect(() => { load() }, [load])
 
-  return { loading, balance, products, activeLoan, reload: load }
+  return { loading, balance, products, activeLoan, readOnly, reload: load }
 }

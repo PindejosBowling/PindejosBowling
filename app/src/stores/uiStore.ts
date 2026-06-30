@@ -20,6 +20,11 @@ interface UiStore {
   h2hP1: string | null
   h2hP2: string | null
   historySeason: string | null
+  // The prior (concluded) season the entire Pinsino tab is being viewed "as of",
+  // read-only. null = the live/current season (default). A concrete season id puts
+  // the hub leaderboard AND every Pinsino sub-surface into read-only end-of-season
+  // mode. Global so the selection persists as the user moves between sub-screens.
+  pinsinoViewSeasonId: string | null
   // When true, art screens hide their foreground UI so the pixel-art backdrop
   // shows in full. Toggled by the header Artwork button; reset on screen blur.
   artworkReveal: boolean
@@ -46,6 +51,7 @@ export const useUiStore = create<UiStore>((set, get) => ({
   h2hP1: null,
   h2hP2: null,
   historySeason: null,
+  pinsinoViewSeasonId: null,
   artworkReveal: false,
   toasts: [],
   weekVersion: 0,

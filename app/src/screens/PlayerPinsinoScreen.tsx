@@ -15,6 +15,9 @@ import LedgerRow from '../components/betting/LedgerRow'
 import { resultBadge, betReturnText } from '../utils/bets'
 import { useRefresh } from '../hooks/useRefresh'
 import { usePlayerPinsinoData, LedgerEntry } from '../hooks/usePlayerPinsinoData'
+import { usePinsinoSeasonContext } from '../hooks/usePinsinoSeasonContext'
+import ReadOnlySeasonBanner from '../components/betting/ReadOnlySeasonBanner'
+import { useUiStore } from '../stores/uiStore'
 import { BetView } from '../hooks/usePinsinoData'
 import EmptyCard from '../components/ui/EmptyCard'
 import { formatPins } from '../utils/formatting'
@@ -32,7 +35,9 @@ export default function PlayerPinsinoScreen() {
   const navigation = useNavigation<PlayerPinsinoNav>()
   const { playerId, name } = route.params
 
-  const { loading, balance, ledger, openBets, settledBets, reload } = usePlayerPinsinoData(playerId)
+  const pinsinoViewSeasonId = useUiStore(s => s.pinsinoViewSeasonId)
+  const { readOnly, viewSeasonNumber } = usePinsinoSeasonContext()
+  const { loading, balance, ledger, openBets, settledBets, reload } = usePlayerPinsinoData(playerId, pinsinoViewSeasonId)
   const { refreshing, onRefresh } = useRefresh(reload)
 
   const [view, setView] = useState<DetailView>('activity')
@@ -139,6 +144,8 @@ export default function PlayerPinsinoScreen() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.muted} />}
       >
         <ScreenHeader title={name} onBack={() => navigation.goBack()} />
+
+        {readOnly && <ReadOnlySeasonBanner seasonNumber={viewSeasonNumber} />}
 
         {/* Summary card */}
         <View style={styles.summaryCard}>

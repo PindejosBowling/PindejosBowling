@@ -26,6 +26,7 @@ import EnergyDrinkToggle from '../components/auction/EnergyDrinkToggle'
 import LineRow from '../components/betting/LineRow'
 import LineRowContainer from '../components/betting/LineRowContainer'
 import CustomLineRow from '../components/betting/CustomLineRow'
+import ReadOnlySeasonBanner from '../components/betting/ReadOnlySeasonBanner'
 import Button from '../components/ui/Button'
 import ConfirmActionSheet from '../components/ui/ConfirmActionSheet'
 import {
@@ -105,13 +106,17 @@ export default function SportsbookScreen() {
   const playerId = useAuthStore(s => s.playerId)
   const { showToast } = useUiStore()
   const artworkReveal = useUiStore(s => s.artworkReveal)
+  const pinsinoViewSeasonId = useUiStore(s => s.pinsinoViewSeasonId)
   const navigation = useNavigation<PinsinoNav>()
 
-  const { loading, balance, openLines, weekTeams, customLines, weekBets, settledBets, reload } = usePinsinoData(playerId)
+  const { loading, balance, openLines, weekTeams, customLines, weekBets, settledBets, seasonNumber, readOnly, reload } = usePinsinoData(playerId, pinsinoViewSeasonId)
   const { refreshing, onRefresh } = useRefresh(reload)
   const insets = useSafeAreaInsets()
 
   const [view, setView] = useState<View2>('place')
+  // Past-season review is read-only: only the season's settled bets are shown
+  // (no Place/Active board, no wager sheets reachable).
+  const effectiveView: View2 = readOnly ? 'settled' : view
   const [placeMode, setPlaceMode] = useState<PlaceMode>('single')
   const [parlayLegs, setParlayLegs] = useState<ParlayLeg[]>([])
   const [parlayModalOpen, setParlayModalOpen] = useState(false)
@@ -151,7 +156,8 @@ export default function SportsbookScreen() {
   const [hauntModal, setHauntModal] = useState<BetView | null>(null)
 
   const reloadTickets = useCallback(async () => {
-    if (!playerId) { setTickets([]); setCrutches([]); setBoosts([]); setGhosts([]); return }
+    // Inventory items are live-season only — skip entirely in past-season review.
+    if (!playerId || readOnly) { setTickets([]); setCrutches([]); setBoosts([]); setGhosts([]); return }
     const { data: season } = await seasons.getCurrent()
     if (!season) { setTickets([]); setCrutches([]); setBoosts([]); setGhosts([]); return }
     const { data } = await inventoryItems.listByPlayerSeason(playerId, season.id)
@@ -165,15 +171,15 @@ export default function SportsbookScreen() {
     setBoosts(boostRows.map((i: any) => i.id))
     setBoostPct(boostRows.length ? Number((boostRows[0].item_catalog?.effect_params as any)?.boost_pct ?? 1) : 1)
     setGhosts(unconsumed.filter((i: any) => i.item_catalog?.effect_type === 'haunt').map((i: any) => i.id))
-  }, [playerId])
+  }, [playerId, readOnly])
 
   useEffect(() => { reloadTickets() }, [reloadTickets])
 
   const reloadHaunts = useCallback(async () => {
-    if (!playerId) { setHauntedBetIds(new Set()); return }
+    if (!playerId || readOnly) { setHauntedBetIds(new Set()); return }
     const { data } = await haunts.listMine(playerId)
     setHauntedBetIds(new Set((data ?? []).map((r: any) => r.bet_id)))
-  }, [playerId])
+  }, [playerId, readOnly])
 
   useEffect(() => { reloadHaunts() }, [reloadHaunts])
 
@@ -283,6 +289,7 @@ export default function SportsbookScreen() {
   // Single mode: tapping a selection opens the wager sheet (pre-picked to that
   // side). Own-against side always toasts; below-min balance is a silent no-op.
   function onSingleSelect(line: LineView, sel: SelectionView) {
+    if (readOnly) return
     if (isSelfTank(line, sel)) { showToast("Believe in yourself man", 'error'); return }
     if (balance < 10) return
     setInsureBet(false)
@@ -291,6 +298,7 @@ export default function SportsbookScreen() {
   }
 
   async function placeBet() {
+    if (readOnly) return
     if (!modal || !playerId) return
     const sel = modal.line.selections.find(s => s.selectionId === modal.selectedId)
     if (!sel) { showToast('Choose a selection', 'error'); return }
@@ -325,6 +333,7 @@ export default function SportsbookScreen() {
   // parlay slip (it already *is* a parlay when multi-leg), so the TAKE button
   // behaves identically in Single and Parlay modes.
   function onTakeCustom(line: CustomLineView) {
+    if (readOnly) return
     if (customLineSelfTank(line, playerId)) { showToast("Believe in yourself man", 'error'); return }
     if (balance < 10) return
     setInsureBet(false)
@@ -334,6 +343,7 @@ export default function SportsbookScreen() {
   }
 
   async function placeCustom() {
+    if (readOnly) return
     if (!takeModal || !playerId) return
     const wagerNum = parseInt(takeModal.wager, 10)
     if (isNaN(wagerNum) || wagerNum < 10) { showToast('Minimum wager is 10 pins', 'error'); return }
@@ -368,6 +378,7 @@ export default function SportsbookScreen() {
 
   // Toggle a selection in/out of the slip. One selection per market.
   function toggleParlayLeg(line: LineView, sel: SelectionView) {
+    if (readOnly) return
     if (isSelfTank(line, sel)) { showToast('Believe in yourself man', 'error'); return }
 
     setParlayLegs(prev => {
@@ -395,6 +406,7 @@ export default function SportsbookScreen() {
   }
 
   async function placeParlay() {
+    if (readOnly) return
     if (!playerId) return
     if (parlayLegs.length < 2) { showToast('A parlay needs at least 2 legs', 'error'); return }
     const wagerNum = parseInt(parlayWager, 10)
@@ -483,7 +495,7 @@ export default function SportsbookScreen() {
         contentContainerStyle={[
           styles.content,
           { paddingTop: insets.top },
-          view === 'place' && placeMode === 'parlay' && parlayLegs.length > 0 && { paddingBottom: 96 },
+          effectiveView === 'place' && placeMode === 'parlay' && parlayLegs.length > 0 && { paddingBottom: 96 },
         ]}
         refreshControl={
           loading ? undefined : (
@@ -501,13 +513,17 @@ export default function SportsbookScreen() {
           pointerEvents={artworkReveal ? 'none' : 'auto'}
           style={artworkReveal ? styles.artHidden : undefined}
         >
-        {/* View toggle */}
-        <View style={styles.viewToggle}>
-          <ToggleGroup options={VIEW_OPTIONS} value={view} onChange={setView} />
-        </View>
+        {readOnly && <ReadOnlySeasonBanner seasonNumber={seasonNumber} />}
+
+        {/* View toggle — hidden in past-season review (settled bets only). */}
+        {!readOnly && (
+          <View style={styles.viewToggle}>
+            <ToggleGroup options={VIEW_OPTIONS} value={view} onChange={setView} />
+          </View>
+        )}
 
         {/* ── Active Bets (read-only; tap a row for details) ──── */}
-        {view === 'action' && (
+        {effectiveView === 'action' && (
           <ActiveBetsView
             bets={activeBets}
             myBets={myActiveBets}
@@ -518,7 +534,7 @@ export default function SportsbookScreen() {
         )}
 
         {/* ── Place Bets ──────────────────────────────────────── */}
-        {view === 'place' && <>
+        {effectiveView === 'place' && <>
         {/* Single / Parlay mode */}
         <View style={styles.modeToggle}>
           <ToggleGroup
@@ -622,7 +638,7 @@ export default function SportsbookScreen() {
         </>}
 
         {/* ── Settled Bets (read-only; tap a row for details) ─── */}
-        {view === 'settled' && (
+        {effectiveView === 'settled' && (
           <SettledBetsView bets={settledBets} onBetPress={setDetailModal} />
         )}
         </View>
@@ -630,7 +646,7 @@ export default function SportsbookScreen() {
       </ScrollView>
 
       {/* Parlay bet slip (sticky) */}
-      {view === 'place' && placeMode === 'parlay' && parlayLegs.length > 0 && (
+      {effectiveView === 'place' && placeMode === 'parlay' && parlayLegs.length > 0 && (
         <View style={styles.slipBar}>
           <View style={styles.slipInfo}>
             <Text style={styles.slipTitle}>

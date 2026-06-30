@@ -11,14 +11,16 @@ import PinsinoLeaderboardTable from '../components/betting/PinsinoLeaderboardTab
 import { usePinsinoData } from '../hooks/usePinsinoData'
 import { useRefresh } from '../hooks/useRefresh'
 import { useAuthStore } from '../stores/authStore'
+import { useUiStore } from '../stores/uiStore'
 
 type PinsinoNav = NativeStackNavigationProp<PinsinoStackParamList>
 
 export default function PinsinoLeaderboardScreen() {
   const playerId = useAuthStore(s => s.playerId)
+  const pinsinoViewSeasonId = useUiStore(s => s.pinsinoViewSeasonId)
   const navigation = useNavigation<PinsinoNav>()
 
-  const { loading, leaderboard, seasonNumber, seasonConcluded, reload } = usePinsinoData(playerId)
+  const { loading, leaderboard, seasonNumber, seasonConcluded, reload } = usePinsinoData(playerId, pinsinoViewSeasonId)
   const { refreshing, onRefresh } = useRefresh(reload)
   const [rulesOpen, setRulesOpen] = useState(false)
 

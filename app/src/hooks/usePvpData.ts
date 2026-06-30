@@ -103,7 +103,7 @@ const EMPTY_RECORD: PvpRecord = { wins: 0, losses: 0, pushes: 0 }
 
 // One player's PvP state: season balance (for stake validation), the bucketed
 // inbox, the open board they can accept, and their challenge record.
-export function usePvpData(playerId: string | null) {
+export function usePvpData(playerId: string | null, viewSeasonId?: string | null) {
   const [loading, setLoading] = useState(true)
   const [balance, setBalance] = useState(0)
   const [inbox, setInbox] = useState<PvpInbox>(EMPTY_INBOX)
@@ -127,11 +127,20 @@ export function usePvpData(playerId: string | null) {
         return
       }
 
-      // Falls back to the most-recently-ended season between seasons so results
-      // (and the Challenges Won board) stay visible until the next season starts.
-      const seasonRes = await seasons.getCurrentOrLastEnded()
-      const seasonId = seasonRes.data?.id ?? null
-      setSeasonConcluded(seasonRes.concluded)
+      // Past-season mode points at the requested prior season; otherwise falls
+      // back to the most-recently-ended season between seasons so results (and
+      // the Challenges Won board) stay visible until the next season starts.
+      // The pending/open buckets come back empty for a concluded season, leaving
+      // the settled inbox + Challenges Won board as the read-only review.
+      let seasonId: string | null
+      if (viewSeasonId) {
+        seasonId = (await seasons.getById(viewSeasonId)).data?.id ?? null
+        setSeasonConcluded(true)
+      } else {
+        const seasonRes = await seasons.getCurrentOrLastEnded()
+        seasonId = seasonRes.data?.id ?? null
+        setSeasonConcluded(seasonRes.concluded)
+      }
       if (!seasonId) {
         setBalance(0); setInbox(EMPTY_INBOX); setOpenBoard([]); setWonBoard([]); setRecord(EMPTY_RECORD)
         return
@@ -185,9 +194,12 @@ export function usePvpData(playerId: string | null) {
       loadedOnce.current = true
       setLoading(false)
     }
-  }, [playerId])
+  }, [playerId, viewSeasonId])
 
   useEffect(() => { load() }, [load])
 
-  return { loading, balance, inbox, openBoard, wonBoard, record, seasonConcluded, reload: load }
+  // True when reviewing a specific prior season (drives read-only UI gating).
+  const readOnly = viewSeasonId != null
+
+  return { loading, balance, inbox, openBoard, wonBoard, record, seasonConcluded, readOnly, reload: load }
 }

@@ -85,12 +85,15 @@ export interface AuctionHouseData {
   balance: number
   auctions: AuctionView[]
   myItems: InventoryItemView[]
+  readOnly: boolean
   reload: () => Promise<void>
 }
 
 // List data for AuctionHouseScreen. Sectioning/sorting/grouping is pure
 // compute (auctionSections / groupInventory) — wrap in useMemo at the screen.
-export function useAuctionHouseData(playerId: string | null): AuctionHouseData {
+// In past-season mode (`viewSeasonId` set) the season's settled auctions load
+// read-only — `auctions.listBySeason` already returns concluded auctions.
+export function useAuctionHouseData(playerId: string | null, viewSeasonId?: string | null): AuctionHouseData {
   const [loading, setLoading] = useState(true)
   const [balance, setBalance] = useState(0)
   const [auctionList, setAuctionList] = useState<AuctionView[]>([])
@@ -103,8 +106,9 @@ export function useAuctionHouseData(playerId: string | null): AuctionHouseData {
       const reset = () => { setBalance(0); setAuctionList([]); setMyItems([]) }
       if (!playerId) { reset(); return }
 
-      const seasonRes = await seasons.getCurrent()
-      const seasonId = seasonRes.data?.id ?? null
+      const seasonId = viewSeasonId
+        ? (await seasons.getById(viewSeasonId)).data?.id ?? null
+        : (await seasons.getCurrent()).data?.id ?? null
       if (!seasonId) { reset(); return }
 
       let ledgerData: any[] = []
@@ -139,9 +143,12 @@ export function useAuctionHouseData(playerId: string | null): AuctionHouseData {
       loadedOnce.current = true
       setLoading(false)
     }
-  }, [playerId])
+  }, [playerId, viewSeasonId])
 
   useEffect(() => { load() }, [load])
 
-  return { loading, balance, auctions: auctionList, myItems, reload: load }
+  // True when reviewing a specific prior season (drives read-only UI gating).
+  const readOnly = viewSeasonId != null
+
+  return { loading, balance, auctions: auctionList, myItems, readOnly, reload: load }
 }

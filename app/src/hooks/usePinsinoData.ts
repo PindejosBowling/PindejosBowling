@@ -509,7 +509,7 @@ function resolveCustomLine(
   }
 }
 
-export function usePinsinoData(playerId: string | null) {
+export function usePinsinoData(playerId: string | null, viewSeasonId?: string | null) {
   const [loading, setLoading] = useState(true)
   const [balance, setBalance] = useState(0)
   const [openLines, setOpenLines] = useState<LineView[]>([])
@@ -547,20 +547,43 @@ export function usePinsinoData(playerId: string | null) {
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const [weekRes, seasonRes] = await Promise.all([
-        weeks.getCurrent(),
-        seasons.getCurrentOrLastEnded(),
-      ])
+      // Past-season mode: an explicit prior season is requested. The economy is
+      // season-scoped, so we just point `seasonId` at it and null out `weekId` —
+      // every live/week-scoped fetch below is guarded by `if (weekId)`, so the
+      // board/active-bets vanish automatically and only the season's final
+      // leaderboard + settled history loads. `readOnly` drives the UI gating.
+      let weekId: string | null
+      let seasonId: string | null
+      // The resolved season's number — used to scope the player's all-time bets
+      // to the viewed season in past-season mode.
+      let resolvedSeasonNumber: number | null
+      if (viewSeasonId) {
+        const seasonRes = await seasons.getById(viewSeasonId)
+        weekId = null
+        seasonId = seasonRes.data?.id ?? null
+        resolvedSeasonNumber = seasonRes.data?.number ?? null
+        setCurrentWeekId(null)
+        setCurrentSeasonId(seasonId)
+        setSeasonNumber(resolvedSeasonNumber)
+        // A prior season is by definition concluded → show the FINAL banner.
+        setSeasonConcluded(true)
+      } else {
+        const [weekRes, seasonRes] = await Promise.all([
+          weeks.getCurrent(),
+          seasons.getCurrentOrLastEnded(),
+        ])
 
-      // Week stays current-only (null between seasons → live board correctly
-      // empty); the season falls back to the most-recently-ended one so its
-      // final outcome stays visible until the next season starts.
-      const weekId = weekRes.data?.id ?? null
-      const seasonId = seasonRes.data?.id ?? null
-      setCurrentWeekId(weekId)
-      setCurrentSeasonId(seasonId)
-      setSeasonNumber(seasonRes.data?.number ?? null)
-      setSeasonConcluded(seasonRes.concluded)
+        // Week stays current-only (null between seasons → live board correctly
+        // empty); the season falls back to the most-recently-ended one so its
+        // final outcome stays visible until the next season starts.
+        weekId = weekRes.data?.id ?? null
+        seasonId = seasonRes.data?.id ?? null
+        resolvedSeasonNumber = seasonRes.data?.number ?? null
+        setCurrentWeekId(weekId)
+        setCurrentSeasonId(seasonId)
+        setSeasonNumber(resolvedSeasonNumber)
+        setSeasonConcluded(seasonRes.concluded)
+      }
 
       const fetches: PromiseLike<any>[] = []
 
@@ -735,7 +758,13 @@ export function usePinsinoData(playerId: string | null) {
       }
 
       const weekBetViews = weekBetsData.map(normalizeBet).map(brandBet)
-      const myBetViews = myBetsData.map(normalizeBet).map(brandBet)
+      // `bets.listByPlayer` is all-time; in past-season mode scope the player's
+      // own bets to the viewed season so the history doesn't mix seasons. (The
+      // leaderboard + settled views are already season-scoped server-side.)
+      const myBetViews = myBetsData
+        .map(normalizeBet)
+        .map(brandBet)
+        .filter(b => !viewSeasonId || b.seasonNumber === resolvedSeasonNumber)
 
       // Cutoff for "last week's results": the most recent settlement (score_credit)
       // timestamp in the season ledger. priorBalance sums only rows strictly before
@@ -881,9 +910,12 @@ export function usePinsinoData(playerId: string | null) {
     } finally {
       setLoading(false)
     }
-  }, [playerId])
+  }, [playerId, viewSeasonId])
 
   useEffect(() => { load() }, [load])
 
-  return { loading, balance, debt, openAction, netWorth: balance + openAction - debt, activeLoan, openLines, weekTeams, customLines: customLineViews, myBets, weekBets, settledBets, leaderboard, myBetMarketIds, currentWeekId, currentSeasonId, seasonNumber, seasonConcluded, reload: load }
+  // True when viewing a specific prior season (drives read-only UI gating).
+  const readOnly = viewSeasonId != null
+
+  return { loading, balance, debt, openAction, netWorth: balance + openAction - debt, activeLoan, openLines, weekTeams, customLines: customLineViews, myBets, weekBets, settledBets, leaderboard, myBetMarketIds, currentWeekId, currentSeasonId, seasonNumber, seasonConcluded, readOnly, reload: load }
 }

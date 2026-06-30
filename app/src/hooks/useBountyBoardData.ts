@@ -79,12 +79,15 @@ interface BountyBoardData {
   mySponsored: BountyView[]
   myHunted: BountyView[]
   settled: BountyView[]
+  readOnly: boolean
   reload: () => Promise<void>
 }
 
 // One player's Bounty Board state: season balance (stake validation), the open
 // board, and the player's involvement bucketed into sponsored / hunted / settled.
-export function useBountyBoardData(playerId: string | null): BountyBoardData {
+// In past-season mode (`viewSeasonId` set) the open board is skipped — only the
+// concluded season's settled bounties + the player's involvement load, read-only.
+export function useBountyBoardData(playerId: string | null, viewSeasonId?: string | null): BountyBoardData {
   const [loading, setLoading] = useState(true)
   const [balance, setBalance] = useState(0)
   const [openBoard, setOpenBoard] = useState<BountyView[]>([])
@@ -101,8 +104,11 @@ export function useBountyBoardData(playerId: string | null): BountyBoardData {
       }
       if (!playerId) { reset(); return }
 
-      const seasonRes = await seasons.getCurrent()
-      const seasonId = seasonRes.data?.id ?? null
+      // Past-season mode points at the requested prior season; the open board is
+      // meaningless there (nothing left to hunt), so it's skipped.
+      const seasonId = viewSeasonId
+        ? (await seasons.getById(viewSeasonId)).data?.id ?? null
+        : (await seasons.getCurrent()).data?.id ?? null
       if (!seasonId) { reset(); return }
 
       let ledgerData: any[] = []
@@ -110,7 +116,9 @@ export function useBountyBoardData(playerId: string | null): BountyBoardData {
       let mineData: any[] = []
       await Promise.all([
         pinLedger.listByPlayerSeason(playerId, seasonId).then(({ data }) => { ledgerData = data ?? [] }),
-        bountyPosts.listOpenBySeason(seasonId).then(({ data }) => { boardData = data ?? [] }),
+        viewSeasonId
+          ? Promise.resolve()
+          : bountyPosts.listOpenBySeason(seasonId).then(({ data }) => { boardData = data ?? [] }),
         bountyPosts.listByPlayerSeason(seasonId).then(({ data }) => { mineData = data ?? [] }),
       ])
 
@@ -138,9 +146,12 @@ export function useBountyBoardData(playerId: string | null): BountyBoardData {
       loadedOnce.current = true
       setLoading(false)
     }
-  }, [playerId])
+  }, [playerId, viewSeasonId])
 
   useEffect(() => { load() }, [load])
 
-  return { loading, balance, openBoard, mySponsored, myHunted, settled, reload: load }
+  // True when reviewing a specific prior season (drives read-only UI gating).
+  const readOnly = viewSeasonId != null
+
+  return { loading, balance, openBoard, mySponsored, myHunted, settled, readOnly, reload: load }
 }
