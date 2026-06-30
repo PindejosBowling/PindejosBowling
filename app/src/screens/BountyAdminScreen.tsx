@@ -32,12 +32,19 @@ export default function BountyAdminScreen() {
   const [filter, setFilter] = useState('All')
   const [target, setTarget] = useState<BountyView | null>(null)
   const [createOpen, setCreateOpen] = useState(false)
+  // Between seasons we fall back to the most-recently-ended season so leftover
+  // bounties can still be closed/settled. Creation is disabled in that state
+  // (no current week, and a new bounty must not land in a dead season).
+  const [seasonConcluded, setSeasonConcluded] = useState(false)
+  const [seasonNumber, setSeasonNumber] = useState<number | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const [seasonRes, weekRes] = await Promise.all([seasons.getCurrent(), weeks.getCurrent()])
+      const [seasonRes, weekRes] = await Promise.all([seasons.getCurrentOrLastEnded(), weeks.getCurrent()])
       const seasonId = seasonRes.data?.id ?? null
+      setSeasonConcluded(seasonRes.concluded)
+      setSeasonNumber(seasonRes.data?.number ?? null)
       setWeekId(weekRes.data?.id ?? null)
       if (!seasonId) { setBounties([]); return }
       const { data } = await bountyPosts.listBySeason(seasonId)
@@ -70,7 +77,11 @@ export default function BountyAdminScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
-      <ScreenHeader title="Bounty Admin" subtitle="Create House bounties, close, settle, cancel" onBack={() => navigation.goBack()} />
+      <ScreenHeader
+        title="Bounty Admin"
+        subtitle={seasonConcluded ? `Season ${seasonNumber} · final cleanup` : 'Create House bounties, close, settle, cancel'}
+        onBack={() => navigation.goBack()}
+      />
 
       <PillFilter items={STATUS_FILTERS} value={filter} onChange={setFilter} renderLabel={item => item === 'All' ? 'All' : item.toUpperCase()} />
 
@@ -78,7 +89,13 @@ export default function BountyAdminScreen() {
         contentContainerStyle={styles.content}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.muted} />}
       >
-        <Button label="+ Create House Bounty" onPress={() => setCreateOpen(true)} style={styles.createBtn} />
+        {seasonConcluded ? (
+          <Text style={styles.concludedNote}>
+            Season ended — close out remaining bounties. Creation resumes next season.
+          </Text>
+        ) : (
+          <Button label="+ Create House Bounty" onPress={() => setCreateOpen(true)} style={styles.createBtn} />
+        )}
 
         {rows.length === 0 ? (
           <EmptyCard text="No bounties for this filter." style={{ margin: 16 }} />
@@ -92,7 +109,7 @@ export default function BountyAdminScreen() {
       {target && (
         <BountyAdminActionModal bounty={target} onClose={() => setTarget(null)} onDone={load} />
       )}
-      {createOpen && (
+      {createOpen && !seasonConcluded && (
         <BountyHouseCreateModal weekId={weekId} onClose={() => setCreateOpen(false)} onDone={load} />
       )}
     </SafeAreaView>
@@ -103,4 +120,12 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.bg },
   content: { paddingHorizontal: 16, paddingBottom: 40 },
   createBtn: { marginTop: 4, marginBottom: 16 },
+  concludedNote: {
+    fontFamily: fonts.barlow,
+    fontSize: 13,
+    color: colors.muted,
+    lineHeight: 18,
+    marginTop: 4,
+    marginBottom: 16,
+  },
 })

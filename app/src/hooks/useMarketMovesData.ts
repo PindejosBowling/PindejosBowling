@@ -93,21 +93,27 @@ export function useMarketMovesData() {
   const loadFirst = useCallback(async (f: FeedFilter) => {
     if (!loadedOnce.current) setLoading(true)
     try {
-      const seasonRes = await seasons.getCurrent()
+      // Between seasons (no live season) fall back to the most-recently-ended
+      // season so the newswire keeps showing its final-week activity rather than
+      // going blank until the next season starts.
+      const seasonRes = await seasons.getCurrentOrLastEnded()
       const sid = seasonRes.data?.id ?? null
       setSeasonId(sid)
       if (!sid) { setEvents([]); setHasMore(false); return }
 
-      // Resolve the season's weeks once: label map + the current active week
-      // (highest non-archived week_number) for default-open grouping.
+      // Resolve the season's weeks once: label map + the default-open week for
+      // grouping. While a season runs that's the current active week (highest
+      // non-archived week_number); once it has concluded (no live weeks) we fall
+      // back to the last week overall so the feed opens on the final week.
       const weeksRes = await weeks.listBySeason(sid)
       const weekRows = weeksRes.data ?? []
       const infoMap: WeekInfoById = {}
       for (const w of weekRows) infoMap[w.id] = { weekNumber: w.week_number }
       setWeekInfoById(infoMap)
       const live = weekRows.filter(w => !w.is_archived)
-      const current = live.length
-        ? live.reduce((a, b) => (b.week_number > a.week_number ? b : a))
+      const pickFrom = live.length ? live : weekRows
+      const current = pickFrom.length
+        ? pickFrom.reduce((a, b) => (b.week_number > a.week_number ? b : a))
         : null
       setCurrentWeekId(current?.id ?? null)
 
