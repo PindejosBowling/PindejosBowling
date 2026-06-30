@@ -33,48 +33,51 @@ interface GenPlayer {
 // Round-robin templates keyed by team *number* (1-based); mapped to team ids before insert.
 export type ScheduleTemplate = { game_number: number; team_a: number; team_b: number }
 
-// The league's standard night schedule per team count (team numbers are
-// 1-based). Also consumed by PlayoffsScreen's materialize flow, so playoff
-// weeks get the same schedule shape as a generated week.
-export function buildSchedule(numTeams: number): ScheduleTemplate[] {
-  if (numTeams === 2) return [
-    { game_number: 1, team_a: 1, team_b: 2 },
-    { game_number: 2, team_a: 1, team_b: 2 },
-  ]
-  if (numTeams === 3) return [
-    { game_number: 1, team_a: 1, team_b: 2 },
-    { game_number: 2, team_a: 1, team_b: 3 },
-    { game_number: 3, team_a: 2, team_b: 3 },
-  ]
-  if (numTeams === 4) return [
-    { game_number: 1, team_a: 1, team_b: 3 },
-    { game_number: 1, team_a: 2, team_b: 4 },
-    { game_number: 2, team_a: 4, team_b: 1 },
-    { game_number: 2, team_a: 3, team_b: 2 },
-  ]
-  if (numTeams === 5) return [
-    { game_number: 1, team_a: 1, team_b: 2 },
-    { game_number: 1, team_a: 3, team_b: 4 },
-    { game_number: 2, team_a: 1, team_b: 5 },
-    { game_number: 2, team_a: 2, team_b: 4 },
-    { game_number: 3, team_a: 2, team_b: 3 },
-    { game_number: 3, team_a: 4, team_b: 5 },
-  ]
-  if (numTeams === 6) return [
-    { game_number: 1, team_a: 1, team_b: 2 },
-    { game_number: 1, team_a: 3, team_b: 4 },
-    { game_number: 1, team_a: 5, team_b: 6 },
-    { game_number: 2, team_a: 2, team_b: 3 },
-    { game_number: 2, team_a: 4, team_b: 5 },
-    { game_number: 2, team_a: 6, team_b: 1 },
-  ]
-  return []
+// Round-robin (circle method) rotation. The single source of night schedules —
+// used by the generate-teams flow, the post-generation "Add Game" button, and
+// PlayoffsScreen's materialize flow, so every week gets the same schedule shape.
+//
+// Produces `numGames` rounds of parallel pairings for `numTeams` teams (team
+// numbers are 1-based). Pairings rotate so teams face a different opponent each
+// game; once the unique rounds are exhausted (numGames > numTeams − 1) the
+// rotation cycles back and repeats.
+//
+// Generation restricts team counts to even {2,4,6}, where every round is a set
+// of perfect pairings with no bye. Odd counts still resolve via a rotating bye
+// (a dummy team 0; pairings touching it are dropped) so the function is total,
+// but a generated week is always even. `numGames` defaults to 2.
+export function buildRotation(numTeams: number, numGames = 2): ScheduleTemplate[] {
+  if (numTeams < 2 || numGames < 1) return []
+
+  // Build the unique rounds via the circle method: fix the first team, rotate
+  // the rest one position each round, pairing ends inward.
+  const arr: number[] = Array.from({ length: numTeams }, (_, i) => i + 1)
+  if (numTeams % 2 === 1) arr.push(0) // 0 = bye placeholder for odd counts
+  const n = arr.length
+  const uniqueRounds: { a: number; b: number }[][] = []
+  for (let r = 0; r < n - 1; r++) {
+    const pairings: { a: number; b: number }[] = []
+    for (let i = 0; i < n / 2; i++) {
+      const a = arr[i]
+      const b = arr[n - 1 - i]
+      if (a !== 0 && b !== 0) pairings.push({ a, b })
+    }
+    uniqueRounds.push(pairings)
+    arr.splice(1, 0, arr.pop()!) // rotate, keeping arr[0] fixed
+  }
+
+  const out: ScheduleTemplate[] = []
+  for (let g = 1; g <= numGames; g++) {
+    const round = uniqueRounds[(g - 1) % uniqueRounds.length]
+    for (const p of round) out.push({ game_number: g, team_a: p.a, team_b: p.b })
+  }
+  return out
 }
 
 export default function AdminGenerateTeamsModal({ visible, onClose }: Props) {
   const { showToast } = useUiStore()
   const {
-    genNumTeams, genTeamSize, genAvgSource,
+    genNumTeams, genNumGames, genTeamSize, genAvgSource,
     genTeams, genSwapTarget, set,
   } = usePendingStore()
 
@@ -106,7 +109,7 @@ export default function AdminGenerateTeamsModal({ visible, onClose }: Props) {
         // Default to two teams, sized to absorb the existing "In" RSVPs.
         const inCount = rsvps.filter((r: any) => r.status === 'in').length
         const teamSize = Math.max(1, Math.min(6, Math.ceil(inCount / 2)))
-        set({ genNumTeams: 2, genTeamSize: teamSize, genAvgSource: 'current-season', genTeams: null })
+        set({ genNumTeams: 2, genNumGames: 2, genTeamSize: teamSize, genAvgSource: 'current-season', genTeams: null })
       } else {
         setWeekId(null)
         setWeekRsvps([])
@@ -270,7 +273,8 @@ export default function AdminGenerateTeamsModal({ visible, onClose }: Props) {
         }))
       )
 
-      const scheduleRows: TablesInsert<'games'>[] = buildSchedule(numTeams).map(s => ({
+      const rotation = buildRotation(numTeams, genNumGames)
+      const scheduleRows: TablesInsert<'games'>[] = rotation.map(s => ({
         game_number: s.game_number,
         team_a_id: teamIdByNumber.get(s.team_a)!,
         team_b_id: teamIdByNumber.get(s.team_b)!,
@@ -292,7 +296,7 @@ export default function AdminGenerateTeamsModal({ visible, onClose }: Props) {
       // out-of-schedule game numbers, refunding their bets whole); these explicit
       // syncs are belt-and-braces and create any still-missing markets
       // (current-season avg → floor+0.5), idempotently.
-      const scheduleGames = Array.from(new Set(buildSchedule(numTeams).map(s => s.game_number)))
+      const scheduleGames = Array.from(new Set(rotation.map(s => s.game_number)))
       const { error: eSync } = await betMarkets.syncOUForWeek(weekId, scheduleGames)
       await betMarkets.syncLanetalkPropsForWeek(weekId)
       if (eSync) console.warn('Failed to sync O/U markets:', eSync.message)
@@ -340,9 +344,19 @@ export default function AdminGenerateTeamsModal({ visible, onClose }: Props) {
               <View style={styles.controlRow}>
                 <Text style={styles.controlLabel}>Number of Teams</Text>
                 <ToggleGroup
-                  options={[2, 3, 4, 5, 6].map(n => ({ key: String(n) as any, label: String(n) }))}
+                  options={[2, 4, 6].map(n => ({ key: String(n) as any, label: String(n) }))}
                   value={String(genNumTeams)}
                   onChange={v => set({ genNumTeams: parseInt(v), genTeams: null })}
+                  style={styles.toggleGroup}
+                />
+              </View>
+
+              <View style={styles.controlRow}>
+                <Text style={styles.controlLabel}>Number of Games</Text>
+                <ToggleGroup
+                  options={[2, 3, 4].map(n => ({ key: String(n) as any, label: String(n) }))}
+                  value={String(genNumGames)}
+                  onChange={v => set({ genNumGames: parseInt(v), genTeams: null })}
                   style={styles.toggleGroup}
                 />
               </View>

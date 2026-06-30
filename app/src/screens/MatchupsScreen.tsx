@@ -19,7 +19,7 @@ import OddsBlock from '../components/league/OddsBlock'
 import ConfirmBar from '../components/ui/ConfirmBar'
 import EditableWeek from '../components/league/EditableWeek'
 import AdminArchiveModal from '../components/admin/AdminArchiveModal'
-import AdminGenerateTeamsModal from '../components/admin/AdminGenerateTeamsModal'
+import AdminGenerateTeamsModal, { buildRotation } from '../components/admin/AdminGenerateTeamsModal'
 import ToggleGroup from '../components/ui/ToggleGroup'
 import Button from '../components/ui/Button'
 import { useMatchupsData } from '../hooks/useMatchupsData'
@@ -198,17 +198,23 @@ export default function MatchupsScreen() {
 
   async function addNextGame() {
     if (!weekId) return
-    const game1Round = rounds.find(r => r.num === 1)
-    if (!game1Round) return
+    // Append the next canonical rotation round for this week's team count. The
+    // round-robin cycles back and repeats once the unique rounds are exhausted,
+    // and is computed from team count alone — so the appended pairings are
+    // predictable regardless of any prior manual matchup edits.
+    const teamList = Object.values(teams)
+    const numTeams = teamList.length
+    if (numTeams < 2) return
     const nextGameNum = rounds.length > 0 ? Math.max(...rounds.map(r => r.num)) + 1 : 2
+    const teamIdByNumber = new Map(teamList.map(t => [t.teamNumber, t.teamId]))
     setAddingGame(true)
     try {
-      const rows = game1Round.pairings
-        .filter(p => p.b !== null)
-        .map(p => ({
+      const rows = buildRotation(numTeams, nextGameNum)
+        .filter(s => s.game_number === nextGameNum)
+        .map(s => ({
           game_number: nextGameNum,
-          team_a_id: p.a.teamId,
-          team_b_id: p.b!.teamId,
+          team_a_id: teamIdByNumber.get(s.team_a)!,
+          team_b_id: teamIdByNumber.get(s.team_b)!,
         }))
       await games.insert(rows)
       // Markets aren't derived from the games table — tell the betting system this

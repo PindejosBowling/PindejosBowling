@@ -7,6 +7,7 @@ interface PendingStore {
   genAvgSource: string
   genTeams: any | null
   genNumTeams: number
+  genNumGames: number
   genTeamSize: number
   genFillToSize: boolean
   genSwapTarget: any | null
@@ -20,6 +21,7 @@ export const usePendingStore = create<PendingStore>((set) => ({
   genAvgSource: 'last-season',
   genTeams: null,
   genNumTeams: 4,
+  genNumGames: 2,
   genTeamSize: 3,
   genFillToSize: false,
   genSwapTarget: null,
