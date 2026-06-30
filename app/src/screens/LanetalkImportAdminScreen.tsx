@@ -52,6 +52,10 @@ interface WeekGroup {
   bowledAt: string | null
   players: ImportGroup[]
 }
+interface LinkResult {
+  url: string
+  summary: LanetalkImportSummary
+}
 
 function formatDate(bowledAt: string | null): string {
   if (!bowledAt) return ''
@@ -82,10 +86,14 @@ export default function LanetalkImportAdminScreen() {
   }, [unsettledProps])
   const [confirmWeek, setConfirmWeek] = useState<{ weekId: string; title: string } | null>(null)
 
-  const [url, setUrl] = useState('')
+  // One or more links to import in a batch. Start with a single empty row; the
+  // "+" button appends another. Links are processed sequentially (the importer
+  // combines a player's links across calls, so order-independent and safe).
+  const [links, setLinks] = useState<string[]>([''])
   const [busy, setBusy] = useState(false)
-  const [result, setResult] = useState<LanetalkImportSummary | null>(null)
-  const [showDebug, setShowDebug] = useState(false)
+  // Per-link outcomes from the last batch run, in submit order.
+  const [results, setResults] = useState<LinkResult[]>([])
+  const [showDebug, setShowDebug] = useState<Set<number>>(new Set())
   // Optimistic per-game classification edits, keyed by row id, plus the set of
   // rows currently being saved (to disable their toggle while in flight).
   const [classEdits, setClassEdits] = useState<Record<string, Classification>>({})
@@ -157,27 +165,58 @@ export default function LanetalkImportAdminScreen() {
     })
   }, [])
 
+  function updateLink(i: number, val: string) {
+    setLinks(prev => prev.map((l, idx) => (idx === i ? val : l)))
+  }
+  function addLink() {
+    setLinks(prev => [...prev, ''])
+  }
+  function removeLink(i: number) {
+    setLinks(prev => (prev.length <= 1 ? [''] : prev.filter((_, idx) => idx !== i)))
+  }
+  function toggleResultDebug(i: number) {
+    setShowDebug(prev => {
+      const next = new Set(prev)
+      next.has(i) ? next.delete(i) : next.add(i)
+      return next
+    })
+  }
+
   async function runImport() {
-    const link = url.trim()
-    if (!link) { showToast('Paste a Lanetalk link', 'error'); return }
+    const batch = links.map(l => l.trim()).filter(Boolean)
+    if (!batch.length) { showToast('Paste a Lanetalk link', 'error'); return }
     setBusy(true)
-    setResult(null)
-    setShowDebug(false)
-    try {
-      const data = await lanetalkImports.run(link)
-      setResult(data)
-      if (!data.ok) { showToast(data.message ?? 'Import failed', 'error'); return }
-      const who = data.matchedPlayer ? `for ${data.matchedPlayer}` : '(no player match)'
-      showToast(`Imported ${data.games?.length ?? 0} games ${who} · ${data.officialCount ?? 0} official`, 'success')
-      setUrl('')
-      await reload()
-    } catch (e: any) {
-      const data: LanetalkImportSummary = { ok: false, stage: 'client', message: e?.message ?? 'Import failed' }
-      setResult(data)
-      showToast(data.message ?? 'Import failed', 'error')
-    } finally {
-      setBusy(false)
+    setResults([])
+    setShowDebug(new Set())
+    const out: LinkResult[] = []
+    // Sequential, not parallel: the importer combines a player's links across
+    // calls (reading prior imports for the week), so they must not race.
+    for (const link of batch) {
+      try {
+        const data = await lanetalkImports.run(link)
+        out.push({ url: link, summary: data })
+      } catch (e: any) {
+        out.push({ url: link, summary: { ok: false, stage: 'client', message: e?.message ?? 'Import failed' } })
+      }
     }
+    setResults(out)
+    const okCount = out.filter(r => r.summary.ok).length
+    const gamesCount = out.reduce((n, r) => n + (r.summary.games?.length ?? 0), 0)
+    if (okCount === out.length) {
+      showToast(
+        out.length === 1
+          ? `Imported ${gamesCount} games${out[0].summary.matchedPlayer ? ` for ${out[0].summary.matchedPlayer}` : ' (no player match)'}`
+          : `Imported ${out.length} links · ${gamesCount} games`,
+        'success',
+      )
+      setLinks([''])
+    } else {
+      showToast(`${okCount}/${out.length} links imported · ${out.length - okCount} failed`, okCount > 0 ? 'info' : 'error')
+      // Keep only the failed links in the inputs so they can be retried/edited.
+      setLinks(out.filter(r => !r.summary.ok).map(r => r.url))
+    }
+    await reload()
+    setBusy(false)
   }
 
   async function changeClassification(game: GroupGame, next: Classification) {
@@ -238,18 +277,35 @@ export default function LanetalkImportAdminScreen() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.muted} />}
       >
         <View style={styles.card}>
-          <Text style={styles.label}>Lanetalk share link</Text>
-          <TextInput
-            style={styles.input}
-            value={url}
-            onChangeText={setUrl}
-            placeholder="http://shared.lanetalk.com/…"
-            placeholderTextColor={colors.muted2}
-            autoCapitalize="none"
-            autoCorrect={false}
-            keyboardType="url"
-            editable={!busy}
-          />
+          <Text style={styles.label}>Lanetalk share link{links.length > 1 ? 's' : ''}</Text>
+          {links.map((link, i) => (
+            <View key={i} style={[styles.linkRow, i > 0 && styles.linkRowSpacer]}>
+              <TextInput
+                style={[styles.input, styles.linkInput]}
+                value={link}
+                onChangeText={(t) => updateLink(i, t)}
+                placeholder="http://shared.lanetalk.com/…"
+                placeholderTextColor={colors.muted2}
+                autoCapitalize="none"
+                autoCorrect={false}
+                keyboardType="url"
+                editable={!busy}
+              />
+              {links.length > 1 && (
+                <TouchableOpacity
+                  style={styles.removeLinkBtn}
+                  onPress={() => removeLink(i)}
+                  disabled={busy}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  <Text style={styles.removeLinkText}>✕</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          ))}
+          <TouchableOpacity style={styles.addLinkBtn} onPress={addLink} disabled={busy} activeOpacity={0.7}>
+            <Text style={styles.addLinkText}>+ Add another link</Text>
+          </TouchableOpacity>
           <TouchableOpacity
             style={[styles.button, busy && styles.buttonDisabled]}
             onPress={runImport}
@@ -257,35 +313,44 @@ export default function LanetalkImportAdminScreen() {
           >
             {busy
               ? <ActivityIndicator color={colors.bg} />
-              : <Text style={styles.buttonText}>Fetch & Import</Text>}
+              : <Text style={styles.buttonText}>Fetch & Import{links.filter(l => l.trim()).length > 1 ? ` (${links.filter(l => l.trim()).length})` : ''}</Text>}
           </TouchableOpacity>
           <Text style={styles.hint}>
-            Games matching the bowler's recorded league scores are marked Official; the rest Recreational.
+            Paste a full share message or a bare link — the address is pulled out automatically. Games matching the bowler's recorded league scores are marked Official; the rest Recreational.
           </Text>
         </View>
 
-        {result && !result.ok && (
-          <View style={[styles.resultCard, styles.resultError]}>
-            <View style={styles.resultHeaderRow}>
-              <Text style={styles.resultTitle}>Import failed</Text>
-              {!!result.stage && (
-                <View style={styles.stageBadge}><Text style={styles.stageBadgeText}>{result.stage}</Text></View>
+        {results.map((r, i) => {
+          const s = r.summary
+          const expanded = showDebug.has(i)
+          return (
+            <View key={`${r.url}-${i}`} style={[styles.resultCard, s.ok ? styles.resultOk : styles.resultError]}>
+              <View style={styles.resultHeaderRow}>
+                <Text style={[styles.resultTitle, s.ok && styles.resultTitleOk]}>
+                  {s.ok
+                    ? `Imported ${s.games?.length ?? 0} games${s.matchedPlayer ? ` · ${s.matchedPlayer}` : ' · no player match'}`
+                    : 'Import failed'}
+                </Text>
+                {!s.ok && !!s.stage && (
+                  <View style={styles.stageBadge}><Text style={styles.stageBadgeText}>{s.stage}</Text></View>
+                )}
+              </View>
+              <Text style={styles.resultUrl} numberOfLines={1}>{r.url}</Text>
+              {!s.ok && <Text style={styles.resultMessage}>{s.message ?? 'Unknown error'}</Text>}
+              {!s.ok && !!s.reqId && <Text style={styles.resultReqId}>reqId: {s.reqId}</Text>}
+              {!s.ok && !!s.debug && Object.keys(s.debug).length > 0 && (
+                <>
+                  <TouchableOpacity onPress={() => toggleResultDebug(i)} style={styles.debugToggle}>
+                    <Text style={styles.debugToggleText}>{expanded ? '▾ Hide details' : '▸ Show details'}</Text>
+                  </TouchableOpacity>
+                  {expanded && (
+                    <Text style={styles.debugJson} selectable>{JSON.stringify(s.debug, null, 2)}</Text>
+                  )}
+                </>
               )}
             </View>
-            <Text style={styles.resultMessage}>{result.message ?? 'Unknown error'}</Text>
-            {!!result.reqId && <Text style={styles.resultReqId}>reqId: {result.reqId}</Text>}
-            {!!result.debug && Object.keys(result.debug).length > 0 && (
-              <>
-                <TouchableOpacity onPress={() => setShowDebug(v => !v)} style={styles.debugToggle}>
-                  <Text style={styles.debugToggleText}>{showDebug ? '▾ Hide details' : '▸ Show details'}</Text>
-                </TouchableOpacity>
-                {showDebug && (
-                  <Text style={styles.debugJson} selectable>{JSON.stringify(result.debug, null, 2)}</Text>
-                )}
-              </>
-            )}
-          </View>
-        )}
+          )
+        })}
 
         <Text style={styles.sectionHeader}>RECENT IMPORTS</Text>
         {weekGroups.length === 0 ? (
@@ -429,6 +494,13 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: colors.text,
   },
+  linkRow: { flexDirection: 'row', alignItems: 'center' },
+  linkRowSpacer: { marginTop: 8 },
+  linkInput: { flex: 1 },
+  removeLinkBtn: { paddingLeft: 12, paddingVertical: 4 },
+  removeLinkText: { fontFamily: fonts.barlowCondensed, fontSize: 16, color: colors.muted },
+  addLinkBtn: { marginTop: 10, alignSelf: 'flex-start' },
+  addLinkText: { fontFamily: fonts.barlowCondensed, fontSize: 14, color: colors.accent, letterSpacing: 0.3 },
   button: {
     backgroundColor: colors.accent,
     borderRadius: radius.cardSm,
@@ -447,8 +519,11 @@ const styles = StyleSheet.create({
     marginTop: 12,
   },
   resultError: { backgroundColor: 'rgba(239,68,68,0.10)', borderColor: 'rgba(239,68,68,0.45)' },
+  resultOk: { backgroundColor: 'rgba(74,222,128,0.10)', borderColor: 'rgba(74,222,128,0.45)' },
   resultHeaderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  resultTitle: { fontFamily: fonts.barlowCondensed, fontSize: 16, color: colors.danger, letterSpacing: 0.3 },
+  resultTitle: { flex: 1, fontFamily: fonts.barlowCondensed, fontSize: 16, color: colors.danger, letterSpacing: 0.3 },
+  resultTitleOk: { color: colors.success },
+  resultUrl: { fontFamily: fonts.barlow, fontSize: 11, color: colors.muted2, marginTop: 4 },
   stageBadge: { backgroundColor: 'rgba(239,68,68,0.18)', borderRadius: radius.cardSm, paddingHorizontal: 8, paddingVertical: 3 },
   stageBadgeText: { fontFamily: monoFont, fontSize: 11, color: colors.danger, letterSpacing: 0.3 },
   resultMessage: { fontFamily: fonts.barlow, fontSize: 14, color: colors.text, marginTop: 8, lineHeight: 19 },

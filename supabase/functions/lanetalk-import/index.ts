@@ -40,6 +40,16 @@ function errInfo(e: unknown): Record<string, unknown> {
   return { message: String(e) }
 }
 
+/** Lanetalk's "share" action copies the link wrapped in headline text, e.g.
+ *  "JORDAN-PBL bowled 462 at Lucky Strike Times Square http://shared.lanetalk.com/<hash>".
+ *  Pull the first shared.lanetalk.com URL out of whatever the admin pasted; fall
+ *  back to the raw trimmed input when there's no match, so the existing URL/host
+ *  validation still produces a sensible error. */
+function extractLanetalkUrl(raw: string): string {
+  const m = raw.match(/https?:\/\/shared\.lanetalk\.com\/\S+/i)
+  return m ? m[0] : raw.trim()
+}
+
 /** One game in a player's combined night (parsed fresh, or read back from a row). */
 type NightRow = NightGameInput & { payload: Record<string, unknown> }
 
@@ -265,7 +275,8 @@ Deno.serve(async (req) => {
       return json({ ...result, reqId })
     }
 
-    let url = String(body?.url ?? '').trim()
+    // Accept a bare link or the share-text headline Lanetalk copies around it.
+    let url = extractLanetalkUrl(String(body?.url ?? ''))
     if (!url) return fail('input_empty', 'A Lanetalk link is required', 400)
 
     // Lanetalk shares are served from a plain S3 website bucket on http only —
