@@ -15,6 +15,7 @@ import { useAuthStore } from '../stores/authStore'
 import { LedgerEntry } from '../hooks/usePlayerPinsinoData'
 import { signed } from '../utils/bets'
 import EmptyCard from '../components/ui/EmptyCard'
+import IssueBonusSheet from '../components/admin/IssueBonusSheet'
 import { formatPins } from '../utils/formatting'
 
 type Nav = NativeStackNavigationProp<MoreStackParamList>
@@ -34,6 +35,7 @@ export default function PinsinoAccountingScreen() {
 
   const [view, setView] = useState<AccountingView>('activity')
   const [statementExpanded, setStatementExpanded] = useState(false)
+  const [bonusOpen, setBonusOpen] = useState(false)
 
   // Activity: house ledger grouped by week (newest first), week-less rows
   // (season-open bonuses) bucketed separately.
@@ -77,6 +79,11 @@ export default function PinsinoAccountingScreen() {
             SEASON {seasonNumber} · THE HOUSE{seasonConcluded ? ' · FINAL' : ''}
           </Text>
         )}
+
+        {/* Admin action: hand out a house-funded bonus (e.g. Reigning Champion). */}
+        <TouchableOpacity style={styles.issueBonusBtn} activeOpacity={0.8} onPress={() => setBonusOpen(true)}>
+          <Text style={styles.issueBonusText}>＋ ISSUE BONUS</Text>
+        </TouchableOpacity>
 
         {/* House card — the house's side of the ledger. Tap HOUSE BALANCE to
             collapse/expand the full breakdown (financials + betting record). */}
@@ -213,6 +220,10 @@ export default function PinsinoAccountingScreen() {
           )
         )}
       </ScrollView>
+
+      {bonusOpen && (
+        <IssueBonusSheet onClose={() => setBonusOpen(false)} onIssued={reload} />
+      )}
     </SafeAreaView>
   )
 }
@@ -220,6 +231,23 @@ export default function PinsinoAccountingScreen() {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.bg },
   content: { paddingHorizontal: 16, paddingBottom: 40 },
+
+  issueBonusBtn: {
+    alignSelf: 'flex-start',
+    backgroundColor: colors.surface,
+    borderRadius: radius.cardSm,
+    borderWidth: 1,
+    borderColor: colors.gold,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    marginBottom: 16,
+  },
+  issueBonusText: {
+    fontFamily: fonts.barlowCondensed,
+    fontSize: 13,
+    letterSpacing: 1.5,
+    color: colors.gold,
+  },
 
   subtitle: {
     fontFamily: fonts.barlowCondensed,

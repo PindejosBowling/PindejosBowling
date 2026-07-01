@@ -3625,6 +3625,58 @@ AS $function$
 $function$
 ;
 
+CREATE OR REPLACE FUNCTION public.issue_pin_bonus(p_player_ids uuid[], p_amount integer, p_label text)
+ RETURNS void
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+DECLARE
+  v_season uuid;
+  v_player uuid;
+BEGIN
+  PERFORM public.assert_admin();
+
+  IF p_amount IS NULL OR p_amount <= 0 THEN
+    RAISE EXCEPTION 'Bonus amount must be a positive number';
+  END IF;
+  IF p_label IS NULL OR btrim(p_label) = '' THEN
+    RAISE EXCEPTION 'Bonus label is required';
+  END IF;
+  IF p_player_ids IS NULL OR array_length(p_player_ids, 1) IS NULL THEN
+    RAISE EXCEPTION 'At least one recipient is required';
+  END IF;
+
+  -- Current playing season (the getCurrent() rule): active, out of registration.
+  SELECT id INTO v_season
+  FROM public.seasons
+  WHERE is_active AND NOT registration_open
+  ORDER BY number DESC
+  LIMIT 1;
+  IF v_season IS NULL THEN
+    RAISE EXCEPTION 'No active season to credit the bonus into';
+  END IF;
+
+  FOREACH v_player IN ARRAY p_player_ids LOOP
+    -- House-funded double entry. p_house_description = p_label so both sides of
+    -- the ledger read identically (matches the champion-bonus convention).
+    PERFORM public.pin_ledger_double_entry(
+      v_player, v_season, NULL, p_amount, 'bonus', btrim(p_label), btrim(p_label));
+
+    -- Public Market Moves announcement (subject = recipient; no actor/FK).
+    PERFORM public.publish_activity_event(
+      'admin', 'admin_bonus_issued',
+      v_season, NULL, NULL, v_player, NULL,
+      NULL, NULL,
+      'admin.bonus_issued',
+      jsonb_build_object('amount', p_amount, 'label', btrim(p_label)),
+      '{}'::jsonb,
+      'public', now());
+  END LOOP;
+END;
+$function$
+;
+
 CREATE OR REPLACE FUNCTION public.lanetalk_game_stats(p_payload jsonb)
  RETURNS TABLE(strikes integer, spares integer, clean_pct numeric, first_ball_avg numeric)
  LANGUAGE sql

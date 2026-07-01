@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect } from 'react'
-import { weeks, seasons, betMarkets, bets, pinLedger, loanLedger, loans, pvpChallenges, bountyPosts, teamSlots, customLines, games } from '../utils/supabase/db'
+import { weeks, seasons, betMarkets, bets, pinLedger, loanLedger, loans, pvpChallenges, bountyPosts, teamSlots, customLines, games, players } from '../utils/supabase/db'
 
 // One bettable side of a market (a single `bet_selections` row, flattened).
 // Generic over market_type — over/under is the first consumer, but the shape
@@ -642,10 +642,16 @@ export function usePinsinoData(playerId: string | null, viewSeasonId?: string | 
       // locked PvP contracts + all bounties (active hunter stakes summed per player).
       let seasonPvpData: any[] = []
       let seasonBountyData: any[] = []
+      // All players registered for the season — so the scoreboard lists everyone
+      // in the season, even players with no ledger activity yet (seeded at 0).
+      let seasonPlayersData: any[] = []
       if (seasonId) {
         fetches.push(
           pinLedger.listBySeasonForLeaderboard(seasonId).then(({ data }) => {
             seasonLedger = data ?? []
+          }),
+          players.listBySeason(seasonId).then(({ data }) => {
+            seasonPlayersData = data ?? []
           }),
           bets.listSettledBySeason(seasonId).then(({ data }) => {
             settledBetsData = data ?? []
@@ -781,6 +787,18 @@ export function usePinsinoData(playerId: string | null, viewSeasonId?: string | 
       // Sum the season ledger per player (house rows already excluded), keep
       // active players, sort high → low.
       const byPlayer: Record<string, { playerId: string; name: string; balance: number; priorBalance: number; isActive: boolean }> = {}
+      // Seed every registered player at zero first, so the scoreboard includes
+      // players who haven't touched the economy yet; ledger rows then add on top.
+      for (const p of seasonPlayersData) {
+        if (!p.id || byPlayer[p.id]) continue
+        byPlayer[p.id] = {
+          playerId: p.id,
+          name: p.name ?? '—',
+          balance: 0,
+          priorBalance: 0,
+          isActive: p.is_active ?? true,
+        }
+      }
       for (const e of seasonLedger) {
         const pid = e.player_id
         if (!pid) continue

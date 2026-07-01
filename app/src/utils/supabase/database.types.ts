@@ -2758,6 +2758,10 @@ export type Database = {
       }
       is_admin: { Args: never; Returns: boolean }
       is_registered_player: { Args: { phone: string }; Returns: boolean }
+      issue_pin_bonus: {
+        Args: { p_amount: number; p_label: string; p_player_ids: string[] }
+        Returns: undefined
+      }
       lanetalk_game_stats: {
         Args: { p_payload: Json }
         Returns: {
