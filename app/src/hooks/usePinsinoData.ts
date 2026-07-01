@@ -136,8 +136,12 @@ export interface LineCategory {
 export function lineCategory(line: LineView): LineCategory {
   switch (line.marketType) {
     case 'moneyline':
-      // Shown first within each game, above the player overs.
-      return { key: 'moneyline', label: 'Moneylines', sortOrder: 0 }
+    case 'team_prop':
+      // Team lines live INSIDE the game listing alongside the player rows: a
+      // team's moneyline (viewer's team only — toYourTeamMoneyline) and its
+      // team_prop stat lines consolidate into ONE row (rowKey = teamId) shown
+      // above that team's player rows (the screen's team-block sorting).
+      return { key: 'player_ou', label: 'Player Overs', sortOrder: 1 }
     case 'over_under':
       // Only the "over" side is bettable in the UI (the "under" is hidden — see
       // SportsbookScreen / context/betting-line-board.md), so the section reads
@@ -150,10 +154,6 @@ export function lineCategory(line: LineView): LineCategory {
       return line.gameNumber != null
         ? { key: 'player_ou', label: 'Player Overs', sortOrder: 1 }
         : { key: 'night_props', label: 'Night Props', sortOrder: 0 }
-    case 'team_prop':
-      // Team-aggregate lines (total pins / clean frames / strikes / spares per
-      // game) — their own collapsible section below the player overs.
-      return { key: 'team_totals', label: 'Team Totals', sortOrder: 2 }
     default:
       return { key: line.marketType, label: line.title || line.marketType, sortOrder: 99 }
   }
@@ -368,10 +368,12 @@ function normalizeMarket(m: any): LineView {
 // Sportsbook social policy: a player may only bet their OWN team to win. Each
 // moneyline market is reduced to the single selection for the player's week team
 // (the opponent side is hidden). It's reshaped to mirror a player-prop row:
-//   subject "Your Team" · subtitle "MONEYLINE · vs <opponent>" · button "WIN".
+//   subject "Your Team" · subtitle "vs <opponent>" · button "WIN".
 // The opponent's label is the metadata we keep before dropping that selection.
 // Markets not involving the player's team (the other matchups) drop out — so a
-// player sees exactly their own team's moneyline per game.
+// player sees exactly their own team's moneyline per game. `teamId` is stamped
+// with the viewer's team so the board consolidates this row with the team's
+// team_prop lines (one "Your Team" row: WIN + the team stat buttons).
 function toYourTeamMoneyline(line: LineView, myTeamId: string | null): LineView | null {
   const mine = myTeamId ? line.selections.find(s => s.key === myTeamId) : undefined
   if (!mine) return null
@@ -379,7 +381,8 @@ function toYourTeamMoneyline(line: LineView, myTeamId: string | null): LineView 
   return {
     ...line,
     subjectName: 'Your Team',
-    subtitle: opponent ? `MONEYLINE · vs ${opponent.label}` : 'MONEYLINE',
+    teamId: myTeamId,
+    subtitle: opponent ? `vs ${opponent.label}` : undefined,
     selections: [{ ...mine, label: 'Win' }],
   }
 }

@@ -164,17 +164,21 @@ export default function SportsbookScreen() {
   // Within a category, a subject's markets consolidate into ONE row: lines
   // sharing a subjectPlayerId render as a unified button set on that player
   // ("142.5+ PINS · 4.5+ STRIKES · 2.5+ SPARES"), ordered score line first
-  // then stat props. Subject-less lines (moneyline) stay one row per market.
-  // Player rows then group by their week team — the viewer's team first, the
-  // remaining teams in first-appearance order — so teammates sit together.
+  // then stat props. Team-anchored lines (the viewer's moneyline WIN + every
+  // team's team_prop stat lines) consolidate the same way per teamId — one
+  // team row ("Your Team" / "Team N": WIN · 612.5+ TOTAL PINS · …). Rows then
+  // group by week team — the viewer's team first, the remaining teams in
+  // first-appearance order — with each team's row leading its players.
   const lineGroups = useMemo(() => {
     const kindOrder = (l: LineView) =>
-      l.marketType === 'over_under' ? 0
-        : l.marketType === 'prop'
-          ? 1 + ['strikes', 'spares', 'clean_pct', 'first_ball_avg'].indexOf(l.statKey ?? '')
-          : l.marketType === 'team_prop'
-            ? 1 + ['total_pins', 'clean_frames', 'strikes', 'spares'].indexOf(l.statKey ?? '')
-            : 9
+      // The moneyline WIN leads its team row; the team stat buttons follow.
+      l.marketType === 'moneyline' ? -1
+        : l.marketType === 'over_under' ? 0
+          : l.marketType === 'prop'
+            ? 1 + ['strikes', 'spares', 'clean_pct', 'first_ball_avg'].indexOf(l.statKey ?? '')
+            : l.marketType === 'team_prop'
+              ? 1 + ['total_pins', 'clean_frames', 'strikes', 'spares'].indexOf(l.statKey ?? '')
+              : 9
     const games = new Map<string, {
       group: LineGroup
       categories: Map<string, { category: LineCategory; rowMap: Map<string, LineView[]>; count: number }>
@@ -209,8 +213,9 @@ export default function SportsbookScreen() {
               key,
               lines: lines.slice().sort((a, b) => kindOrder(a) - kindOrder(b)),
             }))
-            // Group player rows by week team: viewer's team rank 0, the rest by
-            // first appearance; teamless subjects (moneyline rows) keep place.
+            // Group rows by week team: viewer's team rank 0, the rest by first
+            // appearance. Within a team block the TEAM row (moneyline WIN +
+            // team stat lines, rowKey = teamId) leads its players.
             const teamRank = new Map<string, number>()
             const rankOf = (row: { key: string; lines: LineView[] }) => {
               // Team rows carry their team directly; player rows map through
@@ -221,8 +226,9 @@ export default function SportsbookScreen() {
               if (!teamRank.has(team)) teamRank.set(team, 1 + teamRank.size)
               return teamRank.get(team)!
             }
+            const isTeamRow = (row: { lines: LineView[] }) => (row.lines[0]?.teamId != null ? 0 : 1)
             const ranked = rows.map((row, idx) => ({ row, rank: rankOf(row), idx }))
-            ranked.sort((a, b) => a.rank - b.rank || a.idx - b.idx)
+            ranked.sort((a, b) => a.rank - b.rank || isTeamRow(a.row) - isTeamRow(b.row) || a.idx - b.idx)
             return { category, count, rows: ranked.map(r => r.row) }
           }),
       }))
@@ -386,10 +392,10 @@ export default function SportsbookScreen() {
     }
   }
 
-  // One subject row (≥1 markets → one button set), shared by the collapsible
-  // (O/U) and headerless (moneyline) section layouts. Tapping a cell stages it
-  // in the unified slip (staged = filled); an in-progress game makes every side
-  // inert. Each button binds its own (line, selection).
+  // One subject row (≥1 markets → one button set) — a player's lines or a
+  // team's (WIN + team stats). Tapping a cell stages it in the unified slip
+  // (staged = filled); an in-progress game makes every side inert. Each button
+  // binds its own (line, selection).
   function renderLineSet(lines: LineView[], isLast: boolean, groupInProgress: boolean) {
     return (
       <LineRow
