@@ -1,9 +1,9 @@
 import { ReactNode } from 'react'
-import { Text, TextInput, StyleSheet } from 'react-native'
-import { colors, fonts, radius } from '../../theme'
+import { Text, StyleSheet } from 'react-native'
+import { colors, fonts } from '../../theme'
 import BottomSheet from '../ui/BottomSheet'
 import Button from '../ui/Button'
-import { formatPins } from '../../utils/formatting'
+import WagerField from './WagerField'
 
 interface WagerSheetProps {
   title: string
@@ -52,16 +52,6 @@ export default function WagerSheet({
   children,
   boostPct,
 }: WagerSheetProps) {
-  const wagerNum = parseInt(wager, 10)
-
-  // Live to-win preview mirrors the server's payout math. With an Energy Drink
-  // attached, the House adds floor(profit × boostPct) on a win (profit = payout −
-  // wager), so the boosted total = payout + bonus (boostPct 1.0 doubles profit).
-  const payout = !isNaN(wagerNum) ? Math.floor(wagerNum * odds) : 0
-  const boostBonus = boostPct != null && !isNaN(wagerNum) ? Math.floor((payout - wagerNum) * boostPct) : 0
-  const boosted = boostBonus > 0
-  const toWin = payout + boostBonus
-
   return (
     <BottomSheet
       title={title}
@@ -82,74 +72,19 @@ export default function WagerSheet({
       }
     >
       {children}
-      <Text style={styles.wagerLabel}>WAGER (pins)</Text>
-      <TextInput
-        style={styles.wagerInput}
-        value={wager}
-        onChangeText={v => onChangeWager(v.replace(/[^0-9]/g, ''))}
-        keyboardType="number-pad"
-        placeholder={`10 – ${balance}`}
-        placeholderTextColor={colors.muted2}
-        maxLength={6}
+      <WagerField
+        wager={wager}
+        onChangeWager={onChangeWager}
+        balance={balance}
+        odds={odds}
+        boostPct={boostPct}
       />
-      <Text style={styles.wagerHint}>
-        Balance: {balance} pins  ·  Min: 10
-        {!isNaN(wagerNum) ? '  ·  To win: ' : ''}
-        {!isNaN(wagerNum) && (
-          <Text style={boosted ? styles.toWinBoosted : undefined}>
-            {formatPins(toWin)}{boosted ? ' ⚡️' : ''}
-          </Text>
-        )}
-      </Text>
-      {boosted && (
-        <Text style={styles.boostNote}>
-          Energy Drink ⚡️ doubles your profit — {formatPins(payout)} payout + {formatPins(boostBonus)} bonus.
-        </Text>
-      )}
       <Text style={styles.warning}>⚠ Bets can't be canceled once placed.</Text>
     </BottomSheet>
   )
 }
 
 const styles = StyleSheet.create({
-  wagerLabel: {
-    fontFamily: fonts.barlowCondensed,
-    fontSize: 12,
-    color: colors.muted,
-    letterSpacing: 1,
-    marginTop: 6,
-    marginBottom: 6,
-  },
-  wagerInput: {
-    backgroundColor: colors.surface2,
-    borderRadius: radius.cardSm,
-    borderWidth: 1,
-    borderColor: colors.border2,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontFamily: fonts.barlowCondensed,
-    fontSize: 20,
-    color: colors.text,
-    letterSpacing: 1,
-  },
-  wagerHint: {
-    fontFamily: fonts.barlow,
-    fontSize: 12,
-    color: colors.muted,
-    marginTop: 6,
-  },
-  // Boosted "To win" — gold to flag the Energy Drink's House-funded uplift.
-  toWinBoosted: {
-    fontFamily: fonts.barlowCondensed,
-    color: colors.gold,
-    letterSpacing: 0.3,
-  },
-  boostNote: {
-    fontFamily: fonts.barlow,
-    fontSize: 12,
-    color: colors.gold,
-    marginTop: 4,
-  },
   warning: {
     fontFamily: fonts.barlow,
     fontSize: 12,
