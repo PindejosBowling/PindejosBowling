@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect } from 'react'
-import { seasons, scores, games, seasonChampions, pinLedger } from '../utils/supabase/db'
+import { seasons, scores, games, seasonChampions, pinLedger, registrations } from '../utils/supabase/db'
 
 export interface StandingsRow {
   playerId: string
@@ -44,6 +44,7 @@ export function computeStandingsFromSupabase(
   rawSchedule: any[],
   seasonId: string | null,
   maxWeekNumber?: number,
+  roster: any[] = [],
 ): StandingsRow[] {
   // Schedule lookup: "gameId|teamId" → opponentTeamId
   // Keyed per-team so multiple matchups in the same game round don't overwrite each other.
@@ -73,6 +74,20 @@ export function computeStandingsFromSupabase(
     games: number
     weeks: Set<string>
   }>()
+
+  // Seed every registered player for this season at 0-0 so the roster shows in
+  // full before any games are archived. Per-season only: all-time (seasonId ===
+  // null) keeps its score-driven roster.
+  if (seasonId !== null) {
+    for (const r of roster) {
+      if (r.season_id !== seasonId) continue
+      const p = r.players
+      if (!p?.id || !p?.name) continue
+      if (!byPlayer.has(p.id)) {
+        byPlayer.set(p.id, { name: p.name, wins: 0, losses: 0, pins: 0, games: 0, weeks: new Set() })
+      }
+    }
+  }
 
   for (const row of rawScores as RawScore[]) {
     const slot = row.team_slots
@@ -166,16 +181,18 @@ export function useStandingsData() {
   const [topPinBalancePlayerId, setTopPinBalancePlayerId] = useState<string | null>(null)
   const [rawScores, setRawScores] = useState<any[]>([])
   const [rawSchedule, setRawSchedule] = useState<any[]>([])
+  const [rawRegistrations, setRawRegistrations] = useState<any[]>([])
 
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const [seasonsRes, lastEndedRes, currentRes, scoresRes, scheduleRes] = await Promise.all([
+      const [seasonsRes, lastEndedRes, currentRes, scoresRes, scheduleRes, registrationsRes] = await Promise.all([
         seasons.list(),
         seasons.getLastEnded(),
         seasons.getCurrent(),
         scores.listForStandings(),
         games.listForArchivedWeeks(),
+        registrations.list(),
       ])
       setSeasonList((seasonsRes.data ?? []).filter(s => !s.registration_open).map(s => ({ id: s.id, number: s.number })))
       // Crown only the reigning champion(s) — winners of the most recently ended
@@ -200,6 +217,7 @@ export function useStandingsData() {
       setTopPinBalancePlayerId(topId)
       setRawScores(scoresRes.data ?? [])
       setRawSchedule(scheduleRes.data ?? [])
+      setRawRegistrations(registrationsRes.data ?? [])
     } catch (e) {
       console.error('useStandingsData error:', e)
     } finally {
@@ -209,5 +227,5 @@ export function useStandingsData() {
 
   useEffect(() => { load() }, [load])
 
-  return { loading, seasonList, championPlayerIds, topPinBalancePlayerId, rawScores, rawSchedule, reload: load }
+  return { loading, seasonList, championPlayerIds, topPinBalancePlayerId, rawScores, rawSchedule, rawRegistrations, reload: load }
 }
