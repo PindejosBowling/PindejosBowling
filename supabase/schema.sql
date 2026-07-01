@@ -702,7 +702,7 @@ ALTER TABLE bet_markets ADD CONSTRAINT bet_markets_created_by_player_id_fkey FOR
 
 ALTER TABLE bet_markets ADD CONSTRAINT bet_markets_game_number_check CHECK (((game_number IS NULL) OR (game_number >= 1)));
 
-ALTER TABLE bet_markets ADD CONSTRAINT bet_markets_market_type_check CHECK ((market_type = ANY (ARRAY['over_under'::text, 'moneyline'::text, 'prop'::text])));
+ALTER TABLE bet_markets ADD CONSTRAINT bet_markets_market_type_check CHECK ((market_type = ANY (ARRAY['over_under'::text, 'moneyline'::text, 'prop'::text, 'team_prop'::text])));
 
 ALTER TABLE bet_markets ADD CONSTRAINT bet_markets_pkey PRIMARY KEY (id);
 
@@ -4164,6 +4164,43 @@ END;
 $function$
 ;
 
+CREATE OR REPLACE FUNCTION public.player_raw_avg_score(p_player_id uuid, p_season_id uuid)
+ RETURNS numeric
+ LANGUAGE plpgsql
+ STABLE SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+DECLARE
+  v_avg numeric;
+BEGIN
+  SELECT AVG(s.score) INTO v_avg
+  FROM public.scores s
+  JOIN public.team_slots ts ON ts.id = s.team_slot_id
+  JOIN public.teams t       ON t.id = ts.team_id
+  JOIN public.weeks w       ON w.id = t.week_id
+  WHERE w.season_id = p_season_id AND w.is_archived = true
+    AND ts.player_id = p_player_id AND s.score > 0;
+  IF v_avg IS NOT NULL THEN RETURN v_avg; END IF;
+
+  SELECT AVG(s.score) INTO v_avg
+  FROM public.scores s
+  JOIN public.team_slots ts ON ts.id = s.team_slot_id
+  JOIN public.teams t       ON t.id = ts.team_id
+  JOIN public.weeks w       ON w.id = t.week_id
+  WHERE w.is_archived = true AND ts.player_id = p_player_id AND s.score > 0;
+  IF v_avg IS NOT NULL THEN RETURN v_avg; END IF;
+
+  SELECT COALESCE(AVG(s.score), 130) INTO v_avg
+  FROM public.scores s
+  JOIN public.team_slots ts ON ts.id = s.team_slot_id
+  JOIN public.teams t       ON t.id = ts.team_id
+  JOIN public.weeks w       ON w.id = t.week_id
+  WHERE w.is_archived = true AND ts.player_id IS NOT NULL AND s.score > 0;
+  RETURN v_avg;
+END;
+$function$
+;
+
 CREATE OR REPLACE FUNCTION public.playoff_create_draft(p_season_id uuid, p_week_id uuid, p_draft_type text, p_captain_player_ids uuid[])
  RETURNS uuid
  LANGUAGE plpgsql
@@ -4508,22 +4545,39 @@ CREATE OR REPLACE FUNCTION public.prevent_self_tank()
  SET search_path TO ''
 AS $function$
 DECLARE
-  v_bettor  uuid;
-  v_subject uuid;
-  v_key     text;
+  v_bettor      uuid;
+  v_subject     uuid;
+  v_key         text;
+  v_market_type text;
+  v_params      jsonb;
 BEGIN
   SELECT player_id INTO v_bettor FROM public.bets WHERE id = NEW.bet_id;
 
-  SELECT m.subject_player_id, s.key
-    INTO v_subject, v_key
+  SELECT m.subject_player_id, s.key, m.market_type, m.params
+    INTO v_subject, v_key, v_market_type, v_params
     FROM public.bet_selections s
     JOIN public.bet_markets    m ON m.id = s.market_id
     WHERE s.id = NEW.selection_id;
 
+  -- Player markets: no backing the under (or laying the over) on your OWN line.
   IF v_subject IS NOT NULL AND v_subject = v_bettor THEN
     IF (NEW.side = 'back' AND v_key = 'under')
        OR (NEW.side = 'lay' AND v_key = 'over') THEN
       RAISE EXCEPTION 'A player cannot bet against their own performance (anti-tanking)';
+    END IF;
+  END IF;
+
+  -- Team markets: no backing the under (or laying the over) on a team the bettor
+  -- is rostered on this week (betting your own team to do poorly).
+  IF v_market_type = 'team_prop'
+     AND ((NEW.side = 'back' AND v_key = 'under') OR (NEW.side = 'lay' AND v_key = 'over')) THEN
+    IF EXISTS (
+      SELECT 1 FROM public.team_slots ts
+      WHERE ts.team_id = (v_params ->> 'team_id')::uuid
+        AND ts.player_id = v_bettor
+        AND ts.is_fill = false
+    ) THEN
+      RAISE EXCEPTION 'A player cannot bet the under on their own team (anti-tanking)';
     END IF;
   END IF;
 
@@ -4934,6 +4988,7 @@ BEGIN
   END IF;
   PERFORM public.sync_over_under_markets_for_week(p_week_id);
   PERFORM public.sync_lanetalk_prop_markets_for_week(p_week_id);
+  PERFORM public.sync_team_prop_markets_for_week(p_week_id);
   IF p_moneyline THEN
     PERFORM public.sync_moneyline_markets_for_week(p_week_id);
   END IF;
@@ -5294,6 +5349,33 @@ BEGIN
     END IF;
   END LOOP;
 
+  -- Settle every non-settled team_prop TOTAL PINS market (archive clock) whose
+  -- game has scores. Team pinfall = Σ scores of the anchored team for that game
+  -- (the moneyline aggregation). Frame-stat team_props (clock='lanetalk') settle
+  -- later via settle_lanetalk_props_for_week and are skipped here.
+  FOR v_mkt IN
+    SELECT id, subject_game_id, (params ->> 'team_id')::uuid AS team_id
+    FROM public.bet_markets
+    WHERE week_id = p_week_id AND market_type = 'team_prop'
+      AND params ->> 'stat' = 'total_pins' AND params ->> 'clock' = 'archive'
+      AND status <> 'settled'
+  LOOP
+    IF EXISTS (
+      SELECT 1 FROM public.scores
+      WHERE game_id = v_mkt.subject_game_id AND score IS NOT NULL
+    ) THEN
+      SELECT COALESCE(SUM(sc.score), 0) INTO v_score
+      FROM public.scores sc
+      JOIN public.team_slots ts ON ts.id = sc.team_slot_id
+      WHERE sc.game_id = v_mkt.subject_game_id
+        AND ts.team_id = v_mkt.team_id
+        AND sc.score IS NOT NULL;
+      PERFORM public.settle_market_internal(v_mkt.id, v_score);
+    ELSE
+      UPDATE public.bet_markets SET status = 'closed' WHERE id = v_mkt.id;
+    END IF;
+  END LOOP;
+
   -- Loan garnishment + interest, after pincome is minted, same transaction.
   PERFORM public.process_weekly_loans(p_week_id);
 
@@ -5309,9 +5391,11 @@ BEGIN
   -- reversible — bets/bet_legs pre-images are captured by archive_week, and the
   -- bet_refund rows are bet-linked (and week-stamped) so unarchive deletes them.
   --
-  -- EXEMPTION: bets with ≥1 leg on an UNSETTLED prop market (LaneTalk stat
-  -- bets) are deliberately left pending — their data lands after archive and
-  -- settle_lanetalk_props_for_week settles them on the Confirm clock.
+  -- EXEMPTION: bets with ≥1 leg on an UNSETTLED next-day-clock market are left
+  -- pending — LaneTalk player props (market_type='prop') and LaneTalk-clock
+  -- team_props (market_type='team_prop', params.clock='lanetalk'). Their data
+  -- lands after archive; settle_lanetalk_props_for_week settles them on Confirm.
+  -- total_pins team_props (clock='archive') are NOT exempt — settled just above.
   -- --------------------------------------------------------------------------
   SELECT count(*) INTO v_n_pending
   FROM public.bets b
@@ -5320,7 +5404,9 @@ BEGIN
       SELECT 1 FROM public.bet_legs l2
       JOIN public.bet_selections s2 ON s2.id = l2.selection_id
       JOIN public.bet_markets m2    ON m2.id = s2.market_id
-      WHERE l2.bet_id = b.id AND m2.market_type = 'prop' AND m2.status <> 'settled'
+      WHERE l2.bet_id = b.id AND m2.status <> 'settled'
+        AND (m2.market_type = 'prop'
+             OR (m2.market_type = 'team_prop' AND m2.params ->> 'clock' = 'lanetalk'))
     );
 
   IF v_n_pending > 0 THEN
@@ -5331,12 +5417,15 @@ BEGIN
       JOIN public.bet_selections s ON s.id = l.selection_id
       JOIN public.bet_markets m    ON m.id = s.market_id
       WHERE b.week_id = p_week_id AND b.status = 'pending' AND m.status <> 'settled'
-        AND m.market_type <> 'prop'
+        AND NOT (m.market_type = 'prop'
+                 OR (m.market_type = 'team_prop' AND m.params ->> 'clock' = 'lanetalk'))
         AND NOT EXISTS (
           SELECT 1 FROM public.bet_legs l2
           JOIN public.bet_selections s2 ON s2.id = l2.selection_id
           JOIN public.bet_markets m2    ON m2.id = s2.market_id
-          WHERE l2.bet_id = b.id AND m2.market_type = 'prop' AND m2.status <> 'settled'
+          WHERE l2.bet_id = b.id AND m2.status <> 'settled'
+            AND (m2.market_type = 'prop'
+                 OR (m2.market_type = 'team_prop' AND m2.params ->> 'clock' = 'lanetalk'))
         );
 
       RAISE EXCEPTION '% bet(s) would remain pending after settlement — unsettleable market(s): %. Re-run with force to void and refund them.',
@@ -5351,7 +5440,9 @@ BEGIN
           SELECT 1 FROM public.bet_legs l2
           JOIN public.bet_selections s2 ON s2.id = l2.selection_id
           JOIN public.bet_markets m2    ON m2.id = s2.market_id
-          WHERE l2.bet_id = b.id AND m2.market_type = 'prop' AND m2.status <> 'settled'
+          WHERE l2.bet_id = b.id AND m2.status <> 'settled'
+            AND (m2.market_type = 'prop'
+                 OR (m2.market_type = 'team_prop' AND m2.params ->> 'clock' = 'lanetalk'))
         )
     LOOP
       UPDATE public.bet_legs SET result = 'void' WHERE bet_id = v_bet.id AND result IS NULL;
@@ -5743,8 +5834,8 @@ BEGIN
   IF v_market.id IS NULL THEN
     RAISE EXCEPTION 'Market not found';
   END IF;
-  IF v_market.market_type NOT IN ('over_under', 'prop') THEN
-    RAISE EXCEPTION 'settle_market_internal only handles over_under/prop markets';
+  IF v_market.market_type NOT IN ('over_under', 'prop', 'team_prop') THEN
+    RAISE EXCEPTION 'settle_market_internal only handles over_under/prop/team_prop markets';
   END IF;
   IF v_market.status = 'settled' THEN
     RETURN;  -- idempotent
@@ -6612,6 +6703,108 @@ END;
 $function$
 ;
 
+CREATE OR REPLACE FUNCTION public.sync_team_prop_markets_for_week(p_week_id uuid)
+ RETURNS void
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+DECLARE
+  v_season_id uuid;
+  v_rec       record;
+  v_stat      text;
+  v_clock     text;
+  v_line      numeric;
+  v_market_id uuid;
+  v_label     text;
+BEGIN
+  SELECT season_id INTO v_season_id FROM public.weeks WHERE id = p_week_id;
+  IF v_season_id IS NULL THEN
+    RAISE EXCEPTION 'Week not found';
+  END IF;
+
+  -- Prune open/closed team_props whose game/team no longer exists or whose stat
+  -- left the catalog. (Game deletion already cascades the market away + refunds;
+  -- this also covers team reassignment.) Settled/void are immutable.
+  DELETE FROM public.bet_markets m
+   WHERE m.week_id = p_week_id
+     AND m.market_type = 'team_prop'
+     AND m.status IN ('open', 'closed')
+     AND (
+       NOT EXISTS (SELECT 1 FROM public.games g WHERE g.id = m.subject_game_id)
+       OR NOT EXISTS (
+            SELECT 1 FROM public.games g
+            WHERE g.id = m.subject_game_id
+              AND (m.params ->> 'team_id')::uuid IN (g.team_a_id, g.team_b_id))
+       OR (m.params ->> 'stat') NOT IN ('clean_frames', 'strikes', 'spares', 'total_pins')
+     );
+
+  -- Create: one market per (game, team∈{a,b}, stat) not already present.
+  FOR v_rec IN
+    SELECT g.id AS game_id, g.game_number, t.id AS team_id, t.team_number
+    FROM public.games g
+    JOIN public.teams ta ON ta.id = g.team_a_id AND ta.week_id = p_week_id
+    JOIN public.teams t  ON t.id IN (g.team_a_id, g.team_b_id)
+    WHERE g.team_a_id IS NOT NULL AND g.team_b_id IS NOT NULL
+  LOOP
+    FOREACH v_stat IN ARRAY ARRAY['clean_frames', 'strikes', 'spares', 'total_pins'] LOOP
+      IF EXISTS (
+        SELECT 1 FROM public.bet_markets m
+        WHERE m.market_type = 'team_prop'
+          AND m.subject_game_id = v_rec.game_id
+          AND m.params ->> 'team_id' = v_rec.team_id::text
+          AND m.params ->> 'stat' = v_stat
+      ) THEN
+        CONTINUE;
+      END IF;
+
+      v_clock := CASE WHEN v_stat = 'total_pins' THEN 'archive' ELSE 'lanetalk' END;
+      v_label := CASE v_stat
+                   WHEN 'clean_frames' THEN 'Clean Frames'
+                   WHEN 'strikes'      THEN 'Strikes'
+                   WHEN 'spares'       THEN 'Spares'
+                   ELSE 'Total Pins' END;
+      v_line := public.team_prop_seed_line(v_rec.team_id, v_stat, v_season_id);
+
+      INSERT INTO public.bet_markets (market_type, title, week_id, game_number, subject_game_id, params, status)
+        VALUES ('team_prop',
+                'Team ' || v_rec.team_number || ' ' || v_label || ' — Game ' || v_rec.game_number,
+                p_week_id, v_rec.game_number, v_rec.game_id,
+                jsonb_build_object(
+                  'family', 'team_aggregate',
+                  'stat', v_stat,
+                  'scope', 'game',
+                  'team_id', v_rec.team_id::text,
+                  'team_number', v_rec.team_number,
+                  'clock', v_clock),
+                'open')
+        RETURNING id INTO v_market_id;
+
+      INSERT INTO public.bet_selections (market_id, key, label, odds, line, sort_order) VALUES
+        (v_market_id, 'over',  'Over',  2.000, v_line, 0),
+        (v_market_id, 'under', 'Under', 2.000, v_line, 1);
+    END LOOP;
+  END LOOP;
+
+  -- Reseed: refresh the line on every open team_prop market that has NO bets yet
+  -- (self-heals stale lines after roster/import changes). Never touches a market
+  -- carrying a placed bet.
+  UPDATE public.bet_selections s
+     SET line = public.team_prop_seed_line((m.params ->> 'team_id')::uuid, m.params ->> 'stat', v_season_id)
+    FROM public.bet_markets m
+   WHERE s.market_id = m.id
+     AND m.week_id = p_week_id
+     AND m.market_type = 'team_prop'
+     AND m.status = 'open'
+     AND NOT EXISTS (
+       SELECT 1 FROM public.bet_legs l
+       JOIN public.bet_selections s2 ON s2.id = l.selection_id
+       WHERE s2.market_id = m.id
+     );
+END;
+$function$
+;
+
 CREATE OR REPLACE FUNCTION public.take_loan(p_loan_product_id uuid)
  RETURNS uuid
  LANGUAGE plpgsql
@@ -6698,6 +6891,50 @@ BEGIN
     NULL, now());
 
   RETURN v_loan_id;
+END;
+$function$
+;
+
+CREATE OR REPLACE FUNCTION public.team_prop_seed_line(p_team_id uuid, p_stat text, p_season_id uuid)
+ RETURNS numeric
+ LANGUAGE plpgsql
+ STABLE SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+DECLARE
+  v_roster integer;
+  v_sum    numeric;
+BEGIN
+  SELECT count(*) INTO v_roster
+  FROM public.team_slots ts
+  WHERE ts.team_id = p_team_id AND ts.is_fill = false AND ts.player_id IS NOT NULL;
+  IF v_roster = 0 THEN v_roster := 1; END IF;
+
+  IF p_stat IN ('clean_frames', 'strikes', 'spares') THEN
+    SELECT COALESCE(SUM(pl.avg_stat), 0) INTO v_sum
+    FROM public.team_slots ts
+    CROSS JOIN LATERAL (
+      SELECT CASE p_stat
+               WHEN 'strikes' THEN avg(i.strikes)
+               WHEN 'spares'  THEN avg(i.spares)
+               ELSE avg(i.strikes + i.spares)
+             END AS avg_stat
+      FROM public.lanetalk_game_imports i
+      WHERE i.player_id = ts.player_id AND i.classification = 'official' AND i.frames > 0
+    ) pl
+    WHERE ts.team_id = p_team_id AND ts.is_fill = false AND ts.player_id IS NOT NULL;
+    -- Half-point, floored once; clamp to [0.5, 10 frames/game × roster − 0.5].
+    RETURN LEAST(10 * v_roster - 0.5, GREATEST(0.5, floor(COALESCE(v_sum, 0)) + 0.5));
+
+  ELSIF p_stat = 'total_pins' THEN
+    SELECT COALESCE(SUM(public.player_raw_avg_score(ts.player_id, p_season_id)), 0) INTO v_sum
+    FROM public.team_slots ts
+    WHERE ts.team_id = p_team_id AND ts.is_fill = false AND ts.player_id IS NOT NULL;
+    RETURN GREATEST(0.5, floor(COALESCE(v_sum, 0)) + 0.5);
+
+  ELSE
+    RAISE EXCEPTION 'Unknown team_prop stat %', p_stat;
+  END IF;
 END;
 $function$
 ;

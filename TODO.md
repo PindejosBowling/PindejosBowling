@@ -10,8 +10,10 @@ is the execution checklist, the plan is the spec).
   rebuilt specials leg model that bundles any of {player score O/U, player stat props,
   team win, team stat props}. Motivating example: **"Clean Up Crew — me & the boys clean
   10 frames in a game."**
-- **⛔ Nothing has touched the database yet.** The four PR1 migration files are written but
-  **NOT pushed**. No `supabase db push` has run; the schema snapshot is unchanged.
+- **✅ PR1 is COMPLETE (2026-07-01).** The four migrations are pushed, probes extended +
+  green, snapshot refreshed, app board wired, docs updated. Team recreation fired the
+  coupling triggers, so the live week's team_prop markets exist and render. PR2/PR3 below
+  remain outstanding.
 
 ## Hard constraints (from AGENTS.md — do not violate)
 - Migrations only (`supabase/migrations/*.sql` → `supabase db push`). Never direct DDL/DML.
@@ -66,7 +68,7 @@ All four under `supabase/migrations/`, `CREATE OR REPLACE` style:
 
 ## ☐ OUTSTANDING
 
-### PR1 — apply migrations + finish the board
+### ✅ PR1 — apply migrations + finish the board — DONE (all steps below completed 2026-07-01)
 1. **Baseline probes:** `./supabase/verify/run-all-probes.sh` (confirm green before changing anything).
 2. **Push:** `supabase db push --linked --workdir $(pwd)` (token from `app/.env.local`). Applies the 4 files.
 3. **Extend probes** ([context/db-verification.md](context/db-verification.md)):

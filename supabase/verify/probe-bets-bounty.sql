@@ -9,7 +9,16 @@
 --   bounty #2 (house): p2 enters → sponsor_win (house keeps stake)
 --   bet #1: p1 stakes 50 on over @2.0, market settles over  → won (+50 net)
 --   bet #2: p2 stakes 50 on over @2.0, market settles under → lost (−50 net)
+--   team_prop: two 1-man teams + a game (the INSERT fires the resync trigger →
+--     sync_team_prop_markets_for_week creates the 8 team×stat markets) + scores
+--     (T1=150, T2=120). Lines pinned to 140.5/130.5 for deterministic grading.
+--     · anti-tank: p1 backing his OWN team's under must RAISE (trigger)
+--     · p2 over on T1 total_pins → won at the sweep (archive clock, Σ=150)
+--     · p1 over on T2 total_pins → lost at the sweep (Σ=120)
+--     · p1 over on T1 strikes (clock='lanetalk') → must SURVIVE the force sweep
+--       as pending (the widened backstop exemption)
 --   sweep:  settle_betting_for_week(force) — the archive-time settlement path
+--     (no score mint: the 'score_credit' fixture seed trips the mint guard)
 -- Asserts per-player deltas, statuses, payouts, net-zero; raises PROBE_RESULT.
 DO $$
 DECLARE
@@ -21,6 +30,10 @@ DECLARE
   v_mkt2 uuid; v_sel2 uuid;
   v_bet1 uuid; v_bet2 uuid;
   v_bounty1 uuid; v_bounty2 uuid;
+  v_t1 uuid; v_t2 uuid; v_slot1 uuid; v_slot2 uuid; v_game uuid;
+  v_mkt_tp1 uuid; v_mkt_tp2 uuid; v_mkt_lt uuid;
+  v_sel_tp1_over uuid; v_sel_tp1_under uuid; v_sel_tp2_over uuid; v_sel_lt_over uuid;
+  v_bet_tp_won uuid; v_bet_tp_lost uuid; v_bet_lt uuid;
   c_seed constant int := 1000;
   v_got int;
   v_result jsonb;
@@ -120,6 +133,78 @@ BEGIN
     RAISE EXCEPTION 'PROBE_FAIL: bet2 not lost';
   END IF;
 
+  ------------------------------------------------------------------ team props
+  -- Two 1-man teams + a game. The game INSERT fires trg_resync_markets_games →
+  -- sync_team_prop_markets_for_week, so the team_prop markets are created by the
+  -- LIVE coupling path, not by hand.
+  INSERT INTO public.teams (week_id, team_number) VALUES (v_week, 998) RETURNING id INTO v_t1;
+  INSERT INTO public.teams (week_id, team_number) VALUES (v_week, 999) RETURNING id INTO v_t2;
+  INSERT INTO public.team_slots (team_id, slot, player_id) VALUES (v_t1, 1, v_p1) RETURNING id INTO v_slot1;
+  INSERT INTO public.team_slots (team_id, slot, player_id) VALUES (v_t2, 1, v_p2) RETURNING id INTO v_slot2;
+  INSERT INTO public.games (game_number, team_a_id, team_b_id) VALUES (1, v_t1, v_t2) RETURNING id INTO v_game;
+
+  IF (SELECT count(*) FROM public.bet_markets
+      WHERE market_type = 'team_prop' AND subject_game_id = v_game) <> 8 THEN
+    RAISE EXCEPTION 'PROBE_FAIL: expected 8 team_prop markets for the fixture game, got %',
+      (SELECT count(*) FROM public.bet_markets
+       WHERE market_type = 'team_prop' AND subject_game_id = v_game);
+  END IF;
+  IF EXISTS (
+    SELECT 1 FROM public.bet_markets
+    WHERE market_type = 'team_prop' AND subject_game_id = v_game
+      AND (params ->> 'clock') <> CASE WHEN params ->> 'stat' = 'total_pins'
+                                       THEN 'archive' ELSE 'lanetalk' END
+  ) THEN
+    RAISE EXCEPTION 'PROBE_FAIL: team_prop clock params wrong';
+  END IF;
+
+  -- Score rows are auto-seeded blank at game creation — fill them in.
+  UPDATE public.scores SET score = 150 WHERE team_slot_id = v_slot1 AND game_id = v_game;
+  UPDATE public.scores SET score = 120 WHERE team_slot_id = v_slot2 AND game_id = v_game;
+
+  SELECT id INTO v_mkt_tp1 FROM public.bet_markets
+    WHERE market_type = 'team_prop' AND subject_game_id = v_game
+      AND params ->> 'team_id' = v_t1::text AND params ->> 'stat' = 'total_pins';
+  SELECT id INTO v_mkt_tp2 FROM public.bet_markets
+    WHERE market_type = 'team_prop' AND subject_game_id = v_game
+      AND params ->> 'team_id' = v_t2::text AND params ->> 'stat' = 'total_pins';
+  SELECT id INTO v_mkt_lt FROM public.bet_markets
+    WHERE market_type = 'team_prop' AND subject_game_id = v_game
+      AND params ->> 'team_id' = v_t1::text AND params ->> 'stat' = 'strikes';
+
+  -- Pin the lines for deterministic grading (the seeded line floats with live
+  -- league averages). Nothing reseeds between here and the sweep, and a placed
+  -- bet freezes the line anyway.
+  UPDATE public.bet_selections SET line = 140.5 WHERE market_id = v_mkt_tp1;  -- T1 Σ=150 → over wins
+  UPDATE public.bet_selections SET line = 130.5 WHERE market_id = v_mkt_tp2;  -- T2 Σ=120 → over loses
+
+  SELECT id INTO v_sel_tp1_over  FROM public.bet_selections WHERE market_id = v_mkt_tp1 AND key = 'over';
+  SELECT id INTO v_sel_tp1_under FROM public.bet_selections WHERE market_id = v_mkt_tp1 AND key = 'under';
+  SELECT id INTO v_sel_tp2_over  FROM public.bet_selections WHERE market_id = v_mkt_tp2 AND key = 'over';
+  SELECT id INTO v_sel_lt_over   FROM public.bet_selections WHERE market_id = v_mkt_lt  AND key = 'over';
+
+  -- Anti-tank: p1 is rostered on T1 → backing T1's under must RAISE (trigger).
+  PERFORM set_config('request.jwt.claims', json_build_object(
+    'sub', v_u1, 'role', 'authenticated', 'app_metadata', json_build_object('role', 'player'))::text, true);
+  BEGIN
+    PERFORM public.place_house_bet(ARRAY[v_sel_tp1_under], 50);
+    RAISE EXCEPTION 'PROBE_FAIL: own-team under bet was not blocked (anti-tank)';
+  EXCEPTION WHEN OTHERS THEN
+    IF SQLERRM NOT LIKE '%anti-tanking%' THEN RAISE; END IF;
+  END;
+
+  -- p1: over on the OTHER team's total_pins (Σ=120 < 130.5 → lost at the sweep),
+  -- and over on his OWN team's strikes (clock='lanetalk' → must survive the sweep).
+  SELECT public.place_house_bet(ARRAY[v_sel_tp2_over], 50) INTO v_bet_tp_lost;
+  SELECT public.place_house_bet(ARRAY[v_sel_lt_over], 20) INTO v_bet_lt;
+  -- p2: over on T1's total_pins (Σ=150 > 140.5 → won at the sweep).
+  PERFORM set_config('request.jwt.claims', json_build_object(
+    'sub', v_u2, 'role', 'authenticated', 'app_metadata', json_build_object('role', 'player'))::text, true);
+  SELECT public.place_house_bet(ARRAY[v_sel_tp1_over], 50) INTO v_bet_tp_won;
+
+  PERFORM set_config('request.jwt.claims', json_build_object(
+    'sub', v_u1, 'role', 'authenticated', 'app_metadata', json_build_object('role', 'admin'))::text, true);
+
   ------------------------------------------------------------------ sweep
   PERFORM public.settle_betting_for_week(v_week, true);
 
@@ -136,15 +221,55 @@ BEGIN
   END;
 
   ------------------------------------------------------------------ assertions
+  -- team_prop archive clock: both total_pins markets settled by the sweep with
+  -- the moneyline aggregation (Σ team scores for the game).
+  IF (SELECT status FROM public.bet_markets WHERE id = v_mkt_tp1) <> 'settled'
+     OR (SELECT result_value FROM public.bet_markets WHERE id = v_mkt_tp1) <> 150 THEN
+    RAISE EXCEPTION 'PROBE_FAIL: T1 total_pins market not settled at 150';
+  END IF;
+  IF (SELECT status FROM public.bet_markets WHERE id = v_mkt_tp2) <> 'settled'
+     OR (SELECT result_value FROM public.bet_markets WHERE id = v_mkt_tp2) <> 120 THEN
+    RAISE EXCEPTION 'PROBE_FAIL: T2 total_pins market not settled at 120';
+  END IF;
+  IF (SELECT status FROM public.bets WHERE id = v_bet_tp_won) <> 'won'
+     OR (SELECT potential_payout FROM public.bets WHERE id = v_bet_tp_won) <> 100 THEN
+    RAISE EXCEPTION 'PROBE_FAIL: team_prop over bet not won @100 (50 @ 2.000)';
+  END IF;
+  IF (SELECT status FROM public.bets WHERE id = v_bet_tp_lost) <> 'lost' THEN
+    RAISE EXCEPTION 'PROBE_FAIL: team_prop over bet on the 120-pin team not lost';
+  END IF;
+
+  -- lanetalk-clock team_prop: exempted from the force-void backstop — the bet
+  -- must survive the sweep pending, its market unsettled.
+  IF (SELECT status FROM public.bets WHERE id = v_bet_lt) <> 'pending' THEN
+    RAISE EXCEPTION 'PROBE_FAIL: lanetalk-clock team_prop bet did not survive the force sweep (got %)',
+      (SELECT status FROM public.bets WHERE id = v_bet_lt);
+  END IF;
+  IF (SELECT status FROM public.bet_markets WHERE id = v_mkt_lt) = 'settled' THEN
+    RAISE EXCEPTION 'PROBE_FAIL: lanetalk-clock team_prop market settled at the archive sweep';
+  END IF;
+
+  -- back-links: won = stake pair + payout pair; lost/pending = stake pair only.
+  IF (SELECT count(*) FROM public.pin_ledger WHERE bet_id = v_bet_tp_won) <> 4
+     OR (SELECT count(*) FROM public.pin_ledger WHERE bet_id = v_bet_tp_lost) <> 2
+     OR (SELECT count(*) FROM public.pin_ledger WHERE bet_id = v_bet_lt) <> 2 THEN
+    RAISE EXCEPTION 'PROBE_FAIL: team_prop bet ledger back-link counts wrong (won %, lost %, pending %)',
+      (SELECT count(*) FROM public.pin_ledger WHERE bet_id = v_bet_tp_won),
+      (SELECT count(*) FROM public.pin_ledger WHERE bet_id = v_bet_tp_lost),
+      (SELECT count(*) FROM public.pin_ledger WHERE bet_id = v_bet_lt);
+  END IF;
+
   SELECT COALESCE(SUM(amount), 0) - c_seed INTO v_got
     FROM public.pin_ledger WHERE player_id = v_p1 AND created_at = now();
-  IF v_got <> 80 THEN
-    RAISE EXCEPTION 'PROBE_FAIL: p1 final delta % (expected +80 = +30 bounty +50 bet)', v_got;
+  -- (No score mint despite the fixture scores: the seed rows are typed
+  -- 'score_credit', which trips the sweep's once-per-week mint guard.)
+  IF v_got <> 10 THEN
+    RAISE EXCEPTION 'PROBE_FAIL: p1 final delta % (expected +10 = +30 bounty +50 bet −50 team_prop −20 pending stake)', v_got;
   END IF;
   SELECT COALESCE(SUM(amount), 0) - c_seed INTO v_got
     FROM public.pin_ledger WHERE player_id = v_p2 AND created_at = now();
-  IF v_got <> -50 THEN
-    RAISE EXCEPTION 'PROBE_FAIL: p2 final delta % (expected −50 = 0 bounty −50 bet)', v_got;
+  IF v_got <> 0 THEN
+    RAISE EXCEPTION 'PROBE_FAIL: p2 final delta % (expected 0 = 0 bounty −50 bet +50 team_prop)', v_got;
   END IF;
 
   -- double-entry: every transfer type in this tx nets to zero (the sweep's
@@ -176,7 +301,7 @@ BEGIN
       FROM public.pin_ledger
       WHERE created_at = now() AND type <> 'score_credit'
         AND (player_id IN (v_p1, v_p2)
-             OR bet_id IN (v_bet1, v_bet2)
+             OR bet_id IN (v_bet1, v_bet2, v_bet_tp_won, v_bet_tp_lost, v_bet_lt)
              OR bounty_post_id IN (v_bounty1, v_bounty2)))
   ) INTO v_result;
 

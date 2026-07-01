@@ -85,14 +85,18 @@ interface BetModalState {
   wager: string
 }
 
-// UI-only policy: the "under" side of player O/U lines is hidden from the
-// Sportsbook. Betting on a leaguemate to do *poorly* has negative social
-// dynamics in a small rec league, so we don't surface it as a pick. This is a
-// pure presentation filter — the selection still exists in the DB and the
-// place/settlement RPCs (`place_house_bet`, etc.) handle `under` unchanged, so
-// the mechanic can be restored by removing this filter. See AGENTS.md.
+// UI-only policy: the "under" side of player O/U, stat-prop, and team-prop
+// lines is hidden from the Sportsbook. Betting on leaguemates (or a whole
+// team) to do *poorly* has negative social dynamics in a small rec league, so
+// we don't surface it as a pick. This is a pure presentation filter — the
+// selection still exists in the DB and the place/settlement RPCs
+// (`place_house_bet`, etc.) handle `under` unchanged, so the mechanic can be
+// restored by removing this filter. See AGENTS.md.
 function isSelectionHiddenInUI(line: LineView, sel: SelectionView): boolean {
-  return (line.marketType === 'over_under' || line.marketType === 'prop') && sel.key === 'under'
+  return (
+    (line.marketType === 'over_under' || line.marketType === 'prop' || line.marketType === 'team_prop') &&
+    sel.key === 'under'
+  )
 }
 
 // Drop UI-hidden selections from a line, returning the same object when nothing
@@ -208,7 +212,9 @@ export default function SportsbookScreen() {
       l.marketType === 'over_under' ? 0
         : l.marketType === 'prop'
           ? 1 + ['strikes', 'spares', 'clean_pct', 'first_ball_avg'].indexOf(l.statKey ?? '')
-          : 9
+          : l.marketType === 'team_prop'
+            ? 1 + ['total_pins', 'clean_frames', 'strikes', 'spares'].indexOf(l.statKey ?? '')
+            : 9
     const games = new Map<string, {
       group: LineGroup
       categories: Map<string, { category: LineCategory; rowMap: Map<string, LineView[]>; count: number }>
@@ -224,7 +230,9 @@ export default function SportsbookScreen() {
       const category = lineCategory(line)
       let c = g.categories.get(category.key)
       if (!c) { c = { category, rowMap: new Map(), count: 0 }; g.categories.set(category.key, c) }
-      const rowKey = line.subjectPlayerId ?? line.marketId
+      // Team-prop lines consolidate per team (one row of stat buttons per
+      // team), mirroring how a player's markets consolidate per subject.
+      const rowKey = line.teamId ?? line.subjectPlayerId ?? line.marketId
       const row = c.rowMap.get(rowKey)
       if (row) row.push(line)
       else c.rowMap.set(rowKey, [line])
@@ -244,8 +252,10 @@ export default function SportsbookScreen() {
             // Group player rows by week team: viewer's team rank 0, the rest by
             // first appearance; teamless subjects (moneyline rows) keep place.
             const teamRank = new Map<string, number>()
-            const rankOf = (row: { key: string }) => {
-              const team = weekTeams.teamByPlayer[row.key]
+            const rankOf = (row: { key: string; lines: LineView[] }) => {
+              // Team rows carry their team directly; player rows map through
+              // the week roster.
+              const team = row.lines[0]?.teamId ?? weekTeams.teamByPlayer[row.key]
               if (!team) return Number.MAX_SAFE_INTEGER
               if (team === weekTeams.myTeamId) return 0
               if (!teamRank.has(team)) teamRank.set(team, 1 + teamRank.size)
@@ -281,9 +291,15 @@ export default function SportsbookScreen() {
   }, [customLines, lineGroups])
 
   // Anti-tanking, market-type-aware: backing the side that bets against your own
-  // performance (the `under` on your own line) is blocked.
+  // performance (the `under` on your own line, or on your own team's line) is
+  // blocked. Friendly pre-check only — the prevent_self_tank trigger is the
+  // authoritative backstop.
   function isSelfTank(line: LineView, sel: SelectionView): boolean {
-    return line.subjectPlayerId === playerId && selectionBetsAgainstSubject(line.marketType, sel.key)
+    if (!selectionBetsAgainstSubject(line.marketType, sel.key)) return false
+    if (line.marketType === 'team_prop') {
+      return line.teamId != null && line.teamId === weekTeams.myTeamId
+    }
+    return line.subjectPlayerId === playerId
   }
 
   // Single mode: tapping a selection opens the wager sheet (pre-picked to that
@@ -446,7 +462,15 @@ export default function SportsbookScreen() {
           // so it shares the teammate green — one color story for "your side".
           lines[0].marketType === 'moneyline'
             ? 'with'
-            : subjectRelation(weekTeams, lines[0].subjectPlayerId, lines[0].gameNumber)
+            : lines[0].teamId != null
+              // Team-prop rows relate by their anchored team directly.
+              ? lines[0].teamId === weekTeams.myTeamId
+                ? 'with'
+                : lines[0].gameNumber != null &&
+                    weekTeams.opponentTeamByGame[lines[0].gameNumber] === lines[0].teamId
+                  ? 'against'
+                  : null
+              : subjectRelation(weekTeams, lines[0].subjectPlayerId, lines[0].gameNumber)
         }
         inProgress={groupInProgress}
         onSelect={(line, sel) =>

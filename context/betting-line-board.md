@@ -23,7 +23,7 @@ LineRow            one market row; renders N selection buttons from line.selecti
 ### Data shapes (`usePinsinoData.ts`)
 
 - **`SelectionView`** — one `bet_selections` row, flattened: `{ selectionId, key, label, line, odds }`. `key` is the stable side key (`'over'`, `'under'`, `'yes'`, a player id, …); `label` is the display text (rendered uppercased). **Generic** — carries any side, not just over/under.
-- **`LineView`** — one market + its selections: `{ marketId, marketType, title, subjectPlayerId, subjectName, gameNumber, line, selections: SelectionView[], inProgress }`. `line` is the **shared** line only when every selection agrees on one (the O/U case); otherwise `null`. `inProgress` = market closed for betting (`status = 'closed'`). `gameNumber` is **nullable** (season-long markets have none).
+- **`LineView`** — one market + its selections: `{ marketId, marketType, title, subjectPlayerId, subjectName, gameNumber, line, statKey, teamId, selections: SelectionView[], inProgress }`. `statKey` = `params.stat` for prop/team_prop markets; `teamId` = `params.team_id` for team_prop markets (null otherwise). `line` is the **shared** line only when every selection agrees on one (the O/U case); otherwise `null`. `inProgress` = market closed for betting (`status = 'closed'`). `gameNumber` is **nullable** (season-long markets have none).
 - `normalizeMarket(raw)` builds a `LineView` from the `MARKET_GRAPH` embed (`bet_selections(*)`), sorting selections by `sort_order`. The hook's `openLines` is `LineView[]`.
 
 ### Market-type seams — the **only** places that branch on `market_type`
@@ -56,7 +56,7 @@ The screen owns the betting context (balance, parlay slip, identity) and passes 
 - **Parlay mode** — `onSelect` toggles the selection in/out of the slip (one selection per market); `selectionState` marks the slip's selection `selected` and dims anti-tank sides. Lines in the slip are passed to `LineRowContainer` as **`pinned`**, so they stay visible even when their section is collapsed (build-across-sections UX).
 - **In progress** — `inProgress` dims the whole row and makes every side inert.
 
-`isSelfTank(line, sel)` in the screen is the single anti-tank predicate: `line.subjectPlayerId === playerId && selectionBetsAgainstSubject(line.marketType, sel.key)`. It gates the single sheet, the parlay toggle, and the placement (the server re-checks regardless).
+`isSelfTank(line, sel)` in the screen is the single anti-tank predicate: `selectionBetsAgainstSubject(line.marketType, sel.key)` AND ownership — `line.subjectPlayerId === playerId` for player markets, `line.teamId === weekTeams.myTeamId` for team_prop markets. It gates the single sheet, the parlay toggle, and the placement (the server re-checks regardless via the `prevent_self_tank` trigger).
 
 ### UI-hidden selections — the "under" is disabled in the Sportsbook
 
@@ -90,6 +90,19 @@ The **"under" side of player O/U lines is intentionally not bettable** from the 
 - **Open/close:** props ride the game toggles (`setPropStatusByWeekGame`); closing game 1 also closes the night markets; `reopenOUForWeek` reopens props too.
 - **Placed-bet surfaces** (`BetRow`, `BetDetailModal`, `SettleBetModal`, `LedgerRow`) render the shared `betLineSuffix` helper ("OVER 4.5 STRIKES"); `LegView`/`BetView` carry `statKey`.
 
+### Team-aggregate props (the fourth consumer)
+
+**Team props** (team total pins / clean frames / strikes / spares per game;
+`market_type='team_prop'`, `params={stat, team_id, team_number, clock}`) render
+through the stack with zero new row components. Board specifics:
+
+- **Fetch:** `betMarkets.listActiveTeamPropByWeek` merged into `openLines` alongside O/U + moneyline + props.
+- **Subject = a team.** `subject_game_id` anchors the matchup (like moneyline) and `params.team_id` picks the side; `subject_player_id` is null, so `normalizeMarket` labels the row `Team N` from `params.team_number` — relabeled **"Your Team"** in the hook's board-build loop when `params.team_id` is the viewer's week team. Every team's lines are shown (not just the viewer's — unlike the moneyline reduction).
+- **Grouping:** `lineCategory('team_prop')` → a **`Team Totals`** collapsible section per game (sortOrder 2, below Player Overs). A team's four stat markets consolidate into ONE row (`rowKey = line.teamId`), buttons ordered total_pins → clean_frames → strikes → spares (`612.5+ TOTAL PINS · 9.5+ CLEAN FRAMES · …` via the shared `STAT_LABELS`/`selectionButtonLabel`). Row tint: green for the viewer's team, red for the game's opponent (keyed off `teamId` directly, not `subjectRelation`).
+- **Anti-tank + under-hide:** `selectionBetsAgainstSubject('team_prop','under') → true`; `isSelectionHiddenInUI` hides the team under like the player unders (same social policy). `isSelfTank` blocks the viewer backing their **own team's** under (`teamId === weekTeams.myTeamId`); the DB `prevent_self_tank` team branch is the authoritative backstop (any non-fill roster membership on `params.team_id`).
+- **Placed-bet surfaces** reuse `betLineSuffix` (`OVER 612.5 TOTAL PINS`) — `team_prop` is in its market-type gate alongside `prop`.
+- **Two settlement clocks** (DB concern, invisible to the board): `total_pins` settles at archive; the frame stats settle on the LaneTalk clock. See [archive-and-settlement.md](archive-and-settlement.md) §3.
+
 ### Recipe — adding a new market type to the board
 
 The board needs **no new render code**:
@@ -100,7 +113,7 @@ The board needs **no new render code**:
 4. **Helpers** — add a `case` to `lineCategory` (section name) and, if a side bets against the subject, to `selectionBetsAgainstSubject`. Touch `lineGroup` only if the scope isn't per-game/season.
 5. Done — `LineRow` / `LineRowContainer` / the grouping render it as-is.
 
-> **Known assumption:** `lineCategory` maps `over_under → "Player Overs"` because every O/U subject is a player today. A *team* over/under under the same `market_type` would need the category (and anti-tank) to key off the subject **kind** (player vs team), not `market_type` alone.
+> **Known assumption:** `lineCategory` maps `over_under → "Player Overs"` because every O/U subject is a player today. Team aggregates got their **own** `market_type='team_prop'` (they need their own settlement-clock dispatch — see PIN_ECONOMY_SCHEMA §7), so this assumption still holds.
 
 ### Custom lines ("Specials") — admin-authored bundles of existing selections
 

@@ -428,6 +428,19 @@ export const betMarkets = {
       .in('status', ['open', 'closed'])
       .order('game_number', { nullsFirst: false })
       .order('subject_player_id'),
+  // Active (open + closed-for-betting) team_prop markets for a week — team
+  // aggregate lines (clean frames / strikes / spares / total pins per game).
+  // Anchored by subject_game_id + params.team_id, so the player-subject embed
+  // resolves null (like moneyline); the row label comes from params.team_number.
+  listActiveTeamPropByWeek: (weekId: string) =>
+    supabase
+      .from('bet_markets')
+      .select(MARKET_GRAPH)
+      .eq('week_id', weekId)
+      .eq('market_type', 'team_prop')
+      .in('status', ['open', 'closed'])
+      .order('game_number')
+      .order('title'),
   // Unsettled LaneTalk prop markets across ALL weeks — the import screen groups
   // these by week to surface its "Confirm LaneTalk Data" button. These ride a
   // separate settlement clock from archive (data lands the next day).
