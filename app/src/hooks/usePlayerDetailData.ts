@@ -7,6 +7,7 @@ import {
   seasonChampions as seasonChampionsDb,
   teamSlots as teamSlotsDb,
 } from '../utils/supabase/db'
+import { countsTowardAverage } from '../utils/averages'
 
 // ---- Raw query result shapes ----
 
@@ -154,7 +155,8 @@ export function computePlayerProfile(
     return true
   })
 
-  const scoreVals = playerRows.map(r => r.score ?? 0).filter(s => s > 0)
+  // Canonical policy: only bowled games (score > 0) count toward the average.
+  const scoreVals = playerRows.map(r => r.score).filter(countsTowardAverage)
   const avg = scoreVals.length ? scoreVals.reduce((a, b) => a + b, 0) / scoreVals.length : 0
   const highGame = scoreVals.length ? Math.max(...scoreVals) : 0
   const totalGames = scoreVals.length
@@ -178,8 +180,8 @@ export function computePlayerProfile(
         const slot = r.team_slots
         return slot && !slot.is_fill && slot.player_id === playerId && slot.teams.weeks.season_id === currentSeasonId
       })
-      .map(r => r.score ?? 0)
-      .filter(s => s > 0)
+      .map(r => r.score)
+      .filter(countsTowardAverage)
     seasonAvg = cs.length ? cs.reduce((a, b) => a + b, 0) / cs.length : 0
   }
 

@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
-import { weeks, teamSlots, games, scores, rsvp, seasons, seasonChampions, betMarkets } from '../utils/supabase/db'
+import { weeks, teamSlots, games, scores, rsvp, seasonChampions, betMarkets } from '../utils/supabase/db'
+import { aggregatePlayerAverages, effectiveAverage, type AverageRow } from '../utils/averages'
 
 export interface MatchupsPlayer {
   name: string
@@ -39,14 +40,12 @@ export function useMatchupsData() {
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const [weekRes, seasonsRes, championsRes] = await Promise.all([
+      const [weekRes, championsRes] = await Promise.all([
         weeks.getActive(),
-        seasons.list(),
         seasonChampions.list(),
       ])
 
       const week = weekRes.data
-      const allSeasons = seasonsRes.data ?? []
       const champRows = championsRes.data ?? []
 
       if (!week) {
@@ -59,20 +58,14 @@ export function useMatchupsData() {
 
       const championPlayerIds = new Set(champRows.map((c: any) => c.player_id))
 
-      // Only seasons that have started count — a season still in registration
-      // (registration_open) has no scores and must not be mistaken for the
-      // current season when picking the previous season for average calc.
-      const startedSeasons = allSeasons.filter((s: any) => !s.registration_open)
-      const prevSeason = startedSeasons.length >= 2
-        ? startedSeasons[startedSeasons.length - 2]
-        : startedSeasons[startedSeasons.length - 1]
-
-      const [slotsRes, scheduleRes, weekScoresRes, rsvpRes, prevScoresRes, marketStatusRes] = await Promise.all([
+      const [slotsRes, scheduleRes, weekScoresRes, rsvpRes, archivedScoresRes, marketStatusRes] = await Promise.all([
         teamSlots.listByWeek(week.id),
         games.listByWeek(week.id),
         scores.listByWeek(week.id),
         rsvp.listByWeek(week.id),
-        prevSeason ? scores.listBySeason(prevSeason.id) : Promise.resolve({ data: [] as any[] }),
+        // All-time official games across every season — a player's average
+        // defaults to their total career average, not a single prior season.
+        scores.listAllArchived(),
         betMarkets.listOUStatusByWeek(week.id),
       ])
 
@@ -98,23 +91,13 @@ export function useMatchupsData() {
       setGameIdByNumber(idByNumber)
       const weekScores = weekScoresRes.data ?? []
       const rsvpRows = rsvpRes.data ?? []
-      const prevScores = prevScoresRes.data ?? []
+      const archivedScores = archivedScoresRes.data ?? []
 
-      // League avg and per-player avgs from prev-season archived scores
-      const totalPins = prevScores.reduce((s: number, r: any) => s + (r.score ?? 0), 0)
-      const leagueAvg = prevScores.length > 0 ? totalPins / prevScores.length : 0
-
-      const byPlayer: Record<string, { pins: number; games: number }> = {}
-      for (const row of prevScores) {
-        const pid = (row as any).team_slots?.player_id
-        if (!pid) continue
-        if (!byPlayer[pid]) byPlayer[pid] = { pins: 0, games: 0 }
-        byPlayer[pid].pins += row.score ?? 0
-        byPlayer[pid].games += 1
-      }
-      const playerAvgById: Record<string, number> = Object.fromEntries(
-        Object.entries(byPlayer).map(([pid, { pins, games }]) => [pid, games > 0 ? pins / games : 0])
-      )
+      // Per-player + games-weighted league averages across all-time archived
+      // scores (canonical policy — see utils/averages). listAllArchived already
+      // strips fills/nulls; the util's guards make this idempotent.
+      const avgAgg = aggregatePlayerAverages(archivedScores as AverageRow[])
+      const leagueAvg = avgAgg.leagueAvg
 
       const outPlayerIds = new Set(
         rsvpRows.filter((r: any) => r.status === 'Out').map((r: any) => r.player_id)
@@ -136,9 +119,7 @@ export function useMatchupsData() {
         const playerId: string | null = slot.player_id
         const isOut = playerId ? outPlayerIds.has(playerId) : false
         const isChampion = playerId ? championPlayerIds.has(playerId) : false
-        const effectiveAvg = slot.is_fill || isOut
-          ? leagueAvg
-          : (playerId ? (playerAvgById[playerId] ?? leagueAvg) : leagueAvg)
+        const effectiveAvg = effectiveAverage(avgAgg, playerId, { isFill: slot.is_fill, isOut })
 
         teams[teamName].players.push({
           name: slot.is_fill ? 'League Avg Fill' : (slot.players?.name ?? ''),
