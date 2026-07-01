@@ -10,8 +10,8 @@ import WinnersCrutchToggle from '../auction/WinnersCrutchToggle'
 import EnergyDrinkToggle from '../auction/EnergyDrinkToggle'
 import { betLineSuffix } from '../../hooks/usePinsinoData'
 
-// One pick staged in the unified slip. Generic over market_type — a pick is a
-// chosen selection on a market. Mirrors the fields the board already carries.
+// One individual pick staged in the slip — a chosen selection on a market.
+// Combines with other picks into a parlay, or places as its own single.
 export interface SlipPick {
   selectionId: string
   selectionKey: string
@@ -26,17 +26,29 @@ export interface SlipPick {
   odds: number
 }
 
+// One special ("custom line") staged in the slip. A special is a pre-built,
+// admin-curated bundle at fixed combined odds — it ALWAYS places as its own
+// bet (carrying its custom_line_id tag), never merged as a leg into a parlay
+// (that would break its identity/branding — see the design note in the screen).
+export interface SlipSpecial {
+  key: string          // instance id (React key + staging identity)
+  lineId: string       // custom_lines.id — the durable bet tag
+  title: string
+  category: string     // 'special' | 'default'
+  summary: string      // one-line leg summary for display
+  selectionIds: string[]
+  combinedOdds: number
+  multiLeg: boolean
+}
+
 type SlipMode = 'singles' | 'parlay'
 
-// Concrete item choices resolved from the toggles, handed back to the screen
-// (which maps them onto item ids and calls the placement RPC).
-export interface SinglesSubmit {
-  entries: { pick: SlipPick; stake: number }[]
-  insure: boolean
-  boost: boolean
-}
-export interface ParlaySubmit {
-  stake: number
+// A normalized placement request: at most one parlay (the combined picks) plus a
+// list of standalone single bets (singles-mode picks and/or every special). The
+// screen just loops this over bets.place. Items attach to the sole bet only.
+export interface SlipSubmit {
+  parlay: { selectionIds: string[]; stake: number } | null
+  singles: { selectionIds: string[]; lineId?: string; stake: number }[]
   insure: boolean
   crutch: boolean
   boost: boolean
@@ -44,9 +56,11 @@ export interface ParlaySubmit {
 
 interface BetSlipProps {
   picks: SlipPick[]
+  specials: SlipSpecial[]
   open: boolean
   onOpenChange: (open: boolean) => void
   onRemovePick: (marketId: string) => void
+  onRemoveSpecial: (key: string) => void
   onClear: () => void
   balance: number
   placing: boolean
@@ -55,8 +69,7 @@ interface BetSlipProps {
   crutchCount: number
   boostCount: number
   boostPct: number
-  onPlaceSingles: (submit: SinglesSubmit) => void
-  onPlaceParlay: (submit: ParlaySubmit) => void
+  onPlace: (submit: SlipSubmit) => void
 }
 
 function pickLabel(p: SlipPick): string {
@@ -67,16 +80,18 @@ function pickLabel(p: SlipPick): string {
   )
 }
 
-// The unified bet slip: a persistent bottom bar summarizing staged picks that
-// expands into a placement sheet. One pick → a single; 2+ → Singles (each its
-// own bet, per-pick stake) or Parlay (one combined-odds bet). Presentational
+// The unified bet slip: a persistent bar summarizing staged picks + specials
+// that expands into a placement sheet. Individual picks combine (Singles /
+// Parlay); each special always places as its own tagged bet. Presentational
 // over the screen's slip state; the screen owns the placement RPC + reload.
-// Mount it whenever `picks.length > 0`.
+// Mount whenever `picks.length + specials.length > 0`.
 export default function BetSlip({
   picks,
+  specials,
   open,
   onOpenChange,
   onRemovePick,
+  onRemoveSpecial,
   onClear,
   balance,
   placing,
@@ -84,13 +99,14 @@ export default function BetSlip({
   crutchCount,
   boostCount,
   boostPct,
-  onPlaceSingles,
-  onPlaceParlay,
+  onPlace,
 }: BetSlipProps) {
-  const multi = picks.length > 1
+  const count = picks.length + specials.length
+  const multiPicks = picks.length > 1
   const [mode, setMode] = useState<SlipMode>('parlay')
   const [parlayWager, setParlayWager] = useState('')
   const [singleWagers, setSingleWagers] = useState<Record<string, string>>({})
+  const [specialWagers, setSpecialWagers] = useState<Record<string, string>>({})
   const [insure, setInsure] = useState(false)
   const [crutch, setCrutch] = useState(false)
   const [boost, setBoost] = useState(false)
@@ -101,6 +117,7 @@ export default function BetSlip({
     if (open) {
       setParlayWager('')
       setSingleWagers({})
+      setSpecialWagers({})
       setInsure(false)
       setCrutch(false)
       setBoost(false)
@@ -108,42 +125,67 @@ export default function BetSlip({
     }
   }, [open]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // A single staged pick is always a single; only offer the switch for 2+.
-  const effectiveMode: SlipMode = multi ? mode : 'singles'
+  // Picks parlay only when there are 2+ and parlay is chosen; specials always
+  // stand alone. The resulting bet count drives item eligibility.
+  const parlayPicks = multiPicks && mode === 'parlay'
+  const pickBets = parlayPicks ? (picks.length >= 2 ? 1 : 0) : picks.length
+  const totalBets = pickBets + specials.length
+
+  // Items attach to exactly ONE bet, so they're offered only when the slip
+  // resolves to a single bet. A crutch additionally needs that bet to be
+  // multi-leg (a parlay of picks, or a multi-leg special).
+  const oneBet = totalBets === 1
+  const oneBetMultiLeg =
+    oneBet &&
+    ((parlayPicks && specials.length === 0 && picks.length >= 2) ||
+      (specials.length === 1 && picks.length === 0 && specials[0].multiLeg))
+
   const parlayOdds = useMemo(() => Math.pow(2, picks.length), [picks.length])
 
-  // Items attach to exactly one bet, so they're only offered when the slip
-  // resolves to ONE bet: a lone single, or a parlay. Multi-single hides them.
-  const oneBet = effectiveMode === 'parlay' || picks.length === 1
-
-  const singlesTotal = useMemo(
-    () => picks.reduce((s, p) => s + (parseInt(singleWagers[p.marketId] ?? '', 10) || 0), 0),
-    [picks, singleWagers],
-  )
-
+  const specialsTotal = specials.reduce((s, sp) => s + (parseInt(specialWagers[sp.key] ?? '', 10) || 0), 0)
+  const singlesPickTotal = picks.reduce((s, p) => s + (parseInt(singleWagers[p.marketId] ?? '', 10) || 0), 0)
   const parlayNum = parseInt(parlayWager, 10)
-  const canPlace =
-    effectiveMode === 'parlay'
-      ? picks.length >= 2 && !isNaN(parlayNum) && parlayNum >= 10 && parlayNum <= balance
-      : picks.length >= 1 &&
-        picks.every(p => {
-          const n = parseInt(singleWagers[p.marketId] ?? '', 10)
-          return !isNaN(n) && n >= 10
-        }) &&
-        singlesTotal <= balance
+  const grandTotal = specialsTotal + (parlayPicks ? (parlayNum || 0) : singlesPickTotal)
+
+  const specialsValid = specials.every(sp => {
+    const n = parseInt(specialWagers[sp.key] ?? '', 10)
+    return !isNaN(n) && n >= 10
+  })
+  const picksValid = parlayPicks
+    ? !isNaN(parlayNum) && parlayNum >= 10
+    : picks.every(p => {
+        const n = parseInt(singleWagers[p.marketId] ?? '', 10)
+        return !isNaN(n) && n >= 10
+      })
+  const canPlace = count > 0 && specialsValid && picksValid && grandTotal <= balance
 
   function submit() {
     if (!canPlace) return
-    if (effectiveMode === 'parlay') {
-      onPlaceParlay({ stake: parlayNum, insure, crutch, boost })
-    } else {
-      const entries = picks.map(p => ({ pick: p, stake: parseInt(singleWagers[p.marketId], 10) }))
-      onPlaceSingles({ entries, insure: oneBet && insure, boost: oneBet && boost })
+    const singles: SlipSubmit['singles'] = []
+    if (!parlayPicks) {
+      for (const p of picks) singles.push({ selectionIds: [p.selectionId], stake: parseInt(singleWagers[p.marketId], 10) })
     }
+    for (const sp of specials) singles.push({ selectionIds: sp.selectionIds, lineId: sp.lineId, stake: parseInt(specialWagers[sp.key], 10) })
+    onPlace({
+      parlay: parlayPicks ? { selectionIds: picks.map(p => p.selectionId), stake: parlayNum } : null,
+      singles,
+      insure: oneBet && insure,
+      crutch: oneBetMultiLeg && crutch,
+      boost: oneBet && boost,
+    })
   }
 
-  const ctaLabel =
-    effectiveMode === 'singles' && multi ? `Place ${picks.length} Bets` : 'Place Bet'
+  const ctaLabel = totalBets > 1 ? `Place ${totalBets} Bets` : 'Place Bet'
+  const showZoneLabels = specials.length > 0 && picks.length > 0
+
+  const subtitle =
+    totalBets > 1
+      ? `${totalBets} BETS · ${grandTotal || 0} PINS`
+      : parlayPicks
+        ? `${picks.length}-LEG PARLAY · ALL MUST WIN · PAYS ×${parlayOdds}`
+        : specials.length === 1
+          ? `SPECIAL · PAYS ×${specials[0].combinedOdds.toFixed(specials[0].combinedOdds % 1 === 0 ? 0 : 2)}`
+          : 'SINGLE BET'
 
   return (
     <>
@@ -151,10 +193,13 @@ export default function BetSlip({
       <View style={styles.bar}>
         <TouchableOpacity style={styles.barInfo} onPress={() => onOpenChange(true)} activeOpacity={0.7}>
           <Text style={styles.barTitle}>
-            BET SLIP · {picks.length} {picks.length === 1 ? 'PICK' : 'PICKS'}
+            BET SLIP · {count} {count === 1 ? 'PICK' : 'PICKS'}
           </Text>
           <Text style={styles.barSub} numberOfLines={1}>
-            {picks.map(p => `${p.subjectName} ${p.selectionLabel.toUpperCase()}`).join(' · ')}
+            {[
+              ...specials.map(s => s.title),
+              ...picks.map(p => `${p.subjectName} ${p.selectionLabel.toUpperCase()}`),
+            ].join(' · ')}
           </Text>
         </TouchableOpacity>
         <Button variant="ghost" label="Clear" onPress={onClear} style={styles.barClear} />
@@ -165,17 +210,11 @@ export default function BetSlip({
       {open && (
         <BottomSheet
           title="Bet Slip"
-          subtitle={
-            effectiveMode === 'parlay'
-              ? `${picks.length}-LEG PARLAY · ALL MUST WIN · PAYS ×${parlayOdds}`
-              : multi
-                ? `${picks.length} SINGLES · ${singlesTotal || 0} PINS`
-                : 'SINGLE BET'
-          }
+          subtitle={subtitle}
           onClose={() => onOpenChange(false)}
           busy={placing}
           keyboardAvoiding
-          bodyMaxHeight={420}
+          bodyMaxHeight={440}
           footer={
             <Button
               label={ctaLabel}
@@ -187,28 +226,57 @@ export default function BetSlip({
             />
           }
         >
-          {/* Singles / Parlay switch (only meaningful for 2+ picks) */}
-          {multi && (
-            <View style={styles.modeRow}>
-              <ToggleGroup
-                variant="bar"
-                options={[{ key: 'singles', label: 'Singles' }, { key: 'parlay', label: 'Parlay' }]}
-                value={mode}
-                onChange={(m: SlipMode) => setMode(m)}
-              />
+          {/* ── Specials (each its own bet) ── */}
+          {specials.length > 0 && (
+            <View style={styles.zone}>
+              {showZoneLabels && <Text style={styles.zoneLabel}>SPECIALS</Text>}
+              {specials.map(sp => (
+                <View key={sp.key} style={styles.row}>
+                  <View style={styles.rowMain}>
+                    <Text style={[styles.specialTitle, sp.category === 'special' && styles.specialTitleGold]}>
+                      {sp.title} · ×{sp.combinedOdds.toFixed(sp.combinedOdds % 1 === 0 ? 0 : 2)}
+                    </Text>
+                    <Text style={styles.specialSummary} numberOfLines={2}>{sp.summary}</Text>
+                    <View style={styles.wager}>
+                      <WagerField
+                        wager={specialWagers[sp.key] ?? ''}
+                        onChangeWager={v => setSpecialWagers(s => ({ ...s, [sp.key]: v }))}
+                        balance={balance}
+                        odds={sp.combinedOdds}
+                        boostPct={oneBet && boost ? boostPct : undefined}
+                        label="STAKE (pins)"
+                        compact
+                      />
+                    </View>
+                  </View>
+                  <TouchableOpacity onPress={() => onRemoveSpecial(sp.key)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                    <Text style={styles.remove}>✕</Text>
+                  </TouchableOpacity>
+                </View>
+              ))}
             </View>
           )}
 
-          {/* Staged picks */}
-          <View style={styles.pickList}>
-            {picks.map(p => {
-              const isSingles = effectiveMode === 'singles'
-              return (
-                <View key={p.marketId} style={styles.pickRow}>
-                  <View style={styles.pickMain}>
+          {/* ── Picks (singles / parlay) ── */}
+          {picks.length > 0 && (
+            <View style={styles.zone}>
+              {showZoneLabels && <Text style={styles.zoneLabel}>PICKS</Text>}
+              {multiPicks && (
+                <View style={styles.modeRow}>
+                  <ToggleGroup
+                    variant="bar"
+                    options={[{ key: 'singles', label: 'Singles' }, { key: 'parlay', label: 'Parlay' }]}
+                    value={mode}
+                    onChange={(m: SlipMode) => setMode(m)}
+                  />
+                </View>
+              )}
+              {picks.map(p => (
+                <View key={p.marketId} style={styles.row}>
+                  <View style={styles.rowMain}>
                     <Text style={styles.pickText} numberOfLines={2}>{pickLabel(p)}</Text>
-                    {isSingles && (
-                      <View style={styles.pickWager}>
+                    {!parlayPicks && (
+                      <View style={styles.wager}>
                         <WagerField
                           wager={singleWagers[p.marketId] ?? ''}
                           onChangeWager={v => setSingleWagers(s => ({ ...s, [p.marketId]: v }))}
@@ -221,33 +289,28 @@ export default function BetSlip({
                       </View>
                     )}
                   </View>
-                  <TouchableOpacity
-                    onPress={() => onRemovePick(p.marketId)}
-                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                  >
-                    <Text style={styles.pickRemove}>✕</Text>
+                  <TouchableOpacity onPress={() => onRemovePick(p.marketId)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                    <Text style={styles.remove}>✕</Text>
                   </TouchableOpacity>
                 </View>
-              )
-            })}
-          </View>
-
-          {/* Parlay: one combined stake */}
-          {effectiveMode === 'parlay' && (
-            <WagerField
-              wager={parlayWager}
-              onChangeWager={setParlayWager}
-              balance={balance}
-              odds={parlayOdds}
-              boostPct={boost ? boostPct : undefined}
-            />
+              ))}
+              {parlayPicks && (
+                <WagerField
+                  wager={parlayWager}
+                  onChangeWager={setParlayWager}
+                  balance={balance}
+                  odds={parlayOdds}
+                  boostPct={oneBet && boost ? boostPct : undefined}
+                />
+              )}
+            </View>
           )}
 
           {/* Item toggles — only when the slip resolves to a single bet. */}
           {oneBet ? (
             <>
               <GoldenTicketToggle ticketCount={ticketCount} enabled={insure} onToggle={setInsure} disabled={placing} />
-              {effectiveMode === 'parlay' && (
+              {oneBetMultiLeg && (
                 <WinnersCrutchToggle crutchCount={crutchCount} enabled={crutch} onToggle={setCrutch} disabled={placing} />
               )}
               <EnergyDrinkToggle boostCount={boostCount} enabled={boost} onToggle={setBoost} disabled={placing} />
@@ -255,12 +318,12 @@ export default function BetSlip({
           ) : (
             (ticketCount > 0 || boostCount > 0) && (
               <Text style={styles.itemNote}>
-                Place a pick on its own to attach a Golden Ticket or Energy Drink.
+                Place a bet on its own to attach a Golden Ticket or Energy Drink.
               </Text>
             )
           )}
 
-          {!canPlace && effectiveMode === 'singles' && singlesTotal > balance && (
+          {count > 0 && grandTotal > balance && (
             <Text style={styles.warning}>Total stake exceeds your balance.</Text>
           )}
           <Text style={styles.warning}>⚠ Bets can't be canceled once placed.</Text>
@@ -303,10 +366,18 @@ const styles = StyleSheet.create({
   barClear: { paddingHorizontal: 8, paddingVertical: 8 },
   barReview: { paddingHorizontal: 16, paddingVertical: 10 },
 
-  modeRow: { marginBottom: 14 },
+  zone: { marginBottom: 6 },
+  zoneLabel: {
+    fontFamily: fonts.barlowCondensed,
+    fontSize: 12,
+    letterSpacing: 1.5,
+    color: colors.muted,
+    marginTop: 4,
+    marginBottom: 4,
+  },
+  modeRow: { marginBottom: 12 },
 
-  pickList: { marginBottom: 4 },
-  pickRow: {
+  row: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     justifyContent: 'space-between',
@@ -315,15 +386,29 @@ const styles = StyleSheet.create({
     borderBottomColor: colors.border,
     gap: 10,
   },
-  pickMain: { flex: 1 },
+  rowMain: { flex: 1 },
   pickText: {
     fontFamily: fonts.barlowCondensed,
     fontSize: 14,
     color: colors.text,
     letterSpacing: 0.3,
   },
-  pickWager: { marginTop: 2 },
-  pickRemove: {
+  specialTitle: {
+    fontFamily: fonts.barlowCondensed,
+    fontSize: 14,
+    color: colors.accent,
+    letterSpacing: 0.3,
+  },
+  specialTitleGold: { color: colors.gold },
+  specialSummary: {
+    fontFamily: fonts.barlowCondensed,
+    fontSize: 12,
+    color: colors.muted,
+    marginTop: 2,
+    letterSpacing: 0.3,
+  },
+  wager: { marginTop: 2 },
+  remove: {
     fontFamily: fonts.barlowCondensed,
     fontSize: 15,
     color: colors.danger,

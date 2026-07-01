@@ -10,6 +10,9 @@ interface CustomLineRowProps {
   // Dimmed but still pressable, so the screen's handler can toast (anti-tank /
   // low balance) — mirrors LineRow's SelectionUiState.disabled semantics.
   disabled?: boolean
+  // Staged in the bet slip — the multiplier button flips to a solid fill (mirrors
+  // LineRow's picked odds cell).
+  selected?: boolean
   // Tapping the TAKE button. Omit (or set `inProgress`) to render an inert pill.
   onTake?: () => void
 }
@@ -18,7 +21,7 @@ interface CustomLineRowProps {
 // and the bundled legs on the left, a single TAKE button (the whole bundle) on
 // the right. category drives the visual treatment — 'special' lines get the
 // gold chip + border; 'default' lines match the standard accent language.
-export default function CustomLineRow({ line, isLast, inProgress, disabled, onTake }: CustomLineRowProps) {
+export default function CustomLineRow({ line, isLast, inProgress, disabled, selected, onTake }: CustomLineRowProps) {
   const pressable = !inProgress && !!onTake
   const special = line.category === 'special'
 
@@ -41,13 +44,18 @@ export default function CustomLineRow({ line, isLast, inProgress, disabled, onTa
         style={[
           styles.takeBtn,
           special && styles.takeBtnSpecial,
+          selected && (special ? styles.takeBtnSelectedSpecial : styles.takeBtnSelected),
           (inProgress || disabled) && styles.takeBtnDisabled,
         ]}
         onPress={pressable ? onTake : undefined}
         disabled={!pressable}
         activeOpacity={0.7}
       >
-        <Text style={[styles.takeBtnOdds, special && styles.takeBtnOddsSpecial]}>
+        <Text style={[
+          styles.takeBtnOdds,
+          special && styles.takeBtnOddsSpecial,
+          selected && styles.takeBtnOddsSelected,
+        ]}>
           ×{line.combinedOdds.toFixed(line.combinedOdds % 1 === 0 ? 0 : 2)}
         </Text>
       </TouchableOpacity>
@@ -105,6 +113,9 @@ const styles = StyleSheet.create({
     borderColor: colors.gold,
     backgroundColor: colors.goldDim,
   },
+  // Staged in the slip: solid fill (accent for default, gold for specials).
+  takeBtnSelected: { backgroundColor: colors.accent, borderColor: colors.accent },
+  takeBtnSelectedSpecial: { backgroundColor: colors.gold, borderColor: colors.gold },
   takeBtnDisabled: { borderColor: colors.border2, backgroundColor: 'transparent', opacity: 0.4 },
   // The multiplier IS the button — oversized for scanability.
   takeBtnOdds: {
@@ -114,4 +125,5 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   takeBtnOddsSpecial: { color: colors.gold },
+  takeBtnOddsSelected: { color: colors.bg },
 })

@@ -19,11 +19,7 @@ import BalancePill from '../components/ui/BalancePill'
 import ActiveBetsView from '../components/betting/ActiveBetsView'
 import SettledBetsView from '../components/betting/SettledBetsView'
 import BetDetailModal from '../components/betting/BetDetailModal'
-import WagerSheet from '../components/betting/WagerSheet'
-import BetSlip, { type SlipPick, type SinglesSubmit, type ParlaySubmit } from '../components/betting/BetSlip'
-import GoldenTicketToggle from '../components/auction/GoldenTicketToggle'
-import WinnersCrutchToggle from '../components/auction/WinnersCrutchToggle'
-import EnergyDrinkToggle from '../components/auction/EnergyDrinkToggle'
+import BetSlip, { type SlipPick, type SlipSpecial, type SlipSubmit } from '../components/betting/BetSlip'
 import LineRow from '../components/betting/LineRow'
 import LineRowContainer from '../components/betting/LineRowContainer'
 import CustomLineRow from '../components/betting/CustomLineRow'
@@ -93,33 +89,22 @@ export default function SportsbookScreen() {
   // Past-season review is read-only: only the season's settled bets are shown
   // (no Place/Active board, no bet slip reachable).
   const effectiveView: View2 = readOnly ? 'settled' : view
-  // Unified bet slip: tapping any line stages a pick here; the slip places them
-  // as singles (per-pick stake) or one parlay (combined odds).
+  // Unified bet slip: tapping any line stages an individual pick; tapping a
+  // special stages its bundle. The slip places picks as singles/parlay and each
+  // special as its own tagged bet; BetSlip owns the stake + item-toggle inputs.
   const [slipPicks, setSlipPicks] = useState<SlipPick[]>([])
+  const [slipSpecials, setSlipSpecials] = useState<SlipSpecial[]>([])
   const [slipOpen, setSlipOpen] = useState(false)
   const [placing, setPlacing] = useState(false)
   const [detailModal, setDetailModal] = useState<BetView | null>(null)
-  // Wager sheet for taking a custom line ("special") — the whole bundle at once.
-  const [takeModal, setTakeModal] = useState<{ line: CustomLineView; wager: string } | null>(null)
 
-  // Golden Tickets (auction-won bet insurance): unconsumed attach_to_bet items,
-  // oldest first — the toggle consumes tickets[0]. Default OFF per sheet open;
-  // spending a scarce item is always a deliberate act.
+  // Attachable items (auction-won), oldest first — the slip spends [0] of the
+  // chosen kind: Golden Tickets (bet insurance), Winner's Crutches (parlay save),
+  // Energy Drinks (profit doubler; boostPct is the oldest drink's multiplier).
   const [tickets, setTickets] = useState<string[]>([])
-  const [insureBet, setInsureBet] = useState(false)
-
-  // Winner's Crutches (auction-won parlay insurance): unconsumed attach_to_bet
-  // items, oldest first — the toggle consumes crutches[0]. Parlay flows only.
   const [crutches, setCrutches] = useState<string[]>([])
-  const [useCrutch, setUseCrutch] = useState(false)
-
-  // Energy Drinks (auction-won profit doubler): unconsumed attach_to_bet items,
-  // oldest first — the toggle consumes boosts[0]. Works on any bet. boostPct is
-  // the oldest drink's profit multiplier (catalog effect_params), driving the
-  // boosted to-win preview.
   const [boosts, setBoosts] = useState<string[]>([])
   const [boostPct, setBoostPct] = useState(1)
-  const [useBoost, setUseBoost] = useState(false)
 
   // Ghosts in the Slip (auction-won adversarial item): unconsumed
   // attach_to_foreign_bet items, oldest first — a haunt spends ghosts[0]. Unlike
@@ -303,106 +288,85 @@ export default function SportsbookScreen() {
     setSlipPicks(prev => prev.filter(p => p.marketId !== marketId))
   }
 
-  // Singles: each staged pick placed as its own bet, sequentially. Item
-  // attachment is offered only for a lone single (BetSlip enforces this), so at
-  // most one bet carries a ticket/boost. Reports partial placement on failure.
-  async function placeSingles({ entries, insure, boost }: SinglesSubmit) {
-    if (readOnly || !playerId || entries.length === 0) return
-    const total = entries.reduce((s, e) => s + e.stake, 0)
-    if (entries.some(e => e.stake < 10)) { showToast('Minimum stake is 10 pins', 'error'); return }
+  // Tapping a special toggles its bundle in/out of the slip. Anti-tank toasts as
+  // for a pick; low balance still stages (validated at placement). A special is a
+  // pre-built bundle that always places as its OWN tagged bet — never merged as a
+  // parlay leg (that would forfeit its custom_line_id branding + curated odds).
+  function stageSpecial(line: CustomLineView) {
+    if (readOnly) return
+    if (customLineSelfTank(line, playerId)) { showToast('Believe in yourself man', 'error'); return }
+    setSlipSpecials(prev => {
+      if (prev.some(s => s.key === line.id)) return prev.filter(s => s.key !== line.id)
+      const summary = line.legs.map(leg =>
+        `${leg.subjectName} · ${leg.pick.toUpperCase()}` +
+        (leg.marketType === 'over_under' && leg.line != null ? ` ${leg.line.toFixed(1)}` : '') +
+        (leg.gameNumber != null ? ` · G${leg.gameNumber}` : '')
+      ).join('  ·  ')
+      return [...prev, {
+        key: line.id,
+        lineId: line.lineId,
+        title: line.title,
+        category: line.category,
+        summary,
+        selectionIds: line.selectionIds,
+        combinedOdds: line.combinedOdds,
+        multiLeg: line.legs.length > 1,
+      }]
+    })
+  }
+
+  function removeSlipSpecial(key: string) {
+    setSlipSpecials(prev => prev.filter(s => s.key !== key))
+  }
+
+  function clearSlip() {
+    setSlipPicks([])
+    setSlipSpecials([])
+    setSlipOpen(false)
+  }
+
+  // Places the whole slip: at most one parlay (the combined picks) plus each
+  // standalone single bet (singles-mode picks and every special, which carries
+  // its lineId tag). All even money, so parlay odds = 2^N server-side. Items
+  // attach to the sole bet only (BetSlip gates the flags). Sequential; reports
+  // partial placement on failure.
+  async function placeSlip({ parlay, singles, insure, crutch, boost }: SlipSubmit) {
+    if (readOnly || !playerId) return
+    const total = (parlay?.stake ?? 0) + singles.reduce((s, e) => s + e.stake, 0)
+    if (parlay && parlay.stake < 10) { showToast('Minimum wager is 10 pins', 'error'); return }
+    if (singles.some(e => e.stake < 10)) { showToast('Minimum stake is 10 pins', 'error'); return }
     if (total > balance) { showToast('Total stake exceeds your balance', 'error'); return }
 
     setPlacing(true)
     let placed = 0
+    const totalBets = (parlay ? 1 : 0) + singles.length
     try {
-      for (const { pick, stake } of entries) {
+      if (parlay) {
         const { error } = await bets.place(
-          [pick.selectionId], stake, undefined,
-          insure ? tickets[0] : undefined, undefined, boost ? boosts[0] : undefined)
+          parlay.selectionIds, parlay.stake, undefined,
+          insure ? tickets[0] : undefined, crutch ? crutches[0] : undefined, boost ? boosts[0] : undefined)
+        if (error) { showToast(error.message, 'error'); return }
+        placed += 1
+      }
+      for (const e of singles) {
+        // Items only attach when this is the sole bet (totalBets === 1); the flags
+        // are already false otherwise, so passing them here is safe.
+        const { error } = await bets.place(
+          e.selectionIds, e.stake, e.lineId,
+          insure ? tickets[0] : undefined, crutch ? crutches[0] : undefined, boost ? boosts[0] : undefined)
         if (error) {
           showToast(placed > 0 ? `Placed ${placed} — then: ${error.message}` : error.message, 'error')
           return
         }
         placed += 1
       }
-      showToast(entries.length > 1 ? `${placed} bets placed!` : (insure ? 'Bet placed — Golden Ticket attached!' : 'Bet placed!'), 'success')
-      setSlipPicks([])
-      setSlipOpen(false)
+      showToast(totalBets > 1 ? `${placed} bets placed!` : (insure ? 'Bet placed — Golden Ticket attached!' : 'Bet placed!'), 'success')
+      clearSlip()
     } catch {
       showToast('Failed to place bets', 'error')
     } finally {
       setPlacing(false)
       await Promise.all([reload(), reloadTickets()])
-    }
-  }
-
-  // ── Custom lines ("specials") ───────────────────────────────────────────
-  // Taking a special wagers on the whole bundle at once — it never enters the
-  // parlay slip (it already *is* a parlay when multi-leg), so the TAKE button
-  // behaves identically in Single and Parlay modes.
-  function onTakeCustom(line: CustomLineView) {
-    if (readOnly) return
-    if (customLineSelfTank(line, playerId)) { showToast("Believe in yourself man", 'error'); return }
-    if (balance < 10) return
-    setInsureBet(false)
-    setUseCrutch(false)
-    setUseBoost(false)
-    setTakeModal({ line, wager: '' })
-  }
-
-  async function placeCustom() {
-    if (readOnly) return
-    if (!takeModal || !playerId) return
-    const wagerNum = parseInt(takeModal.wager, 10)
-    if (isNaN(wagerNum) || wagerNum < 10) { showToast('Minimum wager is 10 pins', 'error'); return }
-    if (wagerNum > balance) { showToast('Wager exceeds your balance', 'error'); return }
-
-    setPlacing(true)
-    try {
-      // Same atomic RPC as singles/parlays — the special is just its bundle of
-      // selections; payout falls out of the legs' combined odds server-side.
-      // The lineId tag snapshots the special's title/description onto the bet.
-      // A crutch only applies to a multi-leg special (it's already a parlay).
-      const crutchId = useCrutch && takeModal.line.legs.length > 1 ? crutches[0] : undefined
-      const { error } = await bets.place(
-        takeModal.line.selectionIds, wagerNum, takeModal.line.lineId,
-        insureBet ? tickets[0] : undefined, crutchId, useBoost ? boosts[0] : undefined)
-      if (error) { showToast(error.message, 'error'); return }
-      showToast(insureBet ? 'Bet placed — Golden Ticket attached!' : 'Bet placed!', 'success')
-      setTakeModal(null)
-      await Promise.all([reload(), reloadTickets()])
-    } catch {
-      showToast('Failed to place bet', 'error')
-    } finally {
-      setPlacing(false)
-    }
-  }
-
-  // ── Parlay (from the unified slip) ──────────────────────────────────────
-  // All selections sit at even money (2.000), so the fair combined odds of an
-  // N-leg parlay = 2^N and payout = floor(stake × 2^N). Push/void legs drop out
-  // at settlement (handled server-side), recomputing over the surviving legs.
-  async function placeParlay({ stake, insure, crutch, boost }: ParlaySubmit) {
-    if (readOnly || !playerId) return
-    if (slipPicks.length < 2) { showToast('A parlay needs at least 2 legs', 'error'); return }
-    if (stake < 10) { showToast('Minimum wager is 10 pins', 'error'); return }
-    if (stake > balance) { showToast('Wager exceeds your balance', 'error'); return }
-
-    setPlacing(true)
-    try {
-      const { error } = await bets.place(
-        slipPicks.map(p => p.selectionId), stake, undefined,
-        insure ? tickets[0] : undefined, crutch ? crutches[0] : undefined,
-        boost ? boosts[0] : undefined)
-      if (error) { showToast(error.message, 'error'); return }
-      showToast(insure ? 'Parlay placed — Golden Ticket attached!' : 'Parlay placed!', 'success')
-      setSlipPicks([])
-      setSlipOpen(false)
-      await Promise.all([reload(), reloadTickets()])
-    } catch {
-      showToast('Failed to place parlay', 'error')
-    } finally {
-      setPlacing(false)
     }
   }
 
@@ -446,7 +410,8 @@ export default function SportsbookScreen() {
             isLast={idx === lines.length - 1}
             inProgress={gameInProgress || cl.inProgress}
             disabled={balance < 10 || customLineSelfTank(cl, playerId)}
-            onTake={() => onTakeCustom(cl)}
+            selected={slipSpecials.some(s => s.key === cl.id)}
+            onTake={() => stageSpecial(cl)}
           />
         ))}
       </View>
@@ -463,7 +428,7 @@ export default function SportsbookScreen() {
         contentContainerStyle={[
           styles.content,
           { paddingTop: insets.top },
-          effectiveView === 'place' && slipPicks.length > 0 && { paddingBottom: 96 },
+          effectiveView === 'place' && (slipPicks.length > 0 || slipSpecials.length > 0) && { paddingBottom: 96 },
         ]}
         refreshControl={
           loading ? undefined : (
@@ -541,13 +506,16 @@ export default function SportsbookScreen() {
               const containerRows = [
                 ...specials.map(cl => ({
                   key: cl.id,
+                  // Keep a staged special visible under a collapsed header.
+                  pinned: slipSpecials.some(s => s.key === cl.id),
                   render: (isLast: boolean) => (
                     <CustomLineRow
                       line={cl}
                       isLast={isLast}
                       inProgress={gameInProgress || cl.inProgress}
                       disabled={balance < 10 || customLineSelfTank(cl, playerId)}
-                      onTake={() => onTakeCustom(cl)}
+                      selected={slipSpecials.some(s => s.key === cl.id)}
+                      onTake={() => stageSpecial(cl)}
                     />
                   ),
                 })),
@@ -602,58 +570,25 @@ export default function SportsbookScreen() {
         </ScreenBackdrop>
       </ScrollView>
 
-      {/* Unified bet slip — persistent bar → placement sheet (singles/parlay). */}
-      {effectiveView === 'place' && !readOnly && slipPicks.length > 0 && (
+      {/* Unified bet slip — persistent bar → placement sheet. Individual picks
+          combine (singles/parlay); each staged special places as its own bet. */}
+      {effectiveView === 'place' && !readOnly && (slipPicks.length > 0 || slipSpecials.length > 0) && (
         <BetSlip
           picks={slipPicks}
+          specials={slipSpecials}
           open={slipOpen}
           onOpenChange={setSlipOpen}
           onRemovePick={removeSlipPick}
-          onClear={() => { setSlipPicks([]); setSlipOpen(false) }}
+          onRemoveSpecial={removeSlipSpecial}
+          onClear={clearSlip}
           balance={balance}
           placing={placing}
           ticketCount={tickets.length}
           crutchCount={crutches.length}
           boostCount={boosts.length}
           boostPct={boostPct}
-          onPlaceSingles={placeSingles}
-          onPlaceParlay={placeParlay}
+          onPlace={placeSlip}
         />
-      )}
-
-      {/* Custom line ("special") take sheet — read-only leg list + live payout. */}
-      {takeModal && (
-        <WagerSheet
-          title={takeModal.line.title}
-          titleColor={takeModal.line.category === 'special' ? colors.gold : undefined}
-          oddsPrefix={takeModal.line.legs.length > 1 ? 'ALL LEGS MUST WIN · ' : ''}
-          odds={takeModal.line.combinedOdds}
-          wager={takeModal.wager}
-          onChangeWager={wager => setTakeModal(m => m ? { ...m, wager } : m)}
-          balance={balance}
-          ctaLabel="Take It"
-          onSubmit={placeCustom}
-          boostPct={useBoost ? boostPct : undefined}
-          busy={placing}
-          onClose={() => setTakeModal(null)}
-        >
-          <View style={styles.parlayLegList}>
-            {takeModal.line.legs.map(leg => (
-              <View key={leg.selectionId} style={styles.parlayLegRow}>
-                <Text style={styles.parlayLegText} numberOfLines={1}>
-                  {leg.subjectName} · {leg.pick.toUpperCase()}
-                  {leg.marketType === 'over_under' && leg.line != null ? ` ${leg.line.toFixed(1)}` : ''}
-                  {leg.gameNumber != null ? ` · G${leg.gameNumber}` : ''}
-                </Text>
-              </View>
-            ))}
-          </View>
-          <GoldenTicketToggle ticketCount={tickets.length} enabled={insureBet} onToggle={setInsureBet} disabled={placing} />
-          {takeModal.line.legs.length > 1 && (
-            <WinnersCrutchToggle crutchCount={crutches.length} enabled={useCrutch} onToggle={setUseCrutch} disabled={placing} />
-          )}
-          <EnergyDrinkToggle boostCount={boosts.length} enabled={useBoost} onToggle={setUseBoost} disabled={placing} />
-        </WagerSheet>
       )}
 
       {/* Bet details modal */}
@@ -735,24 +670,6 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
 
-  // Special ("take") sheet leg list — read-only leg rows.
-  parlayLegList: { marginBottom: 16 },
-  parlayLegRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-    gap: 10,
-  },
-  parlayLegText: {
-    flex: 1,
-    fontFamily: fonts.barlowCondensed,
-    fontSize: 14,
-    color: colors.text,
-    letterSpacing: 0.3,
-  },
   hauntSheetCopy: {
     fontFamily: fonts.barlow,
     fontSize: 14,
