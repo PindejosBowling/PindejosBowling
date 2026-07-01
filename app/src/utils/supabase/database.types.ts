@@ -292,6 +292,48 @@ export type Database = {
           },
         ]
       }
+      auction_house_state: {
+        Row: {
+          closed_message: string | null
+          created_at: string
+          is_closed: boolean
+          season_id: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          closed_message?: string | null
+          created_at?: string
+          is_closed?: boolean
+          season_id: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          closed_message?: string | null
+          created_at?: string
+          is_closed?: boolean
+          season_id?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "auction_house_state_season_id_fkey"
+            columns: ["season_id"]
+            isOneToOne: true
+            referencedRelation: "seasons"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "auction_house_state_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       auctions: {
         Row: {
           bidder_count: number
@@ -2888,6 +2930,10 @@ export type Database = {
       }
       reverse_settled_auction: {
         Args: { p_auction_id: string }
+        Returns: undefined
+      }
+      set_auction_house_closed: {
+        Args: { p_closed_message?: string; p_is_closed: boolean }
         Returns: undefined
       }
       settle_auction: { Args: { p_auction_id: string }; Returns: undefined }

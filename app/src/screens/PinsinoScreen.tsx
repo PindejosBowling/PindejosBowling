@@ -25,6 +25,7 @@ import { useNotificationStore } from '../stores/notificationStore'
 import { useUiStore } from '../stores/uiStore'
 import { countForRoute } from '../utils/notifications'
 import { SHOW_AUCTION_HOUSE } from '../utils/featureFlags'
+import { AUCTION_HOUSE_CLOSED_DEFAULT_MESSAGE } from '../utils/auction'
 import { PinsinoStackParamList } from '../navigation/types'
 import { formatPins } from '../utils/formatting'
 
@@ -55,7 +56,7 @@ export default function PinsinoScreen() {
   // The shared "viewed season" context drives the selector + read-only gating
   // across the whole Pinsino tab.
   const { seasons: allSeasons, readOnly } = usePinsinoSeasonContext()
-  const { loading, balance, debt, openAction, netWorth, leaderboard, seasonNumber, seasonConcluded, reload } = usePinsinoData(playerId, pinsinoViewSeasonId)
+  const { loading, balance, debt, openAction, netWorth, leaderboard, seasonNumber, seasonConcluded, auctionHouseClosed, auctionHouseClosedMessage, reload } = usePinsinoData(playerId, pinsinoViewSeasonId)
   const { refreshing, onRefresh } = useRefresh(reload)
 
   // Selector options: 'live' (default) + each concluded season, newest first.
@@ -186,18 +187,29 @@ export default function PinsinoScreen() {
             // Suppressed entirely in read-only past-season mode — live pending
             // actions are irrelevant to a frozen archive view.
             const badge = readOnly ? 0 : countForRoute(counts, tile.route)
+            // Admin kill-switch: a closed Auction House paints a stylized status
+            // over its tile and blocks entry (the tap no-ops). Live mode only.
+            const closed = tile.route === 'AuctionHouse' && !readOnly && auctionHouseClosed
             return (
               <TouchableOpacity
                 key={tile.route}
                 style={styles.tile}
-                onPress={() => navigation.navigate(tile.route)}
-                activeOpacity={0.7}
+                onPress={() => { if (!closed) navigation.navigate(tile.route) }}
+                activeOpacity={closed ? 1 : 0.7}
               >
-                <Text style={styles.tileIcon}>{tile.icon}</Text>
-                <Text style={styles.tileLabel}>{tile.label}</Text>
-                {badge > 0 && (
+                <Text style={[styles.tileIcon, closed && styles.tileIconClosed]}>{tile.icon}</Text>
+                <Text style={[styles.tileLabel, closed && styles.tileLabelClosed]}>{tile.label}</Text>
+                {badge > 0 && !closed && (
                   <View style={styles.badge}>
                     <Text style={styles.badgeText}>{badge > 99 ? '99+' : badge}</Text>
+                  </View>
+                )}
+                {closed && (
+                  <View style={styles.closedOverlay}>
+                    <Text style={styles.closedTag}>CLOSED</Text>
+                    <Text style={styles.closedMsg} numberOfLines={3}>
+                      {auctionHouseClosedMessage?.trim() || AUCTION_HOUSE_CLOSED_DEFAULT_MESSAGE}
+                    </Text>
                   </View>
                 )}
               </TouchableOpacity>
@@ -352,11 +364,41 @@ const styles = StyleSheet.create({
     lineHeight: 14,
   },
   tileIcon: { fontSize: 40, marginBottom: 10 },
+  tileIconClosed: { opacity: 0.25 },
   tileLabel: {
     fontFamily: fonts.barlowCondensed,
     fontSize: 13,
     color: colors.text,
     letterSpacing: 0.3,
     textAlign: 'center',
+  },
+  tileLabelClosed: { opacity: 0.25 },
+
+  // Stylized "closed" status painted over the Auction House tile when an admin
+  // has closed the house. Sits above the dimmed icon/label; the tap is inert.
+  closedOverlay: {
+    position: 'absolute',
+    top: 0, left: 0, right: 0, bottom: 0,
+    borderRadius: radius.cardMd,
+    backgroundColor: 'rgba(10,10,12,0.82)',
+    borderWidth: 1,
+    borderColor: colors.danger,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 8,
+  },
+  closedTag: {
+    fontFamily: fonts.barlowCondensedHeavy,
+    fontSize: 15,
+    letterSpacing: 2,
+    color: colors.danger,
+  },
+  closedMsg: {
+    fontFamily: fonts.barlowCondensed,
+    fontSize: 11,
+    letterSpacing: 0.3,
+    color: colors.text,
+    textAlign: 'center',
+    marginTop: 4,
   },
 })

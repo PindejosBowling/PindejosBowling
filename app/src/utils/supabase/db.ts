@@ -1085,6 +1085,24 @@ export const auctions = {
     supabase.rpc('reverse_settled_auction', { p_auction_id: auctionId }),
 }
 
+// Auction House open/closed kill-switch (auction_house_state, one row per
+// season). Read by everyone (drives the Pinsino tile overlay + entry gate);
+// only admins can flip it, through the guarded RPC. Absent row = open.
+export const auctionHouseState = {
+  getBySeason: (seasonId: string) =>
+    supabase.from('auction_house_state')
+      .select('is_closed, closed_message')
+      .eq('season_id', seasonId)
+      .maybeSingle(),
+  setClosed: (isClosed: boolean, closedMessage: string | null) =>
+    supabase.rpc('set_auction_house_closed', {
+      p_is_closed: isClosed,
+      // The RPC param defaults to NULL; omit it (undefined) to clear the message
+      // server-side rather than send an explicit null.
+      p_closed_message: closedMessage ?? undefined,
+    }),
+}
+
 // Auction money is plain pin_ledger rows tagged with auction_id. The player
 // side of 'auction_check_bounce' rows is the public bounce story (name + fee
 // — the pledged amount was destroyed at settlement and exists nowhere).

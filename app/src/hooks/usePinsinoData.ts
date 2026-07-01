@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect } from 'react'
-import { weeks, seasons, betMarkets, bets, pinLedger, loanLedger, loans, pvpChallenges, bountyPosts, teamSlots, customLines, games, players } from '../utils/supabase/db'
+import { weeks, seasons, betMarkets, bets, pinLedger, loanLedger, loans, pvpChallenges, bountyPosts, teamSlots, customLines, games, players, auctionHouseState } from '../utils/supabase/db'
 
 // One bettable side of a market (a single `bet_selections` row, flattened).
 // Generic over market_type — over/under is the first consumer, but the shape
@@ -543,6 +543,10 @@ export function usePinsinoData(playerId: string | null, viewSeasonId?: string | 
   // every player's team, the viewer's team, and per game the team the
   // viewer's team is matched up against.
   const [weekTeams, setWeekTeams] = useState<WeekTeams>(EMPTY_WEEK_TEAMS)
+  // Auction House admin kill-switch for the live season. Drives the "closed"
+  // status overlay + entry gate on the Pinsino tile (live mode only).
+  const [auctionHouseClosed, setAuctionHouseClosed] = useState(false)
+  const [auctionHouseClosedMessage, setAuctionHouseClosedMessage] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -664,6 +668,17 @@ export function usePinsinoData(playerId: string | null, viewSeasonId?: string | 
           }),
           bountyPosts.listBySeason(seasonId).then(({ data }) => {
             seasonBountyData = data ?? []
+          })
+        )
+      }
+
+      // Auction House open/closed state — a live-only concept, so it's skipped
+      // in past-season review (viewSeasonId set). Absent row = open.
+      let auctionStateData: any = null
+      if (seasonId && !viewSeasonId) {
+        fetches.push(
+          auctionHouseState.getBySeason(seasonId).then(({ data }) => {
+            auctionStateData = data
           })
         )
       }
@@ -923,6 +938,8 @@ export function usePinsinoData(playerId: string | null, viewSeasonId?: string | 
       setMyBets(myBetViews)
       setBalance(ledgerData.reduce((sum, e) => sum + e.amount, 0))
       setMyBetMarketIds(new Set(myBetViews.map(b => b.marketId)))
+      setAuctionHouseClosed(auctionStateData?.is_closed ?? false)
+      setAuctionHouseClosedMessage(auctionStateData?.closed_message ?? null)
     } catch (e) {
       console.error('usePinsinoData error:', e)
     } finally {
@@ -935,5 +952,5 @@ export function usePinsinoData(playerId: string | null, viewSeasonId?: string | 
   // True when viewing a specific prior season (drives read-only UI gating).
   const readOnly = viewSeasonId != null
 
-  return { loading, balance, debt, openAction, netWorth: balance + openAction - debt, activeLoan, openLines, weekTeams, customLines: customLineViews, myBets, weekBets, settledBets, leaderboard, myBetMarketIds, currentWeekId, currentSeasonId, seasonNumber, seasonConcluded, readOnly, reload: load }
+  return { loading, balance, debt, openAction, netWorth: balance + openAction - debt, activeLoan, openLines, weekTeams, customLines: customLineViews, myBets, weekBets, settledBets, leaderboard, myBetMarketIds, currentWeekId, currentSeasonId, seasonNumber, seasonConcluded, readOnly, auctionHouseClosed, auctionHouseClosedMessage, reload: load }
 }

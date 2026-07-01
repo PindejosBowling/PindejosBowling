@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from 'react'
-import { auctionLedger, auctions, itemCatalog, players, seasons } from '../utils/supabase/db'
+import { auctionHouseState, auctionLedger, auctions, itemCatalog, players, seasons } from '../utils/supabase/db'
 import { AuctionView, CatalogItemAdminView } from '../utils/auction'
 import { bouncesByAuction, normalizeAuction, purchasesByAuction } from './useAuctionHouseData'
 import { PlayerPickerItem } from '../components/ui/PlayerPickerModal'
@@ -24,6 +24,10 @@ export interface AuctionAdminData {
   auctions: AuctionView[]
   catalog: CatalogItemAdminView[]
   playerOptions: PlayerPickerItem[]
+  // Current season's open/closed kill-switch (drives the status toggle + tile
+  // overlay). closedMessage is the admin-authored copy (null = use default).
+  houseClosed: boolean
+  houseClosedMessage: string | null
   reload: () => Promise<void>
 }
 
@@ -36,6 +40,8 @@ export function useAuctionAdminData(): AuctionAdminData {
   const [auctionList, setAuctionList] = useState<AuctionView[]>([])
   const [catalog, setCatalog] = useState<CatalogItemAdminView[]>([])
   const [playerOptions, setPlayerOptions] = useState<PlayerPickerItem[]>([])
+  const [houseClosed, setHouseClosed] = useState(false)
+  const [houseClosedMessage, setHouseClosedMessage] = useState<string | null>(null)
   const loadedOnce = useRef(false)
 
   const load = useCallback(async () => {
@@ -48,12 +54,16 @@ export function useAuctionAdminData(): AuctionAdminData {
       let catalogData: any[] = []
       let playerData: any[] = []
       let auctionLedgerData: any[] = []
+      let stateData: any = null
       await Promise.all([
         seasonId
           ? auctions.listBySeason(seasonId).then(({ data }) => { auctionData = data ?? [] })
           : Promise.resolve(),
         seasonId
           ? auctionLedger.listBySeason(seasonId).then(({ data }) => { auctionLedgerData = data ?? [] })
+          : Promise.resolve(),
+        seasonId
+          ? auctionHouseState.getBySeason(seasonId).then(({ data }) => { stateData = data })
           : Promise.resolve(),
         itemCatalog.listAllWithCounts().then(({ data }) => { catalogData = data ?? [] }),
         players.listActive().then(({ data }) => { playerData = data ?? [] }),
@@ -65,6 +75,8 @@ export function useAuctionAdminData(): AuctionAdminData {
         normalizeAuction(row, null, bounceMap.get(row.id) ?? [], winnerMap.get(row.id) ?? [])))
       setCatalog(catalogData.map(normalizeCatalogItem))
       setPlayerOptions(playerData.map((p: any) => ({ id: p.id, name: p.name })))
+      setHouseClosed(stateData?.is_closed ?? false)
+      setHouseClosedMessage(stateData?.closed_message ?? null)
     } finally {
       loadedOnce.current = true
       setLoading(false)
@@ -73,5 +85,5 @@ export function useAuctionAdminData(): AuctionAdminData {
 
   useEffect(() => { load() }, [load])
 
-  return { loading, auctions: auctionList, catalog, playerOptions, reload: load }
+  return { loading, auctions: auctionList, catalog, playerOptions, houseClosed, houseClosedMessage, reload: load }
 }

@@ -12,6 +12,7 @@ import AuctionCreateModal from '../components/auction/AuctionCreateModal'
 import AuctionAdminActionModal from '../components/auction/AuctionAdminActionModal'
 import CatalogItemModal from '../components/auction/CatalogItemModal'
 import GrantItemSheet from '../components/auction/GrantItemSheet'
+import AuctionHouseStatusSheet from '../components/auction/AuctionHouseStatusSheet'
 import { useAuctionAdminData } from '../hooks/useAuctionAdminData'
 import { useRefresh } from '../hooks/useRefresh'
 import { useAuthStore } from '../stores/authStore'
@@ -24,7 +25,7 @@ export default function AuctionHouseAdminScreen() {
   const navigation = useNavigation()
   const isAdmin = useAuthStore(s => s.role) === 'admin'
 
-  const { loading, auctions, catalog, playerOptions, reload } = useAuctionAdminData()
+  const { loading, auctions, catalog, playerOptions, houseClosed, houseClosedMessage, reload } = useAuctionAdminData()
   const { refreshing, onRefresh } = useRefresh(reload)
 
   const [createOpen, setCreateOpen] = useState(false)
@@ -32,6 +33,7 @@ export default function AuctionHouseAdminScreen() {
   const [editAuction, setEditAuction] = useState<AuctionView | null>(null)
   const [catalogModal, setCatalogModal] = useState<{ initial?: CatalogItemAdminView } | null>(null)
   const [grantOpen, setGrantOpen] = useState(false)
+  const [statusOpen, setStatusOpen] = useState(false)
 
   useFocusEffect(useCallback(() => { reload() }, [reload]))
 
@@ -67,6 +69,26 @@ export default function AuctionHouseAdminScreen() {
         contentContainerStyle={styles.content}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.muted} />}
       >
+        {/* Kill-switch: closing paints a status over the Pinsino tile and blocks
+            entry to the player-facing Auction House. */}
+        <TouchableOpacity
+          style={[styles.statusCard, houseClosed && styles.statusCardClosed]}
+          onPress={() => setStatusOpen(true)}
+          activeOpacity={0.8}
+        >
+          <View style={styles.statusText}>
+            <Text style={[styles.statusValue, houseClosed && styles.statusValueClosed]}>
+              {houseClosed ? 'CLOSED' : 'OPEN'}
+            </Text>
+            <Text style={styles.statusSub}>
+              {houseClosed
+                ? (houseClosedMessage?.trim() || 'Players can’t enter — status shown on the tile')
+                : 'The block is open — tap to close'}
+            </Text>
+          </View>
+          <Text style={styles.statusEdit}>EDIT ›</Text>
+        </TouchableOpacity>
+
         <Button label="+ Create Auction" variant="outline" onPress={() => setCreateOpen(true)} style={styles.topBtn} />
 
         {noAuctions ? (
@@ -119,6 +141,14 @@ export default function AuctionHouseAdminScreen() {
       {grantOpen && (
         <GrantItemSheet playerOptions={playerOptions} catalog={catalog} onClose={() => setGrantOpen(false)} onDone={reload} />
       )}
+      {statusOpen && (
+        <AuctionHouseStatusSheet
+          initialClosed={houseClosed}
+          initialMessage={houseClosedMessage}
+          onClose={() => setStatusOpen(false)}
+          onDone={reload}
+        />
+      )}
     </SafeAreaView>
   )
 }
@@ -128,6 +158,25 @@ const styles = StyleSheet.create({
   content: { paddingHorizontal: 16, paddingBottom: 40 },
 
   topBtn: { marginTop: 8, marginBottom: 14 },
+
+  statusCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: colors.surface,
+    borderRadius: radius.cardMd,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    marginTop: 10,
+  },
+  statusCardClosed: { borderColor: colors.danger },
+  statusText: { flex: 1, marginRight: 12 },
+  statusValue: { fontFamily: fonts.barlowCondensedHeavy, fontSize: 18, letterSpacing: 1.5, color: colors.accent },
+  statusValueClosed: { color: colors.danger },
+  statusSub: { fontFamily: fonts.barlow, fontSize: 12, color: colors.muted, marginTop: 3, lineHeight: 16 },
+  statusEdit: { fontFamily: fonts.barlowCondensed, fontSize: 12, letterSpacing: 1, color: colors.accent },
 
   sectionLabel: {
     fontFamily: fonts.barlowCondensed,
