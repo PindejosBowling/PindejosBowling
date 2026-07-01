@@ -18,7 +18,7 @@ export const usePendingStore = create<PendingStore>((set) => ({
   pendingRSVP: {},
   pendingScores: {},
   genFillMode: 'League Avg',
-  genAvgSource: 'last-season',
+  genAvgSource: 'all-time',
   genTeams: null,
   genNumTeams: 4,
   genNumGames: 2,

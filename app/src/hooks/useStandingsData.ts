@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect } from 'react'
 import { seasons, scores, games, seasonChampions, pinLedger, registrations } from '../utils/supabase/db'
+import { countsTowardAverage } from '../utils/averages'
 
 export interface StandingsRow {
   playerId: string
@@ -112,8 +113,13 @@ export function computeStandingsFromSupabase(
     const p = byPlayer.get(player.id)!
     p.wins   += myTotal > oppTotal ? 1 : 0
     p.losses += myTotal <= oppTotal ? 1 : 0
-    p.pins   += row.score ?? 0
-    p.games  += 1
+    // Average denominator counts only bowled games (canonical policy) — an
+    // un-bowled 0/null game never drags the average down. W/L is team-based and
+    // stays counted above regardless.
+    if (countsTowardAverage(row.score)) {
+      p.pins  += row.score
+      p.games += 1
+    }
     p.weeks.add(slot.teams.week_id)
   }
 

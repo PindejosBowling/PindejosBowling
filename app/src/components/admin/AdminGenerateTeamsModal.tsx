@@ -11,6 +11,7 @@ import {
 import { usePendingStore } from '../../stores/pendingStore'
 import { useUiStore } from '../../stores/uiStore'
 import { weeks, rsvp, players, teamSlots, teams as teamsDb, games, scores, seasons, betMarkets } from '../../utils/supabase/db'
+import { aggregatePlayerAverages, type AverageRow } from '../../utils/averages'
 import type { TablesInsert } from '../../utils/supabase/database.types'
 import { colors, fonts, radius } from '../../theme'
 import Toast from '../ui/Toast'
@@ -109,7 +110,7 @@ export default function AdminGenerateTeamsModal({ visible, onClose }: Props) {
         // Default to two teams, sized to absorb the existing "In" RSVPs.
         const inCount = rsvps.filter((r: any) => r.status === 'in').length
         const teamSize = Math.max(1, Math.min(6, Math.ceil(inCount / 2)))
-        set({ genNumTeams: 2, genNumGames: 2, genTeamSize: teamSize, genAvgSource: 'current-season', genTeams: null })
+        set({ genNumTeams: 2, genNumGames: 2, genTeamSize: teamSize, genAvgSource: 'all-time', genTeams: null })
       } else {
         setWeekId(null)
         setWeekRsvps([])
@@ -149,38 +150,21 @@ export default function AdminGenerateTeamsModal({ visible, onClose }: Props) {
         scoreRows = (await scores.listAllArchived()).data ?? []
       }
 
-      // Aggregate per-player averages
-      const byPlayer: Record<string, { pins: number; games: number }> = {}
-      for (const row of scoreRows) {
-        const pid = row.team_slots?.player_id
-        if (!pid) continue
-        if (!byPlayer[pid]) byPlayer[pid] = { pins: 0, games: 0 }
-        byPlayer[pid].pins += row.score ?? 0
-        byPlayer[pid].games += 1
-      }
-      const playerAvgById: Record<string, number> = Object.fromEntries(
-        Object.entries(byPlayer).map(([pid, { pins, games }]) => [pid, games > 0 ? pins / games : 0])
-      )
-      // League avg is games-weighted (total pins / total games), matching the
-      // Standings banner — not the unweighted mean of per-player averages.
-      const totals = Object.values(byPlayer).reduce(
-        (acc, { pins, games }) => ({ pins: acc.pins + pins, games: acc.games + games }),
-        { pins: 0, games: 0 },
-      )
+      // Per-player + games-weighted league averages (canonical policy — see
+      // utils/averages). Balancing accuracy depends on this matching what
+      // Standings/matchups show for the same player.
+      const avgAgg = aggregatePlayerAverages(scoreRows as AverageRow[])
       let leagueAvg: number
-      if (totals.games > 0) {
-        leagueAvg = totals.pins / totals.games
+      if (avgAgg.leagueAvg > 0) {
+        leagueAvg = avgAgg.leagueAvg
       } else if (genAvgSource === 'current-season' && prevSeason) {
         // Week 1: the current season has no archived scores yet, so anchor to
         // the prior season's league average. A completed season always exists,
         // so an empty result here means something is wrong — fail loudly.
         const prevRows = (await scores.listBySeason(prevSeason.id)).data ?? []
-        const prevTotals = prevRows.reduce(
-          (acc, r: any) => ({ pins: acc.pins + (r.score ?? 0), games: acc.games + 1 }),
-          { pins: 0, games: 0 },
-        )
-        if (prevTotals.games === 0) throw new Error(`No archived scores found for prior season ${prevSeason.number}`)
-        leagueAvg = prevTotals.pins / prevTotals.games
+        const prevLeague = aggregatePlayerAverages(prevRows as AverageRow[]).leagueAvg
+        if (prevLeague <= 0) throw new Error(`No archived scores found for prior season ${prevSeason.number}`)
+        leagueAvg = prevLeague
       } else {
         throw new Error(`No archived scores found for avg source "${genAvgSource}"`)
       }
@@ -193,7 +177,7 @@ export default function AdminGenerateTeamsModal({ visible, onClose }: Props) {
         .map((player: any) => ({
           id: player.id,
           name: player.name,
-          avg: playerAvgById[player.id] ?? leagueAvg,
+          avg: avgAgg.byPlayer.get(player.id)?.avg ?? leagueAvg,
           isFill: false,
           status: 'in' as const,
         }))
