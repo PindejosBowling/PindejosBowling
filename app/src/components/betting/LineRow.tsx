@@ -1,5 +1,5 @@
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native'
-import { colors, fonts } from '../../theme'
+import { colors, fonts, radius } from '../../theme'
 import { selectionButtonLabel, type LineView, type SelectionView } from '../../hooks/usePinsinoData'
 
 // Per-selection visual state the caller computes (it owns the betting context —
@@ -52,9 +52,9 @@ export default function LineRow({ lines, isLast, relation, inProgress, selection
       ]}
     >
       <View style={stacked ? styles.lineInfoStacked : styles.lineInfo}>
-        <Text style={[styles.lineName, stacked && styles.centered]}>{first.subjectName}</Text>
-        {/* Optional metadata (moneyline matchup). The bet condition itself
-            lives in each pick button ("142.5+ PINS") — selectionButtonLabel. */}
+        {/* Just the subject's name — the bet condition itself lives in each pick
+            button ("142.5+ PINS") — selectionButtonLabel. */}
+        <Text style={styles.lineName}>{first.subjectName}</Text>
         {first.subtitle != null && (
           <Text style={[styles.lineValue, stacked && styles.centered]}>{first.subtitle}</Text>
         )}
@@ -125,28 +125,33 @@ const styles = StyleSheet.create({
     marginTop: 1,
     letterSpacing: 0.5,
   },
-  pickBtns: { flexDirection: 'row', gap: 6 },
+  pickBtns: { flexDirection: 'row', gap: 8 },
   // A subject's full button set; wraps when the conditions outgrow the row.
   pickBtnsStacked: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    justifyContent: 'space-evenly',
+    justifyContent: 'center',
     alignItems: 'center',
-    gap: 6,
+    gap: 8,
   },
+  // Fuller "odds cell": a filled surface tile with an accent border — a clearer,
+  // larger tap target than the old thin pill. Staged picks flip to a solid
+  // accent fill so the slip contents read at a glance.
   pickBtn: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 8,
+    minWidth: 78,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: radius.cardSm,
     borderWidth: 1,
     borderColor: colors.accent,
     backgroundColor: colors.accentDim,
+    alignItems: 'center',
   },
   pickBtnDisabled: { borderColor: colors.border2, backgroundColor: 'transparent', opacity: 0.4 },
-  pickBtnSelected: { backgroundColor: colors.accent },
+  pickBtnSelected: { backgroundColor: colors.accent, borderColor: colors.accent },
   pickBtnText: {
     fontFamily: fonts.barlowCondensed,
-    fontSize: 12,
+    fontSize: 13,
     color: colors.accent,
     letterSpacing: 0.5,
   },
