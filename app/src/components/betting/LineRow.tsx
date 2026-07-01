@@ -138,16 +138,17 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   // Fuller "odds cell": a filled surface tile — a clearer, larger tap target
-  // than the old thin pill. Neutral white at rest; staged picks flip to a solid
-  // accent fill so the slip contents read at a glance.
+  // than the old thin pill. Quietly neutral at rest (soft white-alpha border +
+  // faint fill, so it reads as tappable without glare); staged picks flip to a
+  // solid accent fill so the slip contents read at a glance.
   pickBtn: {
     minWidth: 78,
     paddingHorizontal: 12,
     paddingVertical: 10,
     borderRadius: radius.cardSm,
     borderWidth: 1,
-    borderColor: colors.text,
-    backgroundColor: 'rgba(240,240,240,0.08)',
+    borderColor: 'rgba(255,255,255,0.22)',
+    backgroundColor: 'rgba(255,255,255,0.04)',
     alignItems: 'center',
   },
   pickBtnDisabled: { borderColor: colors.border2, backgroundColor: 'transparent', opacity: 0.4 },
@@ -155,7 +156,7 @@ const styles = StyleSheet.create({
   pickBtnText: {
     fontFamily: fonts.barlowCondensed,
     fontSize: 13,
-    color: colors.text,
+    color: 'rgba(240,240,240,0.85)',
     letterSpacing: 0.5,
   },
   pickBtnTextSelected: { color: colors.bg },
