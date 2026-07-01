@@ -1,6 +1,5 @@
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native'
 import { colors, fonts, radius } from '../../theme'
-import PlayerAvatar from '../ui/PlayerAvatar'
 import { selectionButtonLabel, type LineView, type SelectionView } from '../../hooks/usePinsinoData'
 
 // Per-selection visual state the caller computes (it owns the betting context —
@@ -53,17 +52,9 @@ export default function LineRow({ lines, isLast, relation, inProgress, selection
       ]}
     >
       <View style={stacked ? styles.lineInfoStacked : styles.lineInfo}>
-        {/* Player rows lead with an avatar + name for a card-like read; moneyline
-            keeps the plain name-left layout. The bet condition itself lives in
-            each pick button ("142.5+ PINS") — selectionButtonLabel. */}
-        {stacked ? (
-          <View style={styles.subjectHeader}>
-            <PlayerAvatar name={first.subjectName} playerId={first.subjectPlayerId} size={24} />
-            <Text style={styles.lineName}>{first.subjectName}</Text>
-          </View>
-        ) : (
-          <Text style={styles.lineName}>{first.subjectName}</Text>
-        )}
+        {/* Just the subject's name — the bet condition itself lives in each pick
+            button ("142.5+ PINS") — selectionButtonLabel. */}
+        <Text style={styles.lineName}>{first.subjectName}</Text>
         {first.subtitle != null && (
           <Text style={[styles.lineValue, stacked && styles.centered]}>{first.subtitle}</Text>
         )}
@@ -121,8 +112,6 @@ const styles = StyleSheet.create({
   lineInfo: { flex: 1 },
   lineInfoStacked: { alignItems: 'center' },
   centered: { textAlign: 'center' },
-  // Avatar + name lockup atop a player's stacked prop row.
-  subjectHeader: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   lineName: {
     fontFamily: fonts.barlowCondensed,
     fontSize: 15,
