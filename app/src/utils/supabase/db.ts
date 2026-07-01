@@ -26,8 +26,10 @@ export const games = {
       .from('games')
       .select('id, game_number, team_a_id, team_b_id, teams!games_team_a_id_fkey!inner(week_id, weeks!inner(is_archived))')
       .eq('teams.weeks.is_archived', true),
+  // Returns the inserted rows (ids + team ids) so callers can reconcile the
+  // participation the games_participation_seed_ins trigger auto-creates.
   insert: (data: TablesInsert<'games'> | TablesInsert<'games'>[]) =>
-    supabase.from('games').insert(data),
+    supabase.from('games').insert(data).select('id, game_number, team_a_id, team_b_id'),
   remove: (id: string) =>
     supabase.from('games').delete().eq('id', id),
   // Deleting a week's teams cascades to its games (and slots/scores); see teams.removeByWeek.
