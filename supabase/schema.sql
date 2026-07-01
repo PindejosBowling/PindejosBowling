@@ -4631,7 +4631,7 @@ DECLARE
   v_avg        numeric;
   v_league_avg numeric;
 BEGIN
-  -- Player's mean of current-season archived scores.
+  -- 1. Season-specific: player's mean of THIS season's archived bowled scores.
   SELECT AVG(s.score) INTO v_avg
   FROM public.scores s
   JOIN public.team_slots ts ON ts.id = s.team_slot_id
@@ -4640,26 +4640,36 @@ BEGIN
   WHERE w.season_id = p_season_id
     AND w.is_archived = true
     AND ts.player_id = p_player_id
-    AND s.score IS NOT NULL;
+    AND s.score > 0;
 
   IF v_avg IS NOT NULL THEN
     RETURN floor(v_avg) + 0.5;
   END IF;
 
-  -- Fallback: league average (mean of all players' per-player season averages).
-  SELECT COALESCE(AVG(pa.avg_score), 130) INTO v_league_avg
-  FROM (
-    SELECT AVG(s.score) AS avg_score
-    FROM public.scores s
-    JOIN public.team_slots ts ON ts.id = s.team_slot_id
-    JOIN public.teams t       ON t.id = ts.team_id
-    JOIN public.weeks w       ON w.id = t.week_id
-    WHERE w.season_id = p_season_id
-      AND w.is_archived = true
-      AND ts.player_id IS NOT NULL
-      AND s.score IS NOT NULL
-    GROUP BY ts.player_id
-  ) pa;
+  -- 2. Lifetime: player's mean across ALL archived seasons.
+  SELECT AVG(s.score) INTO v_avg
+  FROM public.scores s
+  JOIN public.team_slots ts ON ts.id = s.team_slot_id
+  JOIN public.teams t       ON t.id = ts.team_id
+  JOIN public.weeks w       ON w.id = t.week_id
+  WHERE w.is_archived = true
+    AND ts.player_id = p_player_id
+    AND s.score > 0;
+
+  IF v_avg IS NOT NULL THEN
+    RETURN floor(v_avg) + 0.5;
+  END IF;
+
+  -- 3. Fallback: games-weighted, all-time league average (Σscore / Σgames).
+  -- player_id IS NOT NULL excludes fill slots (fills carry a null player).
+  SELECT COALESCE(AVG(s.score), 130) INTO v_league_avg
+  FROM public.scores s
+  JOIN public.team_slots ts ON ts.id = s.team_slot_id
+  JOIN public.teams t       ON t.id = ts.team_id
+  JOIN public.weeks w       ON w.id = t.week_id
+  WHERE w.is_archived = true
+    AND ts.player_id IS NOT NULL
+    AND s.score > 0;
 
   RETURN floor(v_league_avg) + 0.5;
 END;
@@ -6359,8 +6369,6 @@ DECLARE
   v_has_teams    boolean;
   v_has_games    boolean;
   v_target_games integer[];
-  v_league_avg   numeric;
-  v_avg          numeric;
   v_line         numeric;
   v_market_id    uuid;
   v_rec          record;
@@ -6434,18 +6442,23 @@ BEGIN
                AND r.player_id = m.subject_player_id))
      );
 
-  -- --- League average (mean of per-player current-season archived averages) ---
-  SELECT COALESCE(AVG(pa.avg_score), 130) INTO v_league_avg
-  FROM (
-    SELECT AVG(s.score) AS avg_score
-    FROM public.scores s
-    JOIN public.team_slots ts ON ts.id = s.team_slot_id
-    JOIN public.teams t       ON t.id = ts.team_id
-    JOIN public.weeks w       ON w.id = t.week_id
-    WHERE w.season_id = v_season_id AND w.is_archived = true
-      AND ts.player_id IS NOT NULL AND s.score IS NOT NULL
-    GROUP BY ts.player_id
-  ) pa;
+  -- --- Refresh: recompute the line on every OPEN market that has no bets yet,
+  -- so re-syncs pick up the current season→lifetime→league ladder. Markets with
+  -- any bet on any selection are frozen (line untouched) to protect bettors.
+  -- pvp_player_line already returns FLOOR(avg) + 0.5 — use it verbatim.
+  UPDATE public.bet_selections bs
+     SET line = public.pvp_player_line(m.subject_player_id, v_season_id)
+   FROM public.bet_markets m
+   WHERE bs.market_id = m.id
+     AND m.week_id = p_week_id
+     AND m.market_type = 'over_under'
+     AND m.status = 'open'
+     AND m.subject_player_id IS NOT NULL
+     AND NOT EXISTS (
+       SELECT 1 FROM public.bet_legs bl
+       JOIN public.bet_selections s2 ON s2.id = bl.selection_id
+       WHERE s2.market_id = m.id
+     );
 
   -- --- Create missing markets for eligible (player, game) pairs ---------------
   FOR v_rec IN
@@ -6481,15 +6494,8 @@ BEGIN
         AND m.game_number = ep.game_number AND m.subject_player_id = ep.player_id
     )
   LOOP
-    SELECT AVG(s.score) INTO v_avg
-    FROM public.scores s
-    JOIN public.team_slots ts ON ts.id = s.team_slot_id
-    JOIN public.teams t       ON t.id = ts.team_id
-    JOIN public.weeks w       ON w.id = t.week_id
-    WHERE w.season_id = v_season_id AND w.is_archived = true
-      AND ts.player_id = v_rec.player_id AND s.score IS NOT NULL;
-
-    v_line := FLOOR(COALESCE(v_avg, v_league_avg)) + 0.5;
+    -- Season → lifetime → league ladder, shared with PvP lines.
+    v_line := public.pvp_player_line(v_rec.player_id, v_season_id);
 
     INSERT INTO public.bet_markets (market_type, title, week_id, game_number, subject_player_id, status)
       VALUES ('over_under', v_rec.name || ' · Game ' || v_rec.game_number,
