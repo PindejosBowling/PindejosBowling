@@ -36,10 +36,13 @@ interface LineRowProps {
 export default function LineRow({ lines, isLast, relation, inProgress, selectionState, onSelect }: LineRowProps) {
   const pressable = !inProgress && !!onSelect
   const first = lines[0]
-  // Player rows (overs + stat props) stack: name centered on its own row, the
-  // button set evenly spaced beneath. Team moneylines keep the original
-  // horizontal name-left / button-right presentation.
-  const stacked = first.marketType !== 'moneyline'
+  // Multi-button rows (player overs + stat props, team rows spanning WIN + the
+  // team stat lines) stack: name centered on its own row, the button set
+  // wrapping evenly beneath. Only a lone-button row (a bare moneyline WIN)
+  // keeps the horizontal name-left / button-right presentation — a row of one
+  // never needs to wrap.
+  const buttonCount = lines.reduce((n, l) => n + l.selections.length, 0)
+  const stacked = first.marketType !== 'moneyline' || buttonCount > 1
 
   return (
     <View
