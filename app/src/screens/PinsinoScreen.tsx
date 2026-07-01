@@ -59,7 +59,9 @@ export default function PinsinoScreen() {
   const { refreshing, onRefresh } = useRefresh(reload)
 
   // Selector options: 'live' (default) + each concluded season, newest first.
-  const concludedSeasons = allSeasons.filter(s => !s.is_active)
+  // Season 1 predates the Pinsino economy (no pin ledger / bets / outcomes to
+  // review), so it's excluded entirely from the history selector.
+  const concludedSeasons = allSeasons.filter(s => !s.is_active && s.number > 1)
   const seasonItems = ['live', ...concludedSeasons.map(s => String(s.number))]
   const selectorValue = pinsinoViewSeasonId == null
     ? 'live'
