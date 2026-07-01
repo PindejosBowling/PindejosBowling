@@ -760,6 +760,18 @@ export const pinLedger = {
     supabase.from('pin_ledger').insert(data),
 }
 
+// Admin-issued, house-funded `bonus` pins (e.g. a "Reigning Champion" bonus).
+// The RPC is admin-only, resolves the current season server-side, writes the
+// double-entry pair per recipient, and publishes a Market Moves event each.
+export const bonuses = {
+  issue: (playerIds: string[], amount: number, label: string) =>
+    supabase.rpc('issue_pin_bonus', {
+      p_player_ids: playerIds,
+      p_amount: amount,
+      p_label: label,
+    }),
+}
+
 // ── PvP Challenge Contracts (pvp_challenges → pvp_challenge_offers / pvp_ledger) ─
 // Player-vs-player duels escrowed at acceptance; winner takes the whole pot (no
 // rake). Lifecycle-only contract rows (escrow derived from pvp_ledger); all player
