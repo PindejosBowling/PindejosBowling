@@ -72,6 +72,7 @@ const EVENT_IMPORTANCE: Record<string, Importance> = {
   auction_opened: 'highlight',
   auction_won: 'highlight',
   auction_check_bounce: 'highlight',
+  admin_bonus_issued: 'highlight',
 
   sportsbook_weekly_house_result: 'major',
 }
@@ -370,6 +371,18 @@ export function renderFeedEvent(row: FeedEventView): FeedRenderParts {
         ...featureMeta('loan_shark'),
         line: 'The Loan Shark is offering dangerous terms this week.',
       }
+
+    case 'admin.bonus_issued': {
+      // A House-issued bonus (e.g. a Reigning Champion prize). Subject = the
+      // recipient; the amount is public (bonuses aren't privacy-sensitive).
+      const recipient = row.subjectName ?? 'A player'
+      const label = typeof p.label === 'string' && p.label.trim() ? p.label.trim() : 'a bonus'
+      return {
+        ...meta,
+        line: `The House awarded ${recipient} ${num(p.amount).toLocaleString()} pins — ${label}. 🎉`,
+        amount: { value: num(p.amount), tone: 'positive', label: 'BONUS' },
+      }
+    }
 
     default:
       // Unknown template_key (a newer publisher) — safe generic line.
