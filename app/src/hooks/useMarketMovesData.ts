@@ -71,7 +71,7 @@ function fetchPage(
 // The public "Market Moves" feed: paginated, filterable, read-derived. No
 // memoization in the hook (project rule) — the screen renders display copy via
 // renderFeedEvent + useMemo.
-export function useMarketMovesData() {
+export function useMarketMovesData(viewSeasonId?: string | null) {
   const [loading, setLoading] = useState(true)
   const [seasonId, setSeasonId] = useState<string | null>(null)
   const [events, setEvents] = useState<FeedEventView[]>([])
@@ -93,11 +93,12 @@ export function useMarketMovesData() {
   const loadFirst = useCallback(async (f: FeedFilter) => {
     if (!loadedOnce.current) setLoading(true)
     try {
-      // Between seasons (no live season) fall back to the most-recently-ended
-      // season so the newswire keeps showing its final-week activity rather than
-      // going blank until the next season starts.
-      const seasonRes = await seasons.getCurrentOrLastEnded()
-      const sid = seasonRes.data?.id ?? null
+      // Past-season mode points at the requested prior season; otherwise (and
+      // between seasons) fall back to the most-recently-ended season so the
+      // newswire keeps showing its final-week activity rather than going blank.
+      const sid = viewSeasonId
+        ? (await seasons.getById(viewSeasonId)).data?.id ?? null
+        : (await seasons.getCurrentOrLastEnded()).data?.id ?? null
       setSeasonId(sid)
       if (!sid) { setEvents([]); setHasMore(false); return }
 
@@ -128,7 +129,7 @@ export function useMarketMovesData() {
       loadedOnce.current = true
       setLoading(false)
     }
-  }, [])
+  }, [viewSeasonId])
 
   useEffect(() => { loadFirst('all') }, [loadFirst])
 

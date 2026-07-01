@@ -10,6 +10,8 @@ import MarketMovesTownBackdrop from '../components/pixelart/MarketMovesTownBackd
 import LoadingView from '../components/ui/LoadingView'
 import PillFilter from '../components/ui/PillFilter'
 import MarketMoveCard from '../components/economy/MarketMoveCard'
+import ReadOnlySeasonBanner from '../components/betting/ReadOnlySeasonBanner'
+import { usePinsinoSeasonContext } from '../hooks/usePinsinoSeasonContext'
 import BetDetailModal from '../components/betting/BetDetailModal'
 import PvpChallengeDetailModal from '../components/pvp/PvpChallengeDetailModal'
 import { useMarketMovesData, FeedFilter, WeekInfoById } from '../hooks/useMarketMovesData'
@@ -77,7 +79,9 @@ export default function MarketMovesScreen() {
   const navigation = useNavigation<Nav>()
   const playerId = useAuthStore(s => s.playerId)
   const artworkReveal = useUiStore(s => s.artworkReveal)
-  const { loading, events, filter, setFilter, hasMore, loadMore, reload, weekInfoById, currentWeekId } = useMarketMovesData()
+  const pinsinoViewSeasonId = useUiStore(s => s.pinsinoViewSeasonId)
+  const { readOnly, viewSeasonNumber } = usePinsinoSeasonContext()
+  const { loading, events, filter, setFilter, hasMore, loadMore, reload, weekInfoById, currentWeekId } = useMarketMovesData(pinsinoViewSeasonId)
   const { refreshing, onRefresh } = useRefresh(reload)
 
   const groups = useMemo(() => groupEventsByWeek(events, weekInfoById), [events, weekInfoById])
@@ -163,6 +167,11 @@ export default function MarketMovesScreen() {
     <SafeAreaView style={styles.safe} edges={['top']}>
       <MarketMovesTownBackdrop />
       <ScreenHeader title="Market Moves" subtitle="The Pinsino Newswire" onBack={() => navigation.goBack()} right={<ArtworkToggle />} />
+      {!artworkReveal && readOnly && (
+        <View style={styles.pillBar}>
+          <ReadOnlySeasonBanner seasonNumber={viewSeasonNumber} />
+        </View>
+      )}
       {!artworkReveal && (
       <View style={styles.pillBar}>
         <PillFilter

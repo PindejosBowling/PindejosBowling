@@ -20,6 +20,8 @@ import BorrowConfirmModal from '../components/economy/BorrowConfirmModal'
 import Button from '../components/ui/Button'
 import BalancePill from '../components/ui/BalancePill'
 import { useLoanSharkData, LoanProductView, DebtLedgerEntry } from '../hooks/useLoanSharkData'
+import { usePinsinoSeasonContext } from '../hooks/usePinsinoSeasonContext'
+import ReadOnlySeasonBanner from '../components/betting/ReadOnlySeasonBanner'
 import { useRefresh } from '../hooks/useRefresh'
 import { useAuthStore } from '../stores/authStore'
 import { useUiStore } from '../stores/uiStore'
@@ -60,7 +62,9 @@ export default function LoanSharkScreen() {
   const { showToast } = useUiStore()
   const artworkReveal = useUiStore(s => s.artworkReveal)
 
-  const { loading, balance, products, activeLoan, reload } = useLoanSharkData(playerId)
+  const pinsinoViewSeasonId = useUiStore(s => s.pinsinoViewSeasonId)
+  const { readOnly, viewSeasonNumber } = usePinsinoSeasonContext()
+  const { loading, balance, products, activeLoan, reload } = useLoanSharkData(playerId, pinsinoViewSeasonId)
   const { refreshing, onRefresh } = useRefresh(reload)
   const insets = useSafeAreaInsets()
 
@@ -83,6 +87,7 @@ export default function LoanSharkScreen() {
   }, [activeLoan])
 
   async function repay() {
+    if (readOnly) return
     if (!activeLoan) return
     const amount = parseInt(repayAmount, 10)
     // Client mirror of the RPC validation (server re-checks regardless).
@@ -135,6 +140,8 @@ export default function LoanSharkScreen() {
           pointerEvents={artworkReveal ? 'none' : 'auto'}
           style={artworkReveal ? styles.artHidden : undefined}
         >
+        {readOnly && <ReadOnlySeasonBanner seasonNumber={viewSeasonNumber} />}
+
         <BalancePill balance={balance} style={styles.balanceMargin} />
 
         {activeLoan ? (
@@ -207,7 +214,7 @@ export default function LoanSharkScreen() {
           <>
             <Text style={styles.sectionLabel}>AVAILABLE LOANS</Text>
             {availableProducts.length === 0 ? (
-              <EmptyCard text="The Shark has nothing for you right now" />
+              <EmptyCard text={readOnly ? 'No loan activity to review for this season' : 'The Shark has nothing for you right now'} />
             ) : (
               availableProducts.map(p => (
                 <View key={p.id} style={styles.productCard}>

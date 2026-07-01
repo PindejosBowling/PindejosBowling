@@ -12,7 +12,9 @@ import AuctionCard from '../components/auction/AuctionCard'
 import MyItemRow from '../components/auction/MyItemRow'
 import ItemInfoSheet from '../components/auction/ItemInfoSheet'
 import BalancePill from '../components/ui/BalancePill'
+import ReadOnlySeasonBanner from '../components/betting/ReadOnlySeasonBanner'
 import { useAuctionHouseData } from '../hooks/useAuctionHouseData'
+import { usePinsinoSeasonContext } from '../hooks/usePinsinoSeasonContext'
 import { useRefresh } from '../hooks/useRefresh'
 import { useAuthStore } from '../stores/authStore'
 import { useUiStore } from '../stores/uiStore'
@@ -28,7 +30,9 @@ export default function AuctionHouseScreen() {
 
   // Admin controls live on AuctionHouseAdmin (Pinsino Admin → Auction House) —
   // this screen is purely the player-facing floor.
-  const { loading, balance, auctions, myItems, reload } = useAuctionHouseData(playerId)
+  const pinsinoViewSeasonId = useUiStore(s => s.pinsinoViewSeasonId)
+  const { readOnly, viewSeasonNumber } = usePinsinoSeasonContext()
+  const { loading, balance, auctions, myItems, reload } = useAuctionHouseData(playerId, pinsinoViewSeasonId)
   const { refreshing, onRefresh } = useRefresh(reload)
 
   const [infoGroup, setInfoGroup] = useState<InventoryGroupView | null>(null)
@@ -75,11 +79,15 @@ export default function AuctionHouseScreen() {
         contentContainerStyle={styles.content}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.muted} />}
       >
+        {readOnly && <ReadOnlySeasonBanner seasonNumber={viewSeasonNumber} />}
+
         <BalancePill balance={balance} />
 
         {noAuctions ? (
           <View style={styles.emptyCard}>
-            <Text style={styles.emptyText}>Nothing on the block — check back when the House lists something worth fighting over.</Text>
+            <Text style={styles.emptyText}>
+              {readOnly ? 'No auctions to review for this season.' : 'Nothing on the block — check back when the House lists something worth fighting over.'}
+            </Text>
           </View>
         ) : (
           <>

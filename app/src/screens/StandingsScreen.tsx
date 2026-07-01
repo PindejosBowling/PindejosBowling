@@ -20,7 +20,7 @@ import { badgesForPlayer } from '../utils/badges'
 type Nav = NativeStackNavigationProp<StandingsStackParamList>
 
 export default function StandingsScreen() {
-  const { loading, seasonList, championPlayerIds, topPinBalancePlayerId, rawScores, rawSchedule, reload } = useStandingsData()
+  const { loading, seasonList, championPlayerIds, topPinBalancePlayerId, rawScores, rawSchedule, rawRegistrations, reload } = useStandingsData()
   const { standingsSeason, set } = useUiStore()
   const navigation = useNavigation<Nav>()
   const { refreshing, onRefresh } = useRefresh(reload)
@@ -43,8 +43,8 @@ export default function StandingsScreen() {
   )
 
   const standings = useMemo(
-    () => computeStandingsFromSupabase(rawScores, rawSchedule, activeSeasonId),
-    [rawScores, rawSchedule, activeSeasonId],
+    () => computeStandingsFromSupabase(rawScores, rawSchedule, activeSeasonId, undefined, rawRegistrations),
+    [rawScores, rawSchedule, activeSeasonId, rawRegistrations],
   )
 
   const movementByPlayer = useMemo(

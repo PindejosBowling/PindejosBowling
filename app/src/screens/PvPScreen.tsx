@@ -13,6 +13,8 @@ import PvpChallengeDetailModal from '../components/pvp/PvpChallengeDetailModal'
 import Button from '../components/ui/Button'
 import BalancePill from '../components/ui/BalancePill'
 import { usePvpData, PvpChallengeView } from '../hooks/usePvpData'
+import { usePinsinoSeasonContext } from '../hooks/usePinsinoSeasonContext'
+import ReadOnlySeasonBanner from '../components/betting/ReadOnlySeasonBanner'
 import { useRefresh } from '../hooks/useRefresh'
 import { useAuthStore } from '../stores/authStore'
 import { useUiStore } from '../stores/uiStore'
@@ -26,7 +28,9 @@ export default function PvPScreen() {
   const playerId = useAuthStore(s => s.playerId)
   const artworkReveal = useUiStore(s => s.artworkReveal)
 
-  const { loading, balance, inbox, openBoard, record, reload } = usePvpData(playerId)
+  const pinsinoViewSeasonId = useUiStore(s => s.pinsinoViewSeasonId)
+  const { readOnly, viewSeasonNumber } = usePinsinoSeasonContext()
+  const { loading, balance, inbox, openBoard, record, reload } = usePvpData(playerId, pinsinoViewSeasonId)
 
   // Reload the inbox AND the Pinsino notification badges together. The pending-action
   // count (tile + tab-bar badge) is derived from the same "received" contracts shown
@@ -83,6 +87,8 @@ export default function PvPScreen() {
         contentContainerStyle={styles.content}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.muted} />}
       >
+        {readOnly && <ReadOnlySeasonBanner seasonNumber={viewSeasonNumber} />}
+
         {/* Record + balance summary */}
         <View style={styles.recordCard}>
           <View style={styles.recordCell}>
@@ -103,22 +109,26 @@ export default function PvPScreen() {
 
         <BalancePill balance={balance} style={styles.balanceMargin} />
 
-        {/* Entry points */}
-        <View style={styles.actions}>
-          <Button label="New Challenge" onPress={() => navigation.navigate('PvPCreate')} fullWidth style={styles.primaryBtn} />
-          <Button
-            variant="outline"
-            label={`Challenge Board${openBoard.length > 0 ? ` (${openBoard.length})` : ''}`}
-            onPress={() => navigation.navigate('PvPBoard')}
-            fullWidth
-            style={styles.secondaryBtn}
-          />
-        </View>
+        {/* Entry points — hidden in past-season review (no new challenges). */}
+        {!readOnly && (
+          <View style={styles.actions}>
+            <Button label="New Challenge" onPress={() => navigation.navigate('PvPCreate')} fullWidth style={styles.primaryBtn} />
+            <Button
+              variant="outline"
+              label={`Challenge Board${openBoard.length > 0 ? ` (${openBoard.length})` : ''}`}
+              onPress={() => navigation.navigate('PvPBoard')}
+              fullWidth
+              style={styles.secondaryBtn}
+            />
+          </View>
+        )}
 
-        {/* Inbox */}
+        {/* Inbox — in past-season review only settled challenges exist. */}
         {nothing ? (
           <View style={styles.emptyCard}>
-            <Text style={styles.emptyText}>No challenges yet. Start one or browse the board.</Text>
+            <Text style={styles.emptyText}>
+              {readOnly ? 'No challenges this season.' : 'No challenges yet. Start one or browse the board.'}
+            </Text>
           </View>
         ) : (
           <>

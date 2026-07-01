@@ -12,7 +12,7 @@ export interface LedgerEntry {
   bet: BetView | null   // populated for bet_stake / bet_payout / bet_refund rows
 }
 
-export function usePlayerPinsinoData(playerId: string | null) {
+export function usePlayerPinsinoData(playerId: string | null, viewSeasonId?: string | null) {
   const [loading, setLoading] = useState(true)
   const [balance, setBalance] = useState(0)
   const [ledger, setLedger] = useState<LedgerEntry[]>([])
@@ -32,12 +32,24 @@ export function usePlayerPinsinoData(playerId: string | null) {
         return
       }
 
-      // Falls back to the most-recently-ended season between seasons so the
+      // Past-season mode points at the requested prior season; otherwise (and
+      // between seasons) falls back to the most-recently-ended season so the
       // player's final ledger/balance stays visible until the next one starts.
-      const seasonRes = await seasons.getCurrentOrLastEnded()
-      const seasonId = seasonRes.data?.id ?? null
-      setSeasonNumber(seasonRes.data?.number ?? null)
-      setSeasonConcluded(seasonRes.concluded)
+      let seasonId: string | null
+      let resolvedSeasonNumber: number | null
+      if (viewSeasonId) {
+        const seasonRes = await seasons.getById(viewSeasonId)
+        seasonId = seasonRes.data?.id ?? null
+        resolvedSeasonNumber = seasonRes.data?.number ?? null
+        setSeasonNumber(resolvedSeasonNumber)
+        setSeasonConcluded(true)
+      } else {
+        const seasonRes = await seasons.getCurrentOrLastEnded()
+        seasonId = seasonRes.data?.id ?? null
+        resolvedSeasonNumber = seasonRes.data?.number ?? null
+        setSeasonNumber(resolvedSeasonNumber)
+        setSeasonConcluded(seasonRes.concluded)
+      }
 
       const fetches: PromiseLike<any>[] = []
 
@@ -71,9 +83,13 @@ export function usePlayerPinsinoData(playerId: string | null) {
 
       await Promise.all(fetches)
 
-      // Normalize bets
+      // Normalize bets. `bets.listByPlayer` is all-time, so in past-season mode
+      // scope the open (pending) bets to the viewed season — a concluded season
+      // has none, and we must not leak the live season's pending bets here.
       const allBetViews = allBetsData.map(normalizeBet)
-      const openBetViews = allBetViews.filter(b => b.status === 'pending')
+      const openBetViews = allBetViews
+        .filter(b => b.status === 'pending')
+        .filter(b => !viewSeasonId || b.seasonNumber === resolvedSeasonNumber)
       const settledBetViews = settledBetsData
         .map(normalizeBet)
         .filter(b => b.playerId === playerId)
@@ -101,7 +117,7 @@ export function usePlayerPinsinoData(playerId: string | null) {
     } finally {
       setLoading(false)
     }
-  }, [playerId])
+  }, [playerId, viewSeasonId])
 
   useEffect(() => {
     load()

@@ -19,7 +19,7 @@ import OddsBlock from '../components/league/OddsBlock'
 import ConfirmBar from '../components/ui/ConfirmBar'
 import EditableWeek from '../components/league/EditableWeek'
 import AdminArchiveModal from '../components/admin/AdminArchiveModal'
-import AdminGenerateTeamsModal from '../components/admin/AdminGenerateTeamsModal'
+import AdminGenerateTeamsModal, { buildRotation } from '../components/admin/AdminGenerateTeamsModal'
 import ToggleGroup from '../components/ui/ToggleGroup'
 import Button from '../components/ui/Button'
 import { useMatchupsData } from '../hooks/useMatchupsData'
@@ -92,10 +92,17 @@ export default function MatchupsScreen() {
     )
   )
 
+  // A team's roster can differ per game (a player may be swapped for a single
+  // game, producing a slot that only participates in some games). A slot's
+  // participation in a game is recorded as a score row, so a game number is
+  // present as a key in `scores` iff the player is in that game's lineup.
+  const playsInGame = (p: any, gameNum: number) => p.scores[gameNum] !== undefined
+
   function getTotal(teamName: string, gameNum: number): number {
     const team = teams[teamName]
     if (!team) return 0
     return team.players.reduce((s: number, p: any) => {
+      if (!playsInGame(p, gameNum)) return s
       // A stored score (including an admin-entered fill score) always wins; an
       // unscored fill falls back to its league-average estimate.
       const raw = p.scores[gameNum] ?? ''
@@ -198,19 +205,50 @@ export default function MatchupsScreen() {
 
   async function addNextGame() {
     if (!weekId) return
-    const game1Round = rounds.find(r => r.num === 1)
-    if (!game1Round) return
+    // Append the next canonical rotation round for this week's team count. The
+    // round-robin cycles back and repeats once the unique rounds are exhausted,
+    // and is computed from team count alone — so the appended pairings are
+    // predictable regardless of any prior manual matchup edits.
+    const teamList = Object.values(teams)
+    const numTeams = teamList.length
+    if (numTeams < 2) return
     const nextGameNum = rounds.length > 0 ? Math.max(...rounds.map(r => r.num)) + 1 : 2
+    const teamIdByNumber = new Map(teamList.map(t => [t.teamNumber, t.teamId]))
+    const teamById = new Map(teamList.map((t: any) => [t.teamId, t]))
     setAddingGame(true)
     try {
-      const rows = game1Round.pairings
-        .filter(p => p.b !== null)
-        .map(p => ({
+      const rows = buildRotation(numTeams, nextGameNum)
+        .filter(s => s.game_number === nextGameNum)
+        .map(s => ({
           game_number: nextGameNum,
-          team_a_id: p.a.teamId,
-          team_b_id: p.b!.teamId,
+          team_a_id: teamIdByNumber.get(s.team_a)!,
+          team_b_id: teamIdByNumber.get(s.team_b)!,
         }))
-      await games.insert(rows)
+      const { data: inserted } = await games.insert(rows)
+
+      // The games_participation_seed_ins trigger seeds a participation row for
+      // EVERY slot on both teams. That over-fields the new game when a team has
+      // extra slots from single-game roster edits (e.g. a game-1-only swap leaves
+      // that sub's slot on the team). Prune the new game down to each team's most
+      // recent prior game lineup so an added game inherits the standing roster.
+      const teamGameNumbers = (t: any): number[] =>
+        Array.from(new Set(t.players.flatMap((p: any) => Object.keys(p.scores).map(Number))))
+      for (const g of (inserted ?? []) as any[]) {
+        for (const teamId of [g.team_a_id, g.team_b_id]) {
+          const t = teamById.get(teamId)
+          if (!t) continue
+          const priorNums = teamGameNumbers(t).filter(n => n < nextGameNum)
+          if (priorNums.length === 0) continue
+          const refNum = Math.max(...priorNums)
+          const refSlots = new Set(
+            t.players.filter((p: any) => playsInGame(p, refNum)).map((p: any) => p.teamSlotId)
+          )
+          const extras = t.players.filter((p: any) => !refSlots.has(p.teamSlotId))
+          for (const p of extras) {
+            await scores.remove(p.teamSlotId, g.id)
+          }
+        }
+      }
       // Markets aren't derived from the games table — tell the betting system this
       // schedule game now exists so it creates its RSVP-driven O/U lines (same call
       // team-gen makes for game 3). Idempotent.
@@ -404,7 +442,7 @@ export default function MatchupsScreen() {
                             <View>
                               <View style={[styles.teamBlock]}>
                                 <Text style={styles.teamLabel}>{pairing.a.name}</Text>
-                                {pairing.a.players.map((player: any) => (
+                                {pairing.a.players.filter((player: any) => playsInGame(player, round.num)).map((player: any) => (
                                   <PlayerScoreRow
                                     key={player.slot}
                                     player={player}
@@ -423,7 +461,7 @@ export default function MatchupsScreen() {
                                 <Text style={[styles.teamLabel, aWins(pairing, round.num) && styles.teamLabelWinner]}>
                                   {pairing.a.name}
                                 </Text>
-                                {pairing.a.players.map((player: any) => (
+                                {pairing.a.players.filter((player: any) => playsInGame(player, round.num)).map((player: any) => (
                                   <PlayerScoreRow
                                     key={player.slot}
                                     player={player}
@@ -454,7 +492,7 @@ export default function MatchupsScreen() {
                                 <Text style={[styles.teamLabel, bWins(pairing, round.num) && styles.teamLabelWinner]}>
                                   {pairing.b.name}
                                 </Text>
-                                {pairing.b.players.map((player: any) => (
+                                {pairing.b.players.filter((player: any) => playsInGame(player, round.num)).map((player: any) => (
                                   <PlayerScoreRow
                                     key={player.slot}
                                     player={player}

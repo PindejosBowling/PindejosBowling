@@ -16,7 +16,9 @@ import AppHeader from '../components/league/AppHeader'
 import PinsinoNoirBackdrop from '../components/pixelart/PinsinoNoirBackdrop'
 import LoadingView from '../components/ui/LoadingView'
 import PinsinoLeaderboardTable from '../components/betting/PinsinoLeaderboardTable'
+import PillFilter from '../components/ui/PillFilter'
 import { usePinsinoData } from '../hooks/usePinsinoData'
+import { usePinsinoSeasonContext } from '../hooks/usePinsinoSeasonContext'
 import { useRefresh } from '../hooks/useRefresh'
 import { useAuthStore } from '../stores/authStore'
 import { useNotificationStore } from '../stores/notificationStore'
@@ -46,10 +48,29 @@ export default function PinsinoScreen() {
   const playerId = useAuthStore(s => s.playerId)
   const playerName = useAuthStore(s => s.playerName)
   const artworkReveal = useUiStore(s => s.artworkReveal)
+  const pinsinoViewSeasonId = useUiStore(s => s.pinsinoViewSeasonId)
+  const setUi = useUiStore(s => s.set)
   const navigation = useNavigation<PinsinoNav>()
 
-  const { loading, balance, debt, openAction, netWorth, leaderboard, seasonNumber, seasonConcluded, reload } = usePinsinoData(playerId)
+  // The shared "viewed season" context drives the selector + read-only gating
+  // across the whole Pinsino tab.
+  const { seasons: allSeasons, readOnly } = usePinsinoSeasonContext()
+  const { loading, balance, debt, openAction, netWorth, leaderboard, seasonNumber, seasonConcluded, reload } = usePinsinoData(playerId, pinsinoViewSeasonId)
   const { refreshing, onRefresh } = useRefresh(reload)
+
+  // Selector options: 'live' (default) + each concluded season, newest first.
+  // Season 1 predates the Pinsino economy (no pin ledger / bets / outcomes to
+  // review), so it's excluded entirely from the history selector.
+  const concludedSeasons = allSeasons.filter(s => !s.is_active && s.number > 1)
+  const seasonItems = ['live', ...concludedSeasons.map(s => String(s.number))]
+  const selectorValue = pinsinoViewSeasonId == null
+    ? 'live'
+    : String(concludedSeasons.find(s => s.id === pinsinoViewSeasonId)?.number ?? 'live')
+  const onSelectSeason = (item: string) => {
+    if (item === 'live') { setUi({ pinsinoViewSeasonId: null }); return }
+    const picked = concludedSeasons.find(s => String(s.number) === item)
+    setUi({ pinsinoViewSeasonId: picked?.id ?? null })
+  }
 
   // Pending-action counts for the tile badges. Refresh on focus so they reflect
   // actions taken inside the subpages (e.g. responding to a PvP contract).
@@ -80,6 +101,19 @@ export default function PinsinoScreen() {
         contentContainerStyle={styles.content}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.muted} />}
       >
+        {/* Season selector — governs the entire tab. 'Live' (default) shows the
+            current season; picking a concluded season puts the whole Pinsino tab
+            into read-only end-of-season review. Only shown once there's a prior
+            season to review. */}
+        {concludedSeasons.length > 0 && (
+          <PillFilter
+            items={seasonItems}
+            value={selectorValue}
+            onChange={onSelectSeason}
+            renderLabel={item => (item === 'live' ? 'Live' : `Season ${item}`)}
+          />
+        )}
+
         {/* Between seasons: the most-recently-ended season is frozen here as a
             final outcome until the next season starts. */}
         {seasonConcluded && (
@@ -97,12 +131,14 @@ export default function PinsinoScreen() {
         <TouchableOpacity
           style={styles.balanceCard}
           onPress={() => {
+            // The player detail respects the selected season too, so this drills
+            // into the viewer's record for whichever season is being viewed.
             if (playerId) navigation.navigate('PlayerPinsino', { playerId, name: playerName ?? 'Me' })
           }}
           activeOpacity={0.7}
           disabled={!playerId}
         >
-          <Text style={styles.balanceLabel}>YOUR BALANCE</Text>
+          <Text style={styles.balanceLabel}>{readOnly ? `SEASON ${seasonNumber} FINAL BALANCE` : 'YOUR BALANCE'}</Text>
           <Text style={styles.balanceValue}>{formatPins(balance)}</Text>
           <Text style={styles.balanceUnit}>PINS</Text>
           {(debt > 0 || openAction > 0) && (
@@ -147,7 +183,9 @@ export default function PinsinoScreen() {
         <View style={styles.grid}>
           {MENU_TILES.map(tile => {
             // Pending-action badge for this tile (0 when nothing needs attention).
-            const badge = countForRoute(counts, tile.route)
+            // Suppressed entirely in read-only past-season mode — live pending
+            // actions are irrelevant to a frozen archive view.
+            const badge = readOnly ? 0 : countForRoute(counts, tile.route)
             return (
               <TouchableOpacity
                 key={tile.route}

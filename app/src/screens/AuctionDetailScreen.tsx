@@ -8,6 +8,7 @@ import LoadingView from '../components/ui/LoadingView'
 import Button from '../components/ui/Button'
 import AuctionBidSheet from '../components/auction/AuctionBidSheet'
 import { useAuctionDetailData } from '../hooks/useAuctionDetailData'
+import { usePinsinoSeasonContext } from '../hooks/usePinsinoSeasonContext'
 import { useRefresh } from '../hooks/useRefresh'
 import { useAuthStore } from '../stores/authStore'
 import { formatCountdown } from '../utils/auction'
@@ -23,6 +24,7 @@ export default function AuctionDetailScreen() {
   const playerId = useAuthStore(s => s.playerId)
 
   // Admin management lives on AuctionHouseAdmin (Pinsino Admin → Auction House).
+  const { readOnly } = usePinsinoSeasonContext()
   const { loading, balance, auction, reload } = useAuctionDetailData(params.auctionId, playerId)
   const { refreshing, onRefresh } = useRefresh(reload)
 
@@ -186,8 +188,8 @@ export default function AuctionDetailScreen() {
           </>
         )}
 
-        {/* Actions */}
-        {open && !hammerFalling && (
+        {/* Actions — hidden in past-season review. */}
+        {open && !hammerFalling && !readOnly && (
           <>
             <Button
               label={a.myBidAmount != null ? 'Edit Bid' : 'Place Sealed Bid'}

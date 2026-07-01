@@ -18,7 +18,7 @@ import { useRefresh } from '../hooks/useRefresh'
 import { usePlayoffDraftData, computeDraftTurnSeed, DraftType } from '../hooks/usePlayoffDraftData'
 import { computeStandingsFromSupabase } from '../hooks/useStandingsData'
 import { playoffDrafts, teams, games, betMarkets } from '../utils/supabase/db'
-import { buildSchedule } from '../components/admin/AdminGenerateTeamsModal'
+import { buildRotation } from '../components/admin/AdminGenerateTeamsModal'
 
 type Nav = NativeStackNavigationProp<MoreStackParamList>
 
@@ -168,7 +168,8 @@ export default function PlayoffsScreen() {
     if (teamsErr) return { error: teamsErr }
     const teamIdByNumber = new Map<number, string>((teamRows ?? []).map((t: any) => [t.team_number, t.id]))
 
-    const schedule = buildSchedule((teamRows ?? []).length)
+    // Same rotation the generate-teams flow lays — default 2 games per night.
+    const schedule = buildRotation((teamRows ?? []).length)
     if (schedule.length) {
       const { error: gamesErr } = await games.insert(
         schedule.map(s => ({

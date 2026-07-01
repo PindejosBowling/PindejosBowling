@@ -10,7 +10,9 @@ import BountyBoardBackdrop from '../components/pixelart/BountyBoardBackdrop'
 import LoadingView from '../components/ui/LoadingView'
 import BountyCard from '../components/bounty/BountyCard'
 import BalancePill from '../components/ui/BalancePill'
+import ReadOnlySeasonBanner from '../components/betting/ReadOnlySeasonBanner'
 import { useBountyBoardData, BountyView } from '../hooks/useBountyBoardData'
+import { usePinsinoSeasonContext } from '../hooks/usePinsinoSeasonContext'
 import { useRefresh } from '../hooks/useRefresh'
 import { useAuthStore } from '../stores/authStore'
 import { useUiStore } from '../stores/uiStore'
@@ -23,7 +25,9 @@ export default function BountyBoardScreen() {
   const playerId = useAuthStore(s => s.playerId)
   const artworkReveal = useUiStore(s => s.artworkReveal)
 
-  const { loading, balance, openBoard, mySponsored, myHunted, settled, reload } = useBountyBoardData(playerId)
+  const pinsinoViewSeasonId = useUiStore(s => s.pinsinoViewSeasonId)
+  const { readOnly, viewSeasonNumber } = usePinsinoSeasonContext()
+  const { loading, balance, openBoard, mySponsored, myHunted, settled, reload } = useBountyBoardData(playerId, pinsinoViewSeasonId)
   const { refreshing, onRefresh } = useRefresh(reload)
 
   // Refresh on return (e.g. after posting or entering). Silent after first load.
@@ -56,6 +60,8 @@ export default function BountyBoardScreen() {
         contentContainerStyle={styles.content}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.muted} />}
       >
+        {readOnly && <ReadOnlySeasonBanner seasonNumber={viewSeasonNumber} />}
+
         <BalancePill balance={balance} />
 
         {/* v1 is House-only: the player "Post a Bounty" entry point is intentionally
@@ -65,7 +71,9 @@ export default function BountyBoardScreen() {
 
         {nothing ? (
           <View style={styles.emptyCard}>
-            <Text style={styles.emptyText}>No bounties right now. Check back when the Pinsino posts one to hunt.</Text>
+            <Text style={styles.emptyText}>
+              {readOnly ? 'No bounties this season.' : 'No bounties right now. Check back when the Pinsino posts one to hunt.'}
+            </Text>
           </View>
         ) : (
           <>
