@@ -16,6 +16,11 @@ export { formatTimeRemaining, formatCountdown }
 // (pre-settlement cancel is a hard delete) — AUCTION_FINDINGS.md §10.
 export type AuctionStatus = 'scheduled' | 'open' | 'settled' | 'settled_no_winner'
 
+// House-voice fallback shown on the Pinsino tile when an admin closes the
+// Auction House without authoring custom copy (auction_house_state.closed_message
+// is null). Shared by the tile overlay and the admin status editor.
+export const AUCTION_HOUSE_CLOSED_DEFAULT_MESSAGE = 'The block is dark tonight'
+
 export interface AuctionBounceView {
   playerName: string
   // The fee actually charged: min(balance at settlement, bounce fee).

@@ -57,6 +57,15 @@ CREATE TABLE auction_bids (
   updated_at timestamp with time zone NOT NULL DEFAULT now()
 );
 
+CREATE TABLE auction_house_state (
+  season_id uuid NOT NULL,
+  is_closed boolean NOT NULL DEFAULT false,
+  closed_message text,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_by uuid
+);
+
 CREATE TABLE auctions (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   season_id uuid NOT NULL,
@@ -634,6 +643,12 @@ ALTER TABLE auction_bids ADD CONSTRAINT auction_bids_pkey PRIMARY KEY (id);
 ALTER TABLE auction_bids ADD CONSTRAINT auction_bids_player_id_fkey FOREIGN KEY (player_id) REFERENCES players(id) ON DELETE CASCADE;
 
 ALTER TABLE auction_bids ADD CONSTRAINT auction_bids_status_check CHECK ((status = ANY (ARRAY['active'::text, 'won'::text])));
+
+ALTER TABLE auction_house_state ADD CONSTRAINT auction_house_state_pkey PRIMARY KEY (season_id);
+
+ALTER TABLE auction_house_state ADD CONSTRAINT auction_house_state_season_id_fkey FOREIGN KEY (season_id) REFERENCES seasons(id) ON DELETE CASCADE;
+
+ALTER TABLE auction_house_state ADD CONSTRAINT auction_house_state_updated_by_fkey FOREIGN KEY (updated_by) REFERENCES players(id);
 
 ALTER TABLE auctions ADD CONSTRAINT auctions_bounce_fee_check CHECK ((bounce_fee >= 0));
 
@@ -1358,6 +1373,11 @@ CREATE POLICY "owner can read own bids" ON auction_bids AS PERMISSIVE FOR SELECT
   USING ((player_id IN ( SELECT p.id
    FROM players p
   WHERE (p.user_id = ( SELECT auth.uid() AS uid)))));
+
+ALTER TABLE auction_house_state ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "authenticated can read auction house state" ON auction_house_state AS PERMISSIVE FOR SELECT TO authenticated
+  USING (true);
 
 ALTER TABLE auctions ENABLE ROW LEVEL SECURITY;
 
@@ -4977,6 +4997,36 @@ END;
 $function$
 ;
 
+CREATE OR REPLACE FUNCTION public.set_auction_house_closed(p_is_closed boolean, p_closed_message text DEFAULT NULL::text)
+ RETURNS void
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+DECLARE
+  v_season uuid;
+  v_msg    text;
+BEGIN
+  PERFORM public.assert_admin();
+
+  v_season := public.current_season_id();
+  IF v_season IS NULL THEN
+    RAISE EXCEPTION 'No active season';
+  END IF;
+
+  v_msg := NULLIF(btrim(COALESCE(p_closed_message, '')), '');
+
+  INSERT INTO public.auction_house_state (season_id, is_closed, closed_message, updated_at, updated_by)
+    VALUES (v_season, COALESCE(p_is_closed, false), v_msg, now(), public.current_player_id())
+  ON CONFLICT (season_id) DO UPDATE
+    SET is_closed      = EXCLUDED.is_closed,
+        closed_message = EXCLUDED.closed_message,
+        updated_at     = now(),
+        updated_by     = EXCLUDED.updated_by;
+END;
+$function$
+;
+
 CREATE OR REPLACE FUNCTION public.set_updated_at()
  RETURNS trigger
  LANGUAGE plpgsql
@@ -7164,6 +7214,8 @@ CREATE TRIGGER set_updated_at BEFORE UPDATE ON public.activity_event_catalog FOR
 CREATE TRIGGER set_updated_at BEFORE UPDATE ON public.activity_feed_events FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
 CREATE TRIGGER set_updated_at BEFORE UPDATE ON public.auction_bids FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+CREATE TRIGGER set_updated_at BEFORE UPDATE ON public.auction_house_state FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
 CREATE TRIGGER set_updated_at BEFORE UPDATE ON public.auctions FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
