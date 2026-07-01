@@ -1,9 +1,8 @@
-import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   View,
   Text,
   ScrollView,
-  TouchableOpacity,
   StyleSheet,
   RefreshControl,
 } from 'react-native'
@@ -16,10 +15,12 @@ import ArtworkToggle from '../components/ui/ArtworkToggle'
 import SportsbookPokerTableBackdrop from '../components/pixelart/SportsbookPokerTableBackdrop'
 import ScreenBackdrop from '../components/pixelart/ScreenBackdrop'
 import ToggleGroup from '../components/ui/ToggleGroup'
+import BalancePill from '../components/ui/BalancePill'
 import ActiveBetsView from '../components/betting/ActiveBetsView'
 import SettledBetsView from '../components/betting/SettledBetsView'
 import BetDetailModal from '../components/betting/BetDetailModal'
 import WagerSheet from '../components/betting/WagerSheet'
+import BetSlip, { type SlipPick, type SinglesSubmit, type ParlaySubmit } from '../components/betting/BetSlip'
 import GoldenTicketToggle from '../components/auction/GoldenTicketToggle'
 import WinnersCrutchToggle from '../components/auction/WinnersCrutchToggle'
 import EnergyDrinkToggle from '../components/auction/EnergyDrinkToggle'
@@ -27,7 +28,6 @@ import LineRow from '../components/betting/LineRow'
 import LineRowContainer from '../components/betting/LineRowContainer'
 import CustomLineRow from '../components/betting/CustomLineRow'
 import ReadOnlySeasonBanner from '../components/betting/ReadOnlySeasonBanner'
-import Button from '../components/ui/Button'
 import ConfirmActionSheet from '../components/ui/ConfirmActionSheet'
 import {
   usePinsinoData,
@@ -36,8 +36,6 @@ import {
   lineGroup,
   lineCategory,
   closedBettingNote,
-  betLineSuffix,
-  selectionButtonLabel,
   subjectRelation,
   type BetView,
   type LineView,
@@ -56,34 +54,12 @@ import EmptyCard from '../components/ui/EmptyCard'
 type PinsinoNav = NativeStackNavigationProp<PinsinoStackParamList>
 
 type View2 = 'action' | 'place' | 'settled'
-type PlaceMode = 'single' | 'parlay'
-
-// One leg staged in the parlay bet slip. Generic over market_type — a leg is a
-// chosen selection on a market, not an over/under-specific pick.
-interface ParlayLeg {
-  selectionId: string
-  selectionKey: string
-  selectionLabel: string
-  marketId: string
-  subjectName: string
-  subjectPlayerId: string | null
-  marketType: string
-  gameNumber: number | null
-  line: number | null
-  statKey: string | null
-}
 
 const VIEW_OPTIONS: { key: View2; label: string }[] = [
-  { key: 'place', label: 'Place Bets' },
-  { key: 'action', label: 'Active Bets' },
-  { key: 'settled', label: 'Settled Bets' },
+  { key: 'place', label: 'Place' },
+  { key: 'action', label: 'Active' },
+  { key: 'settled', label: 'Settled' },
 ]
-
-interface BetModalState {
-  line: LineView
-  selectedId: string | null
-  wager: string
-}
 
 // UI-only policy: the "under" side of player O/U lines is hidden from the
 // Sportsbook. Betting on a leaguemate to do *poorly* has negative social
@@ -115,13 +91,12 @@ export default function SportsbookScreen() {
 
   const [view, setView] = useState<View2>('place')
   // Past-season review is read-only: only the season's settled bets are shown
-  // (no Place/Active board, no wager sheets reachable).
+  // (no Place/Active board, no bet slip reachable).
   const effectiveView: View2 = readOnly ? 'settled' : view
-  const [placeMode, setPlaceMode] = useState<PlaceMode>('single')
-  const [parlayLegs, setParlayLegs] = useState<ParlayLeg[]>([])
-  const [parlayModalOpen, setParlayModalOpen] = useState(false)
-  const [parlayWager, setParlayWager] = useState('')
-  const [modal, setModal] = useState<BetModalState | null>(null)
+  // Unified bet slip: tapping any line stages a pick here; the slip places them
+  // as singles (per-pick stake) or one parlay (combined odds).
+  const [slipPicks, setSlipPicks] = useState<SlipPick[]>([])
+  const [slipOpen, setSlipOpen] = useState(false)
   const [placing, setPlacing] = useState(false)
   const [detailModal, setDetailModal] = useState<BetView | null>(null)
   // Wager sheet for taking a custom line ("special") — the whole bundle at once.
@@ -280,51 +255,84 @@ export default function SportsbookScreen() {
     return { customByGame: byGame, topSpecials: top }
   }, [customLines, lineGroups])
 
+  // First non-in-progress group opens by default, so the board lands with live
+  // action visible instead of a wall of collapsed bars; the rest start collapsed.
+  const firstOpenGroupKey = useMemo(() => {
+    const g = lineGroups.find(grp =>
+      !(grp.group.key !== 'season' &&
+        grp.categories.some(({ rows }) => rows.some(r => r.lines.some(l => l.inProgress)))))
+    return g?.group.key
+  }, [lineGroups])
+
   // Anti-tanking, market-type-aware: backing the side that bets against your own
   // performance (the `under` on your own line) is blocked.
   function isSelfTank(line: LineView, sel: SelectionView): boolean {
     return line.subjectPlayerId === playerId && selectionBetsAgainstSubject(line.marketType, sel.key)
   }
 
-  // Single mode: tapping a selection opens the wager sheet (pre-picked to that
-  // side). Own-against side always toasts; below-min balance is a silent no-op.
-  function onSingleSelect(line: LineView, sel: SelectionView) {
+  // Tapping any selection toggles it in/out of the unified slip. One selection
+  // per market; own-against side always toasts (anti-tank). Balance is validated
+  // at placement, so a low balance still stages (the cell is cosmetically dimmed).
+  function stagePick(line: LineView, sel: SelectionView) {
     if (readOnly) return
-    if (isSelfTank(line, sel)) { showToast("Believe in yourself man", 'error'); return }
-    if (balance < 10) return
-    setInsureBet(false)
-    setUseBoost(false)
-    setModal({ line, selectedId: sel.selectionId, wager: '' })
+    if (isSelfTank(line, sel)) { showToast('Believe in yourself man', 'error'); return }
+    setSlipPicks(prev => {
+      const existing = prev.find(p => p.marketId === line.marketId)
+      // Tapping the already-staged side removes it.
+      if (existing && existing.selectionId === sel.selectionId) {
+        return prev.filter(p => p.marketId !== line.marketId)
+      }
+      const without = prev.filter(p => p.marketId !== line.marketId)
+      return [...without, {
+        selectionId: sel.selectionId,
+        selectionKey: sel.key,
+        selectionLabel: sel.label,
+        marketId: line.marketId,
+        subjectName: line.subjectName,
+        subjectPlayerId: line.subjectPlayerId,
+        marketType: line.marketType,
+        gameNumber: line.gameNumber,
+        line: sel.line ?? line.line,
+        statKey: line.statKey,
+        odds: sel.odds ?? 2,
+      }]
+    })
   }
 
-  async function placeBet() {
-    if (readOnly) return
-    if (!modal || !playerId) return
-    const sel = modal.line.selections.find(s => s.selectionId === modal.selectedId)
-    if (!sel) { showToast('Choose a selection', 'error'); return }
-    // Hard constraint: no backing the side against your own performance (anti-tanking).
-    if (isSelfTank(modal.line, sel)) { showToast("Believe in yourself man", 'error'); return }
-    const wagerNum = parseInt(modal.wager, 10)
-    if (isNaN(wagerNum) || wagerNum < 10) { showToast('Minimum wager is 10 pins', 'error'); return }
-    if (wagerNum > balance) { showToast('Wager exceeds your balance', 'error'); return }
+  function removeSlipPick(marketId: string) {
+    setSlipPicks(prev => prev.filter(p => p.marketId !== marketId))
+  }
+
+  // Singles: each staged pick placed as its own bet, sequentially. Item
+  // attachment is offered only for a lone single (BetSlip enforces this), so at
+  // most one bet carries a ticket/boost. Reports partial placement on failure.
+  async function placeSingles({ entries, insure, boost }: SinglesSubmit) {
+    if (readOnly || !playerId || entries.length === 0) return
+    const total = entries.reduce((s, e) => s + e.stake, 0)
+    if (entries.some(e => e.stake < 10)) { showToast('Minimum stake is 10 pins', 'error'); return }
+    if (total > balance) { showToast('Total stake exceeds your balance', 'error'); return }
 
     setPlacing(true)
+    let placed = 0
     try {
-      // Atomic + balance-checked, server-side (place_house_bet RPC). The bettor is
-      // resolved from the JWT and the double-entry stake ledger pair is written in
-      // the same transaction — the client no longer writes any betting rows.
-      const { error: betErr } = await bets.place(
-        [sel.selectionId], wagerNum, undefined,
-        insureBet ? tickets[0] : undefined, undefined, useBoost ? boosts[0] : undefined)
-      if (betErr) { showToast(betErr.message, 'error'); return }
-
-      showToast(insureBet ? 'Bet placed — Golden Ticket attached!' : 'Bet placed!', 'success')
-      setModal(null)
-      await Promise.all([reload(), reloadTickets()])
+      for (const { pick, stake } of entries) {
+        const { error } = await bets.place(
+          [pick.selectionId], stake, undefined,
+          insure ? tickets[0] : undefined, undefined, boost ? boosts[0] : undefined)
+        if (error) {
+          showToast(placed > 0 ? `Placed ${placed} — then: ${error.message}` : error.message, 'error')
+          return
+        }
+        placed += 1
+      }
+      showToast(entries.length > 1 ? `${placed} bets placed!` : (insure ? 'Bet placed — Golden Ticket attached!' : 'Bet placed!'), 'success')
+      setSlipPicks([])
+      setSlipOpen(false)
     } catch {
-      showToast('Failed to place bet', 'error')
+      showToast('Failed to place bets', 'error')
     } finally {
       setPlacing(false)
+      await Promise.all([reload(), reloadTickets()])
     }
   }
 
@@ -370,60 +378,26 @@ export default function SportsbookScreen() {
     }
   }
 
-  // ── Parlay slip ─────────────────────────────────────────────────────────
-  // All O/U selections sit at even money (2.000), so the fair combined odds of
-  // an N-leg parlay = 2^N and payout = floor(stake × 2^N). Push/void legs drop
-  // out at settlement (handled server-side), recomputing over the surviving legs.
-  const parlayOdds = useMemo(() => Math.pow(2, parlayLegs.length), [parlayLegs])
-
-  // Toggle a selection in/out of the slip. One selection per market.
-  function toggleParlayLeg(line: LineView, sel: SelectionView) {
-    if (readOnly) return
-    if (isSelfTank(line, sel)) { showToast('Believe in yourself man', 'error'); return }
-
-    setParlayLegs(prev => {
-      const existing = prev.find(l => l.marketId === line.marketId)
-      // Tapping the already-selected side removes the leg.
-      if (existing && existing.selectionId === sel.selectionId) return prev.filter(l => l.marketId !== line.marketId)
-      const without = prev.filter(l => l.marketId !== line.marketId)
-      return [...without, {
-        selectionId: sel.selectionId,
-        selectionKey: sel.key,
-        selectionLabel: sel.label,
-        marketId: line.marketId,
-        subjectName: line.subjectName,
-        subjectPlayerId: line.subjectPlayerId,
-        marketType: line.marketType,
-        gameNumber: line.gameNumber,
-        line: sel.line ?? line.line,
-        statKey: line.statKey,
-      }]
-    })
-  }
-
-  function removeParlayLeg(marketId: string) {
-    setParlayLegs(prev => prev.filter(l => l.marketId !== marketId))
-  }
-
-  async function placeParlay() {
-    if (readOnly) return
-    if (!playerId) return
-    if (parlayLegs.length < 2) { showToast('A parlay needs at least 2 legs', 'error'); return }
-    const wagerNum = parseInt(parlayWager, 10)
-    if (isNaN(wagerNum) || wagerNum < 10) { showToast('Minimum wager is 10 pins', 'error'); return }
-    if (wagerNum > balance) { showToast('Wager exceeds your balance', 'error'); return }
+  // ── Parlay (from the unified slip) ──────────────────────────────────────
+  // All selections sit at even money (2.000), so the fair combined odds of an
+  // N-leg parlay = 2^N and payout = floor(stake × 2^N). Push/void legs drop out
+  // at settlement (handled server-side), recomputing over the surviving legs.
+  async function placeParlay({ stake, insure, crutch, boost }: ParlaySubmit) {
+    if (readOnly || !playerId) return
+    if (slipPicks.length < 2) { showToast('A parlay needs at least 2 legs', 'error'); return }
+    if (stake < 10) { showToast('Minimum wager is 10 pins', 'error'); return }
+    if (stake > balance) { showToast('Wager exceeds your balance', 'error'); return }
 
     setPlacing(true)
     try {
       const { error } = await bets.place(
-        parlayLegs.map(l => l.selectionId), wagerNum, undefined,
-        insureBet ? tickets[0] : undefined, useCrutch ? crutches[0] : undefined,
-        useBoost ? boosts[0] : undefined)
+        slipPicks.map(p => p.selectionId), stake, undefined,
+        insure ? tickets[0] : undefined, crutch ? crutches[0] : undefined,
+        boost ? boosts[0] : undefined)
       if (error) { showToast(error.message, 'error'); return }
-      showToast(insureBet ? 'Parlay placed — Golden Ticket attached!' : 'Parlay placed!', 'success')
-      setParlayModalOpen(false)
-      setParlayLegs([])
-      setParlayWager('')
+      showToast(insure ? 'Parlay placed — Golden Ticket attached!' : 'Parlay placed!', 'success')
+      setSlipPicks([])
+      setSlipOpen(false)
       await Promise.all([reload(), reloadTickets()])
     } catch {
       showToast('Failed to place parlay', 'error')
@@ -433,9 +407,9 @@ export default function SportsbookScreen() {
   }
 
   // One subject row (≥1 markets → one button set), shared by the collapsible
-  // (O/U) and headerless (moneyline) section layouts. Single mode opens the
-  // wager sheet; parlay mode toggles the slip; an in-progress game makes every
-  // side inert. Each button binds its own (line, selection).
+  // (O/U) and headerless (moneyline) section layouts. Tapping a cell stages it
+  // in the unified slip (staged = filled); an in-progress game makes every side
+  // inert. Each button binds its own (line, selection).
   function renderLineSet(lines: LineView[], isLast: boolean, groupInProgress: boolean) {
     return (
       <LineRow
@@ -449,17 +423,11 @@ export default function SportsbookScreen() {
             : subjectRelation(weekTeams, lines[0].subjectPlayerId, lines[0].gameNumber)
         }
         inProgress={groupInProgress}
-        onSelect={(line, sel) =>
-          placeMode === 'parlay' ? toggleParlayLeg(line, sel) : onSingleSelect(line, sel)
-        }
-        selectionState={(line, sel) =>
-          placeMode === 'parlay'
-            ? {
-                selected: parlayLegs.some(l => l.selectionId === sel.selectionId),
-                disabled: isSelfTank(line, sel),
-              }
-            : { disabled: balance < 10 || isSelfTank(line, sel) }
-        }
+        onSelect={stagePick}
+        selectionState={(line, sel) => ({
+          selected: slipPicks.some(p => p.selectionId === sel.selectionId),
+          disabled: balance < 10 || isSelfTank(line, sel),
+        })}
       />
     )
   }
@@ -495,7 +463,7 @@ export default function SportsbookScreen() {
         contentContainerStyle={[
           styles.content,
           { paddingTop: insets.top },
-          effectiveView === 'place' && placeMode === 'parlay' && parlayLegs.length > 0 && { paddingBottom: 96 },
+          effectiveView === 'place' && slipPicks.length > 0 && { paddingBottom: 96 },
         ]}
         refreshControl={
           loading ? undefined : (
@@ -515,10 +483,15 @@ export default function SportsbookScreen() {
         >
         {readOnly && <ReadOnlySeasonBanner seasonNumber={seasonNumber} />}
 
-        {/* View toggle — hidden in past-season review (settled bets only). */}
+        {/* Always-visible balance (as on every other Pinsino screen) — hidden in
+            past-season review, where there's nothing to wager. */}
+        {!readOnly && <BalancePill balance={balance} />}
+
+        {/* View switcher — one full-width segmented control (Place/Active/Settled);
+            hidden in past-season review (settled bets only). */}
         {!readOnly && (
           <View style={styles.viewToggle}>
-            <ToggleGroup options={VIEW_OPTIONS} value={view} onChange={setView} />
+            <ToggleGroup variant="bar" options={VIEW_OPTIONS} value={view} onChange={setView} />
           </View>
         )}
 
@@ -535,20 +508,6 @@ export default function SportsbookScreen() {
 
         {/* ── Place Bets ──────────────────────────────────────── */}
         {effectiveView === 'place' && <>
-        {/* Single / Parlay mode */}
-        <View style={styles.modeToggle}>
-          <ToggleGroup
-            options={[{ key: 'single', label: 'Single' }, { key: 'parlay', label: 'Parlay' }]}
-            value={placeMode}
-            onChange={(m: PlaceMode) => setPlaceMode(m)}
-          />
-        </View>
-        {placeMode === 'parlay' && (
-          <Text style={[styles.adminHint, { textAlign: 'center' }]}>
-            Tap lines to add legs · all must win · odds double with each leg
-          </Text>
-        )}
-
         {/* Open lines — the board starts straight at its WEEKLY/GAME labels
             (no "this week" section header; that's implicit in the Sportsbook). */}
         {lineGroups.length > 0 || topSpecials.length > 0 ? (
@@ -595,12 +554,10 @@ export default function SportsbookScreen() {
                 ...categories.flatMap(({ rows }) =>
                   rows.map(row => ({
                     key: row.key,
-                    // Keep a subject's row visible while collapsed if any of
-                    // its lines is in the parlay slip — lets players build
-                    // across collapsed games.
-                    pinned:
-                      placeMode === 'parlay' &&
-                      row.lines.some(l => parlayLegs.some(leg => leg.marketId === l.marketId)),
+                    // Keep a subject's row visible while collapsed if any of its
+                    // lines is staged in the slip — lets players build across
+                    // collapsed games.
+                    pinned: row.lines.some(l => slipPicks.some(p => p.marketId === l.marketId)),
                     render: (isLast: boolean) =>
                       renderLineSet(
                         row.lines,
@@ -622,9 +579,9 @@ export default function SportsbookScreen() {
                   <LineRowContainer
                     title={title}
                     count={lineCount}
-                    // Every group starts as a collapsed summary bar — the
-                    // board opens as a stack of headers over the poker table.
-                    defaultCollapsed
+                    // The first live group opens; the rest start collapsed as
+                    // summary bars over the poker table.
+                    defaultCollapsed={group.key !== firstOpenGroupKey}
                     disabled={gameInProgress}
                     rows={containerRows}
                   />
@@ -645,112 +602,23 @@ export default function SportsbookScreen() {
         </ScreenBackdrop>
       </ScrollView>
 
-      {/* Parlay bet slip (sticky) */}
-      {effectiveView === 'place' && placeMode === 'parlay' && parlayLegs.length > 0 && (
-        <View style={styles.slipBar}>
-          <View style={styles.slipInfo}>
-            <Text style={styles.slipTitle}>
-              {parlayLegs.length}-LEG PARLAY · ×{parlayOdds}
-            </Text>
-            <Text style={styles.slipSub} numberOfLines={1}>
-              {parlayLegs.map(l => `${l.subjectName} ${l.selectionLabel.toUpperCase()}`).join(' · ')}
-            </Text>
-          </View>
-          <Button variant="ghost" label="Clear" onPress={() => setParlayLegs([])} style={styles.slipClear} />
-          <Button
-            label={parlayLegs.length < 2 ? 'Add 2+' : 'Build'}
-            onPress={() => { if (parlayLegs.length >= 2) { setInsureBet(false); setUseCrutch(false); setUseBoost(false); setParlayModalOpen(true) } }}
-            disabled={parlayLegs.length < 2}
-            style={styles.slipBuild}
-          />
-        </View>
-      )}
-
-      {/* Bet placement sheet (single) — pick toggle + live payout (WagerSheet). */}
-      {modal && (
-        <WagerSheet
-          title={`${modal.line.subjectName}${modal.line.gameNumber != null ? ` — Game ${modal.line.gameNumber}` : ''}`}
-          oddsPrefix={
-            modal.line.subtitle != null
-              ? `${modal.line.subtitle} · `
-              : modal.line.line != null
-                ? `LINE: ${modal.line.line.toFixed(1)} · `
-                : ''
-          }
-          odds={modal.line.selections.find(s => s.selectionId === modal.selectedId)?.odds ?? 2}
-          wager={modal.wager}
-          onChangeWager={wager => setModal(m => m ? { ...m, wager } : m)}
+      {/* Unified bet slip — persistent bar → placement sheet (singles/parlay). */}
+      {effectiveView === 'place' && !readOnly && slipPicks.length > 0 && (
+        <BetSlip
+          picks={slipPicks}
+          open={slipOpen}
+          onOpenChange={setSlipOpen}
+          onRemovePick={removeSlipPick}
+          onClear={() => { setSlipPicks([]); setSlipOpen(false) }}
           balance={balance}
-          ctaLabel="Place Bet"
-          onSubmit={placeBet}
-          boostPct={useBoost ? boostPct : undefined}
-          busy={placing}
-          onClose={() => setModal(null)}
-        >
-          <View style={styles.pickToggle}>
-            {modal.line.selections.map(sel => {
-              // Anti-tanking: can't back the side against your own performance.
-              const blocked = isSelfTank(modal.line, sel)
-              const active = modal.selectedId === sel.selectionId
-              return (
-                <TouchableOpacity
-                  key={sel.selectionId}
-                  style={[
-                    styles.pickToggleBtn,
-                    active && styles.pickToggleBtnActive,
-                    blocked && styles.pickToggleBtnDisabled,
-                  ]}
-                  onPress={() => {
-                    if (blocked) { showToast("Believe in yourself man", 'error'); return }
-                    setModal(m => m ? { ...m, selectedId: sel.selectionId } : m)
-                  }}
-                  activeOpacity={0.7}
-                >
-                  <Text style={[styles.pickToggleBtnText, active && styles.pickToggleBtnTextActive]}>
-                    {selectionButtonLabel(modal.line, sel)}
-                  </Text>
-                </TouchableOpacity>
-              )
-            })}
-          </View>
-          <GoldenTicketToggle ticketCount={tickets.length} enabled={insureBet} onToggle={setInsureBet} disabled={placing} />
-          <EnergyDrinkToggle boostCount={boosts.length} enabled={useBoost} onToggle={setUseBoost} disabled={placing} />
-        </WagerSheet>
-      )}
-
-      {/* Parlay confirm sheet — removable leg list + live payout. */}
-      {parlayModalOpen && (
-        <WagerSheet
-          title={`${parlayLegs.length}-Leg Parlay`}
-          oddsPrefix="ALL LEGS MUST WIN · "
-          odds={parlayOdds}
-          wager={parlayWager}
-          onChangeWager={setParlayWager}
-          balance={balance}
-          ctaLabel="Place Parlay"
-          onSubmit={placeParlay}
-          boostPct={useBoost ? boostPct : undefined}
-          busy={placing}
-          onClose={() => setParlayModalOpen(false)}
-        >
-          <View style={styles.parlayLegList}>
-            {parlayLegs.map(leg => (
-              <View key={leg.marketId} style={styles.parlayLegRow}>
-                <Text style={styles.parlayLegText} numberOfLines={1}>
-                  {leg.subjectName} · {leg.selectionLabel.toUpperCase()}
-                  {betLineSuffix(leg.marketType, leg.line, leg.statKey)}
-                  {leg.gameNumber != null ? ` · G${leg.gameNumber}` : ''}
-                </Text>
-                <TouchableOpacity onPress={() => removeParlayLeg(leg.marketId)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                  <Text style={styles.parlayLegRemove}>✕</Text>
-                </TouchableOpacity>
-              </View>
-            ))}
-          </View>
-          <GoldenTicketToggle ticketCount={tickets.length} enabled={insureBet} onToggle={setInsureBet} disabled={placing} />
-          <WinnersCrutchToggle crutchCount={crutches.length} enabled={useCrutch} onToggle={setUseCrutch} disabled={placing} />
-          <EnergyDrinkToggle boostCount={boosts.length} enabled={useBoost} onToggle={setUseBoost} disabled={placing} />
-        </WagerSheet>
+          placing={placing}
+          ticketCount={tickets.length}
+          crutchCount={crutches.length}
+          boostCount={boosts.length}
+          boostPct={boostPct}
+          onPlaceSingles={placeSingles}
+          onPlaceParlay={placeParlay}
+        />
       )}
 
       {/* Custom line ("special") take sheet — read-only leg list + live payout. */}
@@ -867,41 +735,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
 
-  modeToggle: { marginBottom: 12 },
-
-  // Parlay sticky slip
-  slipBar: {
-    position: 'absolute',
-    left: 12,
-    right: 12,
-    bottom: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    backgroundColor: colors.surface2,
-    borderRadius: radius.cardMd,
-    borderWidth: 1,
-    borderColor: colors.accent,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-  },
-  slipInfo: { flex: 1 },
-  slipTitle: {
-    fontFamily: fonts.barlowCondensedHeavy,
-    fontSize: 15,
-    color: colors.accent,
-    letterSpacing: 0.5,
-  },
-  slipSub: {
-    fontFamily: fonts.barlowCondensed,
-    fontSize: 12,
-    color: colors.muted,
-    marginTop: 1,
-  },
-  slipClear: { paddingHorizontal: 10, paddingVertical: 8 },
-  slipBuild: { paddingHorizontal: 16, paddingVertical: 10 },
-
-  // Parlay confirm modal leg list
+  // Special ("take") sheet leg list — read-only leg rows.
   parlayLegList: { marginBottom: 16 },
   parlayLegRow: {
     flexDirection: 'row',
@@ -925,44 +759,4 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     color: colors.muted,
   },
-  parlayLegRemove: {
-    fontFamily: fonts.barlowCondensed,
-    fontSize: 15,
-    color: colors.danger,
-  },
-
-  adminHint: {
-    fontFamily: fonts.barlow,
-    fontSize: 12,
-    color: colors.muted,
-    fontStyle: 'italic',
-    marginBottom: 10,
-  },
-
-  // Bet sheet pick toggle (body passed into WagerSheet)
-  pickToggle: {
-    flexDirection: 'row',
-    gap: 10,
-    marginBottom: 20,
-  },
-  pickToggleBtn: {
-    flex: 1,
-    paddingVertical: 12,
-    borderRadius: radius.cardSm,
-    borderWidth: 1,
-    borderColor: colors.border2,
-    alignItems: 'center',
-  },
-  pickToggleBtnActive: {
-    backgroundColor: colors.accentDim,
-    borderColor: colors.accent,
-  },
-  pickToggleBtnDisabled: { borderColor: colors.border2, opacity: 0.4 },
-  pickToggleBtnText: {
-    fontFamily: fonts.barlowCondensed,
-    fontSize: 16,
-    color: colors.muted,
-    letterSpacing: 1,
-  },
-  pickToggleBtnTextActive: { color: colors.accent },
 })
