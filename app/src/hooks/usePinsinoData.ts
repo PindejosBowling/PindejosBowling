@@ -74,7 +74,9 @@ export function selectionButtonLabel(line: LineView, sel: SelectionView): string
     const what =
       line.marketType === 'prop' || line.marketType === 'team_prop'
         ? line.statKey ? STAT_LABELS[line.statKey] ?? line.statKey : null
-        : line.marketType === 'over_under' ? 'Pins' : null
+        // Score lines: a game row reads "PINS"; the night line matches the
+        // team row's "TOTAL PINS" wording (it IS the night total).
+        : line.marketType === 'over_under' ? (line.gameNumber != null ? 'Pins' : 'Total Pins') : null
     return `${threshold.toFixed(1)}+${what ? ` ${what.toUpperCase()}` : ''}`
   }
   return (sel.label || sel.key).toUpperCase()

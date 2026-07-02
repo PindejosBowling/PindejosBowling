@@ -175,10 +175,11 @@ export default function SportsbookScreen() {
       l.marketType === 'moneyline' ? -1
         : l.marketType === 'over_under' ? 0
           : l.marketType === 'prop'
-            // Same stat order at both scopes, so game and night rows read
-            // alike: PINS · STRIKES · SPARES · CLEAN FRAMES. (first_ball_avg
-            // is retired for new markets — legacy lines sink to the row's end.)
-            ? 1 + ['strikes', 'spares', 'clean_frames'].indexOf(l.statKey ?? '')
+            // One stat order everywhere — player and team rows alike read
+            // PINS · CLEAN FRAMES · STRIKES · SPARES (the score line is the
+            // player row's "total pins"). (first_ball_avg is retired for new
+            // markets — legacy lines sink to the row's end.)
+            ? 1 + ['clean_frames', 'strikes', 'spares'].indexOf(l.statKey ?? '')
             : l.marketType === 'team_prop'
               ? 1 + ['total_pins', 'clean_frames', 'strikes', 'spares'].indexOf(l.statKey ?? '')
               : 9

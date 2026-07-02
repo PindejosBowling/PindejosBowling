@@ -70,7 +70,12 @@ export default function LineRow({ lines, isLast, relation, inProgress, selection
             return (
               <TouchableOpacity
                 key={sel.selectionId}
-                style={[styles.pickBtn, st.selected && styles.pickBtnSelected, dim && styles.pickBtnDisabled]}
+                style={[
+                  styles.pickBtn,
+                  stacked && styles.pickBtnGridItem,
+                  st.selected && styles.pickBtnSelected,
+                  dim && styles.pickBtnDisabled,
+                ]}
                 onPress={pressable ? () => onSelect!(line, sel) : undefined}
                 disabled={!pressable}
                 activeOpacity={0.7}
@@ -151,6 +156,12 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.04)',
     alignItems: 'center',
   },
+  // Stacked rows lay the buttons as a uniform two-per-line grid: every cell
+  // the same width, each line spanning the full row. Content-sized cells made
+  // wrapped lines ragged (3 wide + 1 narrow), which read as off-center; equal
+  // cells keep the set symmetric under the centered name. An odd last button
+  // stays half-width and centers via the container's justifyContent.
+  pickBtnGridItem: { flexGrow: 1, flexBasis: '40%', maxWidth: '48%' },
   pickBtnDisabled: { borderColor: colors.border2, backgroundColor: 'transparent', opacity: 0.4 },
   pickBtnSelected: { backgroundColor: colors.accent, borderColor: colors.accent },
   pickBtnText: {
