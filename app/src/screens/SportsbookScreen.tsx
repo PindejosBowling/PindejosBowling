@@ -29,6 +29,7 @@ import {
   usePinsinoData,
   selectionBetsAgainstSubject,
   customLineSelfTank,
+  customLegLabel,
   lineGroup,
   lineCategory,
   closedBettingNote,
@@ -323,11 +324,7 @@ export default function SportsbookScreen() {
     if (customLineSelfTank(line, playerId)) { showToast('Believe in yourself man', 'error'); return }
     setSlipSpecials(prev => {
       if (prev.some(s => s.key === line.id)) return prev.filter(s => s.key !== line.id)
-      const summary = line.legs.map(leg =>
-        `${leg.subjectName} · ${leg.pick.toUpperCase()}` +
-        (leg.marketType === 'over_under' && leg.line != null ? ` ${leg.line.toFixed(1)}` : '') +
-        (leg.gameNumber != null ? ` · G${leg.gameNumber}` : '')
-      ).join('  ·  ')
+      const summary = line.legs.map(customLegLabel).join('  ·  ')
       return [...prev, {
         key: line.id,
         lineId: line.lineId,
