@@ -12,31 +12,6 @@ export type Database = {
   __InternalSupabase: {
     PostgrestVersion: "14.5"
   }
-  graphql_public: {
-    Tables: {
-      [_ in never]: never
-    }
-    Views: {
-      [_ in never]: never
-    }
-    Functions: {
-      graphql: {
-        Args: {
-          extensions?: Json
-          operationName?: string
-          query?: string
-          variables?: Json
-        }
-        Returns: Json
-      }
-    }
-    Enums: {
-      [_ in never]: never
-    }
-    CompositeTypes: {
-      [_ in never]: never
-    }
-  }
   public: {
     Tables: {
       activity_event_catalog: {
@@ -2817,9 +2792,10 @@ export type Database = {
         Args: { p_player_id: string }
         Returns: {
           clean_frames_per_game: number
-          first_ball_avg_line: number
           spares_line: number
+          spares_per_game: number
           strikes_line: number
+          strikes_per_game: number
         }[]
       }
       my_bid_amount: { Args: { p_auction_id: string }; Returns: number }
@@ -2864,6 +2840,10 @@ export type Database = {
           p_stake: number
         }
         Returns: string
+      }
+      player_raw_avg_score: {
+        Args: { p_player_id: string; p_season_id: string }
+        Returns: number
       }
       playoff_create_draft: {
         Args: {
@@ -3008,7 +2988,20 @@ export type Database = {
         Args: { p_extra_games?: number[]; p_week_id: string }
         Returns: undefined
       }
+      sync_team_prop_markets_for_week: {
+        Args: { p_week_id: string }
+        Returns: undefined
+      }
       take_loan: { Args: { p_loan_product_id: string }; Returns: string }
+      team_prop_seed_line: {
+        Args: {
+          p_n_games?: number
+          p_season_id: string
+          p_stat: string
+          p_team_id: string
+        }
+        Returns: number
+      }
       unarchive_week: {
         Args: { p_force?: boolean; p_week_id: string }
         Returns: undefined
@@ -3170,9 +3163,6 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
-  graphql_public: {
-    Enums: {},
-  },
   public: {
     Enums: {},
   },

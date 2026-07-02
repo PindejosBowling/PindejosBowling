@@ -441,38 +441,50 @@ export const betMarkets = {
       .in('status', ['open', 'closed'])
       .order('game_number')
       .order('title'),
-  // Unsettled LaneTalk prop markets across ALL weeks — the import screen groups
+  // Unsettled LaneTalk-clock markets across ALL weeks — the import screen groups
   // these by week to surface its "Confirm LaneTalk Data" button. These ride a
-  // separate settlement clock from archive (data lands the next day).
+  // separate settlement clock from archive (data lands the next day). Covers
+  // both player props (source=lanetalk) and lanetalk-clock team props — the
+  // Confirm RPC settles both, so the badge must count both.
   listUnsettledLanetalkProps: () =>
     supabase
       .from('bet_markets')
       .select('id, week_id, game_number, subject_player_id, params, status, title')
-      .eq('market_type', 'prop')
-      .eq('params->>source', 'lanetalk')
+      .or('and(market_type.eq.prop,params->>source.eq.lanetalk),and(market_type.eq.team_prop,params->>clock.eq.lanetalk)')
       .in('status', ['open', 'closed']),
-  // Week ids that have settled LaneTalk props — pairs with
+  // Week ids that have settled LaneTalk-clock markets — pairs with
   // listUnsettledLanetalkProps so the import screen can mark a week Confirmed
   // (settled, none pending) vs Unconfirmed (some pending) vs no badge (no props).
   listSettledLanetalkPropWeeks: () =>
     supabase
       .from('bet_markets')
       .select('week_id')
-      .eq('market_type', 'prop')
-      .eq('params->>source', 'lanetalk')
+      .or('and(market_type.eq.prop,params->>source.eq.lanetalk),and(market_type.eq.team_prop,params->>clock.eq.lanetalk)')
       .eq('status', 'settled'),
   // Start/reopen a game's betting: flip every O/U market for a week+game between
   // 'open' and 'closed' in one admin write. Closing blocks new bets (place_house_bet
   // rejects non-open selections) but leaves settlement intact (settle_betting_for_week
   // settles any market with status <> 'settled').
-  setOUStatusByWeekGame: (weekId: string, gameNumber: number, status: 'open' | 'closed') =>
-    supabase
+  // Night total-pins O/U markets (game_number null) ride game 1's toggle, like
+  // the night stat props — once the night's bowling starts, night betting closes.
+  setOUStatusByWeekGame: async (weekId: string, gameNumber: number, status: 'open' | 'closed') => {
+    const from = status === 'closed' ? 'open' : 'closed'
+    const res = await supabase
       .from('bet_markets')
       .update({ status })
       .eq('week_id', weekId)
       .eq('market_type', 'over_under')
       .eq('game_number', gameNumber)
-      .eq('status', status === 'closed' ? 'open' : 'closed'),
+      .eq('status', from)
+    if (res.error || gameNumber !== 1) return res
+    return supabase
+      .from('bet_markets')
+      .update({ status })
+      .eq('week_id', weekId)
+      .eq('market_type', 'over_under')
+      .is('game_number', null)
+      .eq('status', from)
+  },
   // Same open/close toggle for a week+game's moneyline markets (run alongside the
   // O/U toggle when a game starts/reopens — both close so the board goes inert).
   setMoneylineStatusByWeekGame: (weekId: string, gameNumber: number, status: 'open' | 'closed') =>
@@ -505,18 +517,39 @@ export const betMarkets = {
       .is('game_number', null)
       .eq('status', from)
   },
+  // Same open/close toggle for a week+game's team-prop markets (run alongside
+  // the other toggles when a game starts/reopens). Night-scoped team props
+  // (game_number null) ride game 1's toggle, like the night player props.
+  setTeamPropStatusByWeekGame: async (weekId: string, gameNumber: number, status: 'open' | 'closed') => {
+    const from = status === 'closed' ? 'open' : 'closed'
+    const res = await supabase
+      .from('bet_markets')
+      .update({ status })
+      .eq('week_id', weekId)
+      .eq('market_type', 'team_prop')
+      .eq('game_number', gameNumber)
+      .eq('status', from)
+    if (res.error || gameNumber !== 1) return res
+    return supabase
+      .from('bet_markets')
+      .update({ status })
+      .eq('week_id', weekId)
+      .eq('market_type', 'team_prop')
+      .is('game_number', null)
+      .eq('status', from)
+  },
   // Reopen every closed O/U line for a week. Clear Matchups returns the week to a
   // pre-game state, so Start Game's betting suspension must not survive the reset —
   // surviving lines (both players still RSVP'd in) would otherwise be stranded
   // unbettable with no games row left to expose the reopen toggle.
-  // Covers stat props too — they suspend with the games, so the reset must
-  // reopen them alongside the O/U lines.
+  // Covers stat props and team props too — they suspend with the games, so the
+  // reset must reopen them alongside the O/U lines.
   reopenOUForWeek: (weekId: string) =>
     supabase
       .from('bet_markets')
       .update({ status: 'open' })
       .eq('week_id', weekId)
-      .in('market_type', ['over_under', 'prop'])
+      .in('market_type', ['over_under', 'prop', 'team_prop'])
       .eq('status', 'closed'),
   // Create/refund of O/U markets (SECURITY DEFINER, server-side). Line ownership:
   // RSVP owns the lines until the week has teams; the roster (team_slots) owns

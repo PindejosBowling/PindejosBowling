@@ -57,8 +57,8 @@ export const STAT_LABELS: Record<string, string> = {
   clean_frames: 'Clean Frames',
   // team_prop only — the team's summed pinfall for a game.
   total_pins: 'Total Pins',
-  // Retired for new markets (replaced by clean_frames) — kept so settled
-  // history renders its label.
+  // Retired for new markets (clean_pct replaced by clean_frames; first_ball_avg
+  // dropped as a bettable line) — kept so settled history renders its label.
   clean_pct: 'Clean %',
   first_ball_avg: 'First-Ball Avg',
 }
@@ -110,9 +110,10 @@ export function marketGroup(gameNumber: number | null, marketType: string): Line
   if (gameNumber != null) {
     return { key: `game-${gameNumber}`, label: `GAME ${gameNumber}`, sortOrder: gameNumber }
   }
-  // Night-scoped stat props (no single game, settled over the whole night)
+  // Night-scoped markets — player stat props, team props, and the player
+  // night total-pins O/U (no single game, settled over the whole night) —
   // lead the board, above the game groups (game numbers start at 1).
-  if (marketType === 'prop') {
+  if (marketType === 'prop' || marketType === 'team_prop' || marketType === 'over_under') {
     return { key: 'weekly', label: 'WEEKLY', sortOrder: 0 }
   }
   // Season-long / futures markets (no game scope) collect at the end.
@@ -136,17 +137,26 @@ export interface LineCategory {
 export function lineCategory(line: LineView): LineCategory {
   switch (line.marketType) {
     case 'moneyline':
+      return { key: 'player_ou', label: 'Player Overs', sortOrder: 1 }
     case 'team_prop':
       // Team lines live INSIDE the game listing alongside the player rows: a
       // team's moneyline (viewer's team only — toYourTeamMoneyline) and its
       // team_prop stat lines consolidate into ONE row (rowKey = teamId) shown
       // above that team's player rows (the screen's team-block sorting).
-      return { key: 'player_ou', label: 'Player Overs', sortOrder: 1 }
+      // Night team props (no game number) join the WEEKLY group's night
+      // section instead, consolidating per team the same way.
+      return line.gameNumber != null
+        ? { key: 'player_ou', label: 'Player Overs', sortOrder: 1 }
+        : { key: 'night_props', label: 'Night Props', sortOrder: 0 }
     case 'over_under':
       // Only the "over" side is bettable in the UI (the "under" is hidden — see
       // SportsbookScreen / context/betting-line-board.md), so the section reads
-      // "Player Overs" rather than "Player Over/Unders".
-      return { key: 'player_ou', label: 'Player Overs', sortOrder: 1 }
+      // "Player Overs" rather than "Player Over/Unders". The night total-pins
+      // O/U (no game number) joins the WEEKLY group's night section, leading
+      // its player's consolidated night row.
+      return line.gameNumber != null
+        ? { key: 'player_ou', label: 'Player Overs', sortOrder: 1 }
+        : { key: 'night_props', label: 'Night Props', sortOrder: 0 }
     case 'prop':
       // LaneTalk stat lines: per-game strike/spare props share the score O/U's
       // "Player Overs" section (one collapsible menu per game); night-level

@@ -81,27 +81,32 @@ The **"under" side of player O/U lines is intentionally not bettable** from the 
 
 ### LaneTalk stat props (the third consumer)
 
-**LaneTalk stat lines** (strikes/spares O/U per game, clean% + first-ball avg O/U per night; `market_type='prop'`, `params.stat`/`params.scope`) render through the stack with zero new row components — full feature doc: [lanetalk-stat-bets.md](lanetalk-stat-bets.md). Board specifics:
+**LaneTalk stat lines** (strikes + spares + clean frames O/U at BOTH scopes — per game and per night — since the 2026-07-01 standardization; first-ball avg retired for new markets; `market_type='prop'`, `params.stat`/`params.scope`) render through the stack with zero new row components — full feature doc: [lanetalk-stat-bets.md](lanetalk-stat-bets.md). Board specifics:
 
 - **Fetch:** `betMarkets.listActivePropByWeek` merged into `openLines` alongside O/U + moneyline.
 - **`LineView.statKey`** (from `params.stat`) — the full condition renders in the pick button (`4.5+ STRIKES`, via `selectionButtonLabel`); prop rows carry no subtitle.
-- **Grouping:** per-game props share the score O/U's `Player Overs` category (one collapsible menu per game); night props (`gameNumber == null`) → a `Night Props` category under a new **`WEEKLY`** outer group that leads the board, above the game groups (week-level specials render inside it rather than under their own duplicate `WEEKLY` header).
+- **Grouping:** per-game props share the score O/U's `Player Overs` category (one collapsible menu per game); night props (`gameNumber == null`) → a `Night Props` category under a new **`WEEKLY`** outer group that leads the board, above the game groups (week-level specials render inside it rather than under their own duplicate `WEEKLY` header). The **player night total-pins O/U** (`market_type='over_under'`, `game_number` null, `params.scope='night'` — settled at archive from Σ the player's scores, NOT a LaneTalk market) joins the same night row, so game and night player rows read alike: `PINS · STRIKES · SPARES · CLEAN FRAMES` (one `kindOrder` stat list at both scopes; `marketGroup`/`lineCategory` route null-game over_unders to WEEKLY/`night_props`).
 - **Anti-tank + under-hide:** `selectionBetsAgainstSubject('prop','under') → true`, and `isSelectionHiddenInUI` hides the prop under exactly like the score O/U under (same social policy, same trivial revert).
-- **Open/close:** props ride the game toggles (`setPropStatusByWeekGame`); closing game 1 also closes the night markets; `reopenOUForWeek` reopens props too.
+- **Open/close:** props ride the game toggles (`setPropStatusByWeekGame`); closing game 1 also closes the night markets (incl. the night total-pins O/U via `setOUStatusByWeekGame`'s null-game branch); `reopenOUForWeek` reopens props too.
 - **Placed-bet surfaces** (`BetRow`, `BetDetailModal`, `SettleBetModal`, `LedgerRow`) render the shared `betLineSuffix` helper ("OVER 4.5 STRIKES"); `LegView`/`BetView` carry `statKey`.
 
 ### Team-aggregate props (the fourth consumer)
 
-**Team props** (team total pins / clean frames / strikes / spares per game;
-`market_type='team_prop'`, `params={stat, team_id, team_number, clock}`) render
-through the stack with zero new row components. Board specifics:
+**Team props** (team total pins / clean frames / strikes / spares — per game
+AND per night since the 2026-07-01 standardization;
+`market_type='team_prop'`, `params={stat, scope, team_id, team_number, clock}`)
+render through the stack with zero new row components. Night team markets have
+`game_number` and `subject_game_id` **null** (the first team_props with no game
+anchor — `sync_team_prop_markets_for_week` prunes them by week-team membership
+instead of the games cascade). Board specifics:
 
 - **Fetch:** `betMarkets.listActiveTeamPropByWeek` merged into `openLines` alongside O/U + moneyline + props.
 - **Subject = a team.** `subject_game_id` anchors the matchup (like moneyline) and `params.team_id` picks the side; `subject_player_id` is null, so `normalizeMarket` labels the row `Team N` from `params.team_number` — relabeled **"Your Team"** in the hook's board-build loop when `params.team_id` is the viewer's week team. Every team's lines are shown (not just the viewer's — unlike the moneyline reduction).
-- **Grouping — team rows live inside the game listing, no separate section.** `lineCategory` maps both `team_prop` and `moneyline` into `player_ou`, and `toYourTeamMoneyline` stamps `teamId` on the reshaped WIN row, so a team's moneyline + four stat markets consolidate into ONE row (`rowKey = line.teamId`): **"Your Team" — `WIN · 612.5+ TOTAL PINS · 9.5+ CLEAN FRAMES · …`** (moneyline first via `kindOrder`, then total_pins → clean_frames → strikes → spares; labels via the shared `STAT_LABELS`/`selectionButtonLabel`). Opponent team rows have no WIN button (own-team-only moneyline policy). The screen's team-block sort puts **each team's row above that team's player rows** (viewer's team block first). Row tint: green for the viewer's team, red for the game's opponent (keyed off `teamId` directly, not `subjectRelation`).
+- **Grouping — team rows live inside the game listing, no separate section.** `lineCategory` maps `moneyline` and per-game `team_prop` into `player_ou`, and `toYourTeamMoneyline` stamps `teamId` on the reshaped WIN row, so a team's moneyline + four stat markets consolidate into ONE row (`rowKey = line.teamId`): **"Your Team" — `WIN · 612.5+ TOTAL PINS · 9.5+ CLEAN FRAMES · …`** (moneyline first via `kindOrder`, then total_pins → clean_frames → strikes → spares; labels via the shared `STAT_LABELS`/`selectionButtonLabel`). Opponent team rows have no WIN button (own-team-only moneyline policy). The screen's team-block sort puts **each team's row above that team's player rows** (viewer's team block first). Row tint: green for the viewer's team, red for the game's opponent (keyed off `teamId` directly, not `subjectRelation`). **Night team props** (`gameNumber == null`) map to `night_props` instead (and `marketGroup` sends null-game team_props to `WEEKLY`, not `SEASON`), so each team gets ONE consolidated night row in the WEEKLY group above the night player rows; the red "against" tint keys off the team opposing the viewer in ANY of the night's games.
 - **Anti-tank + under-hide:** `selectionBetsAgainstSubject('team_prop','under') → true`; `isSelectionHiddenInUI` hides the team under like the player unders (same social policy). `isSelfTank` blocks the viewer backing their **own team's** under (`teamId === weekTeams.myTeamId`); the DB `prevent_self_tank` team branch is the authoritative backstop (any non-fill roster membership on `params.team_id`).
 - **Placed-bet surfaces** reuse `betLineSuffix` (`OVER 612.5 TOTAL PINS`) — `team_prop` is in its market-type gate alongside `prop`.
-- **Two settlement clocks** (DB concern, invisible to the board): `total_pins` settles at archive; the frame stats settle on the LaneTalk clock. See [archive-and-settlement.md](archive-and-settlement.md) §3.
+- **Open/close:** team props ride the game toggles (`setTeamPropStatusByWeekGame`, called alongside the O/U/moneyline/prop toggles); closing game 1 also closes the night team markets; `reopenOUForWeek` reopens team props too.
+- **Two settlement clocks** (DB concern, invisible to the board): `total_pins` settles at archive (night total_pins = Σ the team's scores across the whole night); the frame stats settle on the LaneTalk clock via `settle_lanetalk_props_for_week` (game + night scope). See [archive-and-settlement.md](archive-and-settlement.md) §3 and [lanetalk-stat-bets.md](lanetalk-stat-bets.md).
 
 ### Recipe — adding a new market type to the board
 

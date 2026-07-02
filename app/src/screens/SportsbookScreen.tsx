@@ -175,7 +175,10 @@ export default function SportsbookScreen() {
       l.marketType === 'moneyline' ? -1
         : l.marketType === 'over_under' ? 0
           : l.marketType === 'prop'
-            ? 1 + ['strikes', 'spares', 'clean_pct', 'first_ball_avg'].indexOf(l.statKey ?? '')
+            // Same stat order at both scopes, so game and night rows read
+            // alike: PINS · STRIKES · SPARES · CLEAN FRAMES. (first_ball_avg
+            // is retired for new markets — legacy lines sink to the row's end.)
+            ? 1 + ['strikes', 'spares', 'clean_frames'].indexOf(l.statKey ?? '')
             : l.marketType === 'team_prop'
               ? 1 + ['total_pins', 'clean_frames', 'strikes', 'spares'].indexOf(l.statKey ?? '')
               : 9
@@ -407,11 +410,14 @@ export default function SportsbookScreen() {
           lines[0].marketType === 'moneyline'
             ? 'with'
             : lines[0].teamId != null
-              // Team-prop rows relate by their anchored team directly.
+              // Team-prop rows relate by their anchored team directly; a night
+              // team row (no game) reads "against" if that team opposes the
+              // viewer in ANY of the night's games.
               ? lines[0].teamId === weekTeams.myTeamId
                 ? 'with'
-                : lines[0].gameNumber != null &&
-                    weekTeams.opponentTeamByGame[lines[0].gameNumber] === lines[0].teamId
+                : (lines[0].gameNumber != null
+                    ? weekTeams.opponentTeamByGame[lines[0].gameNumber] === lines[0].teamId
+                    : Object.values(weekTeams.opponentTeamByGame).includes(lines[0].teamId))
                   ? 'against'
                   : null
               : subjectRelation(weekTeams, lines[0].subjectPlayerId, lines[0].gameNumber)
