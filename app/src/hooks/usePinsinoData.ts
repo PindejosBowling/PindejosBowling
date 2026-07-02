@@ -95,6 +95,24 @@ export function betLineSuffix(marketType: string, line: number | null, statKey?:
   return ''
 }
 
+// One resolved special leg as a display string — shared by the board row and
+// the bet-slip summary so every surface labels legs identically:
+// "Alice · OVER 4.5 STRIKES · G1", "Your Team · OVER 612.5 TOTAL PINS · NIGHT".
+// Declared before CustomLegView is defined, so typed structurally.
+export function customLegLabel(leg: {
+  subjectName: string
+  pick: string
+  marketType: string
+  line: number | null
+  statKey: string | null
+  gameNumber: number | null
+}): string {
+  const suffix = betLineSuffix(leg.marketType, leg.line, leg.statKey)
+  const where =
+    leg.gameNumber != null ? ` · G${leg.gameNumber}` : leg.marketType === 'moneyline' ? '' : ' · NIGHT'
+  return `${leg.subjectName} · ${leg.pick.toUpperCase()}${suffix}${where}`
+}
+
 // The section a line is bucketed under on the Place Bets board. Per-game markets
 // group by game number; markets with no game (season-long / futures) share one
 // group. New market kinds slot in here without the screen knowing their shape.
@@ -405,17 +423,28 @@ function toYourTeamMoneyline(line: LineView, myTeamId: string | null): LineView 
 // auto-generated markets; taking a special places an ordinary single/parlay via
 // bets.place. See context/betting-line-board.md.
 
-// One leg spec as stored in custom_lines.legs jsonb. A moneyline leg means
-// "the team containing player_id wins game_number" — anchored by player because
-// team ids don't persist across weeks. Two fields are relative-by-null:
+// One leg spec as stored in custom_lines.legs jsonb. Team-anchored legs
+// (moneyline, team_prop) mean "the team containing player_id" — anchored by
+// player because team ids don't persist across weeks. Two fields are
+// relative-by-null:
 //  • player_id null = THE BETTOR (self-referential): the subject is whoever
 //    takes the bet, so the line resolves per-viewer ("you beat your over").
-//  • game_number null = EVERY GAME: the line materializes once per game that
-//    week, each instance binding its null-game legs to that game ("the bettor
-//    bowls their over in this game" → one offering in each game's group).
+//  • game_number null at game scope = EVERY GAME: the line materializes once
+//    per game that week, each instance binding its null-game legs to that game
+//    ("the bettor bowls their over in this game" → one offering per game group).
+// Legacy rows (created before props/team props) carry only kind/player_id/
+// game_number/pick — a missing scope always reads as 'game', so night lines are
+// reachable only via an explicit scope:'night' and legacy EACH semantics are
+// untouched. The creator emits only 'over'/'win' picks; 'under' survives in
+// old rows and still resolves.
 export interface CustomLegSpec {
-  kind: 'over_under' | 'moneyline'
+  kind: 'over_under' | 'moneyline' | 'prop' | 'team_prop'
   player_id: string | null
+  // Stat key for prop (strikes|spares|clean_frames) and team_prop
+  // (total_pins|clean_frames|strikes|spares) legs; absent otherwise.
+  stat?: string
+  // absent = legacy = 'game'. Night legs ignore game_number (always null).
+  scope?: 'game' | 'night'
   game_number: number | null
   pick: 'over' | 'under' | 'win'
 }
@@ -426,11 +455,12 @@ export interface CustomLegView {
   selectionId: string
   marketId: string
   marketType: string
-  subjectName: string          // O/U player name, or "<anchor>'s Team" for moneylines
+  subjectName: string          // O/U player name, or "<anchor>'s Team" for team legs
   subjectPlayerId: string | null
   pick: string                 // display label: 'Over' / 'Under' / 'Win'
   selectionKey: string         // raw side key ('over' / 'under' / a team uuid)
   line: number | null
+  statKey: string | null       // params.stat of the matched market (prop/team_prop)
   gameNumber: number | null
   odds: number
   inProgress: boolean          // this leg's market is closed for betting
@@ -491,24 +521,44 @@ function resolveCustomLine(
   for (const spec of specs) {
     const subjectId = spec.player_id ?? takerPlayerId
     if (!subjectId) return null
-    const legGame = spec.game_number ?? instanceGame
-    if (legGame == null) return null
+    // Night legs live on the null-game market; game legs bind a fixed number or
+    // the instance's game (EACH). Legacy specs have no scope → 'game'.
+    const scope = spec.scope ?? 'game'
+    const legGame = scope === 'night' ? null : (spec.game_number ?? instanceGame)
+    if (scope === 'game' && legGame == null) return null
     let line: LineView | undefined
     let sel: SelectionView | undefined
     let subjectName = ''
-    if (spec.kind === 'over_under') {
+    if (spec.kind === 'over_under' || spec.kind === 'prop') {
       line = rawLines.find(
-        l => l.marketType === 'over_under' && l.subjectPlayerId === subjectId && l.gameNumber === legGame
+        l =>
+          l.marketType === spec.kind &&
+          l.subjectPlayerId === subjectId &&
+          l.gameNumber === legGame &&
+          (spec.kind === 'prop' ? l.statKey === spec.stat : true)
       )
       sel = line?.selections.find(s => s.key === spec.pick)
       subjectName = spec.player_id == null ? 'You' : (line?.subjectName ?? '')
     } else {
+      // Team legs (moneyline win, team_prop stat): resolve the anchor player to
+      // their week team, then match that team's market.
       const slot = slotByPlayer.get(subjectId)
       if (!slot) return null
-      line = rawLines.find(
-        l => l.marketType === 'moneyline' && l.gameNumber === legGame && l.selections.some(s => s.key === slot.teamId)
-      )
-      sel = line?.selections.find(s => s.key === slot.teamId)
+      if (spec.kind === 'moneyline') {
+        line = rawLines.find(
+          l => l.marketType === 'moneyline' && l.gameNumber === legGame && l.selections.some(s => s.key === slot.teamId)
+        )
+        sel = line?.selections.find(s => s.key === slot.teamId)
+      } else {
+        line = rawLines.find(
+          l =>
+            l.marketType === 'team_prop' &&
+            l.teamId === slot.teamId &&
+            l.statKey === spec.stat &&
+            l.gameNumber === legGame
+        )
+        sel = line?.selections.find(s => s.key === spec.pick)
+      }
       subjectName = spec.player_id == null ? 'Your Team' : `${slot.playerName}'s Team`
     }
     if (!line || !sel) return null
@@ -523,6 +573,7 @@ function resolveCustomLine(
       pick: spec.kind === 'moneyline' ? 'Win' : sel.label,
       selectionKey: sel.key,
       line: sel.line,
+      statKey: line.statKey,
       gameNumber: line.gameNumber,
       odds: sel.odds,
       inProgress: line.inProgress,
@@ -778,7 +829,10 @@ export function usePinsinoData(playerId: string | null, viewSeasonId?: string | 
         rawLineViews.map(l => l.gameNumber).filter((g): g is number => g != null)
       )].sort((a, b) => a - b)
       const resolveInstances = (cl: any, taker: string | null): CustomLineView[] => {
-        const perGame = Array.isArray(cl.legs) && cl.legs.some((l: any) => l?.game_number == null)
+        // Only game-scope null-game legs mean EACH; night legs also carry a
+        // null game_number but resolve once (against the night market).
+        const perGame = Array.isArray(cl.legs) &&
+          cl.legs.some((l: any) => l?.game_number == null && (l?.scope ?? 'game') === 'game')
         const instances = perGame
           ? weekGameNumbers.map(g => resolveCustomLine(cl, rawLineViews, slotByPlayer, taker, g))
           : [resolveCustomLine(cl, rawLineViews, slotByPlayer, taker, null)]

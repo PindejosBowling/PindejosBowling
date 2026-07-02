@@ -29,6 +29,7 @@ import {
   usePinsinoData,
   selectionBetsAgainstSubject,
   customLineSelfTank,
+  customLegLabel,
   lineGroup,
   lineCategory,
   closedBettingNote,
@@ -260,15 +261,6 @@ export default function SportsbookScreen() {
     return { customByGame: byGame, topSpecials: top }
   }, [customLines, lineGroups])
 
-  // First non-in-progress group opens by default, so the board lands with live
-  // action visible instead of a wall of collapsed bars; the rest start collapsed.
-  const firstOpenGroupKey = useMemo(() => {
-    const g = lineGroups.find(grp =>
-      !(grp.group.key !== 'season' &&
-        grp.categories.some(({ rows }) => rows.some(r => r.lines.some(l => l.inProgress)))))
-    return g?.group.key
-  }, [lineGroups])
-
   // Anti-tanking, market-type-aware: backing the side that bets against your own
   // performance (the `under` on your own line, or on your own team's line) is
   // blocked. Friendly pre-check only — the prevent_self_tank trigger is the
@@ -323,11 +315,7 @@ export default function SportsbookScreen() {
     if (customLineSelfTank(line, playerId)) { showToast('Believe in yourself man', 'error'); return }
     setSlipSpecials(prev => {
       if (prev.some(s => s.key === line.id)) return prev.filter(s => s.key !== line.id)
-      const summary = line.legs.map(leg =>
-        `${leg.subjectName} · ${leg.pick.toUpperCase()}` +
-        (leg.marketType === 'over_under' && leg.line != null ? ` ${leg.line.toFixed(1)}` : '') +
-        (leg.gameNumber != null ? ` · G${leg.gameNumber}` : '')
-      ).join('  ·  ')
+      const summary = line.legs.map(customLegLabel).join('  ·  ')
       return [...prev, {
         key: line.id,
         lineId: line.lineId,
@@ -584,9 +572,9 @@ export default function SportsbookScreen() {
                   <LineRowContainer
                     title={title}
                     count={lineCount}
-                    // The first live group opens; the rest start collapsed as
-                    // summary bars over the poker table.
-                    defaultCollapsed={group.key !== firstOpenGroupKey}
+                    // Every group starts collapsed — the board lands as summary
+                    // bars over the poker table; players expand what they want.
+                    defaultCollapsed
                     disabled={gameInProgress}
                     rows={containerRows}
                   />

@@ -1,6 +1,6 @@
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native'
 import { colors, fonts } from '../../theme'
-import type { CustomLineView } from '../../hooks/usePinsinoData'
+import { customLegLabel, type CustomLineView } from '../../hooks/usePinsinoData'
 
 interface CustomLineRowProps {
   line: CustomLineView
@@ -33,11 +33,7 @@ export default function CustomLineRow({ line, isLast, inProgress, disabled, sele
           <Text style={styles.description} numberOfLines={2}>{line.description}</Text>
         )}
         {line.legs.map(leg => (
-          <Text key={leg.selectionId} style={styles.leg}>
-            {leg.subjectName} · {leg.pick.toUpperCase()}
-            {leg.marketType === 'over_under' && leg.line != null ? ` ${leg.line.toFixed(1)}` : ''}
-            {leg.gameNumber != null ? ` · G${leg.gameNumber}` : ''}
-          </Text>
+          <Text key={leg.selectionId} style={styles.leg}>{customLegLabel(leg)}</Text>
         ))}
       </View>
       <TouchableOpacity
