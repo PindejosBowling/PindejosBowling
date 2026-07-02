@@ -1,10 +1,14 @@
 # LaneTalk Stat Bets — frame-stat props on a second settlement clock
 
-Bet lines on LaneTalk frame stats: **strikes O/U + spares O/U per game**, and
-**night-level clean frames + first-ball avg O/U** — generated from imported
-**official** LaneTalk games and settled when the admin taps **"Confirm LaneTalk
-Data"** on the import screen. Archive runs night-of; LaneTalk data often lands
-the next day, so these bets ride a **separate settlement clock** from
+Bet lines on LaneTalk frame stats: **strikes + spares + clean frames O/U, both
+per game and night-level** (standardized 2026-07-01 — every scope carries the
+full stat range; **first-ball avg is retired as a bettable line**, kept only
+for settled history) — generated from imported **official** LaneTalk games and
+settled when the admin taps **"Confirm LaneTalk Data"** on the import screen.
+The same Confirm also settles **LaneTalk-clock team props**
+(`market_type='team_prop'`, `params.clock='lanetalk'` — game AND night scope);
+see the team-prop section below. Archive runs night-of; LaneTalk data often
+lands the next day, so these bets ride a **separate settlement clock** from
 `archive_week`.
 
 **Zero schema additions.** Every persisted record is an ordinary row in the
@@ -32,8 +36,10 @@ The four stats have **one money definition**: the SQL function
 | `clean_frames` | strikes + spares (a frame count; night = total across games) |
 | `first_ball_avg` | Σ first-ball pins (`throws->0->>'pins'`) / frames |
 
-(`clean_pct` — (strikes+spares)/frames×100 — is retired for new markets; the
-settle RPC still grades any pre-change market carrying it.)
+(`clean_pct` — (strikes+spares)/frames×100 — and `first_ball_avg` are retired
+for new markets; the settle RPC still grades any pre-change market carrying
+them, and the sync prunes only **betless** retired-stat markets so a live FBA
+bet rides to Confirm untouched.)
 
 The client mirror lives in
 [app/src/data/lanetalk/stats.ts](../app/src/data/lanetalk/stats.ts)
@@ -68,8 +74,17 @@ JSONB per resync anymore.
    - **Night markets**: frame-weighted aggregate across the player's official
      imports for the week, **only when their official-game count ≥ their
      scored-game count** (never settle a night stat off half a night); else missing.
-   - Data present → `settle_market_internal` (relaxed to
-     `IN ('over_under','prop')` — same over/under/push engine).
+   - **LaneTalk-clock team props** (since `…153000_standardize_betting_lines_settlement`,
+     which closed a gap — earlier comments claimed the Confirm settled these but
+     the loop only selected `market_type='prop'`): team value = **Σ official
+     imports of the team's NON-FILL roster** (the population `team_prop_seed_line`
+     prices and the anti-tank trigger guards; fills contribute nothing), for the
+     market's game (game scope) or the whole week (night scope). Complete-data
+     guard mirrors the player night guard: every non-fill roster player with a
+     recorded score (for that game / any game) must have covering official
+     imports, and ≥1 import must exist (an import-less team never settles at 0).
+   - Data present → `settle_market_internal` (accepts
+     `over_under`/`prop`/`team_prop` — same over/under/push engine).
    - Missing → left pending when `NOT p_void_missing`; else the market is
      **DELETEd** (the `refund_bets_before_market_delete` trigger refunds bets
      whole — see void semantics below).
@@ -111,10 +126,14 @@ sit alongside the `syncOUForWeek` belt-and-braces call sites. Idempotent.
   official-import history, frame-weighted (one game is sufficient). Syncs
   **reprice unbet open/closed markets** whose seeded line drifted after new
   imports; a line never moves under a placed bet.
-- **Rounding:** counts → `floor(avg)+0.5` clamped [0.5, 9.5] (no pushes);
-  night clean frames → `floor(avg-per-game × scheduled-games)+0.5` clamped
-  [0.5, 10·games−0.5] (no pushes); first-ball avg → `round(avg,1)` (a rare
-  push refunds normally).
+- **Scope matrix (standardized 2026-07-01):** strikes, spares, and clean
+  frames are all generated at **both** scopes — per game (`scope='game'`,
+  `game_number` set) and night (`scope='night'`, `game_number` null).
+- **Rounding:** per-game counts → `floor(avg)+0.5` clamped [0.5, 9.5]; night
+  counts → `floor(avg-per-game × scheduled-games)+0.5` clamped
+  [0.5, 10·games−0.5] (all frame counts max 10/game — the money definitions
+  count FRAMES, so a triple-strike 10th is one frame). No pushes anywhere.
+  Legacy `first_ball_avg` lines are frozen (the reprice CASE yields NULL).
 
 ## Board & bet surfaces
 
@@ -128,8 +147,11 @@ week-level specials' header). `LineView.statKey` carries the stat, and the pick 
 itself (`4.5+ STRIKES`, via `selectionButtonLabel` — all board bets are overs
 by definition; score lines read `142.5+ PINS`); **unders are UI-hidden**
 (same social policy + trivial revert as score O/U). Game start/stop toggles
-(`setPropStatusByWeekGame`) close a game's props with it; **closing game 1 also
-closes the night markets**; `reopenOUForWeek` reopens props too. Placed-bet
+(`setPropStatusByWeekGame` + `setTeamPropStatusByWeekGame`) close a game's
+props with it; **closing game 1 also closes the night markets (player AND
+team)**; `reopenOUForWeek` reopens props + team props too. The Confirm surface
+(`listUnsettledLanetalkProps` / `listSettledLanetalkPropWeeks`) matches both
+player props and lanetalk-clock team props via a PostgREST `or()`. Placed-bet
 surfaces render `betLineSuffix` ("OVER 4.5 STRIKES"); `SettleBetModal` keeps a
 manual enter-a-value escape hatch for props (decimals allowed) — systematic
 settlement is the Confirm RPC.

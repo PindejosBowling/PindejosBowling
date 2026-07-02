@@ -18,6 +18,12 @@ interface SettleBetModalProps {
   onSettled: () => void
 }
 
+// Sanity ceiling for the entered value: a single player game caps at 300;
+// aggregates (night totals, team pinfall) just get a generous bound.
+function valueCap(marketType: string, gameNumber: number | null): number {
+  return marketType === 'over_under' && gameNumber != null ? 300 : 9999
+}
+
 // over/under result from an actual value vs. the line (decimals allowed —
 // stat props settle on values like 62.5 clean% / 7.8 first-ball avg).
 function previewResult(value: string, line: number): string | null {
@@ -40,23 +46,24 @@ export default function SettleBetModal({ bet, onClose, onSettled }: SettleBetMod
   const isParlay = bet.legCount > 1
 
   async function settle() {
-    // Collect the unresolved legs. O/U and stat-prop legs need an entered value
-    // (this is the admin escape hatch — systematic prop settlement is the
-    // "Confirm LaneTalk Data" RPC); moneyline legs settle from the game's
-    // scores server-side (no input).
+    // Collect the unresolved legs. Every value-graded market (O/U, stat prop,
+    // team prop) needs an entered value (this is the admin escape hatch —
+    // systematic settlement is the archive / "Confirm LaneTalk Data" rails);
+    // only moneyline legs settle from the game's scores server-side (no input).
     const toSettle: { marketId: string; marketType: string; value?: number }[] = []
     for (let i = 0; i < bet.legs.length; i++) {
       const leg = bet.legs[i]
       if (leg.result != null) continue // already resolved — locked
-      if (leg.marketType === 'over_under' || leg.marketType === 'prop') {
+      if (leg.marketType === 'moneyline') {
+        toSettle.push({ marketId: leg.marketId, marketType: leg.marketType })
+      } else {
         const a = leg.marketType === 'prop' ? parseFloat(scores[i] ?? '') : parseInt(scores[i] ?? '', 10)
-        if (isNaN(a) || a < 0 || a > 300) {
-          showToast(`Enter a valid value (0–300) for ${leg.subjectName}`, 'error')
+        const max = valueCap(leg.marketType, leg.gameNumber)
+        if (isNaN(a) || a < 0 || a > max) {
+          showToast(`Enter a valid value (0–${max}) for ${leg.subjectName}`, 'error')
           return
         }
         toSettle.push({ marketId: leg.marketId, marketType: leg.marketType, value: a })
-      } else {
-        toSettle.push({ marketId: leg.marketId, marketType: leg.marketType })
       }
     }
 
@@ -97,7 +104,7 @@ export default function SettleBetModal({ bet, onClose, onSettled }: SettleBetMod
           ? `${bet.bettorName} · enter each leg's actual score`
           : bet.marketType === 'over_under'
             ? `LINE: ${bet.line.toFixed(1)}`
-            : bet.marketType === 'prop'
+            : bet.marketType === 'prop' || bet.marketType === 'team_prop'
               ? `${bet.statKey ? `${(STAT_LABELS[bet.statKey] ?? bet.statKey).toUpperCase()} · ` : ''}LINE: ${bet.line.toFixed(1)}`
               : 'Settles from game scores'
       }
@@ -118,12 +125,13 @@ export default function SettleBetModal({ bet, onClose, onSettled }: SettleBetMod
     >
       {bet.legs.map((leg, i) => {
         const settled = leg.result != null
-        const isOU = leg.marketType === 'over_under'
         const isProp = leg.marketType === 'prop'
-        // Both O/U and stat props take a manually entered value; props allow
-        // decimals (clean% / first-ball avg) and name the stat in the hint.
-        const needsValue = isOU || isProp
-        const statLabel = isProp && leg.statKey ? STAT_LABELS[leg.statKey] ?? leg.statKey : null
+        // Every value-graded market takes a manually entered value — only
+        // moneyline settles input-free. Props allow decimals (clean% /
+        // first-ball avg); stat-carrying legs name the stat in the hint.
+        const needsValue = leg.marketType !== 'moneyline'
+        const statLabel = leg.statKey ? STAT_LABELS[leg.statKey] ?? leg.statKey : null
+        const cap = valueCap(leg.marketType, leg.gameNumber)
         const value = scores[i] ?? ''
         const preview = needsValue ? previewResult(value, leg.line) : null
         return (
@@ -152,14 +160,14 @@ export default function SettleBetModal({ bet, onClose, onSettled }: SettleBetMod
                       : v.replace(/[^0-9]/g, ''),
                   }))}
                   keyboardType={isProp ? 'decimal-pad' : 'number-pad'}
-                  placeholder="0 – 300"
+                  placeholder={`0 – ${cap}`}
                   placeholderTextColor={colors.muted2}
-                  maxLength={isProp ? 5 : 3}
+                  maxLength={isProp ? 5 : 4}
                 />
                 <Text style={styles.wagerHint}>
                   {preview
                     ? `Result: ${preview} — resolves all bets on this line`
-                    : `${leg.subjectName}'s actual ${statLabel ? statLabel.toLowerCase() : 'score'}${leg.gameNumber != null ? ` for game ${leg.gameNumber}` : isProp ? ' for the night' : ''}`}
+                    : `${leg.subjectName}'s actual ${statLabel ? statLabel.toLowerCase() : leg.gameNumber != null ? 'score' : 'total pins'}${leg.gameNumber != null ? ` for game ${leg.gameNumber}` : ' for the night'}`}
                 </Text>
               </>
             ) : (

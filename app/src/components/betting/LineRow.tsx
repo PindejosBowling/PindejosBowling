@@ -36,10 +36,13 @@ interface LineRowProps {
 export default function LineRow({ lines, isLast, relation, inProgress, selectionState, onSelect }: LineRowProps) {
   const pressable = !inProgress && !!onSelect
   const first = lines[0]
-  // Player rows (overs + stat props) stack: name centered on its own row, the
-  // button set evenly spaced beneath. Team moneylines keep the original
-  // horizontal name-left / button-right presentation.
-  const stacked = first.marketType !== 'moneyline'
+  // Multi-button rows (player overs + stat props, team rows spanning WIN + the
+  // team stat lines) stack: name centered on its own row, the button set
+  // wrapping evenly beneath. Only a lone-button row (a bare moneyline WIN)
+  // keeps the horizontal name-left / button-right presentation — a row of one
+  // never needs to wrap.
+  const buttonCount = lines.reduce((n, l) => n + l.selections.length, 0)
+  const stacked = first.marketType !== 'moneyline' || buttonCount > 1
 
   return (
     <View
@@ -67,7 +70,12 @@ export default function LineRow({ lines, isLast, relation, inProgress, selection
             return (
               <TouchableOpacity
                 key={sel.selectionId}
-                style={[styles.pickBtn, st.selected && styles.pickBtnSelected, dim && styles.pickBtnDisabled]}
+                style={[
+                  styles.pickBtn,
+                  stacked && styles.pickBtnGridItem,
+                  st.selected && styles.pickBtnSelected,
+                  dim && styles.pickBtnDisabled,
+                ]}
                 onPress={pressable ? () => onSelect!(line, sel) : undefined}
                 disabled={!pressable}
                 activeOpacity={0.7}
@@ -134,25 +142,32 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
   },
-  // Fuller "odds cell": a filled surface tile with an accent border — a clearer,
-  // larger tap target than the old thin pill. Staged picks flip to a solid
-  // accent fill so the slip contents read at a glance.
+  // Fuller "odds cell": a filled surface tile — a clearer, larger tap target
+  // than the old thin pill. Quietly neutral at rest (soft white-alpha border +
+  // faint fill, so it reads as tappable without glare); staged picks flip to a
+  // solid accent fill so the slip contents read at a glance.
   pickBtn: {
     minWidth: 78,
     paddingHorizontal: 12,
     paddingVertical: 10,
     borderRadius: radius.cardSm,
     borderWidth: 1,
-    borderColor: colors.accent,
-    backgroundColor: colors.accentDim,
+    borderColor: 'rgba(255,255,255,0.22)',
+    backgroundColor: 'rgba(255,255,255,0.04)',
     alignItems: 'center',
   },
+  // Stacked rows lay the buttons as a uniform two-per-line grid: every cell
+  // the same width, each line spanning the full row. Content-sized cells made
+  // wrapped lines ragged (3 wide + 1 narrow), which read as off-center; equal
+  // cells keep the set symmetric under the centered name. An odd last button
+  // stays half-width and centers via the container's justifyContent.
+  pickBtnGridItem: { flexGrow: 1, flexBasis: '40%', maxWidth: '48%' },
   pickBtnDisabled: { borderColor: colors.border2, backgroundColor: 'transparent', opacity: 0.4 },
   pickBtnSelected: { backgroundColor: colors.accent, borderColor: colors.accent },
   pickBtnText: {
     fontFamily: fonts.barlowCondensed,
     fontSize: 13,
-    color: colors.accent,
+    color: 'rgba(240,240,240,0.85)',
     letterSpacing: 0.5,
   },
   pickBtnTextSelected: { color: colors.bg },

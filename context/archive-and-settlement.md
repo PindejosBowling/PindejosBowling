@@ -114,11 +114,12 @@ idempotency guard:
 | # | Step | What it does | Ledger writes | Re-run guard |
 |---|---|---|---|---|
 | a | **Score-credit mint** | One `score_credit` per real (non-fill) player per scored game — the economy's **only faucet** (no house counterpart) | `pin_ledger +score` (week-stamped) | `NOT EXISTS score_credit LIKE 'Week N %'` for the season |
-| b | **O/U settlement** | Each non-`settled` O/U market: subject's actual score → `settle_market_internal` (selection results → leg back/lay results → `finalize_bets_for_market`). **No score → market `closed`, no result** (its bets fall to step f) | win: `bet_payout` pair; push: `bet_refund` pair; loss: none (stake kept from placement) | markets reach `settled`; `settle_market_internal` returns early on `settled` |
+| b | **O/U settlement** | Each non-`settled` O/U market: subject's actual score → `settle_market_internal` (selection results → leg back/lay results → `finalize_bets_for_market`). **Night O/U markets** (`game_number` null — the player night total-pins line, since `…160000_player_night_pins_line`) grade on Σ the subject's non-fill scores across the week. **No score → market `closed`, no result** (its bets fall to step f) | win: `bet_payout` pair; push: `bet_refund` pair; loss: none (stake kept from placement) | markets reach `settled`; `settle_market_internal` returns early on `settled` |
 | c | **Moneyline settlement** | Each non-`settled` moneyline whose game has ≥1 score → `settle_moneyline_market_internal` (higher combined team total wins; tie = push; a side with zero scores totals 0). **Zero scores in the game → `closed`** | same as (b) | same as (b) |
+| c′ | **Team-prop `total_pins` settlement** | Each non-`settled` `team_prop` market with `params.stat='total_pins'` (`clock='archive'`): **game markets** (`subject_game_id` set) whose game has ≥1 score → team pinfall = Σ `scores` of the anchored team (`params.team_id`) for the game (the moneyline aggregation); **night markets** (`subject_game_id` null, since `…153000_standardize_betting_lines_settlement`) → Σ the team's non-NULL scores across ALL the week's games (fills INCLUDED — score-sheet semantics; frame-stat team props count non-fill roster imports instead) → `settle_market_internal` (shared over/under grading). **Zero scores → `closed`**. Frame-stat team_props (`clock='lanetalk'`) are skipped — they ride the LaneTalk clock (step f exemption) and settle via `settle_lanetalk_props_for_week`'s team branch on Confirm | same as (b) | same as (b) |
 | d | **Loans** (`process_weekly_loans`) | Per active loan: **garnish** = min(week pincome × rate, outstanding) → then **interest** = ceil(remaining × rate) on still-active loans; outstanding ≤ 0 → `status='paid_off'` | garnish: `pin_ledger` pair (`loan_weekly_garnishment`) + `loan_ledger weekly_garnishment`; interest: `loan_ledger weekly_interest` **only** (debt grows, no pin movement) | per-(loan, week) guard on `loan_ledger` types |
 | e | **PvP** (`settle_pvp_for_week`) | Close still-open offers/challenges (pending/countered → `cancelled`, nothing was escrowed) then auto-settle every `locked` contract: decisive → winner takes pot; tie → push (refund); missing data (incl. a deleted prop market — FK is SET NULL) → **void** (refund). Publishes `pvp_challenge_settled` feed events | win: `pvp_payout` pair; push/void: `pvp_refund` pairs | challenge `status` checks; settled/pushed/voided return early |
-| f | **BACKSTOP** | Count bets with a leg in this week still `pending`. **>0 and not force → RAISE** (whole archive rolls back) naming the unsettleable markets. **Force →** each such bet: legs `result='void'`, bet `status='void'`, stake refunded. **Exemption: bets with ≥1 leg on an unsettled `prop` market (LaneTalk stat bets) are excluded from the count, the listing, AND the force-void** — they settle later via `settle_lanetalk_props_for_week` ([lanetalk-stat-bets.md](lanetalk-stat-bets.md)) | force: `bet_refund` pair ("Voided at archive — market never settled") | n/a (state-driven) |
+| f | **BACKSTOP** | Count bets with a leg in this week still `pending`. **>0 and not force → RAISE** (whole archive rolls back) naming the unsettleable markets. **Force →** each such bet: legs `result='void'`, bet `status='void'`, stake refunded. **Exemption: bets with ≥1 leg on an unsettled next-day-clock market — `market_type='prop'` (LaneTalk stat bets) OR `market_type='team_prop' AND params.clock='lanetalk'` (frame-stat team props) — are excluded from the count, the listing, AND the force-void** — they settle later via `settle_lanetalk_props_for_week` ([lanetalk-stat-bets.md](lanetalk-stat-bets.md)). `total_pins` team_props (`clock='archive'`) are **NOT** exempt — step c′ settles them in this transaction, so a pending one is a real unsettleable | force: `bet_refund` pair ("Voided at archive — market never settled") | n/a (state-driven) |
 | g | **House weekly P&L feed event** | `sportsbook_weekly_house_result` with `house_net` = SUM of house `bet_stake/bet_payout/bet_refund` **via `bet_id` through the week's markets** (`bet_id` is the authoritative link for bet money; payout/refund rows are also week-stamped since `…191008_week_stamp_bet_settlement_ledger`) | none (feed row) | `(season, week, event_type)` existence check |
 
 **Backstop reversibility:** the force-void is an UPDATE on `bets`/`bet_legs`
@@ -261,10 +262,15 @@ void = "the bet was valid but ungradeable".
 ### 5d. The coupling triggers (no client path can forget)
 
 Statement-level AFTER triggers, all funnelling into
-`resync_week_markets(week_id, moneyline?)` → the syncs (O/U **and the LaneTalk
-stat-prop sync**, plus moneyline when flagged — see
-[lanetalk-stat-bets.md](lanetalk-stat-bets.md)). The helper skips weeks
-that are archived (settled markets immutable) or already deleted (mid-cascade).
+`resync_week_markets(week_id, moneyline?)` → the syncs (O/U, **the LaneTalk
+stat-prop sync**, and **the team-prop sync** (`sync_team_prop_markets_for_week`
+— unconditional, a cheap no-op until games exist; prune-dead → create
+game×team×stat **plus one night market per team×stat** (`subject_game_id`
+null, pruned by week-team membership / empty schedule rather than the games
+cascade) → reseed-unbet via `team_prop_seed_line(…, n_games)`), plus moneyline
+when flagged — see [lanetalk-stat-bets.md](lanetalk-stat-bets.md)). The helper skips
+weeks that are archived (settled markets immutable) or already deleted
+(mid-cascade).
 
 | Table | Triggers | Week resolution | Notes |
 |---|---|---|---|
@@ -339,6 +345,6 @@ is admin `cancel_bet`.)
 | Layer | Things |
 |---|---|
 | DB engine | `archive_week`, `unarchive_week`, `settle_betting_for_week`, `settle_market_internal`, `settle_moneyline_market_internal`, `finalize_bets_for_market`, `process_weekly_loans`, `settle_pvp_for_week`, `settle_pvp_challenge`, `void_pvp_challenge`, `close_open_pvp_challenges`, `publish_activity_event` |
-| DB integrity | `sync_over_under_markets_for_week`, `sync_moneyline_markets_for_week`, `resync_week_markets`, `remove_over_under_markets_for_game`, `refund_bets_before_market_delete`, `trg_resync_markets_{rsvp,team_slots,games,scores}`, `trg_seed_participation_games` |
+| DB integrity | `sync_over_under_markets_for_week`, `sync_moneyline_markets_for_week`, `sync_team_prop_markets_for_week` (+ `team_prop_seed_line`, `player_raw_avg_score`), `resync_week_markets`, `remove_over_under_markets_for_game`, `refund_bets_before_market_delete`, `prevent_self_tank` (player + team branches), `trg_resync_markets_{rsvp,team_slots,games,scores}`, `trg_seed_participation_games` |
 | DB state | `weeks.is_archived/bowled_at`, `week_archive_runs`, `week_archive_snapshot`, `scores` (participation rows) |
 | App | `db.ts → archives` (archiveWeek/unarchiveWeek/listArchivedWeeks), `AdminArchiveModal` (archive + force flow), `ArchivesScreen` (unarchive + force flow), `MatchupsScreen` (archive bar, flushScores null-clear, game add/remove), `AdminGenerateTeamsModal`, `useWeekEditor` (per-game lineup edits) |

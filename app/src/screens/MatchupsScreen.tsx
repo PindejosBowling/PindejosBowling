@@ -193,6 +193,7 @@ export default function MatchupsScreen() {
       await betMarkets.setMoneylineStatusByWeekGame(weekId, gameNum, started ? 'closed' : 'open')
       // Stat props suspend with the game too (game 1 also flips the night-scoped props).
       await betMarkets.setPropStatusByWeekGame(weekId, gameNum, started ? 'closed' : 'open')
+      await betMarkets.setTeamPropStatusByWeekGame(weekId, gameNum, started ? 'closed' : 'open')
       if (started) {
         await pvpChallenges.closeOpenForGame(weekId, gameNum)
         setOpenGames(prev => ({ ...prev, [gameNum]: true }))
@@ -313,6 +314,7 @@ export default function MatchupsScreen() {
           await betMarkets.setOUStatusByWeekGame(weekId, num, 'closed')
           await betMarkets.setMoneylineStatusByWeekGame(weekId, num, 'closed')
           await betMarkets.setPropStatusByWeekGame(weekId, num, 'closed')
+          await betMarkets.setTeamPropStatusByWeekGame(weekId, num, 'closed')
           await pvpChallenges.closeOpenForGame(weekId, num)
         }
       }

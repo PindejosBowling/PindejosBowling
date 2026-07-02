@@ -57,14 +57,18 @@ const VIEW_OPTIONS: { key: View2; label: string }[] = [
   { key: 'settled', label: 'Settled' },
 ]
 
-// UI-only policy: the "under" side of player O/U lines is hidden from the
-// Sportsbook. Betting on a leaguemate to do *poorly* has negative social
-// dynamics in a small rec league, so we don't surface it as a pick. This is a
-// pure presentation filter — the selection still exists in the DB and the
-// place/settlement RPCs (`place_house_bet`, etc.) handle `under` unchanged, so
-// the mechanic can be restored by removing this filter. See AGENTS.md.
+// UI-only policy: the "under" side of player O/U, stat-prop, and team-prop
+// lines is hidden from the Sportsbook. Betting on leaguemates (or a whole
+// team) to do *poorly* has negative social dynamics in a small rec league, so
+// we don't surface it as a pick. This is a pure presentation filter — the
+// selection still exists in the DB and the place/settlement RPCs
+// (`place_house_bet`, etc.) handle `under` unchanged, so the mechanic can be
+// restored by removing this filter. See AGENTS.md.
 function isSelectionHiddenInUI(line: LineView, sel: SelectionView): boolean {
-  return (line.marketType === 'over_under' || line.marketType === 'prop') && sel.key === 'under'
+  return (
+    (line.marketType === 'over_under' || line.marketType === 'prop' || line.marketType === 'team_prop') &&
+    sel.key === 'under'
+  )
 }
 
 // Drop UI-hidden selections from a line, returning the same object when nothing
@@ -160,15 +164,25 @@ export default function SportsbookScreen() {
   // Within a category, a subject's markets consolidate into ONE row: lines
   // sharing a subjectPlayerId render as a unified button set on that player
   // ("142.5+ PINS · 4.5+ STRIKES · 2.5+ SPARES"), ordered score line first
-  // then stat props. Subject-less lines (moneyline) stay one row per market.
-  // Player rows then group by their week team — the viewer's team first, the
-  // remaining teams in first-appearance order — so teammates sit together.
+  // then stat props. Team-anchored lines (the viewer's moneyline WIN + every
+  // team's team_prop stat lines) consolidate the same way per teamId — one
+  // team row ("Your Team" / "Team N": WIN · 612.5+ TOTAL PINS · …). Rows then
+  // group by week team — the viewer's team first, the remaining teams in
+  // first-appearance order — with each team's row leading its players.
   const lineGroups = useMemo(() => {
     const kindOrder = (l: LineView) =>
-      l.marketType === 'over_under' ? 0
-        : l.marketType === 'prop'
-          ? 1 + ['strikes', 'spares', 'clean_pct', 'first_ball_avg'].indexOf(l.statKey ?? '')
-          : 9
+      // The moneyline WIN leads its team row; the team stat buttons follow.
+      l.marketType === 'moneyline' ? -1
+        : l.marketType === 'over_under' ? 0
+          : l.marketType === 'prop'
+            // One stat order everywhere — player and team rows alike read
+            // PINS · CLEAN FRAMES · STRIKES · SPARES (the score line is the
+            // player row's "total pins"). (first_ball_avg is retired for new
+            // markets — legacy lines sink to the row's end.)
+            ? 1 + ['clean_frames', 'strikes', 'spares'].indexOf(l.statKey ?? '')
+            : l.marketType === 'team_prop'
+              ? 1 + ['total_pins', 'clean_frames', 'strikes', 'spares'].indexOf(l.statKey ?? '')
+              : 9
     const games = new Map<string, {
       group: LineGroup
       categories: Map<string, { category: LineCategory; rowMap: Map<string, LineView[]>; count: number }>
@@ -184,7 +198,9 @@ export default function SportsbookScreen() {
       const category = lineCategory(line)
       let c = g.categories.get(category.key)
       if (!c) { c = { category, rowMap: new Map(), count: 0 }; g.categories.set(category.key, c) }
-      const rowKey = line.subjectPlayerId ?? line.marketId
+      // Team-prop lines consolidate per team (one row of stat buttons per
+      // team), mirroring how a player's markets consolidate per subject.
+      const rowKey = line.teamId ?? line.subjectPlayerId ?? line.marketId
       const row = c.rowMap.get(rowKey)
       if (row) row.push(line)
       else c.rowMap.set(rowKey, [line])
@@ -201,18 +217,22 @@ export default function SportsbookScreen() {
               key,
               lines: lines.slice().sort((a, b) => kindOrder(a) - kindOrder(b)),
             }))
-            // Group player rows by week team: viewer's team rank 0, the rest by
-            // first appearance; teamless subjects (moneyline rows) keep place.
+            // Group rows by week team: viewer's team rank 0, the rest by first
+            // appearance. Within a team block the TEAM row (moneyline WIN +
+            // team stat lines, rowKey = teamId) leads its players.
             const teamRank = new Map<string, number>()
-            const rankOf = (row: { key: string }) => {
-              const team = weekTeams.teamByPlayer[row.key]
+            const rankOf = (row: { key: string; lines: LineView[] }) => {
+              // Team rows carry their team directly; player rows map through
+              // the week roster.
+              const team = row.lines[0]?.teamId ?? weekTeams.teamByPlayer[row.key]
               if (!team) return Number.MAX_SAFE_INTEGER
               if (team === weekTeams.myTeamId) return 0
               if (!teamRank.has(team)) teamRank.set(team, 1 + teamRank.size)
               return teamRank.get(team)!
             }
+            const isTeamRow = (row: { lines: LineView[] }) => (row.lines[0]?.teamId != null ? 0 : 1)
             const ranked = rows.map((row, idx) => ({ row, rank: rankOf(row), idx }))
-            ranked.sort((a, b) => a.rank - b.rank || a.idx - b.idx)
+            ranked.sort((a, b) => a.rank - b.rank || isTeamRow(a.row) - isTeamRow(b.row) || a.idx - b.idx)
             return { category, count, rows: ranked.map(r => r.row) }
           }),
       }))
@@ -250,9 +270,15 @@ export default function SportsbookScreen() {
   }, [lineGroups])
 
   // Anti-tanking, market-type-aware: backing the side that bets against your own
-  // performance (the `under` on your own line) is blocked.
+  // performance (the `under` on your own line, or on your own team's line) is
+  // blocked. Friendly pre-check only — the prevent_self_tank trigger is the
+  // authoritative backstop.
   function isSelfTank(line: LineView, sel: SelectionView): boolean {
-    return line.subjectPlayerId === playerId && selectionBetsAgainstSubject(line.marketType, sel.key)
+    if (!selectionBetsAgainstSubject(line.marketType, sel.key)) return false
+    if (line.marketType === 'team_prop') {
+      return line.teamId != null && line.teamId === weekTeams.myTeamId
+    }
+    return line.subjectPlayerId === playerId
   }
 
   // Tapping any selection toggles it in/out of the unified slip. One selection
@@ -370,10 +396,10 @@ export default function SportsbookScreen() {
     }
   }
 
-  // One subject row (≥1 markets → one button set), shared by the collapsible
-  // (O/U) and headerless (moneyline) section layouts. Tapping a cell stages it
-  // in the unified slip (staged = filled); an in-progress game makes every side
-  // inert. Each button binds its own (line, selection).
+  // One subject row (≥1 markets → one button set) — a player's lines or a
+  // team's (WIN + team stats). Tapping a cell stages it in the unified slip
+  // (staged = filled); an in-progress game makes every side inert. Each button
+  // binds its own (line, selection).
   function renderLineSet(lines: LineView[], isLast: boolean, groupInProgress: boolean) {
     return (
       <LineRow
@@ -384,7 +410,18 @@ export default function SportsbookScreen() {
           // so it shares the teammate green — one color story for "your side".
           lines[0].marketType === 'moneyline'
             ? 'with'
-            : subjectRelation(weekTeams, lines[0].subjectPlayerId, lines[0].gameNumber)
+            : lines[0].teamId != null
+              // Team-prop rows relate by their anchored team directly; a night
+              // team row (no game) reads "against" if that team opposes the
+              // viewer in ANY of the night's games.
+              ? lines[0].teamId === weekTeams.myTeamId
+                ? 'with'
+                : (lines[0].gameNumber != null
+                    ? weekTeams.opponentTeamByGame[lines[0].gameNumber] === lines[0].teamId
+                    : Object.values(weekTeams.opponentTeamByGame).includes(lines[0].teamId))
+                  ? 'against'
+                  : null
+              : subjectRelation(weekTeams, lines[0].subjectPlayerId, lines[0].gameNumber)
         }
         inProgress={groupInProgress}
         onSelect={stagePick}
