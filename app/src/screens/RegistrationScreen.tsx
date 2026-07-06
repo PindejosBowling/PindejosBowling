@@ -2,19 +2,15 @@ import { useMemo, useState } from 'react'
 import {
   View,
   Text,
-  ScrollView,
-  RefreshControl,
   StyleSheet,
 } from 'react-native'
-import { SafeAreaView } from 'react-native-safe-area-context'
 import { useNavigation } from '@react-navigation/native'
 import { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { colors, fonts, radius } from '../theme'
 import { useRegistrationData } from '../hooks/useRegistrationData'
-import { useRefresh } from '../hooks/useRefresh'
 import { MoreStackParamList } from '../navigation/types'
 import LoadingView from '../components/ui/LoadingView'
-import ScreenHeader from '../components/ui/ScreenHeader'
+import ScreenContainer from '../components/ui/ScreenContainer'
 import PillFilter from '../components/ui/PillFilter'
 
 type Nav = NativeStackNavigationProp<MoreStackParamList>
@@ -40,7 +36,6 @@ function formatDate(date: string | null): string {
 export default function RegistrationScreen() {
   const navigation = useNavigation<Nav>()
   const { loading, rawRegistrations, seasonList, reload } = useRegistrationData()
-  const { refreshing, onRefresh } = useRefresh(reload)
 
   const [selectedNumber, setSelectedNumber] = useState<string | null>(null)
 
@@ -85,15 +80,12 @@ export default function RegistrationScreen() {
   if (loading && rawRegistrations.length === 0) return <LoadingView label="Loading registration" />
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
-      <ScreenHeader title="Registration" onBack={() => navigation.navigate('MoreHome')} />
-
-      <ScrollView
-        contentContainerStyle={styles.content}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.muted} />
-        }
-      >
+    <ScreenContainer
+      title="Registration"
+      onBack={() => navigation.navigate('MoreHome')}
+      onRefresh={reload}
+      contentStyle={styles.content}
+    >
         <PillFilter
           items={seasonNumbers}
           value={activeNumber}
@@ -155,14 +147,14 @@ export default function RegistrationScreen() {
             )}
           </View>
         )}
-      </ScrollView>
-    </SafeAreaView>
+    </ScreenContainer>
   )
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: colors.bg },
-  content: { paddingBottom: 32 },
+  // Overrides the container default: this screen's cards manage their own
+  // horizontal margins.
+  content: { paddingHorizontal: 0, paddingBottom: 32 },
 
   panel: {
     marginHorizontal: 16,

@@ -2,24 +2,19 @@ import { useState, useCallback, useEffect, useMemo } from 'react'
 import {
   View,
   Text,
-  ScrollView,
   StyleSheet,
-  RefreshControl,
   TouchableOpacity,
   Modal,
   TextInput,
   KeyboardAvoidingView,
   Platform,
 } from 'react-native'
-import { SafeAreaView } from 'react-native-safe-area-context'
-import { useNavigation } from '@react-navigation/native'
 import { colors, fonts, radius } from '../theme'
-import ScreenHeader from '../components/ui/ScreenHeader'
+import ScreenContainer from '../components/ui/ScreenContainer'
 import LoadingView from '../components/ui/LoadingView'
 import Toast from '../components/ui/Toast'
 import PillFilter from '../components/ui/PillFilter'
 import Button from '../components/ui/Button'
-import { useRefresh } from '../hooks/useRefresh'
 import { useAuthStore } from '../stores/authStore'
 import { useUiStore } from '../stores/uiStore'
 import { seasons, activityFeed } from '../utils/supabase/db'
@@ -45,7 +40,6 @@ const FILTER_LABELS: Record<string, string> = {
 }
 
 export default function MarketMovesAdminScreen() {
-  const navigation = useNavigation()
   const isAdmin = useAuthStore(s => s.role) === 'admin'
   const { showToast } = useUiStore()
 
@@ -78,7 +72,6 @@ export default function MarketMovesAdminScreen() {
   }, [])
 
   useEffect(() => { load() }, [load])
-  const { refreshing, onRefresh } = useRefresh(load)
 
   const filtered = useMemo(
     () =>
@@ -103,25 +96,27 @@ export default function MarketMovesAdminScreen() {
 
   if (!isAdmin) {
     return (
-      <SafeAreaView style={styles.safe} edges={['top']}>
-        <ScreenHeader title="Market Moves Admin" onBack={() => navigation.goBack()} />
+      <ScreenContainer title="Market Moves Admin" scroll={false}>
         <EmptyCard text="Admins only" style={{ marginHorizontal: 16 }} />
-      </SafeAreaView>
+      </ScreenContainer>
     )
   }
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
-      <ScreenHeader title="Market Moves Admin" subtitle="Moderate the feed" onBack={() => navigation.goBack()} />
-
-      <PillFilter items={FEATURE_FILTERS} value={featureFilter} onChange={setFeatureFilter} renderLabel={i => FILTER_LABELS[i] ?? i} />
-      <PillFilter items={STATUS_FILTERS} value={statusFilter} onChange={setStatusFilter} renderLabel={i => FILTER_LABELS[i] ?? i} />
-      <PillFilter items={IMPORTANCE_FILTERS} value={importanceFilter} onChange={setImportanceFilter} renderLabel={i => FILTER_LABELS[i] ?? i} />
-
-      <ScrollView
-        contentContainerStyle={styles.content}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.muted} />}
-      >
+    <ScreenContainer
+      title="Market Moves Admin"
+      subtitle="Moderate the feed"
+      pinned={
+        <>
+          <PillFilter items={FEATURE_FILTERS} value={featureFilter} onChange={setFeatureFilter} renderLabel={i => FILTER_LABELS[i] ?? i} />
+          <PillFilter items={STATUS_FILTERS} value={statusFilter} onChange={setStatusFilter} renderLabel={i => FILTER_LABELS[i] ?? i} />
+          <PillFilter items={IMPORTANCE_FILTERS} value={importanceFilter} onChange={setImportanceFilter} renderLabel={i => FILTER_LABELS[i] ?? i} />
+        </>
+      }
+      onRefresh={load}
+      contentStyle={styles.content}
+      overlay={<Toast />}
+    >
         <Button variant="outline" label="+ Post system event" onPress={() => setPostOpen(true)} style={styles.postBtn} />
 
         {filtered.length === 0 ? (
@@ -177,7 +172,6 @@ export default function MarketMovesAdminScreen() {
             )
           })
         )}
-      </ScrollView>
 
       {actionEvent && (
         <ModerationModal
@@ -192,8 +186,7 @@ export default function MarketMovesAdminScreen() {
           onDone={() => { setPostOpen(false); load() }}
         />
       )}
-      <Toast />
-    </SafeAreaView>
+    </ScreenContainer>
   )
 }
 
@@ -318,8 +311,8 @@ function PostSystemEventModal({ onClose, onDone }: { onClose: () => void; onDone
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: colors.bg },
-  content: { paddingHorizontal: 16, paddingBottom: 40, paddingTop: 4 },
+  // Merged over ScreenContainer's default { paddingHorizontal: 16, paddingBottom: 40 }.
+  content: { paddingTop: 4 },
 
   postBtn: { paddingVertical: 12, marginBottom: 16 },
 

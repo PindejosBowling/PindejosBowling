@@ -1,12 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
-  View, Text, ScrollView, TouchableOpacity, TextInput, StyleSheet, RefreshControl,
+  View, Text, TouchableOpacity, TextInput, StyleSheet,
 } from 'react-native'
-import { SafeAreaView } from 'react-native-safe-area-context'
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native'
 import { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { colors, fonts, radius } from '../theme'
-import ScreenHeader from '../components/ui/ScreenHeader'
+import ScreenContainer from '../components/ui/ScreenContainer'
 import LoadingView from '../components/ui/LoadingView'
 import ToggleGroup from '../components/ui/ToggleGroup'
 import PlayerPickerModal from '../components/ui/PlayerPickerModal'
@@ -15,7 +14,6 @@ import LineDuelLines from '../components/pvp/LineDuelLines'
 import GamePicker from '../components/ui/GamePicker'
 import PinAmountInput from '../components/ui/PinAmountInput'
 import Toast from '../components/ui/Toast'
-import { useRefresh } from '../hooks/useRefresh'
 import { useAuthStore } from '../stores/authStore'
 import { useUiStore } from '../stores/uiStore'
 import {
@@ -158,7 +156,6 @@ export default function PvPCreateScreen() {
   }
 
   useEffect(() => { load() /* eslint-disable-next-line */ }, [playerId])
-  const { refreshing, onRefresh } = useRefresh(load)
 
   // Preview the named opponent's line-to-beat for a Line Duel. Cleared for the
   // open board (the taker's line is set when they engage) or non-line contracts.
@@ -255,13 +252,14 @@ export default function PvPCreateScreen() {
   const pot = validStake ? stakeNum + oppStakeNum : 0
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
-      <ScreenHeader title="New Challenge" subtitle="Set your terms" onBack={() => navigation.goBack()} />
-      <ScrollView
-        contentContainerStyle={styles.content}
-        keyboardShouldPersistTaps="handled"
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.muted} />}
-      >
+    <ScreenContainer
+      title="New Challenge"
+      subtitle="Set your terms"
+      onRefresh={load}
+      keyboardShouldPersistTaps="handled"
+      contentStyle={{ paddingBottom: 60 }}
+      overlay={<Toast />}
+    >
         {/* Opponent */}
         <Text style={styles.label}>OPPONENT</Text>
         <View style={styles.opponentRow}>
@@ -518,29 +516,26 @@ export default function PvPCreateScreen() {
           disabled={submitting || !validStake}
           style={styles.submitBtn}
         />
-      </ScrollView>
 
-      <PlayerPickerModal
-        visible={pickerOpen}
-        players={opponents.map(o => o.name)}
-        title="Select Opponent"
-        onSelect={name => {
-          const o = opponents.find(p => p.name === name)
-          setOpponentId(o?.id ?? null)
-          setOpenBoard(false)
-          setPickerOpen(false)
-        }}
-        onClose={() => setPickerOpen(false)}
-      />
-      <Toast />
-    </SafeAreaView>
+        {/* Modal-based picker: renders in the native overlay layer, so mounting
+            inside the ScrollView children is visually identical. */}
+        <PlayerPickerModal
+          visible={pickerOpen}
+          players={opponents.map(o => o.name)}
+          title="Select Opponent"
+          onSelect={name => {
+            const o = opponents.find(p => p.name === name)
+            setOpponentId(o?.id ?? null)
+            setOpenBoard(false)
+            setPickerOpen(false)
+          }}
+          onClose={() => setPickerOpen(false)}
+        />
+    </ScreenContainer>
   )
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: colors.bg },
-  content: { paddingHorizontal: 16, paddingBottom: 60 },
-
   label: {
     fontFamily: fonts.barlowCondensed,
     fontSize: 12,

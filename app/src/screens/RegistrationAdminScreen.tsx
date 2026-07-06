@@ -1,10 +1,9 @@
-import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Dimensions } from 'react-native'
-import { SafeAreaView } from 'react-native-safe-area-context'
+import { View, Text, StyleSheet, TouchableOpacity, Dimensions } from 'react-native'
 import { useNavigation } from '@react-navigation/native'
 import { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { colors, fonts, radius } from '../theme'
 import { MoreStackParamList } from '../navigation/types'
-import ScreenHeader from '../components/ui/ScreenHeader'
+import ScreenContainer from '../components/ui/ScreenContainer'
 import { useAuthStore } from '../stores/authStore'
 import EmptyCard from '../components/ui/EmptyCard'
 
@@ -26,39 +25,32 @@ export default function RegistrationAdminScreen() {
 
   if (!isAdmin) {
     return (
-      <SafeAreaView style={styles.safe} edges={['top']}>
-        <ScreenHeader title="Registration Admin" onBack={() => navigation.goBack()} />
+      <ScreenContainer title="Registration Admin">
         <EmptyCard text="Admins only" style={{ margin: 16 }} />
-      </SafeAreaView>
+      </ScreenContainer>
     )
   }
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
-      <ScreenHeader title="Registration Admin" onBack={() => navigation.goBack()} />
-      <ScrollView contentContainerStyle={styles.content}>
-        <View style={styles.grid}>
-          {MENU_TILES.map(tile => (
-            <TouchableOpacity
-              key={tile.route}
-              style={styles.tile}
-              onPress={() => navigation.navigate(tile.route)}
-              activeOpacity={0.7}
-            >
-              <Text style={styles.tileIcon}>{tile.icon}</Text>
-              <Text style={styles.tileLabel}>{tile.label}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-      </ScrollView>
-    </SafeAreaView>
+    <ScreenContainer title="Registration Admin">
+      <View style={styles.grid}>
+        {MENU_TILES.map(tile => (
+          <TouchableOpacity
+            key={tile.route}
+            style={styles.tile}
+            onPress={() => navigation.navigate(tile.route)}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.tileIcon}>{tile.icon}</Text>
+            <Text style={styles.tileLabel}>{tile.label}</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+    </ScreenContainer>
   )
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: colors.bg },
-  content: { paddingHorizontal: 16, paddingBottom: 40 },
-
   grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',

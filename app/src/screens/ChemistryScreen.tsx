@@ -1,9 +1,7 @@
 import { useMemo } from 'react'
 import {
-  View, Text, FlatList, ScrollView, RefreshControl, TouchableOpacity, StyleSheet,
+  View, Text, FlatList, TouchableOpacity, StyleSheet,
 } from 'react-native'
-import { useRefresh } from '../hooks/useRefresh'
-import { SafeAreaView } from 'react-native-safe-area-context'
 import { useNavigation } from '@react-navigation/native'
 import { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { colors, fonts, radius } from '../theme'
@@ -11,7 +9,7 @@ import { useUiStore } from '../stores/uiStore'
 import { useChemistryData, computeChemistryFromSupabase } from '../hooks/useChemistryData'
 import { MoreStackParamList } from '../navigation/types'
 import LoadingView from '../components/ui/LoadingView'
-import ScreenHeader from '../components/ui/ScreenHeader'
+import ScreenContainer from '../components/ui/ScreenContainer'
 import ToggleGroup from '../components/ui/ToggleGroup'
 
 type Nav = NativeStackNavigationProp<MoreStackParamList>
@@ -19,7 +17,6 @@ type Nav = NativeStackNavigationProp<MoreStackParamList>
 export default function ChemistryScreen() {
   const { loading, rawScores, rawSchedule, championNames, reload } = useChemistryData()
   const { chemMode, chemExpanded, set } = useUiStore()
-  const { refreshing, onRefresh } = useRefresh(reload)
   const navigation = useNavigation<Nav>()
 
   const groupSize = chemMode === 'pairs' ? 2 : 3
@@ -34,17 +31,22 @@ export default function ChemistryScreen() {
   if (loading && rawScores.length === 0) return <LoadingView label="Loading chemistry" />
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
-      <ScreenHeader title="Chemistry" onBack={() => navigation.navigate('MoreHome')} />
-
-      <ToggleGroup
-        options={[{ key: 'pairs', label: 'Pairs' }, { key: 'trios', label: 'Trios' }]}
-        value={chemMode}
-        onChange={(mode) => set({ chemMode: mode as 'pairs' | 'trios', chemExpanded: false })}
-        style={{ marginHorizontal: 16, marginBottom: 12 }}
-      />
-
-      <ScrollView refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent} />}>
+    <ScreenContainer
+      title="Chemistry"
+      onBack={() => navigation.navigate('MoreHome')}
+      pinned={
+        <ToggleGroup
+          options={[{ key: 'pairs', label: 'Pairs' }, { key: 'trios', label: 'Trios' }]}
+          value={chemMode}
+          onChange={(mode) => set({ chemMode: mode as 'pairs' | 'trios', chemExpanded: false })}
+          style={{ marginHorizontal: 16, marginBottom: 12 }}
+        />
+      }
+      onRefresh={reload}
+      // Rows/buttons carry their own 16px horizontal inset; the pre-migration
+      // ScrollView had no content padding at all.
+      contentStyle={{ paddingHorizontal: 0, paddingBottom: 0 }}
+    >
         {allGroups.length === 0 ? (
           <Text style={styles.empty}>Not enough data yet.</Text>
         ) : (
@@ -81,13 +83,11 @@ export default function ChemistryScreen() {
             ) : null}
           </>
         )}
-      </ScrollView>
-    </SafeAreaView>
+    </ScreenContainer>
   )
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: colors.bg },
   list: { paddingHorizontal: 16, paddingBottom: 16 },
   card: {
     flexDirection: 'row',

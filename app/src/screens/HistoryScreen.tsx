@@ -1,6 +1,5 @@
 import { useMemo, useState, useCallback } from 'react'
-import { View, Text, ScrollView, RefreshControl, StyleSheet, TouchableOpacity } from 'react-native'
-import { SafeAreaView } from 'react-native-safe-area-context'
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native'
 import { useNavigation } from '@react-navigation/native'
 import { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { colors, fonts, radius } from '../theme'
@@ -9,11 +8,10 @@ import { useAuthStore } from '../stores/authStore'
 import { useHistoryData } from '../hooks/useHistoryData'
 import { computePastGamesFromSupabase } from '../hooks/usePastGamesData'
 import { computeStandingsFromSupabase } from '../hooks/useStandingsData'
-import { useRefresh } from '../hooks/useRefresh'
 import { useWeekEditor } from '../hooks/useWeekEditor'
 import { MoreStackParamList } from '../navigation/types'
 import LoadingView from '../components/ui/LoadingView'
-import ScreenHeader from '../components/ui/ScreenHeader'
+import ScreenContainer from '../components/ui/ScreenContainer'
 import PillFilter from '../components/ui/PillFilter'
 import HistoricalTeamBlock from '../components/league/HistoricalTeamBlock'
 import EditableWeek from '../components/league/EditableWeek'
@@ -33,7 +31,6 @@ export default function HistoryScreen() {
   const { loading, seasonList, rawScores, rawSchedule, champsBySeason, reload } = useHistoryData()
   const { historySeason, set } = useUiStore()
   const isAdmin = useAuthStore(s => s.role) === 'admin'
-  const { refreshing, onRefresh } = useRefresh(reload)
 
   // One archived week editable at a time (a single screen-level ConfirmBar).
   const [editingWeekId, setEditingWeekId] = useState<string | null>(null)
@@ -96,15 +93,24 @@ export default function HistoryScreen() {
   if (loading && seasonList.length === 0) return <LoadingView label="Loading history" />
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
-      <ScreenHeader title="History" onBack={() => navigation.navigate('MoreHome')} />
-
-      <ScrollView
-        contentContainerStyle={[styles.content, editor.pendingCount > 0 && styles.contentEditing]}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent} />
-        }
-      >
+    <ScreenContainer
+      title="History"
+      onBack={() => navigation.navigate('MoreHome')}
+      onRefresh={reload}
+      contentStyle={[styles.content, editor.pendingCount > 0 && styles.contentEditing]}
+      overlay={
+        isAdmin && editingWeekId && editor.pendingCount > 0 ? (
+          <ConfirmBar
+            icon="✏️"
+            title={editor.saving ? `Saving ${editor.pendingCount} change${editor.pendingCount !== 1 ? 's' : ''}...` : `${editor.pendingCount} unsaved change${editor.pendingCount !== 1 ? 's' : ''}`}
+            subtext={editor.saving ? undefined : 'Save or discard your changes'}
+            saving={editor.saving}
+            onDiscard={editor.discard}
+            onSave={async () => { await editor.save(); setEditingWeekId(null) }}
+          />
+        ) : null
+      }
+    >
         {seasonNumbers.length === 0 ? (
           <Text style={styles.empty}>No completed seasons yet.</Text>
         ) : (
@@ -200,19 +206,7 @@ export default function HistoryScreen() {
             )}
           </>
         )}
-      </ScrollView>
-
-      {isAdmin && editingWeekId && editor.pendingCount > 0 && (
-        <ConfirmBar
-          icon="✏️"
-          title={editor.saving ? `Saving ${editor.pendingCount} change${editor.pendingCount !== 1 ? 's' : ''}...` : `${editor.pendingCount} unsaved change${editor.pendingCount !== 1 ? 's' : ''}`}
-          subtext={editor.saving ? undefined : 'Save or discard your changes'}
-          saving={editor.saving}
-          onDiscard={editor.discard}
-          onSave={async () => { await editor.save(); setEditingWeekId(null) }}
-        />
-      )}
-    </SafeAreaView>
+    </ScreenContainer>
   )
 }
 
@@ -226,8 +220,10 @@ function StatRow({ label, value }: { label: string; value: string }) {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: colors.bg },
-  content: { paddingBottom: 40 },
+  // Cards carry their own 16px horizontal margins — cancel the container default.
+  // (Default paddingBottom: 40 matches the pre-migration value.)
+  content: { paddingHorizontal: 0 },
+  // Extra room above the sticky ConfirmBar while edits are pending.
   contentEditing: { paddingBottom: 40 + 57 },
   editorWrap: { padding: 12 },
   editBtn: {

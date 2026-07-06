@@ -2,29 +2,20 @@ import { useMemo, useState } from 'react'
 import {
   View,
   Text,
-  ScrollView,
-  RefreshControl,
   StyleSheet,
   TouchableOpacity,
   Alert,
 } from 'react-native'
-import { SafeAreaView } from 'react-native-safe-area-context'
-import { useNavigation } from '@react-navigation/native'
-import { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { colors, fonts, radius } from '../theme'
 import { useUiStore } from '../stores/uiStore'
 import { useAuthStore } from '../stores/authStore'
 import { useRegistrationData, SeasonOption } from '../hooks/useRegistrationData'
-import { useRefresh } from '../hooks/useRefresh'
 import { registrations, seasons, weeks } from '../utils/supabase/db'
-import { MoreStackParamList } from '../navigation/types'
 import LoadingView from '../components/ui/LoadingView'
-import ScreenHeader from '../components/ui/ScreenHeader'
+import ScreenContainer from '../components/ui/ScreenContainer'
 import PillFilter from '../components/ui/PillFilter'
 import AdminOpenRegistrationModal from '../components/admin/AdminOpenRegistrationModal'
 import AdminEditSeasonModal from '../components/admin/AdminEditSeasonModal'
-
-type Nav = NativeStackNavigationProp<MoreStackParamList>
 
 function formatDate(date: string | null): string {
   if (!date) return ''
@@ -37,9 +28,7 @@ function formatDate(date: string | null): string {
 }
 
 export default function SeasonRegistrationScreen() {
-  const navigation = useNavigation<Nav>()
   const { loading, rawRegistrations, seasonList, allPlayers, reload } = useRegistrationData()
-  const { refreshing, onRefresh } = useRefresh(reload)
   const { showToast } = useUiStore()
   const isAdmin = useAuthStore(s => s.role) === 'admin'
 
@@ -170,27 +159,18 @@ export default function SeasonRegistrationScreen() {
 
   if (!isAdmin) {
     return (
-      <SafeAreaView style={styles.safe} edges={['top']}>
-        <ScreenHeader title="Season Registration" onBack={() => navigation.goBack()} />
+      <ScreenContainer title="Season Registration">
         <View style={styles.emptyCard}>
           <Text style={styles.empty}>Admins only</Text>
         </View>
-      </SafeAreaView>
+      </ScreenContainer>
     )
   }
 
   if (loading && rawRegistrations.length === 0) return <LoadingView label="Loading registration" />
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
-      <ScreenHeader title="Season Registration" onBack={() => navigation.goBack()} />
-
-      <ScrollView
-        contentContainerStyle={styles.content}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.muted} />
-        }
-      >
+    <ScreenContainer title="Season Registration" onRefresh={reload} contentStyle={styles.content}>
         {!openSeason && (
           <TouchableOpacity
             style={styles.openBtn}
@@ -293,8 +273,9 @@ export default function SeasonRegistrationScreen() {
             )}
           </View>
         )}
-      </ScrollView>
 
+      {/* Native modals render in an overlay layer, so mounting them inside the
+          container's ScrollView is visually identical to the old sibling mount. */}
       <AdminOpenRegistrationModal
         visible={showOpenModal}
         onClose={() => setShowOpenModal(false)}
@@ -305,13 +286,14 @@ export default function SeasonRegistrationScreen() {
         onClose={() => setEditSeason(null)}
         onSaved={reload}
       />
-    </SafeAreaView>
+    </ScreenContainer>
   )
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: colors.bg },
-  content: { paddingBottom: 32 },
+  // Overrides the container default: this screen's cards manage their own
+  // horizontal margins.
+  content: { paddingHorizontal: 0, paddingBottom: 32 },
 
   openBtn: {
     marginHorizontal: 16,

@@ -1,13 +1,10 @@
 import { useCallback, useMemo, useState } from 'react'
-import { View, Text, ScrollView, StyleSheet, RefreshControl } from 'react-native'
-import { SafeAreaView } from 'react-native-safe-area-context'
+import { View, Text, StyleSheet } from 'react-native'
 import { useNavigation, useFocusEffect } from '@react-navigation/native'
 import { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { colors, fonts, radius } from '../theme'
-import ScreenHeader from '../components/ui/ScreenHeader'
-import ArtworkToggle from '../components/ui/ArtworkToggle'
+import ScreenContainer from '../components/ui/ScreenContainer'
 import AuctionBankBackdrop from '../components/pixelart/AuctionBankBackdrop'
-import LoadingView from '../components/ui/LoadingView'
 import AuctionCard from '../components/auction/AuctionCard'
 import MyItemRow from '../components/auction/MyItemRow'
 import ItemInfoSheet from '../components/auction/ItemInfoSheet'
@@ -15,7 +12,6 @@ import BalancePill from '../components/ui/BalancePill'
 import ReadOnlySeasonBanner from '../components/betting/ReadOnlySeasonBanner'
 import { useAuctionHouseData } from '../hooks/useAuctionHouseData'
 import { usePinsinoSeasonContext } from '../hooks/usePinsinoSeasonContext'
-import { useRefresh } from '../hooks/useRefresh'
 import { useAuthStore } from '../stores/authStore'
 import { useUiStore } from '../stores/uiStore'
 import { AuctionView, InventoryGroupView, auctionSections, groupInventory } from '../utils/auction'
@@ -26,14 +22,12 @@ type Nav = NativeStackNavigationProp<PinsinoStackParamList>
 export default function AuctionHouseScreen() {
   const navigation = useNavigation<Nav>()
   const playerId = useAuthStore(s => s.playerId)
-  const artworkReveal = useUiStore(s => s.artworkReveal)
 
   // Admin controls live on AuctionHouseAdmin (Pinsino Admin → Auction House) —
   // this screen is purely the player-facing floor.
   const pinsinoViewSeasonId = useUiStore(s => s.pinsinoViewSeasonId)
   const { readOnly, viewSeasonNumber } = usePinsinoSeasonContext()
   const { loading, balance, auctions, myItems, reload } = useAuctionHouseData(playerId, pinsinoViewSeasonId)
-  const { refreshing, onRefresh } = useRefresh(reload)
 
   const [infoGroup, setInfoGroup] = useState<InventoryGroupView | null>(null)
 
@@ -42,17 +36,6 @@ export default function AuctionHouseScreen() {
 
   const sections = useMemo(() => auctionSections(auctions), [auctions])
   const itemGroups = useMemo(() => groupInventory(myItems), [myItems])
-
-  // Transitions stay art-only: the backdrop paints immediately and the
-  // spinner appears only if loading drags past 5s.
-  if (loading) {
-    return (
-      <SafeAreaView style={styles.safe} edges={['top']}>
-        <AuctionBankBackdrop />
-        <LoadingView label="Loading…" transparent delayed />
-      </SafeAreaView>
-    )
-  }
 
   const auctionSection = (title: string, rows: AuctionView[]) =>
     rows.length > 0 ? (
@@ -71,14 +54,13 @@ export default function AuctionHouseScreen() {
   const noAuctions = sections.open.length === 0 && sections.scheduled.length === 0 && sections.settled.length === 0
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
-      <AuctionBankBackdrop />
-      <ScreenHeader title="Auction House" subtitle="Sealed bids · the hammer falls on its own" onBack={() => navigation.goBack()} right={<ArtworkToggle />} />
-      {!artworkReveal && (
-      <ScrollView
-        contentContainerStyle={styles.content}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.muted} />}
-      >
+    <ScreenContainer
+      title="Auction House"
+      subtitle="Sealed bids · the hammer falls on its own"
+      backdrop={<AuctionBankBackdrop />}
+      loading={loading}
+      onRefresh={reload}
+    >
         {readOnly && <ReadOnlySeasonBanner seasonNumber={viewSeasonNumber} />}
 
         <BalancePill balance={balance} />
@@ -106,21 +88,17 @@ export default function AuctionHouseScreen() {
         )}
 
         {auctionSection('RECENTLY SETTLED', sections.settled)}
-      </ScrollView>
-      )}
 
-      {infoGroup && (
-        <ItemInfoSheet group={infoGroup} onClose={() => setInfoGroup(null)} />
-      )}
-    </SafeAreaView>
+        {/* Modal-based sheet: renders in the native overlay layer, so mounting
+            inside the ScrollView children is visually identical. */}
+        {infoGroup && (
+          <ItemInfoSheet group={infoGroup} onClose={() => setInfoGroup(null)} />
+        )}
+    </ScreenContainer>
   )
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: colors.bg },
-  content: { paddingHorizontal: 16, paddingBottom: 40 },
-
-
   sectionLabel: {
     fontFamily: fonts.barlowCondensed,
     fontSize: 13,

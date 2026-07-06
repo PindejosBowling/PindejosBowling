@@ -1,15 +1,13 @@
 import { useCallback, useEffect, useState } from 'react'
-import { View, Text, ScrollView, StyleSheet, RefreshControl, TouchableOpacity } from 'react-native'
-import { SafeAreaView } from 'react-native-safe-area-context'
-import { useNavigation, useRoute, useFocusEffect, RouteProp } from '@react-navigation/native'
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native'
+import { useRoute, useFocusEffect, RouteProp } from '@react-navigation/native'
 import { colors, fonts, radius } from '../theme'
-import ScreenHeader from '../components/ui/ScreenHeader'
+import ScreenContainer from '../components/ui/ScreenContainer'
 import LoadingView from '../components/ui/LoadingView'
 import Button from '../components/ui/Button'
 import AuctionBidSheet from '../components/auction/AuctionBidSheet'
 import { useAuctionDetailData } from '../hooks/useAuctionDetailData'
 import { usePinsinoSeasonContext } from '../hooks/usePinsinoSeasonContext'
-import { useRefresh } from '../hooks/useRefresh'
 import { useAuthStore } from '../stores/authStore'
 import { formatCountdown } from '../utils/auction'
 import { formatCloseTime } from '../utils/bounty'
@@ -19,14 +17,12 @@ import { formatPins } from '../utils/formatting'
 type Route = RouteProp<PinsinoStackParamList, 'AuctionDetail'>
 
 export default function AuctionDetailScreen() {
-  const navigation = useNavigation()
   const { params } = useRoute<Route>()
   const playerId = useAuthStore(s => s.playerId)
 
   // Admin management lives on AuctionHouseAdmin (Pinsino Admin → Auction House).
   const { readOnly } = usePinsinoSeasonContext()
   const { loading, balance, auction, reload } = useAuctionDetailData(params.auctionId, playerId)
-  const { refreshing, onRefresh } = useRefresh(reload)
 
   const [bidOpen, setBidOpen] = useState(false)
   const [bidRevealed, setBidRevealed] = useState(false)
@@ -42,13 +38,13 @@ export default function AuctionDetailScreen() {
     return () => clearInterval(t)
   }, [ticking])
 
+  // Non-standard loading (plain + delayed) — kept outside ScreenContainer.
   if (loading) return <LoadingView label="Loading…" delayed />
   if (!auction) {
     return (
-      <SafeAreaView style={styles.safe} edges={['top']}>
-        <ScreenHeader title="Auction" onBack={() => navigation.goBack()} />
+      <ScreenContainer title="Auction">
         <View style={styles.emptyCard}><Text style={styles.muted}>This auction no longer exists.</Text></View>
-      </SafeAreaView>
+      </ScreenContainer>
     )
   }
 
@@ -61,12 +57,7 @@ export default function AuctionDetailScreen() {
   const hammerFalling = open && countdown == null
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
-      <ScreenHeader title="Auction" subtitle={a.itemName} onBack={() => navigation.goBack()} />
-      <ScrollView
-        contentContainerStyle={styles.content}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.muted} />}
-      >
+    <ScreenContainer title="Auction" subtitle={a.itemName} onRefresh={reload}>
         {/* Item header */}
         <View style={styles.card}>
           <View style={styles.headerRow}>
@@ -199,19 +190,17 @@ export default function AuctionDetailScreen() {
             />
           </>
         )}
-      </ScrollView>
 
-      {bidOpen && (
-        <AuctionBidSheet auction={a} balance={balance} onClose={() => setBidOpen(false)} onDone={reload} />
-      )}
-    </SafeAreaView>
+        {/* Modal-based sheet: renders in the native overlay layer, so mounting
+            inside the ScrollView children is visually identical. */}
+        {bidOpen && (
+          <AuctionBidSheet auction={a} balance={balance} onClose={() => setBidOpen(false)} onDone={reload} />
+        )}
+    </ScreenContainer>
   )
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: colors.bg },
-  content: { paddingHorizontal: 16, paddingBottom: 40 },
-
   card: {
     backgroundColor: colors.surface,
     borderRadius: radius.cardMd,
@@ -269,7 +258,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
     padding: 20,
-    margin: 16,
+    // Horizontal inset now comes from the ScreenContainer content padding.
+    marginTop: 16,
     alignItems: 'center',
   },
 })
