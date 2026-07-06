@@ -1,7 +1,5 @@
 import { useMemo, useState } from 'react'
-import { View, Text, ScrollView, RefreshControl, StyleSheet, TouchableOpacity } from 'react-native'
-import { useRefresh } from '../hooks/useRefresh'
-import { SafeAreaView } from 'react-native-safe-area-context'
+import { View, Text, ScrollView, StyleSheet, TouchableOpacity } from 'react-native'
 import { useNavigation } from '@react-navigation/native'
 import { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { colors, fonts, radius } from '../theme'
@@ -17,7 +15,7 @@ import {
 import { MoreStackParamList } from '../navigation/types'
 import LoadingView from '../components/ui/LoadingView'
 import PillFilter from '../components/ui/PillFilter'
-import ScreenHeader from '../components/ui/ScreenHeader'
+import ScreenContainer from '../components/ui/ScreenContainer'
 
 type Nav = NativeStackNavigationProp<MoreStackParamList>
 
@@ -27,7 +25,6 @@ const SCOPE_LABELS: Record<string, string> = { game: 'Game', night: 'Night', sea
 export default function LeagueRecordsScreen() {
   const { loading, seasonList, rawScores, rawFrames, reload } = useLeagueRecordsData()
   const { recordsSeason, recordsScope, set } = useUiStore()
-  const { refreshing, onRefresh } = useRefresh(reload)
   const navigation = useNavigation<Nav>()
 
   const seasonNumbers = useMemo(
@@ -55,10 +52,12 @@ export default function LeagueRecordsScreen() {
   if (loading && rawScores.length === 0) return <LoadingView label="Loading records" />
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
-      <ScreenHeader title="League Records" onBack={() => navigation.navigate('MoreHome')} />
-
-      <ScrollView contentContainerStyle={styles.content} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent} />}>
+    <ScreenContainer
+      title="League Records"
+      onBack={() => navigation.navigate('MoreHome')}
+      onRefresh={reload}
+      contentStyle={{ paddingHorizontal: 0 }}
+    >
         <PillFilter
           items={seasonNumbers}
           value={activeSeason}
@@ -182,8 +181,7 @@ export default function LeagueRecordsScreen() {
             weeks={records.bestSeasonAvg.weeks}
           />
         ) : null}
-      </ScrollView>
-    </SafeAreaView>
+    </ScreenContainer>
   )
 }
 
@@ -351,11 +349,6 @@ function FrameGameBlock({ game, stat }: { game: RecordFrameGame; stat: FrameStat
     </View>
   )
 }
-
-const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: colors.bg },
-  content: { paddingBottom: 40 },
-})
 
 const cardStyles = StyleSheet.create({
   card: {

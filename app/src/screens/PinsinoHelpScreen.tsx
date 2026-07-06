@@ -1,9 +1,7 @@
-import { View, Text, ScrollView, StyleSheet } from 'react-native'
-import { SafeAreaView } from 'react-native-safe-area-context'
-import { useNavigation } from '@react-navigation/native'
+import { View, Text, StyleSheet } from 'react-native'
 import { colors, fonts, radius } from '../theme'
 import PinsinoNoirBackdrop from '../components/pixelart/PinsinoNoirBackdrop'
-import ScreenHeader from '../components/ui/ScreenHeader'
+import ScreenContainer from '../components/ui/ScreenContainer'
 import FeatureAccordion from '../components/pinsino/FeatureAccordion'
 import { SHOW_AUCTION_HOUSE } from '../utils/featureFlags'
 
@@ -11,17 +9,13 @@ import { SHOW_AUCTION_HOUSE } from '../utils/featureFlags'
 // Pinsino feature gets one collapsible section, in the same order as the landing
 // tiles. The Auction House section is gated on the same flag as its tile.
 export default function PinsinoHelpScreen() {
-  const navigation = useNavigation()
-
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
-      <PinsinoNoirBackdrop />
-      <ScreenHeader
-        title="How the Pinsino Works"
-        subtitle="Plain-English house rules"
-        onBack={() => navigation.goBack()}
-      />
-      <ScrollView contentContainerStyle={styles.content}>
+    <ScreenContainer
+      title="How the Pinsino Works"
+      subtitle="Plain-English house rules"
+      backdrop={<PinsinoNoirBackdrop />}
+      contentStyle={styles.content}
+    >
         {/* Intro — what pins are */}
         <View style={styles.intro}>
           <Text style={styles.introTitle}>IT ALL RUNS ON PINS</Text>
@@ -108,14 +102,13 @@ export default function PinsinoHelpScreen() {
         />
 
         <Text style={styles.footer}>The house always remembers.</Text>
-      </ScrollView>
-    </SafeAreaView>
+    </ScreenContainer>
   )
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: colors.bg },
-  content: { flexGrow: 1, paddingHorizontal: 16, paddingBottom: 32 },
+  // Differs from the ScreenContainer default: flexGrow + shorter bottom pad.
+  content: { flexGrow: 1, paddingBottom: 32 },
 
   intro: {
     backgroundColor: colors.surface,

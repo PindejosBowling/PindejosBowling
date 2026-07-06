@@ -1,13 +1,10 @@
 import { useCallback, useState } from 'react'
-import { View, Text, ScrollView, StyleSheet, RefreshControl } from 'react-native'
-import { SafeAreaView } from 'react-native-safe-area-context'
+import { View, Text, StyleSheet } from 'react-native'
 import { useNavigation, useFocusEffect } from '@react-navigation/native'
 import { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { colors, fonts, radius } from '../theme'
-import ScreenHeader from '../components/ui/ScreenHeader'
-import ArtworkToggle from '../components/ui/ArtworkToggle'
+import ScreenContainer from '../components/ui/ScreenContainer'
 import PvPShootoutBackdrop from '../components/pixelart/PvPShootoutBackdrop'
-import ScreenBackdrop from '../components/pixelart/ScreenBackdrop'
 import PvpChallengeRow from '../components/pvp/PvpChallengeRow'
 import PvpChallengeDetailModal from '../components/pvp/PvpChallengeDetailModal'
 import Button from '../components/ui/Button'
@@ -15,7 +12,6 @@ import BalancePill from '../components/ui/BalancePill'
 import { usePvpData, PvpChallengeView } from '../hooks/usePvpData'
 import { usePinsinoSeasonContext } from '../hooks/usePinsinoSeasonContext'
 import ReadOnlySeasonBanner from '../components/betting/ReadOnlySeasonBanner'
-import { useRefresh } from '../hooks/useRefresh'
 import { useAuthStore } from '../stores/authStore'
 import { useUiStore } from '../stores/uiStore'
 import { useNotificationStore } from '../stores/notificationStore'
@@ -26,7 +22,6 @@ type Nav = NativeStackNavigationProp<PinsinoStackParamList>
 export default function PvPScreen() {
   const navigation = useNavigation<Nav>()
   const playerId = useAuthStore(s => s.playerId)
-  const artworkReveal = useUiStore(s => s.artworkReveal)
 
   const pinsinoViewSeasonId = useUiStore(s => s.pinsinoViewSeasonId)
   const { readOnly, viewSeasonNumber } = usePinsinoSeasonContext()
@@ -41,7 +36,6 @@ export default function PvPScreen() {
     [reload],
   )
 
-  const { refreshing, onRefresh } = useRefresh(reloadAll)
   const [detailId, setDetailId] = useState<string | null>(null)
 
   // Refresh on return (e.g. after creating a challenge). The hook's own mount load
@@ -79,14 +73,13 @@ export default function PvPScreen() {
     inbox.settled.length === 0
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
-      <ScreenBackdrop backdrop={<PvPShootoutBackdrop />} loading={loading}>
-      <ScreenHeader title="PvP" subtitle="Challenge a rival, winner takes the pot" onBack={() => navigation.goBack()} right={<ArtworkToggle />} />
-      {!artworkReveal && (
-      <ScrollView
-        contentContainerStyle={styles.content}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.muted} />}
-      >
+    <ScreenContainer
+      title="PvP"
+      subtitle="Challenge a rival, winner takes the pot"
+      backdrop={<PvPShootoutBackdrop />}
+      loading={loading}
+      onRefresh={reloadAll}
+    >
         {readOnly && <ReadOnlySeasonBanner seasonNumber={viewSeasonNumber} />}
 
         {/* Record + balance summary */}
@@ -138,9 +131,6 @@ export default function PvPScreen() {
             {section('HISTORY', inbox.settled)}
           </>
         )}
-      </ScrollView>
-      )}
-      </ScreenBackdrop>
 
       {detailId && (
         <PvpChallengeDetailModal
@@ -149,14 +139,11 @@ export default function PvPScreen() {
           onChanged={reloadAll}
         />
       )}
-    </SafeAreaView>
+    </ScreenContainer>
   )
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: colors.bg },
-  content: { paddingHorizontal: 16, paddingBottom: 40 },
-
   recordCard: {
     flexDirection: 'row',
     alignItems: 'center',

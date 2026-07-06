@@ -1,19 +1,15 @@
 import { useCallback } from 'react'
-import { View, Text, ScrollView, StyleSheet, RefreshControl } from 'react-native'
-import { SafeAreaView } from 'react-native-safe-area-context'
+import { View, Text, StyleSheet } from 'react-native'
 import { useNavigation, useFocusEffect } from '@react-navigation/native'
 import { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { colors, fonts, radius } from '../theme'
-import ScreenHeader from '../components/ui/ScreenHeader'
-import ArtworkToggle from '../components/ui/ArtworkToggle'
+import ScreenContainer from '../components/ui/ScreenContainer'
 import BountyBoardBackdrop from '../components/pixelart/BountyBoardBackdrop'
-import LoadingView from '../components/ui/LoadingView'
 import BountyCard from '../components/bounty/BountyCard'
 import BalancePill from '../components/ui/BalancePill'
 import ReadOnlySeasonBanner from '../components/betting/ReadOnlySeasonBanner'
 import { useBountyBoardData, BountyView } from '../hooks/useBountyBoardData'
 import { usePinsinoSeasonContext } from '../hooks/usePinsinoSeasonContext'
-import { useRefresh } from '../hooks/useRefresh'
 import { useAuthStore } from '../stores/authStore'
 import { useUiStore } from '../stores/uiStore'
 import { PinsinoStackParamList } from '../navigation/types'
@@ -23,12 +19,10 @@ type Nav = NativeStackNavigationProp<PinsinoStackParamList>
 export default function BountyBoardScreen() {
   const navigation = useNavigation<Nav>()
   const playerId = useAuthStore(s => s.playerId)
-  const artworkReveal = useUiStore(s => s.artworkReveal)
 
   const pinsinoViewSeasonId = useUiStore(s => s.pinsinoViewSeasonId)
   const { readOnly, viewSeasonNumber } = usePinsinoSeasonContext()
   const { loading, balance, openBoard, mySponsored, myHunted, settled, reload } = useBountyBoardData(playerId, pinsinoViewSeasonId)
-  const { refreshing, onRefresh } = useRefresh(reload)
 
   // Refresh on return (e.g. after posting or entering). Silent after first load.
   useFocusEffect(useCallback(() => { reload() }, [reload]))
@@ -52,14 +46,12 @@ export default function BountyBoardScreen() {
     openBoard.length === 0 && mySponsored.length === 0 && myHunted.length === 0 && settled.length === 0
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
-      <BountyBoardBackdrop />
-      <ScreenHeader title="Bounties" subtitle="Join the hunt & prosper together" onBack={() => navigation.goBack()} right={<ArtworkToggle />} />
-      {!artworkReveal && (
-      <ScrollView
-        contentContainerStyle={styles.content}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.muted} />}
-      >
+    <ScreenContainer
+      title="Bounties"
+      subtitle="Join the hunt & prosper together"
+      backdrop={<BountyBoardBackdrop />}
+      onRefresh={reload}
+    >
         {readOnly && <ReadOnlySeasonBanner seasonNumber={viewSeasonNumber} />}
 
         <BalancePill balance={balance} />
@@ -83,16 +75,11 @@ export default function BountyBoardScreen() {
             {section('SETTLED', settled)}
           </>
         )}
-      </ScrollView>
-      )}
-    </SafeAreaView>
+    </ScreenContainer>
   )
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: colors.bg },
-  content: { paddingHorizontal: 16, paddingBottom: 40 },
-
 
   sectionLabel: {
     fontFamily: fonts.barlowCondensed,

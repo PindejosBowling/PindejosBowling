@@ -1,12 +1,8 @@
 import { useState, useCallback, useEffect } from 'react'
-import { View, Text, ScrollView, StyleSheet, RefreshControl, TouchableOpacity, Alert } from 'react-native'
-import { SafeAreaView } from 'react-native-safe-area-context'
-import { useNavigation } from '@react-navigation/native'
+import { View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native'
 import { colors, fonts, radius } from '../theme'
-import ScreenHeader from '../components/ui/ScreenHeader'
-import LoadingView from '../components/ui/LoadingView'
+import ScreenContainer from '../components/ui/ScreenContainer'
 import Toast from '../components/ui/Toast'
-import { useRefresh } from '../hooks/useRefresh'
 import { useAuthStore } from '../stores/authStore'
 import { useUiStore } from '../stores/uiStore'
 import { seasons, loans, loanLedger } from '../utils/supabase/db'
@@ -22,7 +18,6 @@ interface AdminLoanRow {
 }
 
 export default function LoanSharkAdminScreen() {
-  const navigation = useNavigation()
   const isAdmin = useAuthStore(s => s.role) === 'admin'
   const { showToast } = useUiStore()
 
@@ -65,8 +60,6 @@ export default function LoanSharkAdminScreen() {
 
   useEffect(() => { load() }, [load])
 
-  const { refreshing, onRefresh } = useRefresh(load)
-
   // Destructive rollback (cancel_loan RPC): removes the loan's pin + debt rows.
   async function cancelLoan(row: AdminLoanRow) {
     const { error } = await loans.cancel(row.loanId)
@@ -90,24 +83,22 @@ export default function LoanSharkAdminScreen() {
     )
   }
 
-  if (loading) return <LoadingView label="Loading…" />
-
   if (!isAdmin) {
     return (
-      <SafeAreaView style={styles.safe} edges={['top']}>
-        <ScreenHeader title="Loan Shark Admin" onBack={() => navigation.goBack()} />
+      <ScreenContainer title="Loan Shark Admin" loading={loading} scroll={false}>
         <EmptyCard text="Admins only" style={{ marginHorizontal: 16 }} />
-      </SafeAreaView>
+      </ScreenContainer>
     )
   }
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
-      <ScreenHeader title="Loan Shark Admin" subtitle="Active & paid-off loans" onBack={() => navigation.goBack()} />
-      <ScrollView
-        contentContainerStyle={styles.content}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.muted} />}
-      >
+    <ScreenContainer
+      title="Loan Shark Admin"
+      subtitle="Active & paid-off loans"
+      loading={loading}
+      onRefresh={load}
+      overlay={<Toast />}
+    >
         {rows.length === 0 ? (
           <EmptyCard text="No active or paid-off loans" style={{ marginHorizontal: 16 }} />
         ) : (
@@ -139,15 +130,11 @@ export default function LoanSharkAdminScreen() {
             ))}
           </View>
         )}
-      </ScrollView>
-      <Toast />
-    </SafeAreaView>
+    </ScreenContainer>
   )
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: colors.bg },
-  content: { paddingHorizontal: 16, paddingBottom: 40 },
   card: {
     backgroundColor: colors.surface,
     borderRadius: radius.card,

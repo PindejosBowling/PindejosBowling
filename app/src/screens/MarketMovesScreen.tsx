@@ -1,13 +1,10 @@
 import { useState, useCallback, useMemo } from 'react'
 import { View, Text, TouchableOpacity, FlatList, StyleSheet, RefreshControl, ActivityIndicator } from 'react-native'
-import { SafeAreaView } from 'react-native-safe-area-context'
 import { useNavigation, useFocusEffect } from '@react-navigation/native'
 import { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { colors, fonts, radius } from '../theme'
-import ScreenHeader from '../components/ui/ScreenHeader'
-import ArtworkToggle from '../components/ui/ArtworkToggle'
+import ScreenContainer from '../components/ui/ScreenContainer'
 import MarketMovesTownBackdrop from '../components/pixelart/MarketMovesTownBackdrop'
-import LoadingView from '../components/ui/LoadingView'
 import PillFilter from '../components/ui/PillFilter'
 import MarketMoveCard from '../components/economy/MarketMoveCard'
 import ReadOnlySeasonBanner from '../components/betting/ReadOnlySeasonBanner'
@@ -78,7 +75,6 @@ function groupEventsByWeek(events: FeedEventView[], weekInfoById: WeekInfoById):
 export default function MarketMovesScreen() {
   const navigation = useNavigation<Nav>()
   const playerId = useAuthStore(s => s.playerId)
-  const artworkReveal = useUiStore(s => s.artworkReveal)
   const pinsinoViewSeasonId = useUiStore(s => s.pinsinoViewSeasonId)
   const { readOnly, viewSeasonNumber } = usePinsinoSeasonContext()
   const { loading, events, filter, setFilter, hasMore, loadMore, reload, weekInfoById, currentWeekId } = useMarketMovesData(pinsinoViewSeasonId)
@@ -152,27 +148,19 @@ export default function MarketMovesScreen() {
     return undefined
   }
 
-  // Transitions stay art-only: the backdrop paints immediately and the
-  // spinner appears only if loading drags past 5s.
-  if (loading) {
-    return (
-      <SafeAreaView style={styles.safe} edges={['top']}>
-        <MarketMovesTownBackdrop />
-        <LoadingView label="Loading…" transparent delayed />
-      </SafeAreaView>
-    )
-  }
-
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
-      <MarketMovesTownBackdrop />
-      <ScreenHeader title="Market Moves" subtitle="The Pinsino Newswire" onBack={() => navigation.goBack()} right={<ArtworkToggle />} />
-      {!artworkReveal && readOnly && (
+    <ScreenContainer
+      title="Market Moves"
+      subtitle="The Pinsino Newswire"
+      backdrop={<MarketMovesTownBackdrop />}
+      loading={loading}
+      scroll={false}
+    >
+      {readOnly && (
         <View style={styles.pillBar}>
           <ReadOnlySeasonBanner seasonNumber={viewSeasonNumber} />
         </View>
       )}
-      {!artworkReveal && (
       <View style={styles.pillBar}>
         <PillFilter
           items={FILTERS.map(f => f.key)}
@@ -181,8 +169,6 @@ export default function MarketMovesScreen() {
           renderLabel={item => LABEL_BY_KEY[item] ?? item}
         />
       </View>
-      )}
-      {!artworkReveal && (
       <FlatList
         data={groups}
         keyExtractor={g => g.key}
@@ -220,7 +206,6 @@ export default function MarketMovesScreen() {
           hasMore ? <ActivityIndicator color={colors.muted} style={styles.footer} /> : null
         }
       />
-      )}
       <BetDetailModal bet={detailBet} onClose={() => setDetailBet(null)} />
       {detailChallengeId && (
         <PvpChallengeDetailModal
@@ -229,12 +214,11 @@ export default function MarketMovesScreen() {
           onChanged={reload}
         />
       )}
-    </SafeAreaView>
+    </ScreenContainer>
   )
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: colors.bg },
   // Keep the pill row at its natural height — don't let the filled list squeeze it.
   pillBar: { flexShrink: 0 },
   // The list absorbs the remaining vertical space (and scrolls internally) so it

@@ -1,8 +1,6 @@
 import { useState, useMemo } from 'react'
-import { View, Text, ScrollView, RefreshControl, TouchableOpacity, StyleSheet, useWindowDimensions } from 'react-native'
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, useWindowDimensions } from 'react-native'
 import { LineChart } from 'react-native-gifted-charts'
-import { useRefresh } from '../hooks/useRefresh'
-import { SafeAreaView } from 'react-native-safe-area-context'
 import { useNavigation } from '@react-navigation/native'
 import { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { colors, fonts, radius } from '../theme'
@@ -11,7 +9,7 @@ import { useH2HData, computeH2HFromSupabase, H2HGame } from '../hooks/useH2HData
 import { MoreStackParamList } from '../navigation/types'
 import LoadingView from '../components/ui/LoadingView'
 import PlayerPickerModal from '../components/ui/PlayerPickerModal'
-import ScreenHeader from '../components/ui/ScreenHeader'
+import ScreenContainer from '../components/ui/ScreenContainer'
 
 type Nav = NativeStackNavigationProp<MoreStackParamList>
 
@@ -25,7 +23,6 @@ interface WeekGroup {
 export default function HeadToHeadScreen() {
   const { loading, playerNames, rawScores, rawSchedule, reload } = useH2HData()
   const { h2hP1, h2hP2, set } = useUiStore()
-  const { refreshing, onRefresh } = useRefresh(reload)
   const navigation = useNavigation<Nav>()
   const [pickerOpen, setPickerOpen] = useState<'p1' | 'p2' | null>(null)
   const { width: screenWidth } = useWindowDimensions()
@@ -191,10 +188,13 @@ export default function HeadToHeadScreen() {
   const p2Short = (h2hP2 || '').split(' ')[0]
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
-      <ScreenHeader title="Head to Head" onBack={() => navigation.navigate('MoreHome')} />
-
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent} />}>
+    <ScreenContainer
+      title="Head to Head"
+      onBack={() => navigation.navigate('MoreHome')}
+      onRefresh={reload}
+      keyboardShouldPersistTaps="handled"
+      contentStyle={{ paddingBottom: 32 }}
+    >
         {/* Player selectors */}
         <View style={styles.pickerRow}>
           <TouchableOpacity
@@ -512,7 +512,6 @@ export default function HeadToHeadScreen() {
             </View>
           </>
         ) : null}
-      </ScrollView>
 
       <PlayerPickerModal
         visible={pickerOpen === 'p1'}
@@ -528,14 +527,11 @@ export default function HeadToHeadScreen() {
         onSelect={(name) => { set({ h2hP2: name }); setPickerOpen(null) }}
         onClose={() => setPickerOpen(null)}
       />
-    </SafeAreaView>
+    </ScreenContainer>
   )
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: colors.bg },
-  content: { paddingHorizontal: 16, paddingBottom: 32 },
-
   pickerRow: {
     flexDirection: 'row',
     alignItems: 'center',

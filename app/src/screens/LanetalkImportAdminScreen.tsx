@@ -1,25 +1,17 @@
 import { useMemo, useState, useCallback } from 'react'
 import {
-  View, Text, ScrollView, StyleSheet, RefreshControl, TextInput, TouchableOpacity, ActivityIndicator, Platform,
+  View, Text, StyleSheet, TextInput, TouchableOpacity, ActivityIndicator, Platform,
 } from 'react-native'
-import { SafeAreaView } from 'react-native-safe-area-context'
-import { useNavigation } from '@react-navigation/native'
-import { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { colors, fonts, radius } from '../theme'
-import { MoreStackParamList } from '../navigation/types'
-import ScreenHeader from '../components/ui/ScreenHeader'
-import LoadingView from '../components/ui/LoadingView'
+import ScreenContainer from '../components/ui/ScreenContainer'
 import Toast from '../components/ui/Toast'
 import Dropdown from '../components/ui/Dropdown'
-import { useRefresh } from '../hooks/useRefresh'
 import { useAuthStore } from '../stores/authStore'
 import { useUiStore } from '../stores/uiStore'
 import { useLanetalkImportAdmin } from '../hooks/useLanetalkImportAdmin'
 import { lanetalkImports, type LanetalkImportSummary } from '../utils/supabase/db'
 import EmptyCard from '../components/ui/EmptyCard'
 import LanetalkConfirmModal from '../components/admin/LanetalkConfirmModal'
-
-type Nav = NativeStackNavigationProp<MoreStackParamList>
 
 const monoFont = Platform.select({ ios: 'Menlo', android: 'monospace', default: 'monospace' })
 
@@ -65,11 +57,9 @@ function formatDate(bowledAt: string | null): string {
 }
 
 export default function LanetalkImportAdminScreen() {
-  const navigation = useNavigation<Nav>()
   const isAdmin = useAuthStore(s => s.role) === 'admin'
   const showToast = useUiStore(s => s.showToast)
   const { loading, rawImports, unsettledProps, settledPropWeeks, reload } = useLanetalkImportAdmin()
-  const { refreshing, onRefresh } = useRefresh(reload)
 
   // Unsettled LaneTalk stat props, grouped by week — each week group with any
   // pending props gets a "Confirm LaneTalk Data" action. The button hides once
@@ -258,24 +248,23 @@ export default function LanetalkImportAdminScreen() {
     }
   }
 
-  if (loading) return <LoadingView label="Loading…" />
-
   if (!isAdmin) {
     return (
-      <SafeAreaView style={styles.safe} edges={['top']}>
-        <ScreenHeader title="Lanetalk Import" onBack={() => navigation.goBack()} />
+      <ScreenContainer title="Lanetalk Import" loading={loading} scroll={false}>
         <EmptyCard text="Admins only" style={{ marginTop: 12 }} />
-      </SafeAreaView>
+      </ScreenContainer>
     )
   }
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
-      <ScreenHeader title="Lanetalk Import" subtitle="Pull a shared-session link into the league" onBack={() => navigation.goBack()} />
-
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled"
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.muted} />}
-      >
+    <ScreenContainer
+      title="Lanetalk Import"
+      subtitle="Pull a shared-session link into the league"
+      loading={loading}
+      onRefresh={reload}
+      keyboardShouldPersistTaps="handled"
+      overlay={<Toast />}
+    >
         <View style={styles.card}>
           <Text style={styles.label}>Lanetalk share link{links.length > 1 ? 's' : ''}</Text>
           {links.map((link, i) => (
@@ -446,27 +435,23 @@ export default function LanetalkImportAdminScreen() {
             )
           })
         )}
-      </ScrollView>
 
-      {/* Stat-prop settlement modal (mounted conditionally so state resets). */}
-      {confirmWeek && (
-        <LanetalkConfirmModal
-          weekId={confirmWeek.weekId}
-          weekTitle={confirmWeek.title}
-          markets={propsByWeek.get(confirmWeek.weekId) ?? []}
-          onClose={() => setConfirmWeek(null)}
-          onDone={reload}
-        />
-      )}
-
-      <Toast />
-    </SafeAreaView>
+        {/* Stat-prop settlement modal (mounted conditionally so state resets;
+            Modal-based, so it renders in the native overlay layer). */}
+        {confirmWeek && (
+          <LanetalkConfirmModal
+            weekId={confirmWeek.weekId}
+            weekTitle={confirmWeek.title}
+            markets={propsByWeek.get(confirmWeek.weekId) ?? []}
+            onClose={() => setConfirmWeek(null)}
+            onDone={reload}
+          />
+        )}
+    </ScreenContainer>
   )
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: colors.bg },
-  content: { paddingHorizontal: 16, paddingBottom: 40 },
   card: {
     backgroundColor: colors.surface,
     borderRadius: radius.card,

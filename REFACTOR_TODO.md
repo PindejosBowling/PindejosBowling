@@ -40,7 +40,7 @@ Re-derive this table from the `Verify` commands if in doubt — do not trust it 
 | 2 | 2.2 `<StatRow>` | [x] |
 | 2 | 2.3 `<PinAmountInput>` | [x] |
 | 2 | 2.4 shared admin-modal styles | [x] |
-| 2 | 2.5 `<ScreenContainer>` | [ ] |
+| 2 | 2.5 `<ScreenContainer>` | [x] |
 | 3 | 3.1 `useAsyncData` | [ ] |
 | 3 | 3.2 `useEconomyRefresh` + `bounty` source | [~] |
 | 3 | 3.3 migrate `visible`-prop admin modals | [ ] |
@@ -118,9 +118,9 @@ _Baseline: none started — every task below was identified by the audit; no ref
 - **Depends on:** 2.3 (input). **Verify:** the three files no longer each declare their own `section`/`label`/`input` StyleSheet entries.
 
 ### 2.5 — `<ScreenContainer>` scaffold  ↪ §2.5
-- [ ] Create `app/src/components/ui/ScreenContainer.tsx` wrapping `SafeAreaView` + `ScreenHeader` + `ScrollView` + `RefreshControl` (+ optional pixel-art backdrop), using `useRefresh`.
-- [ ] Migrate inner stack screens incrementally (one PR each); tick this when the bulk (~30) are converted.
-- **Verify:** `grep -rln "ScreenContainer" app/src/screens | wc -l` rising toward ~30, while `grep -rln "SafeAreaView" app/src/screens | wc -l` falls.
+- [x] Create `app/src/components/ui/ScreenContainer.tsx` wrapping `SafeAreaView` + `ScreenHeader` + `ScrollView` + `RefreshControl` (+ optional pixel-art backdrop), using `useRefresh`. _(Also grew `pinned` (fixed filter row between header and scroll) and `overlay` (absolutely-positioned siblings outside the scroll — `<Toast />`, `ConfirmBar`) slots, plus `scroll={false}` for FlatList screens and a `loading` prop reproducing both LoadingView variants.)_
+- [x] Migrate inner stack screens incrementally (one PR each); tick this when the bulk (~30) are converted. _(24 screens converted in one sweep — every screen matching the fixed-header shell. The ~13 remaining `SafeAreaView` files are structurally different, not backlog: 9 mount `ScreenHeader` inside the ScrollView so it scrolls away (AdminSportsbook, Archives, FrameStats, LoanShark, PinsinoAdmin/Accounting/Leaderboard, PlayerDetail, PlayerPinsino — converting changes behavior; decide fixed-vs-scrolling header first), plus Sportsbook (scroll-length backdrop per pixelart/config.ts), PlayerManagement/TrashBoard (KeyboardAvoidingView shells), ProfilePictures (inline header-visible loading), and the tab roots. Accepted deviations: RefreshControl tint standardized to `colors.muted` (was `colors.accent` on 4 screens); admin-gate/not-found `EmptyCard`s now sit inside the padded scroll; PinsinoHelp gains the ArtworkToggle + reveal-hiding it previously lacked.)_
+- **Verify:** `grep -rln "ScreenContainer" app/src/screens | wc -l` rising toward ~30 _(now: 24)_, while `grep -rln "SafeAreaView" app/src/screens | wc -l` falls _(42 → 18)_.
 - **Manual check:** each migrated screen — safe-area insets, header, and pull-to-refresh unchanged.
 
 ---

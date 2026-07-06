@@ -1,12 +1,10 @@
 import { useMemo, useState } from 'react'
-import { View, Text, ScrollView, StyleSheet, TouchableOpacity, RefreshControl } from 'react-native'
-import { SafeAreaView } from 'react-native-safe-area-context'
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native'
 import { useNavigation } from '@react-navigation/native'
 import { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { colors, fonts, radius } from '../theme'
 import { MoreStackParamList } from '../navigation/types'
-import ScreenHeader from '../components/ui/ScreenHeader'
-import LoadingView from '../components/ui/LoadingView'
+import ScreenContainer from '../components/ui/ScreenContainer'
 import Button from '../components/ui/Button'
 import ToggleGroup from '../components/ui/ToggleGroup'
 import ConfirmActionSheet from '../components/ui/ConfirmActionSheet'
@@ -14,7 +12,6 @@ import EmptyCard from '../components/ui/EmptyCard'
 import Toast from '../components/ui/Toast'
 import { useAuthStore } from '../stores/authStore'
 import { useUiStore } from '../stores/uiStore'
-import { useRefresh } from '../hooks/useRefresh'
 import { usePlayoffDraftData, computeDraftTurnSeed, DraftType } from '../hooks/usePlayoffDraftData'
 import { computeStandingsFromSupabase } from '../hooks/useStandingsData'
 import { playoffDrafts, teams, games, betMarkets } from '../utils/supabase/db'
@@ -37,7 +34,6 @@ export default function PlayoffsScreen() {
 
   const { loading, seasonId, rawDraft, rawWeeks, rawDraftablePlayers, rawScores, rawSchedule, reload } =
     usePlayoffDraftData()
-  const { refreshing, onRefresh } = useRefresh(reload)
 
   // Setup form state (admin, no draft yet)
   const [captainIds, setCaptainIds] = useState<string[]>([])
@@ -202,20 +198,17 @@ export default function PlayoffsScreen() {
     setSetupWeekId(null)
   }
 
-  if (loading) return <LoadingView label="Loading playoffs…" />
-
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
-      <ScreenHeader
-        title="Playoffs"
-        subtitle={draft ? STATUS_LABEL[draft.status] : 'Captain draft'}
-        onBack={() => navigation.navigate('MoreHome')}
-      />
-
-      <ScrollView
-        contentContainerStyle={styles.content}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.muted} />}
-      >
+    <ScreenContainer
+      title="Playoffs"
+      subtitle={draft ? STATUS_LABEL[draft.status] : 'Captain draft'}
+      onBack={() => navigation.navigate('MoreHome')}
+      loading={loading}
+      loadingLabel="Loading playoffs…"
+      onRefresh={reload}
+      contentStyle={{ paddingBottom: 32 }}
+      overlay={<Toast />}
+    >
         {!seasonId ? (
           <EmptyCard text="No active season — playoffs open once a season is live." style={styles.fieldGap} />
         ) : !draft ? (
@@ -410,9 +403,10 @@ export default function PlayoffsScreen() {
             )}
           </>
         )}
-      </ScrollView>
 
-      {confirmPick && draft && (
+        {/* Modal-based sheets: render in the native overlay layer, so mounting
+            inside the ScrollView children is visually identical. */}
+        {confirmPick && draft && (
         <ConfirmActionSheet
           title={`Draft ${confirmPick.name}?`}
           subtitle={
@@ -468,16 +462,11 @@ export default function PlayoffsScreen() {
           </Text>
         </ConfirmActionSheet>
       )}
-
-      <Toast />
-    </SafeAreaView>
+    </ScreenContainer>
   )
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: colors.bg },
-  content: { paddingHorizontal: 16, paddingBottom: 32 },
-
   sectionHeader: {
     fontFamily: fonts.barlowCondensed,
     fontSize: 11,

@@ -1,10 +1,8 @@
 import { useCallback, useMemo, useState } from 'react'
-import { View, Text, ScrollView, StyleSheet, RefreshControl, TouchableOpacity } from 'react-native'
-import { SafeAreaView } from 'react-native-safe-area-context'
-import { useNavigation, useFocusEffect } from '@react-navigation/native'
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native'
+import { useFocusEffect } from '@react-navigation/native'
 import { colors, fonts, radius } from '../theme'
-import ScreenHeader from '../components/ui/ScreenHeader'
-import LoadingView from '../components/ui/LoadingView'
+import ScreenContainer from '../components/ui/ScreenContainer'
 import EmptyCard from '../components/ui/EmptyCard'
 import Button from '../components/ui/Button'
 import AuctionCard from '../components/auction/AuctionCard'
@@ -14,7 +12,6 @@ import CatalogItemModal from '../components/auction/CatalogItemModal'
 import GrantItemSheet from '../components/auction/GrantItemSheet'
 import AuctionHouseStatusSheet from '../components/auction/AuctionHouseStatusSheet'
 import { useAuctionAdminData } from '../hooks/useAuctionAdminData'
-import { useRefresh } from '../hooks/useRefresh'
 import { useAuthStore } from '../stores/authStore'
 import { AuctionView, CatalogItemAdminView, auctionSections } from '../utils/auction'
 
@@ -22,11 +19,9 @@ import { AuctionView, CatalogItemAdminView, auctionSections } from '../utils/auc
 // (create / edit / open now / settle now / cancel / reverse), item-catalog
 // curation, and item grants. Player-facing screens carry no admin controls.
 export default function AuctionHouseAdminScreen() {
-  const navigation = useNavigation()
   const isAdmin = useAuthStore(s => s.role) === 'admin'
 
   const { loading, auctions, catalog, playerOptions, houseClosed, houseClosedMessage, reload } = useAuctionAdminData()
-  const { refreshing, onRefresh } = useRefresh(reload)
 
   const [createOpen, setCreateOpen] = useState(false)
   const [manageAuction, setManageAuction] = useState<AuctionView | null>(null)
@@ -39,14 +34,11 @@ export default function AuctionHouseAdminScreen() {
 
   const sections = useMemo(() => auctionSections(auctions), [auctions])
 
-  if (loading) return <LoadingView label="Loading…" />
-
   if (!isAdmin) {
     return (
-      <SafeAreaView style={styles.safe} edges={['top']}>
-        <ScreenHeader title="Auction House Admin" onBack={() => navigation.goBack()} />
+      <ScreenContainer title="Auction House Admin">
         <EmptyCard text="Admins only" />
-      </SafeAreaView>
+      </ScreenContainer>
     )
   }
 
@@ -63,12 +55,12 @@ export default function AuctionHouseAdminScreen() {
   const noAuctions = sections.open.length === 0 && sections.scheduled.length === 0 && sections.settled.length === 0
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
-      <ScreenHeader title="Auction House Admin" subtitle="The block, the catalog, the grants" onBack={() => navigation.goBack()} />
-      <ScrollView
-        contentContainerStyle={styles.content}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.muted} />}
-      >
+    <ScreenContainer
+      title="Auction House Admin"
+      subtitle="The block, the catalog, the grants"
+      loading={loading}
+      onRefresh={reload}
+    >
         {/* Kill-switch: closing paints a status over the Pinsino tile and blocks
             entry to the player-facing Auction House. */}
         <TouchableOpacity
@@ -119,8 +111,9 @@ export default function AuctionHouseAdminScreen() {
 
         <Text style={styles.sectionLabel}>GRANTS</Text>
         <Button label="Grant Item to Player" variant="outline" onPress={() => setGrantOpen(true)} />
-      </ScrollView>
 
+      {/* Modal-based sheets: render in the native overlay layer, so mounting
+          inside the ScrollView children is visually identical. */}
       {createOpen && (
         <AuctionCreateModal onClose={() => setCreateOpen(false)} onDone={reload} />
       )}
@@ -149,14 +142,11 @@ export default function AuctionHouseAdminScreen() {
           onDone={reload}
         />
       )}
-    </SafeAreaView>
+    </ScreenContainer>
   )
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: colors.bg },
-  content: { paddingHorizontal: 16, paddingBottom: 40 },
-
   topBtn: { marginTop: 8, marginBottom: 14 },
 
   statusCard: {

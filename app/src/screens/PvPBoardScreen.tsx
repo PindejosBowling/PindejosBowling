@@ -1,10 +1,9 @@
 import { useCallback, useMemo, useState } from 'react'
-import { View, Text, ScrollView, StyleSheet, RefreshControl } from 'react-native'
-import { SafeAreaView } from 'react-native-safe-area-context'
+import { View, Text, StyleSheet } from 'react-native'
 import { useNavigation, useFocusEffect } from '@react-navigation/native'
 import { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { colors, fonts, radius } from '../theme'
-import ScreenHeader from '../components/ui/ScreenHeader'
+import ScreenContainer from '../components/ui/ScreenContainer'
 import LoadingView from '../components/ui/LoadingView'
 import PillFilter from '../components/ui/PillFilter'
 import PvpChallengeRow from '../components/pvp/PvpChallengeRow'
@@ -13,7 +12,6 @@ import PvpCounterModal from '../components/pvp/PvpCounterModal'
 import PvpChallengeDetailModal from '../components/pvp/PvpChallengeDetailModal'
 import Button from '../components/ui/Button'
 import { usePvpData, PvpChallengeView } from '../hooks/usePvpData'
-import { useRefresh } from '../hooks/useRefresh'
 import { useAuthStore } from '../stores/authStore'
 import { CONTRACT_TYPE_LABEL } from '../utils/pvp'
 import { formatPins } from '../utils/formatting'
@@ -46,7 +44,6 @@ export default function PvPBoardScreen() {
   const playerId = useAuthStore(s => s.playerId)
 
   const { loading, balance, openBoard, wonBoard, inbox, reload } = usePvpData(playerId)
-  const { refreshing, onRefresh } = useRefresh(reload)
 
   const [filter, setFilter] = useState('All')
   const showingWon = filter === WON
@@ -73,24 +70,19 @@ export default function PvPBoardScreen() {
   if (loading) return <LoadingView label="Loading…" delayed />
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
-      <ScreenHeader
-        title="Challenge Board"
-        subtitle={showingWon ? 'Settled results — this season' : 'Open contracts — first to accept locks it'}
-        onBack={() => navigation.goBack()}
-      />
-
-      <PillFilter
-        items={FILTERS}
-        value={filter}
-        onChange={setFilter}
-        renderLabel={filterLabel}
-      />
-
-      <ScrollView
-        contentContainerStyle={styles.content}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.muted} />}
-      >
+    <ScreenContainer
+      title="Challenge Board"
+      subtitle={showingWon ? 'Settled results — this season' : 'Open contracts — first to accept locks it'}
+      pinned={
+        <PillFilter
+          items={FILTERS}
+          value={filter}
+          onChange={setFilter}
+          renderLabel={filterLabel}
+        />
+      }
+      onRefresh={reload}
+    >
         {showingWon ? (
           // Challenges Won: every settled contract leaguewide this season, a
           // public results feed. Read-only (no accept/counter); tap for detail.
@@ -160,7 +152,6 @@ export default function PvPBoardScreen() {
         )}
         </>
         )}
-      </ScrollView>
 
       {acceptTarget && (
         <PvpAcceptModal
@@ -186,14 +177,11 @@ export default function PvPBoardScreen() {
           onChanged={reload}
         />
       )}
-    </SafeAreaView>
+    </ScreenContainer>
   )
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: colors.bg },
-  content: { paddingHorizontal: 16, paddingBottom: 40 },
-
   postBtn: { marginTop: 4, marginBottom: 16 },
 
   sectionLabel: {

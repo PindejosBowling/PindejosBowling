@@ -1,23 +1,19 @@
 import { useCallback, useMemo, useState } from 'react'
-import { View, Text, ScrollView, StyleSheet, RefreshControl } from 'react-native'
-import { SafeAreaView } from 'react-native-safe-area-context'
-import { useNavigation, useRoute, useFocusEffect, RouteProp } from '@react-navigation/native'
-import { NativeStackNavigationProp } from '@react-navigation/native-stack'
+import { View, Text, StyleSheet } from 'react-native'
+import { useRoute, useFocusEffect, RouteProp } from '@react-navigation/native'
 import { colors, fonts, radius } from '../theme'
-import ScreenHeader from '../components/ui/ScreenHeader'
+import ScreenContainer from '../components/ui/ScreenContainer'
 import LoadingView from '../components/ui/LoadingView'
 import BountyEntryModal from '../components/bounty/BountyEntryModal'
 import Button from '../components/ui/Button'
 import { useBountyDetail } from '../hooks/useBountyDetail'
 import { usePinsinoSeasonContext } from '../hooks/usePinsinoSeasonContext'
-import { useRefresh } from '../hooks/useRefresh'
 import { useAuthStore } from '../stores/authStore'
 import { useNotificationStore } from '../stores/notificationStore'
 import { bountyEconomics, formatCloseTime } from '../utils/bounty'
 import { PinsinoStackParamList } from '../navigation/types'
 import { formatPins } from '../utils/formatting'
 
-type Nav = NativeStackNavigationProp<PinsinoStackParamList>
 type Rt = RouteProp<PinsinoStackParamList, 'BountyDetail'>
 
 const LEDGER_LABEL: Record<string, string> = {
@@ -27,14 +23,12 @@ const LEDGER_LABEL: Record<string, string> = {
 }
 
 export default function BountyDetailScreen() {
-  const navigation = useNavigation<Nav>()
   const route = useRoute<Rt>()
   const playerId = useAuthStore(s => s.playerId)
   const { bountyId } = route.params
 
   const { readOnly } = usePinsinoSeasonContext()
   const { loading, bounty, hunters, settlement, payouts, ledger, reload } = useBountyDetail(bountyId)
-  const { refreshing, onRefresh } = useRefresh(reload)
   const [entryOpen, setEntryOpen] = useState(false)
 
   useFocusEffect(useCallback(() => { reload() }, [reload]))
@@ -62,26 +56,21 @@ export default function BountyDetailScreen() {
     return !hunters.some(h => h.playerId === playerId)
   }, [bounty, hunters, playerId, readOnly])
 
+  // Non-standard loading (plain + delayed) — kept outside ScreenContainer.
   if (loading) return <LoadingView label="Loading…" delayed />
 
   if (!bounty) {
     return (
-      <SafeAreaView style={styles.safe} edges={['top']}>
-        <ScreenHeader title="Bounty" onBack={() => navigation.goBack()} />
+      <ScreenContainer title="Bounty">
         <View style={styles.emptyCard}><Text style={styles.emptyText}>This bounty is no longer available.</Text></View>
-      </SafeAreaView>
+      </ScreenContainer>
     )
   }
 
   const sponsorLabel = bounty.bountyType === 'house_bounty' ? 'The Pinsino' : (bounty.sponsorName ?? '—')
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
-      <ScreenHeader title="Bounty" onBack={() => navigation.goBack()} />
-      <ScrollView
-        contentContainerStyle={styles.content}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.muted} />}
-      >
+    <ScreenContainer title="Bounty" onRefresh={reload}>
         <Text style={styles.title}>{bounty.title}</Text>
         <Text style={styles.sponsor}>
           by {sponsorLabel} · {bounty.status.toUpperCase()} · Closes {formatCloseTime(bounty.closesAt)}
@@ -176,19 +165,17 @@ export default function BountyDetailScreen() {
         {canJoin && (
           <Button label="Join the Hunt" size="lg" onPress={() => setEntryOpen(true)} style={styles.joinBtn} />
         )}
-      </ScrollView>
 
-      {entryOpen && (
-        <BountyEntryModal bounty={bounty} onClose={() => setEntryOpen(false)} onDone={onEntryDone} />
-      )}
-    </SafeAreaView>
+        {/* Modal-based sheet: renders in the native overlay layer, so mounting
+            inside the ScrollView children is visually identical. */}
+        {entryOpen && (
+          <BountyEntryModal bounty={bounty} onClose={() => setEntryOpen(false)} onDone={onEntryDone} />
+        )}
+    </ScreenContainer>
   )
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: colors.bg },
-  content: { paddingHorizontal: 16, paddingBottom: 40 },
-
   title: { fontFamily: fonts.barlowCondensedHeavy, fontSize: 26, color: colors.text, marginTop: 8 },
   sponsor: { fontFamily: fonts.barlow, fontSize: 12, color: colors.muted, marginTop: 4 },
   description: { fontFamily: fonts.barlow, fontSize: 15, color: colors.text, lineHeight: 22, marginTop: 12 },
@@ -225,7 +212,8 @@ const styles = StyleSheet.create({
 
   emptyCard: {
     backgroundColor: colors.surface, borderRadius: radius.cardMd, borderWidth: 1, borderColor: colors.border,
-    padding: 20, alignItems: 'center', margin: 16,
+    // Horizontal inset now comes from the ScreenContainer content padding.
+    padding: 20, alignItems: 'center', marginTop: 16,
   },
   emptyText: { fontFamily: fonts.barlow, fontSize: 14, color: colors.muted, textAlign: 'center' },
 })
