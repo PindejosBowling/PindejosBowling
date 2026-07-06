@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Platform } from 'react-native'
+import { View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native'
 import DateTimePicker from '@react-native-community/datetimepicker'
 import { colors, fonts, radius } from '../../theme'
 import BottomSheet from '../ui/BottomSheet'
 import Button from '../ui/Button'
+import PinAmountInput from '../ui/PinAmountInput'
 import { useUiStore } from '../../stores/uiStore'
 import { useDatePicker } from '../../hooks/useDatePicker'
 import { AuctionView, CatalogItemView, DEFAULT_BOUNCE_FEE, defaultAuctionCloseAt, itemHowToUse } from '../../utils/auction'
@@ -137,24 +138,10 @@ export default function AuctionCreateModal({ initial, onClose, onDone }: Props) 
       )}
 
       <Text style={styles.label}>MINIMUM BID</Text>
-      <TextInput
-        style={styles.input}
-        value={minimumBid}
-        onChangeText={t => setMinimumBid(t.replace(/[^0-9]/g, ''))}
-        placeholder="e.g. 100"
-        placeholderTextColor={colors.muted2}
-        keyboardType="number-pad"
-      />
+      <PinAmountInput value={minimumBid} onChangeText={setMinimumBid} placeholder="e.g. 100" />
 
       <Text style={styles.label}>QUANTITY</Text>
-      <TextInput
-        style={styles.input}
-        value={quantityText}
-        onChangeText={t => setQuantityText(t.replace(/[^0-9]/g, ''))}
-        placeholder="1"
-        placeholderTextColor={colors.muted2}
-        keyboardType="number-pad"
-      />
+      <PinAmountInput value={quantityText} onChangeText={setQuantityText} placeholder="1" />
       {quantity > 1 && (
         <Text style={styles.quantityNote}>
           Top {quantity} sealed bids each win one — every winner pays their own pledge.
@@ -220,10 +207,6 @@ const styles = StyleSheet.create({
   itemChipText: { fontFamily: fonts.barlowCondensed, fontSize: 14, color: colors.muted },
   itemChipTextActive: { color: colors.accent },
 
-  input: {
-    backgroundColor: colors.surface2, borderRadius: radius.cardSm, borderWidth: 1, borderColor: colors.border2,
-    paddingHorizontal: 14, paddingVertical: 12, fontFamily: fonts.barlow, fontSize: 15, color: colors.text,
-  },
   itemCopy: { fontFamily: fonts.barlow, fontSize: 13, color: colors.muted, marginTop: 10, lineHeight: 18 },
   quantityNote: { fontFamily: fonts.barlow, fontSize: 12, color: colors.muted, marginTop: 8, lineHeight: 17 },
   dateBtn: {

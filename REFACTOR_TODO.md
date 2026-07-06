@@ -38,7 +38,7 @@ Re-derive this table from the `Verify` commands if in doubt — do not trust it 
 | 1 | 1.6 doc-rot (`references/` path) | [x] |
 | 2 | 2.1 `<EconomyCard>` | [x] |
 | 2 | 2.2 `<StatRow>` | [x] |
-| 2 | 2.3 `<PinAmountInput>` | [ ] |
+| 2 | 2.3 `<PinAmountInput>` | [x] |
 | 2 | 2.4 shared admin-modal styles | [ ] |
 | 2 | 2.5 `<ScreenContainer>` | [ ] |
 | 3 | 3.1 `useAsyncData` | [ ] |
@@ -108,8 +108,8 @@ _Baseline: none started — every task below was identified by the audit; no ref
 - **Verify:** `grep -rln "StatRow" app/src/components | wc -l` → `≥4`.
 
 ### 2.3 — `<PinAmountInput>` component  ↪ §2.3
-- [ ] Create `app/src/components/ui/PinAmountInput.tsx` owning the `replace(/[^0-9]/g, '')` filter + shared input styling.
-- [ ] Adopt across the 10 amount-entry sites.
+- [x] Create `app/src/components/ui/PinAmountInput.tsx` owning the `replace(/[^0-9]/g, '')` filter + shared input styling.
+- [x] Adopt across the 10 amount-entry sites. _(Actual scope was 19 sites in 11 files — typography tiers preserved as `form`/`stake`/`wager`/`big` variants; `allowDecimal` covers SettleBetModal's prop-line decimals. Only the component itself contains the filter now.)_
 - **Verify:** `grep -rln "replace(/\[\^0-9\]/g" app/src/components app/src/screens | wc -l` → `≤1` _(was: 10 files)_.
 
 ### 2.4 — Shared admin-modal styles  ↪ §2.4

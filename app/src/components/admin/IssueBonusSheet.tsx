@@ -7,6 +7,7 @@ import BottomSheet from '../ui/BottomSheet'
 import Button from '../ui/Button'
 import PlayerPickerModal, { PlayerPickerItem } from '../ui/PlayerPickerModal'
 import PlayerAvatar from '../ui/PlayerAvatar'
+import PinAmountInput from '../ui/PinAmountInput'
 
 interface Props {
   onClose: () => void
@@ -135,13 +136,10 @@ export default function IssueBonusSheet({ onClose, onIssued }: Props) {
         />
 
         <Text style={[styles.fieldLabel, { marginTop: 16 }]}>AMOUNT (PINS)</Text>
-        <TextInput
-          style={styles.input}
+        <PinAmountInput
           value={amount}
-          onChangeText={v => setAmount(v.replace(/[^0-9]/g, ''))}
-          keyboardType="number-pad"
+          onChangeText={setAmount}
           placeholder="e.g. 100"
-          placeholderTextColor={colors.muted2}
           maxLength={7}
         />
 

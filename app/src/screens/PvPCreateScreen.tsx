@@ -13,6 +13,7 @@ import PlayerPickerModal from '../components/ui/PlayerPickerModal'
 import Button from '../components/ui/Button'
 import LineDuelLines from '../components/pvp/LineDuelLines'
 import GamePicker from '../components/ui/GamePicker'
+import PinAmountInput from '../components/ui/PinAmountInput'
 import Toast from '../components/ui/Toast'
 import { useRefresh } from '../hooks/useRefresh'
 import { useAuthStore } from '../stores/authStore'
@@ -419,13 +420,11 @@ export default function PvPCreateScreen() {
             <Text style={[styles.customToggleText, customStakes && styles.customToggleTextOn]}>Custom stakes</Text>
           </TouchableOpacity>
         </View>
-        <TextInput
-          style={styles.input}
+        <PinAmountInput
+          variant="stake"
           value={stake}
-          onChangeText={v => setStake(v.replace(/[^0-9]/g, ''))}
-          keyboardType="number-pad"
+          onChangeText={setStake}
           placeholder={`${PVP_MIN_STAKE}`}
-          placeholderTextColor={colors.muted2}
           maxLength={7}
         />
         <Text style={styles.helpText}>Balance: {formatPins(balance)} pins</Text>
@@ -433,13 +432,11 @@ export default function PvPCreateScreen() {
         {customStakes && (
           <>
             <Text style={styles.label}>OPPONENT'S STAKE (MIN {PVP_MIN_STAKE})</Text>
-            <TextInput
-              style={styles.input}
+            <PinAmountInput
+              variant="stake"
               value={opponentStake}
-              onChangeText={v => setOpponentStake(v.replace(/[^0-9]/g, ''))}
-              keyboardType="number-pad"
+              onChangeText={setOpponentStake}
               placeholder={`${PVP_MIN_STAKE}`}
-              placeholderTextColor={colors.muted2}
               maxLength={7}
             />
             <Text style={styles.helpText}>

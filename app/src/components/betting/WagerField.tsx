@@ -1,5 +1,6 @@
-import { Text, TextInput, StyleSheet } from 'react-native'
-import { colors, fonts, radius } from '../../theme'
+import { Text, StyleSheet } from 'react-native'
+import { colors, fonts } from '../../theme'
+import PinAmountInput from '../ui/PinAmountInput'
 import { formatPins } from '../../utils/formatting'
 
 interface WagerFieldProps {
@@ -41,13 +42,12 @@ export default function WagerField({
   return (
     <>
       <Text style={styles.wagerLabel}>{label}</Text>
-      <TextInput
-        style={[styles.wagerInput, compact && styles.wagerInputCompact]}
+      <PinAmountInput
+        style={compact && styles.wagerInputCompact}
+        variant="wager"
         value={wager}
-        onChangeText={v => onChangeWager(v.replace(/[^0-9]/g, ''))}
-        keyboardType="number-pad"
+        onChangeText={onChangeWager}
         placeholder={`10 – ${balance}`}
-        placeholderTextColor={colors.muted2}
         maxLength={6}
       />
       <Text style={styles.wagerHint}>
@@ -76,18 +76,6 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
     marginTop: 6,
     marginBottom: 6,
-  },
-  wagerInput: {
-    backgroundColor: colors.surface2,
-    borderRadius: radius.cardSm,
-    borderWidth: 1,
-    borderColor: colors.border2,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontFamily: fonts.barlowCondensed,
-    fontSize: 20,
-    color: colors.text,
-    letterSpacing: 1,
   },
   wagerInputCompact: { paddingVertical: 8, fontSize: 16 },
   wagerHint: {
