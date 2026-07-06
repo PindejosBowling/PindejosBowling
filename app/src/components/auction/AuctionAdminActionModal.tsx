@@ -1,5 +1,5 @@
-import { Text, StyleSheet, ActivityIndicator, Alert } from 'react-native'
-import { colors, fonts } from '../../theme'
+import { Text, ActivityIndicator, Alert } from 'react-native'
+import { colors, sheetStyles } from '../../theme'
 import BottomSheet from '../ui/BottomSheet'
 import Button from '../ui/Button'
 import { useAdminAction } from '../../hooks/useAdminAction'
@@ -56,21 +56,21 @@ export default function AuctionAdminActionModal({ auction: a, onClose, onDone, o
     >
       {a.status === 'scheduled' && (
         <>
-          <Text style={styles.section}>SCHEDULED</Text>
-          <Button variant="outline" label="Edit auction" disabled={saving} onPress={onEdit} style={styles.actSpacing} />
+          <Text style={sheetStyles.section}>SCHEDULED</Text>
+          <Button variant="outline" label="Edit auction" disabled={saving} onPress={onEdit} style={sheetStyles.actSpacing} />
           <Button
             variant="outline"
             label="Open now"
             disabled={saving}
             onPress={() => confirm('Open now?', 'Bidding starts immediately.', () => run('Auction opened', () => auctions.openNow(a.id)), false)}
-            style={styles.actSpacing}
+            style={sheetStyles.actSpacing}
           />
         </>
       )}
 
       {a.status === 'open' && (
         <>
-          <Text style={styles.section}>OPEN</Text>
+          <Text style={sheetStyles.section}>OPEN</Text>
           <Button
             variant="outline"
             label="Settle now"
@@ -82,22 +82,18 @@ export default function AuctionAdminActionModal({ auction: a, onClose, onDone, o
                 () => run('Auction settled', () => auctions.settle(a.id)),
                 false,
               )}
-            style={styles.actSpacing}
+            style={sheetStyles.actSpacing}
           />
         </>
       )}
 
-      <Text style={styles.section}>DESTRUCTIVE</Text>
+      <Text style={sheetStyles.section}>DESTRUCTIVE</Text>
       {settled ? (
-        <Button variant="outline" tone="danger" label="Reverse settlement" disabled={saving} onPress={reverse} style={styles.actSpacing} />
+        <Button variant="outline" tone="danger" label="Reverse settlement" disabled={saving} onPress={reverse} style={sheetStyles.actSpacing} />
       ) : (
-        <Button variant="outline" tone="danger" label="Cancel (erase auction)" disabled={saving} onPress={cancel} style={styles.actSpacing} />
+        <Button variant="outline" tone="danger" label="Cancel (erase auction)" disabled={saving} onPress={cancel} style={sheetStyles.actSpacing} />
       )}
     </BottomSheet>
   )
 }
 
-const styles = StyleSheet.create({
-  section: { fontFamily: fonts.barlowCondensed, fontSize: 12, letterSpacing: 2, color: colors.muted, marginTop: 18, marginBottom: 8 },
-  actSpacing: { marginBottom: 8 },
-})

@@ -4,7 +4,7 @@ Every reusable component in [app/src/components/](../app/src/components/), group
 
 ## Shared conventions
 
-- **Theme tokens only.** Every component styles via `colors` / `fonts` / `radius` from `src/theme` — never hard-coded values.
+- **Theme tokens only.** Every component styles via `colors` / `fonts` / `radius` from `src/theme` — never hard-coded values. `theme.ts` also exports `sheetStyles` (`section` / `label` / `input` / `actSpacing`) — the bottom-sheet form idioms (SECTION heading, small-caps field label, multiline reason/notes input, stacked action-button spacing) used by the admin action sheets; reuse it instead of re-declaring those styles.
 - **Two modal-mounting patterns.** Older modals take a `visible` prop and stay mounted; newer ones (everything in the betting / loan / PvP / bounty families) are **mounted conditionally** (`{thing && <Modal … />}`) so their internal state resets between opens. Each entry below notes which.
 - **`<Toast />` inside every RN `<Modal>` that calls `showToast`** — the app-root Toast is occluded by the native modal layer (see [toast.md](toast.md)).
 - **Presentational rows gate behavior by callback.** List rows (`BetRow`, `LineRow`, …) become tappable/cancellable only when the caller passes `onPress` / `onCancelPress`-style callbacks; read-only surfaces simply omit them. Reuse this pattern instead of `isAdmin` props.

@@ -39,7 +39,7 @@ Re-derive this table from the `Verify` commands if in doubt — do not trust it 
 | 2 | 2.1 `<EconomyCard>` | [x] |
 | 2 | 2.2 `<StatRow>` | [x] |
 | 2 | 2.3 `<PinAmountInput>` | [x] |
-| 2 | 2.4 shared admin-modal styles | [ ] |
+| 2 | 2.4 shared admin-modal styles | [x] |
 | 2 | 2.5 `<ScreenContainer>` | [ ] |
 | 3 | 3.1 `useAsyncData` | [ ] |
 | 3 | 3.2 `useEconomyRefresh` + `bounty` source | [~] |
@@ -113,8 +113,8 @@ _Baseline: none started — every task below was identified by the audit; no ref
 - **Verify:** `grep -rln "replace(/\[\^0-9\]/g" app/src/components app/src/screens | wc -l` → `≤1` _(was: 10 files)_.
 
 ### 2.4 — Shared admin-modal styles  ↪ §2.4
-- [ ] Extract the duplicated `section` / `label` / `input` style objects (export from `theme.ts` or a `<SectionLabel>` + the 2.3 input).
-- [ ] Remove the local copies from `BountyAdminActionModal`, `PvpAdminActionModal`, `AuctionAdminActionModal`.
+- [x] Extract the duplicated `section` / `label` / `input` style objects (export from `theme.ts` or a `<SectionLabel>` + the 2.3 input). _(Went with `sheetStyles` exported from `theme.ts` — the reasoning inputs are multiline text, not numeric, so the 2.3 component didn't apply. Also includes `actSpacing`. Standardized drift: input `minHeight` 70/56 → 64; bounty's label gains the shared `marginTop: 12`.)_
+- [x] Remove the local copies from `BountyAdminActionModal`, `PvpAdminActionModal`, `AuctionAdminActionModal`.
 - **Depends on:** 2.3 (input). **Verify:** the three files no longer each declare their own `section`/`label`/`input` StyleSheet entries.
 
 ### 2.5 — `<ScreenContainer>` scaffold  ↪ §2.5

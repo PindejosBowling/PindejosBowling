@@ -2,7 +2,7 @@ import { useState } from 'react'
 import {
   View, Text, TextInput, StyleSheet, ActivityIndicator,
 } from 'react-native'
-import { colors, fonts, radius } from '../../theme'
+import { colors, fonts, radius, sheetStyles } from '../../theme'
 import BottomSheet from '../ui/BottomSheet'
 import Button from '../ui/Button'
 import { useAdminAction } from '../../hooks/useAdminAction'
@@ -48,16 +48,16 @@ export default function PvpAdminActionModal({ challenge: c, onClose, onDone }: P
     >
       {c.contractType === 'custom' && c.customDescription ? (
         <>
-          <Text style={styles.label}>WIN CONDITION</Text>
+          <Text style={sheetStyles.label}>WIN CONDITION</Text>
           <View style={styles.conditionCard}>
             <Text style={styles.conditionText}>{c.customDescription}</Text>
           </View>
         </>
       ) : null}
 
-      <Text style={styles.label}>ADMIN NOTE (OPTIONAL)</Text>
+      <Text style={sheetStyles.label}>ADMIN NOTE (OPTIONAL)</Text>
       <TextInput
-        style={styles.input}
+        style={sheetStyles.input}
         value={note}
         onChangeText={setNote}
         placeholder="Reason / adjudication notes…"
@@ -68,13 +68,13 @@ export default function PvpAdminActionModal({ challenge: c, onClose, onDone }: P
 
       {isLocked && (
         <>
-          <Text style={styles.section}>MANUAL SETTLE</Text>
+          <Text style={sheetStyles.section}>MANUAL SETTLE</Text>
           <Button
             variant="outline"
             label={`${c.creatorName} wins`}
             disabled={saving}
             onPress={() => confirm(`${c.creatorName} wins?`, () => run('Settled', () => pvpChallenges.settle(c.id, c.creatorId, note)))}
-            style={styles.actSpacing}
+            style={sheetStyles.actSpacing}
           />
           {c.counterpartyId && (
             <Button
@@ -82,7 +82,7 @@ export default function PvpAdminActionModal({ challenge: c, onClose, onDone }: P
               label={`${c.counterpartyName} wins`}
               disabled={saving}
               onPress={() => confirm(`${c.counterpartyName} wins?`, () => run('Settled', () => pvpChallenges.settle(c.id, c.counterpartyId, note)))}
-              style={styles.actSpacing}
+              style={sheetStyles.actSpacing}
             />
           )}
           {c.contractType !== 'custom' && (
@@ -91,13 +91,13 @@ export default function PvpAdminActionModal({ challenge: c, onClose, onDone }: P
               label="Auto-settle from scores (push if tied)"
               disabled={saving}
               onPress={() => confirm('Auto-settle from scores?', () => run('Settled from scores', () => pvpChallenges.settle(c.id, null, note)))}
-              style={styles.actSpacing}
+              style={sheetStyles.actSpacing}
             />
           )}
         </>
       )}
 
-      <Text style={styles.section}>RESOLVE / REVERSE</Text>
+      <Text style={sheetStyles.section}>RESOLVE / REVERSE</Text>
       {(isLocked || c.status === 'settled') && (
         <Button
           variant="outline"
@@ -105,7 +105,7 @@ export default function PvpAdminActionModal({ challenge: c, onClose, onDone }: P
           label="Void (refund both stakes)"
           disabled={saving}
           onPress={() => confirm('Void & refund both?', () => run('Voided — stakes refunded', () => pvpChallenges.void(c.id, note)))}
-          style={styles.actSpacing}
+          style={sheetStyles.actSpacing}
         />
       )}
       {(isLive || isLocked || c.status === 'settled') && (
@@ -115,7 +115,7 @@ export default function PvpAdminActionModal({ challenge: c, onClose, onDone }: P
           label="Cancel contract"
           disabled={saving}
           onPress={() => confirm('Cancel this contract?', () => run('Cancelled', () => pvpChallenges.cancel(c.id)))}
-          style={styles.actSpacing}
+          style={sheetStyles.actSpacing}
         />
       )}
     </BottomSheet>
@@ -123,8 +123,6 @@ export default function PvpAdminActionModal({ challenge: c, onClose, onDone }: P
 }
 
 const styles = StyleSheet.create({
-  label: { fontFamily: fonts.barlowCondensed, fontSize: 12, letterSpacing: 1.5, color: colors.muted, marginTop: 12, marginBottom: 8 },
-  section: { fontFamily: fonts.barlowCondensed, fontSize: 12, letterSpacing: 2, color: colors.muted, marginTop: 18, marginBottom: 8 },
   conditionCard: {
     backgroundColor: colors.surface2,
     borderRadius: radius.cardSm,
@@ -134,18 +132,4 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
   },
   conditionText: { fontFamily: fonts.barlow, fontSize: 15, color: colors.text, lineHeight: 21 },
-  input: {
-    backgroundColor: colors.surface2,
-    borderRadius: radius.cardSm,
-    borderWidth: 1,
-    borderColor: colors.border2,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontFamily: fonts.barlow,
-    fontSize: 15,
-    color: colors.text,
-    minHeight: 56,
-    textAlignVertical: 'top',
-  },
-  actSpacing: { marginBottom: 8 },
 })

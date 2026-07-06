@@ -1,3 +1,5 @@
+import { StyleSheet } from 'react-native'
+
 export const colors = {
   bg:        '#0a0a0c',
   surface:   '#131316',
@@ -54,3 +56,26 @@ export const radius = {
   cardSm: 12,
   icon:   10,
 }
+
+// Shared bottom-sheet form idioms — the SECTION heading, small-caps field
+// label, multiline free-text input (reasoning / admin notes), and stacked
+// action-button spacing previously re-declared per admin action sheet.
+// Styles (not a component) because they dress plain <Text>/<TextInput>.
+export const sheetStyles = StyleSheet.create({
+  section: { fontFamily: fonts.barlowCondensed, fontSize: 12, letterSpacing: 2, color: colors.muted, marginTop: 18, marginBottom: 8 },
+  label: { fontFamily: fonts.barlowCondensed, fontSize: 12, letterSpacing: 1.5, color: colors.muted, marginTop: 12, marginBottom: 8 },
+  input: {
+    backgroundColor: colors.surface2,
+    borderRadius: radius.cardSm,
+    borderWidth: 1,
+    borderColor: colors.border2,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontFamily: fonts.barlow,
+    fontSize: 15,
+    color: colors.text,
+    minHeight: 64,
+    textAlignVertical: 'top',
+  },
+  actSpacing: { marginBottom: 8 },
+})
