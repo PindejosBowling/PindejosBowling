@@ -1,6 +1,6 @@
-import { useState, useCallback, useEffect } from 'react'
 import { bountyPosts, bountyLedger } from '../utils/supabase/db'
 import { normalizeBounty, BountyView, BountyHunterView } from './useBountyBoardData'
+import { useAsyncData } from './useAsyncData'
 
 // The settled-outcome snapshot (design §21) — present only after settlement.
 export interface BountySettlementView {
@@ -46,35 +46,29 @@ interface BountyDetailData {
   reload: () => Promise<void>
 }
 
+type BountyDetailPayload = Pick<BountyDetailData, 'bounty' | 'settlement' | 'payouts' | 'ledger'>
+
+const EMPTY: BountyDetailPayload = { bounty: null, settlement: null, payouts: [], ledger: [] }
+
 export function useBountyDetail(bountyId: string | null): BountyDetailData {
-  const [loading, setLoading] = useState(true)
-  const [bounty, setBounty] = useState<BountyView | null>(null)
-  const [settlement, setSettlement] = useState<BountySettlementView | null>(null)
-  const [payouts, setPayouts] = useState<BountyPayoutView[]>([])
-  const [ledger, setLedger] = useState<BountyLedgerView[]>([])
+  const { loading, data, reload } = useAsyncData<BountyDetailPayload>(async () => {
+    if (!bountyId) return EMPTY
 
-  const load = useCallback(async () => {
-    setLoading(true)
-    try {
-      if (!bountyId) {
-        setBounty(null); setSettlement(null); setPayouts([]); setLedger([]); return
-      }
+    let postRow: any = null
+    let ledgerRows: any[] = []
+    await Promise.all([
+      bountyPosts.getById(bountyId).then(({ data }) => { postRow = data }),
+      bountyLedger.listByPost(bountyId).then(({ data }) => { ledgerRows = data ?? [] }),
+    ])
 
-      let postRow: any = null
-      let ledgerRows: any[] = []
-      await Promise.all([
-        bountyPosts.getById(bountyId).then(({ data }) => { postRow = data }),
-        bountyLedger.listByPost(bountyId).then(({ data }) => { ledgerRows = data ?? [] }),
-      ])
+    if (!postRow) return EMPTY
 
-      if (!postRow) {
-        setBounty(null); setSettlement(null); setPayouts([]); setLedger([]); return
-      }
+    const settleRow = (postRow.bounty_settlements ?? [])[0]
+    const payoutRows: any[] = postRow.bounty_payouts ?? []
 
-      setBounty(normalizeBounty(postRow))
-
-      const settleRow = (postRow.bounty_settlements ?? [])[0]
-      setSettlement(settleRow ? {
+    return {
+      bounty: normalizeBounty(postRow),
+      settlement: settleRow ? {
         id: settleRow.id,
         outcome: settleRow.settlement_outcome,
         sponsorEscrow: settleRow.total_sponsor_bounty,
@@ -85,18 +79,15 @@ export function useBountyDetail(bountyId: string | null): BountyDetailData {
         winnerCount: settleRow.winner_count,
         reasoning: settleRow.admin_settlement_reasoning,
         settledAt: settleRow.settled_at,
-      } : null)
-
-      const payoutRows: any[] = postRow.bounty_payouts ?? []
-      setPayouts(payoutRows.map((p): BountyPayoutView => ({
+      } : null,
+      payouts: payoutRows.map((p): BountyPayoutView => ({
         id: p.id,
         playerId: p.player_id ?? null,
         playerName: p.players?.name ?? null,
         isHouse: p.is_house ?? false,
         amount: p.payout_amount,
-      })))
-
-      setLedger(ledgerRows.map((r): BountyLedgerView => ({
+      })),
+      ledger: ledgerRows.map((r): BountyLedgerView => ({
         id: r.id,
         type: r.type,
         amount: r.amount,
@@ -104,23 +95,16 @@ export function useBountyDetail(bountyId: string | null): BountyDetailData {
         playerName: r.players?.name ?? null,
         description: r.description,
         createdAt: r.created_at,
-      })))
-    } catch (e) {
-      console.error('useBountyDetail error:', e)
-    } finally {
-      setLoading(false)
+      })),
     }
-  }, [bountyId])
+  }, [bountyId], 'useBountyDetail')
 
-  useEffect(() => { load() }, [load])
+  const payload = data ?? EMPTY
 
   return {
     loading,
-    bounty,
-    hunters: bounty?.hunters ?? [],
-    settlement,
-    payouts,
-    ledger,
-    reload: load,
+    ...payload,
+    hunters: payload.bounty?.hunters ?? [],
+    reload,
   }
 }

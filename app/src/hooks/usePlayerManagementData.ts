@@ -1,24 +1,18 @@
-import { useState, useCallback, useEffect } from 'react'
 import { Tables } from '../utils/supabase/database.types'
 import { players } from '../utils/supabase/db'
+import { useAsyncData } from './useAsyncData'
+
+interface PlayerManagementPayload {
+  rawPlayers: Tables<'players'>[]
+}
+
+const EMPTY: PlayerManagementPayload = { rawPlayers: [] }
 
 export function usePlayerManagementData() {
-  const [loading, setLoading] = useState(true)
-  const [rawPlayers, setRawPlayers] = useState<Tables<'players'>[]>([])
+  const { loading, data, reload } = useAsyncData<PlayerManagementPayload>(async () => {
+    const { data } = await players.list()
+    return { rawPlayers: data ?? [] }
+  }, [], 'usePlayerManagementData')
 
-  const load = useCallback(async () => {
-    setLoading(true)
-    try {
-      const { data } = await players.list()
-      setRawPlayers(data ?? [])
-    } catch (e) {
-      console.error('usePlayerManagementData error:', e)
-    } finally {
-      setLoading(false)
-    }
-  }, [])
-
-  useEffect(() => { load() }, [load])
-
-  return { loading, rawPlayers, reload: load }
+  return { loading, ...(data ?? EMPTY), reload }
 }

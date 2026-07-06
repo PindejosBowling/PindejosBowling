@@ -1,4 +1,3 @@
-import { useState, useCallback, useEffect } from 'react'
 import {
   players as playersDb,
   seasons as seasonsDb,
@@ -8,6 +7,7 @@ import {
   teamSlots as teamSlotsDb,
 } from '../utils/supabase/db'
 import { countsTowardAverage } from '../utils/averages'
+import { useAsyncData } from './useAsyncData'
 
 // ---- Raw query result shapes ----
 
@@ -449,54 +449,57 @@ export function computeExpandedMatchups(
 
 // ---- Hook ----
 
+interface PlayerDetailPayload {
+  playerId: string | null
+  isChampion: boolean
+  seasonList: { id: string; number: number }[]
+  allScores: DetailScore[]
+  allSchedule: RawSchedule[]
+  playerSlots: PlayerSlot[]
+}
+
+const EMPTY: PlayerDetailPayload = {
+  playerId: null,
+  isChampion: false,
+  seasonList: [],
+  allScores: [],
+  allSchedule: [],
+  playerSlots: [],
+}
+
 export function usePlayerDetailData(name: string) {
-  const [loading, setLoading] = useState(true)
-  const [playerId, setPlayerId] = useState<string | null>(null)
-  const [isChampion, setIsChampion] = useState(false)
-  const [seasonList, setSeasonList] = useState<{ id: string; number: number }[]>([])
-  const [allScores, setAllScores] = useState<DetailScore[]>([])
-  const [allSchedule, setAllSchedule] = useState<RawSchedule[]>([])
-  const [playerSlots, setPlayerSlots] = useState<PlayerSlot[]>([])
+  const { loading, data, reload } = useAsyncData<PlayerDetailPayload>(async () => {
+    const [playerRes, seasonsRes, champRes, scoresRes, scheduleRes] = await Promise.all([
+      playersDb.getByName(name),
+      seasonsDb.list(),
+      seasonChampionsDb.list(),
+      scoresDb.listForPlayerDetail(),
+      games.listForArchivedWeeks(),
+    ])
 
-  const load = useCallback(async () => {
-    setLoading(true)
-    try {
-      const [playerRes, seasonsRes, champRes, scoresRes, scheduleRes] = await Promise.all([
-        playersDb.getByName(name),
-        seasonsDb.list(),
-        seasonChampionsDb.list(),
-        scoresDb.listForPlayerDetail(),
-        games.listForArchivedWeeks(),
-      ])
+    const player = playerRes.data
+    const rawSeasons = (seasonsRes.data ?? []).filter(s => !s.registration_open).map(s => ({ id: s.id, number: s.number }))
+    const champIds = new Set((champRes.data ?? []).map((c: any) => c.player_id))
 
-      const player = playerRes.data
-      const rawSeasons = (seasonsRes.data ?? []).filter(s => !s.registration_open).map(s => ({ id: s.id, number: s.number }))
-      const champIds = new Set((champRes.data ?? []).map((c: any) => c.player_id))
+    const seasonList = rawSeasons
+    const allScores = (scoresRes.data ?? []) as unknown as DetailScore[]
+    const allSchedule = (scheduleRes.data ?? []) as unknown as RawSchedule[]
 
-      setSeasonList(rawSeasons)
-      setAllScores((scoresRes.data ?? []) as unknown as DetailScore[])
-      setAllSchedule((scheduleRes.data ?? []) as unknown as RawSchedule[])
-
-      if (!player) {
-        setPlayerId(null)
-        setIsChampion(false)
-        setPlayerSlots([])
-        return
-      }
-
-      setPlayerId(player.id)
-      setIsChampion(champIds.has(player.id))
-
-      const slotsRes = await teamSlotsDb.listByPlayer(player.id)
-      setPlayerSlots((slotsRes.data ?? []) as unknown as PlayerSlot[])
-    } catch (e) {
-      console.error('usePlayerDetailData error:', e)
-    } finally {
-      setLoading(false)
+    if (!player) {
+      return { ...EMPTY, seasonList, allScores, allSchedule }
     }
-  }, [name])
 
-  useEffect(() => { load() }, [load])
+    const slotsRes = await teamSlotsDb.listByPlayer(player.id)
 
-  return { loading, playerId, isChampion, seasonList, allScores, allSchedule, playerSlots, reload: load }
+    return {
+      playerId: player.id,
+      isChampion: champIds.has(player.id),
+      seasonList,
+      allScores,
+      allSchedule,
+      playerSlots: (slotsRes.data ?? []) as unknown as PlayerSlot[],
+    }
+  }, [name], 'usePlayerDetailData')
+
+  return { loading, ...(data ?? EMPTY), reload }
 }

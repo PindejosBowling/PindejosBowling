@@ -1,6 +1,6 @@
-import { useState, useCallback, useEffect } from 'react'
 import { scores, games, seasonChampions } from '../utils/supabase/db'
 import { combinations } from '../utils/helpers'
+import { useAsyncData } from './useAsyncData'
 
 export interface ChemistryRow {
   names: string[]
@@ -100,33 +100,29 @@ export function computeChemistryFromSupabase(
     .sort((a, b) => b.winRate - a.winRate || b.games - a.games)
 }
 
+interface ChemistryPayload {
+  rawScores: any[]
+  rawSchedule: any[]
+  championNames: Set<string>
+}
+
+const EMPTY: ChemistryPayload = { rawScores: [], rawSchedule: [], championNames: new Set() }
+
 export function useChemistryData() {
-  const [loading, setLoading] = useState(true)
-  const [rawScores, setRawScores] = useState<any[]>([])
-  const [rawSchedule, setRawSchedule] = useState<any[]>([])
-  const [championNames, setChampionNames] = useState<Set<string>>(new Set())
-
-  const load = useCallback(async () => {
-    setLoading(true)
-    try {
-      const [scoresRes, scheduleRes, champRes] = await Promise.all([
-        scores.listForStandings(),
-        games.listForArchivedWeeks(),
-        seasonChampions.list(),
-      ])
-      setRawScores(scoresRes.data ?? [])
-      setRawSchedule(scheduleRes.data ?? [])
-      setChampionNames(new Set(
+  const { loading, data, reload } = useAsyncData<ChemistryPayload>(async () => {
+    const [scoresRes, scheduleRes, champRes] = await Promise.all([
+      scores.listForStandings(),
+      games.listForArchivedWeeks(),
+      seasonChampions.list(),
+    ])
+    return {
+      rawScores: scoresRes.data ?? [],
+      rawSchedule: scheduleRes.data ?? [],
+      championNames: new Set<string>(
         (champRes.data ?? []).flatMap((c: any) => c.players?.name ? [c.players.name] : [])
-      ))
-    } catch (e) {
-      console.error('useChemistryData error:', e)
-    } finally {
-      setLoading(false)
+      ),
     }
-  }, [])
+  }, [], 'useChemistryData')
 
-  useEffect(() => { load() }, [load])
-
-  return { loading, rawScores, rawSchedule, championNames, reload: load }
+  return { loading, ...(data ?? EMPTY), reload }
 }

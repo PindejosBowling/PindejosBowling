@@ -1,5 +1,5 @@
-import { useState, useCallback, useEffect } from 'react'
 import { lanetalkImports } from '../utils/supabase/db'
+import { useAsyncData } from './useAsyncData'
 import {
   LanetalkSession,
   LanetalkGame,
@@ -22,27 +22,14 @@ export const ALL_CLASSIFICATIONS: ClassificationFilter = 'all'
 // compute functions and the scorecards — reads exactly as it did off the old
 // bundled asset.
 export function useFrameStatsData(playerId: string | null) {
-  const [loading, setLoading] = useState(true)
-  const [session, setSession] = useState<LanetalkSession | null>(null)
+  const { loading, data: session, reload } = useAsyncData<LanetalkSession | null>(async () => {
+    if (!playerId) return null
+    const { data, error } = await lanetalkImports.listByPlayer(playerId)
+    if (error) throw error
+    return buildSession((data ?? []) as ImportRow[])
+  }, [playerId], 'useFrameStatsData')
 
-  const load = useCallback(async () => {
-    setLoading(true)
-    try {
-      if (!playerId) { setSession(null); return }
-      const { data, error } = await lanetalkImports.listByPlayer(playerId)
-      if (error) throw error
-      setSession(buildSession((data ?? []) as ImportRow[]))
-    } catch (e) {
-      console.error('useFrameStatsData error:', e)
-      setSession(null)
-    } finally {
-      setLoading(false)
-    }
-  }, [playerId])
-
-  useEffect(() => { load() }, [load])
-
-  return { loading, session, reload: load }
+  return { loading, session, reload }
 }
 
 // ----------------------------------------------------------------------------

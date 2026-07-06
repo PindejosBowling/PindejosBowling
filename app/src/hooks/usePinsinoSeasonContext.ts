@@ -1,7 +1,7 @@
-import { useState, useCallback, useEffect } from 'react'
 import { seasons } from '../utils/supabase/db'
 import { useUiStore } from '../stores/uiStore'
 import type { Tables } from '../utils/supabase/database.types'
+import { useAsyncData } from './useAsyncData'
 
 type SeasonRow = Tables<'seasons'>
 
@@ -26,30 +26,25 @@ export interface PinsinoSeasonContext {
   loading: boolean
 }
 
+type SeasonContextPayload = Pick<PinsinoSeasonContext, 'seasons' | 'liveSeasonId'>
+
+const EMPTY: SeasonContextPayload = { seasons: [], liveSeasonId: null }
+
 export function usePinsinoSeasonContext(): PinsinoSeasonContext {
   const pinsinoViewSeasonId = useUiStore(s => s.pinsinoViewSeasonId)
-  const [allSeasons, setAllSeasons] = useState<SeasonRow[]>([])
-  const [liveSeasonId, setLiveSeasonId] = useState<string | null>(null)
-  const [loading, setLoading] = useState(true)
 
-  const load = useCallback(async () => {
-    setLoading(true)
-    try {
-      const [listRes, currentRes] = await Promise.all([
-        seasons.list(),
-        seasons.getCurrent(),
-      ])
-      const list = (listRes.data ?? []).slice().sort((a, b) => b.number - a.number)
-      setAllSeasons(list)
-      setLiveSeasonId(currentRes.data?.id ?? null)
-    } catch (e) {
-      console.error('usePinsinoSeasonContext error:', e)
-    } finally {
-      setLoading(false)
+  const { loading, data } = useAsyncData<SeasonContextPayload>(async () => {
+    const [listRes, currentRes] = await Promise.all([
+      seasons.list(),
+      seasons.getCurrent(),
+    ])
+    return {
+      seasons: (listRes.data ?? []).slice().sort((a, b) => b.number - a.number),
+      liveSeasonId: currentRes.data?.id ?? null,
     }
-  }, [])
+  }, [], 'usePinsinoSeasonContext')
 
-  useEffect(() => { load() }, [load])
+  const { seasons: allSeasons, liveSeasonId } = data ?? EMPTY
 
   const readOnly = pinsinoViewSeasonId != null && pinsinoViewSeasonId !== liveSeasonId
   const viewSeasonNumber = readOnly
