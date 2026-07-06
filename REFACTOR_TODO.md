@@ -41,7 +41,7 @@ Re-derive this table from the `Verify` commands if in doubt — do not trust it 
 | 2 | 2.3 `<PinAmountInput>` | [x] |
 | 2 | 2.4 shared admin-modal styles | [x] |
 | 2 | 2.5 `<ScreenContainer>` | [x] |
-| 3 | 3.1 `useAsyncData` | [ ] |
+| 3 | 3.1 `useAsyncData` | [x] |
 | 3 | 3.2 `useEconomyRefresh` + `bounty` source | [~] |
 | 3 | 3.3 migrate `visible`-prop admin modals | [ ] |
 | 3 | 3.4 `db.ts` embed/filter helpers | [ ] |
@@ -128,9 +128,9 @@ _Baseline: none started — every task below was identified by the audit; no ref
 ## Tier 3 — Pattern standardization & data-layer hardening
 
 ### 3.1 — Generic `useAsyncData<T>` lifecycle  ↪ §3.1
-- [ ] Create `app/src/hooks/useAsyncData.ts` → `{ loading, data, error, reload }` with the `loadedOnce` soft-load gate built in (complements, doesn't replace, `useRefresh`).
-- [ ] Migrate the ~21 `use*Data` hooks **incrementally** (a few per PR), starting with `useBountyBoardData` (the canonical shape).
-- **Depends on:** 1.3 helps. **Verify:** `grep -rln "loadedOnce" app/src/hooks | wc -l` → `0` _(was: 6)_ **and** `grep -rn "useEffect(() => { load() }" app/src/hooks | wc -l` → `0` _(was: 21)_.
+- [x] Create `app/src/hooks/useAsyncData.ts` → `{ loading, data, error, reload }` with the `loadedOnce` soft-load gate built in (complements, doesn't replace, `useRefresh`). _(Pattern: hooks define a `Payload` type + `EMPTY` constant, the fetcher returns the payload, and the hook spreads `{ loading, ...(data ?? EMPTY), reload }` — see `useBountyBoardData` for the template. Third arg is the error-log label.)_
+- [x] Migrate the ~21 `use*Data` hooks **incrementally** (a few per PR), starting with `useBountyBoardData` (the canonical shape). _(All 23 hooks migrated — no exceptions. `useMarketMovesData` needed `useAsyncData` to grow a `mutate(updater)` escape hatch (local writes into `data` — pagination page-appends, optimistic edits; the next reload overwrites with server truth); its filter became a plain dep (`[viewSeasonId, filter]`), and on error the feed now keeps stale events instead of blanking. Accepted standardizations: hooks without a `loadedOnce` ref previously hard-loaded (spinner on every reload) — all reloads are now silent soft-loads (incl. playoff-draft realtime refetches, where the spinner-flash was a bug); mid-load partial state flushes (`usePinsinoData`, `useHousePinsinoData`) now land atomically; errors keep stale data + log under the hook's name and three auction hooks that previously had no catch now get it.)_
+- **Depends on:** 1.3 helps. **Verify:** `grep -rln "loadedOnce" app/src/hooks | wc -l` → `1` = `useAsyncData.ts` itself _(was: 6 legacy)_ **and** `grep -rn "useEffect(() => { load() }" app/src/hooks | wc -l` → `1` = `useAsyncData.ts` itself _(was: 21 hand-rolled)_.
 
 ### 3.2 — `useEconomyRefresh` + `bounty` notification source  ↪ §3.2
 - [ ] Create `app/src/hooks/useEconomyRefresh.ts` (`Promise.all([reload(), notificationStore.refresh()])`).

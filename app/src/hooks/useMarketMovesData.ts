@@ -1,6 +1,7 @@
-import { useState, useCallback, useEffect, useRef } from 'react'
+import { useState, useCallback } from 'react'
 import { seasons, activityFeed, weeks } from '../utils/supabase/db'
 import { importanceForEvent, type FeedEventView } from '../utils/activityFeedTemplates'
+import { useAsyncData } from './useAsyncData'
 
 export type FeedFilter = 'all' | 'sportsbook' | 'loan_shark' | 'pvp' | 'bounty_board' | 'auction_house' | 'highlights'
 
@@ -68,78 +69,64 @@ function fetchPage(
   }
 }
 
+interface MarketMovesPayload {
+  seasonId: string | null
+  events: FeedEventView[]
+  hasMore: boolean
+  // Week metadata for the screen's collapsible week grouping (label map + the
+  // default-open week). Refetched with each page-1 load; it doesn't change
+  // across pagination.
+  weekInfoById: WeekInfoById
+  currentWeekId: string | null
+}
+
+const EMPTY: MarketMovesPayload = {
+  seasonId: null, events: [], hasMore: false, weekInfoById: {}, currentWeekId: null,
+}
+
 // The public "Market Moves" feed: paginated, filterable, read-derived. No
 // memoization in the hook (project rule) — the screen renders display copy via
-// renderFeedEvent + useMemo.
+// renderFeedEvent + useMemo. The filter is a dependency of the page-1 load
+// (switching it refetches silently); loadMore appends pages via mutate.
 export function useMarketMovesData(viewSeasonId?: string | null) {
-  const [loading, setLoading] = useState(true)
-  const [seasonId, setSeasonId] = useState<string | null>(null)
-  const [events, setEvents] = useState<FeedEventView[]>([])
-  const [filter, setFilterState] = useState<FeedFilter>('all')
-  const [hasMore, setHasMore] = useState(false)
+  const [filter, setFilter] = useState<FeedFilter>('all')
   const [loadingMore, setLoadingMore] = useState(false)
 
-  // Week metadata for the screen's collapsible week grouping. Loaded once per
-  // season alongside the season lookup (it doesn't change across filter switches
-  // or pagination).
-  const [weekInfoById, setWeekInfoById] = useState<WeekInfoById>({})
-  const [currentWeekId, setCurrentWeekId] = useState<string | null>(null)
+  const { loading, data, reload, mutate } = useAsyncData<MarketMovesPayload>(async () => {
+    // Past-season mode points at the requested prior season; otherwise (and
+    // between seasons) fall back to the most-recently-ended season so the
+    // newswire keeps showing its final-week activity rather than going blank.
+    const sid = viewSeasonId
+      ? (await seasons.getById(viewSeasonId)).data?.id ?? null
+      : (await seasons.getCurrentOrLastEnded()).data?.id ?? null
+    if (!sid) return EMPTY
 
-  // Only the first load shows the full-screen LoadingView; later reloads (focus,
-  // pull-to-refresh, filter switch) refresh in place so the list never flashes.
-  const loadedOnce = useRef(false)
+    // Resolve the season's weeks: label map + the default-open week for
+    // grouping. While a season runs that's the current active week (highest
+    // non-archived week_number); once it has concluded (no live weeks) we fall
+    // back to the last week overall so the feed opens on the final week.
+    const weeksRes = await weeks.listBySeason(sid)
+    const weekRows = weeksRes.data ?? []
+    const weekInfoById: WeekInfoById = {}
+    for (const w of weekRows) weekInfoById[w.id] = { weekNumber: w.week_number }
+    const live = weekRows.filter(w => !w.is_archived)
+    const pickFrom = live.length ? live : weekRows
+    const current = pickFrom.length
+      ? pickFrom.reduce((a, b) => (b.week_number > a.week_number ? b : a))
+      : null
 
-  // Load page 1 for a given filter. Resolves the current season on first call.
-  const loadFirst = useCallback(async (f: FeedFilter) => {
-    if (!loadedOnce.current) setLoading(true)
-    try {
-      // Past-season mode points at the requested prior season; otherwise (and
-      // between seasons) fall back to the most-recently-ended season so the
-      // newswire keeps showing its final-week activity rather than going blank.
-      const sid = viewSeasonId
-        ? (await seasons.getById(viewSeasonId)).data?.id ?? null
-        : (await seasons.getCurrentOrLastEnded()).data?.id ?? null
-      setSeasonId(sid)
-      if (!sid) { setEvents([]); setHasMore(false); return }
-
-      // Resolve the season's weeks once: label map + the default-open week for
-      // grouping. While a season runs that's the current active week (highest
-      // non-archived week_number); once it has concluded (no live weeks) we fall
-      // back to the last week overall so the feed opens on the final week.
-      const weeksRes = await weeks.listBySeason(sid)
-      const weekRows = weeksRes.data ?? []
-      const infoMap: WeekInfoById = {}
-      for (const w of weekRows) infoMap[w.id] = { weekNumber: w.week_number }
-      setWeekInfoById(infoMap)
-      const live = weekRows.filter(w => !w.is_archived)
-      const pickFrom = live.length ? live : weekRows
-      const current = pickFrom.length
-        ? pickFrom.reduce((a, b) => (b.week_number > a.week_number ? b : a))
-        : null
-      setCurrentWeekId(current?.id ?? null)
-
-      const { data } = await fetchPage(f, sid)
-      const rows = (data ?? []).map(normalizeFeedRow)
-      setEvents(rows)
-      setHasMore(rows.length === PAGE_SIZE)
-    } catch (e) {
-      console.error('useMarketMovesData error:', e)
-      setEvents([]); setHasMore(false)
-    } finally {
-      loadedOnce.current = true
-      setLoading(false)
+    const { data: pageData } = await fetchPage(filter, sid)
+    const rows = (pageData ?? []).map(normalizeFeedRow)
+    return {
+      seasonId: sid,
+      events: rows,
+      hasMore: rows.length === PAGE_SIZE,
+      weekInfoById,
+      currentWeekId: current?.id ?? null,
     }
-  }, [viewSeasonId])
+  }, [viewSeasonId, filter], 'useMarketMovesData')
 
-  useEffect(() => { loadFirst('all') }, [loadFirst])
-
-  const reload = useCallback(() => loadFirst(filter), [loadFirst, filter])
-
-  const setFilter = useCallback((f: FeedFilter) => {
-    if (f === filter) return
-    setFilterState(f)
-    loadFirst(f)
-  }, [filter, loadFirst])
+  const { seasonId, events, hasMore, weekInfoById, currentWeekId } = data ?? EMPTY
 
   // Cursor pagination — append the next page after the last loaded row.
   const loadMore = useCallback(async () => {
@@ -147,19 +134,22 @@ export function useMarketMovesData(viewSeasonId?: string | null) {
     setLoadingMore(true)
     try {
       const last = events[events.length - 1]
-      const { data } = await fetchPage(filter, seasonId, {
+      const { data: pageData } = await fetchPage(filter, seasonId, {
         publishedAt: last.publishedAt,
         id: last.id,
       })
-      const rows = (data ?? []).map(normalizeFeedRow)
-      setEvents(prev => [...prev, ...rows])
-      setHasMore(rows.length === PAGE_SIZE)
+      const rows = (pageData ?? []).map(normalizeFeedRow)
+      mutate(prev => prev && {
+        ...prev,
+        events: [...prev.events, ...rows],
+        hasMore: rows.length === PAGE_SIZE,
+      })
     } catch (e) {
       console.error('useMarketMovesData loadMore error:', e)
     } finally {
       setLoadingMore(false)
     }
-  }, [loadingMore, hasMore, seasonId, events, filter])
+  }, [loadingMore, hasMore, seasonId, events, filter, mutate])
 
   return { loading, events, filter, setFilter, hasMore, loadMore, reload, weekInfoById, currentWeekId }
 }

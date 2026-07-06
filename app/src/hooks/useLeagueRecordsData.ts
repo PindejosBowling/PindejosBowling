@@ -1,5 +1,5 @@
-import { useState, useCallback, useEffect } from 'react'
 import { seasons, scores, lanetalkImports } from '../utils/supabase/db'
+import { useAsyncData } from './useAsyncData'
 
 type PlayerEntry = { name: string; score: number }
 type SimpleRecord = { val: number; by: string; when: string }
@@ -266,31 +266,27 @@ export function computeLeagueRecordsFromSupabase(
   return recs
 }
 
+interface LeagueRecordsPayload {
+  seasonList: { id: string; number: number }[]
+  rawScores: any[]
+  rawFrames: any[]
+}
+
+const EMPTY: LeagueRecordsPayload = { seasonList: [], rawScores: [], rawFrames: [] }
+
 export function useLeagueRecordsData() {
-  const [loading, setLoading] = useState(true)
-  const [seasonList, setSeasonList] = useState<{ id: string; number: number }[]>([])
-  const [rawScores, setRawScores] = useState<any[]>([])
-  const [rawFrames, setRawFrames] = useState<any[]>([])
-
-  const load = useCallback(async () => {
-    setLoading(true)
-    try {
-      const [seasonsRes, scoresRes, framesRes] = await Promise.all([
-        seasons.list(),
-        scores.listForLeagueRecords(),
-        lanetalkImports.listForLeagueRecords(),
-      ])
-      setSeasonList((seasonsRes.data ?? []).filter(s => !s.registration_open).map(s => ({ id: s.id, number: s.number })))
-      setRawScores(scoresRes.data ?? [])
-      setRawFrames(framesRes.data ?? [])
-    } catch (e) {
-      console.error('useLeagueRecordsData error:', e)
-    } finally {
-      setLoading(false)
+  const { loading, data, reload } = useAsyncData<LeagueRecordsPayload>(async () => {
+    const [seasonsRes, scoresRes, framesRes] = await Promise.all([
+      seasons.list(),
+      scores.listForLeagueRecords(),
+      lanetalkImports.listForLeagueRecords(),
+    ])
+    return {
+      seasonList: (seasonsRes.data ?? []).filter(s => !s.registration_open).map(s => ({ id: s.id, number: s.number })),
+      rawScores: scoresRes.data ?? [],
+      rawFrames: framesRes.data ?? [],
     }
-  }, [])
+  }, [], 'useLeagueRecordsData')
 
-  useEffect(() => { load() }, [load])
-
-  return { loading, seasonList, rawScores, rawFrames, reload: load }
+  return { loading, ...(data ?? EMPTY), reload }
 }
