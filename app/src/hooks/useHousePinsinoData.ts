@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect } from 'react'
 import { seasons, weeks, bets, pinLedger } from '../utils/supabase/db'
 import { normalizeBet, type BetView } from './usePinsinoData'
 import { LedgerEntry } from './usePlayerPinsinoData'
+import { computeBalance } from '../utils/ledger'
 
 // The house side of the pin economy — the literal other side of
 // usePlayerPinsinoData. House rows are `is_house = true` / `player_id NULL`.
@@ -159,7 +160,7 @@ export function useHousePinsinoData() {
         ? (bettingNet / nextSummary.stakesTaken) * 100
         : null
 
-      setBalance(houseData.reduce((sum, e) => sum + e.amount, 0))
+      setBalance(computeBalance(houseData))
       setLedger(ledgerEntries)
       setSummary(nextSummary)
       setWeekPnl(pnl)

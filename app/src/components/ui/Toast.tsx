@@ -45,7 +45,7 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderRadius: radius.cardMd,
     maxWidth: '90%',
-    shadowColor: '#000',
+    shadowColor: colors.shadow,
     shadowOpacity: 0.4,
     shadowRadius: 8,
     shadowOffset: { width: 0, height: 2 },

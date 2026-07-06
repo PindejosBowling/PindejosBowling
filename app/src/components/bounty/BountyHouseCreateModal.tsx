@@ -5,6 +5,7 @@ import { colors, fonts, radius } from '../../theme'
 import BottomSheet from '../ui/BottomSheet'
 import Button from '../ui/Button'
 import { useUiStore } from '../../stores/uiStore'
+import { useDatePicker } from '../../hooks/useDatePicker'
 import { bountyPosts, players, seasons } from '../../utils/supabase/db'
 import {
   MIN_REWARD_PER_HUNTER, MIN_HUNTER_STAKE, MIN_MAX_HUNTERS, MAX_MAX_HUNTERS,
@@ -26,8 +27,7 @@ export default function BountyHouseCreateModal({ weekId, onClose, onDone }: Prop
   const [reward, setReward] = useState('')
   const [hunterStake, setHunterStake] = useState('')
   const [maxHunters, setMaxHunters] = useState('')
-  const [closesAt, setClosesAt] = useState<Date>(() => defaultBountyCloseAt())
-  const [pickerOpen, setPickerOpen] = useState(false)
+  const { value: closesAt, open: pickerOpen, setOpen: setPickerOpen, onChange: onPickerValue } = useDatePicker(defaultBountyCloseAt)
   const [saving, setSaving] = useState(false)
 
   // Default Max Hunters to the number of players registered for the current
@@ -86,10 +86,6 @@ export default function BountyHouseCreateModal({ weekId, onClose, onDone }: Prop
     }
   }
 
-  function onPickerValue(_e: unknown, selected?: Date) {
-    if (Platform.OS === 'android') setPickerOpen(false)
-    if (selected) setClosesAt(selected)
-  }
 
   return (
     <BottomSheet

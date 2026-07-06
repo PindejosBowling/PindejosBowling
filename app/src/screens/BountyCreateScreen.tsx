@@ -13,6 +13,7 @@ import Toast from '../components/ui/Toast'
 import Button from '../components/ui/Button'
 import BalancePill from '../components/ui/BalancePill'
 import { useRefresh } from '../hooks/useRefresh'
+import { useDatePicker } from '../hooks/useDatePicker'
 import { useAuthStore } from '../stores/authStore'
 import { useUiStore } from '../stores/uiStore'
 import { seasons, weeks, pinLedger, bountyPosts } from '../utils/supabase/db'
@@ -41,8 +42,7 @@ export default function BountyCreateScreen() {
   const [reward, setReward] = useState('')
   const [hunterStake, setHunterStake] = useState('')
   const [maxHunters, setMaxHunters] = useState('')
-  const [closesAt, setClosesAt] = useState<Date>(() => defaultBountyCloseAt())
-  const [pickerOpen, setPickerOpen] = useState(false)
+  const { value: closesAt, open: pickerOpen, setOpen: setPickerOpen, onChange: onPickerValue } = useDatePicker(defaultBountyCloseAt)
 
   const load = async () => {
     setLoading(true)
@@ -108,10 +108,6 @@ export default function BountyCreateScreen() {
     }
   }
 
-  function onPickerValue(_e: unknown, selected?: Date) {
-    if (Platform.OS === 'android') setPickerOpen(false)
-    if (selected) setClosesAt(selected)
-  }
 
   if (loading) return <LoadingView label="Loading…" />
 

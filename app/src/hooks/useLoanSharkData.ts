@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect } from 'react'
 import { seasons, pinLedger, loans, loanProducts, loanLedger } from '../utils/supabase/db'
 import type { Tables } from '../utils/supabase/database.types'
+import { computeBalance, computeDebt } from '../utils/ledger'
 
 export type LoanProductView = Tables<'loan_products'> & {
   // Client-side availability hint; the RPC re-checks the full window / max_uses.
@@ -66,7 +67,7 @@ export function useLoanSharkData(playerId: string | null, viewSeasonId?: string 
 
       await Promise.all(fetches)
 
-      const playerBalance = ledgerData.reduce((sum, e) => sum + e.amount, 0)
+      const playerBalance = computeBalance(ledgerData)
 
       // The active loan (v1: at most one). Resolve its outstanding + history.
       const activeRow = myLoansData.find((l: any) => l.status === 'active')
@@ -74,7 +75,7 @@ export function useLoanSharkData(playerId: string | null, viewSeasonId?: string 
       if (activeRow && playerId && seasonId) {
         const { data: debtRows } = await loanLedger.listByPlayerSeason(playerId, seasonId)
         const rows = (debtRows ?? []).filter((d: any) => d.loan_id === activeRow.id)
-        const outstanding = rows.reduce((sum: number, d: any) => sum + d.amount, 0)
+        const outstanding = computeDebt(rows)
         active = {
           loanId: activeRow.id,
           product: activeRow.loan_products,

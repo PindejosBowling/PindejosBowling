@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect } from 'react'
 import { weeks, seasons, betMarkets, bets, pinLedger, loanLedger, loans, pvpChallenges, bountyPosts, teamSlots, customLines, games, players, auctionHouseState } from '../utils/supabase/db'
+import { computeBalance } from '../utils/ledger'
 
 // One bettable side of a market (a single `bet_selections` row, flattened).
 // Generic over market_type — over/under is the first consumer, but the shape
@@ -1033,7 +1034,7 @@ export function usePinsinoData(playerId: string | null, viewSeasonId?: string | 
       setSettledBets(settledBetsData.map(normalizeBet).map(brandBet))
       setLeaderboard(board)
       setMyBets(myBetViews)
-      setBalance(ledgerData.reduce((sum, e) => sum + e.amount, 0))
+      setBalance(computeBalance(ledgerData))
       setMyBetMarketIds(new Set(myBetViews.map(b => b.marketId)))
       setAuctionHouseClosed(auctionStateData?.is_closed ?? false)
       setAuctionHouseClosedMessage(auctionStateData?.closed_message ?? null)

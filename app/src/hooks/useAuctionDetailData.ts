@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect, useRef } from 'react'
 import { auctions, auctionLedger, pinLedger, seasons } from '../utils/supabase/db'
 import { AuctionView } from '../utils/auction'
+import { computeBalance } from '../utils/ledger'
 import { bouncesByAuction, normalizeAuction, purchasesByAuction } from './useAuctionHouseData'
 
 export interface AuctionDetailData {
@@ -39,7 +40,7 @@ export function useAuctionDetailData(auctionId: string, playerId: string | null)
         auctionLedger.listBySeason(seasonId).then(({ data }) => { auctionLedgerData = data ?? [] }),
       ])
 
-      setBalance(ledgerData.reduce((sum, e) => sum + e.amount, 0))
+      setBalance(computeBalance(ledgerData))
       if (!row) { setAuction(null); return }
       const bounceMap = bouncesByAuction(auctionLedgerData)
       const winnerMap = purchasesByAuction(auctionLedgerData)
