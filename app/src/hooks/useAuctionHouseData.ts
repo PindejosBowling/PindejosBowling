@@ -1,9 +1,9 @@
-import { useState, useCallback, useEffect, useRef } from 'react'
 import { auctions, auctionLedger, inventoryItems, pinLedger, seasons } from '../utils/supabase/db'
 import { computeBalance } from '../utils/ledger'
 import {
   AuctionBounceView, AuctionView, AuctionWinnerView, InventoryItemView, itemHowToUse,
 } from '../utils/auction'
+import { useAsyncData } from './useAsyncData'
 
 // A flattened auctions row + catalog embed. The DB stores one terminal status
 // ('settled'); the view synthesizes 'settled_no_winner' from the null-winner
@@ -94,62 +94,53 @@ export interface AuctionHouseData {
 // compute (auctionSections / groupInventory) — wrap in useMemo at the screen.
 // In past-season mode (`viewSeasonId` set) the season's settled auctions load
 // read-only — `auctions.listBySeason` already returns concluded auctions.
+type AuctionHousePayload = Pick<AuctionHouseData, 'balance' | 'auctions' | 'myItems'>
+
+const EMPTY: AuctionHousePayload = { balance: 0, auctions: [], myItems: [] }
+
 export function useAuctionHouseData(playerId: string | null, viewSeasonId?: string | null): AuctionHouseData {
-  const [loading, setLoading] = useState(true)
-  const [balance, setBalance] = useState(0)
-  const [auctionList, setAuctionList] = useState<AuctionView[]>([])
-  const [myItems, setMyItems] = useState<InventoryItemView[]>([])
-  const loadedOnce = useRef(false)
+  const { loading, data, reload } = useAsyncData<AuctionHousePayload>(async () => {
+    if (!playerId) return EMPTY
 
-  const load = useCallback(async () => {
-    if (!loadedOnce.current) setLoading(true)
-    try {
-      const reset = () => { setBalance(0); setAuctionList([]); setMyItems([]) }
-      if (!playerId) { reset(); return }
+    const seasonId = viewSeasonId
+      ? (await seasons.getById(viewSeasonId)).data?.id ?? null
+      : (await seasons.getCurrent()).data?.id ?? null
+    if (!seasonId) return EMPTY
 
-      const seasonId = viewSeasonId
-        ? (await seasons.getById(viewSeasonId)).data?.id ?? null
-        : (await seasons.getCurrent()).data?.id ?? null
-      if (!seasonId) { reset(); return }
+    let ledgerData: any[] = []
+    let auctionData: any[] = []
+    let itemData: any[] = []
+    let myBidRows: any[] = []
+    let auctionLedgerData: any[] = []
+    await Promise.all([
+      pinLedger.listByPlayerSeason(playerId, seasonId).then(({ data }) => { ledgerData = data ?? [] }),
+      auctions.listBySeason(seasonId).then(({ data }) => { auctionData = data ?? [] }),
+      inventoryItems.listByPlayerSeason(playerId, seasonId).then(({ data }) => { itemData = data ?? [] }),
+      auctions.listMyBids().then(({ data }) => { myBidRows = data ?? [] }),
+      auctionLedger.listBySeason(seasonId).then(({ data }) => { auctionLedgerData = data ?? [] }),
+    ])
 
-      let ledgerData: any[] = []
-      let auctionData: any[] = []
-      let itemData: any[] = []
-      let myBidRows: any[] = []
-      let auctionLedgerData: any[] = []
-      await Promise.all([
-        pinLedger.listByPlayerSeason(playerId, seasonId).then(({ data }) => { ledgerData = data ?? [] }),
-        auctions.listBySeason(seasonId).then(({ data }) => { auctionData = data ?? [] }),
-        inventoryItems.listByPlayerSeason(playerId, seasonId).then(({ data }) => { itemData = data ?? [] }),
-        auctions.listMyBids().then(({ data }) => { myBidRows = data ?? [] }),
-        auctionLedger.listBySeason(seasonId).then(({ data }) => { auctionLedgerData = data ?? [] }),
-      ])
+    // Decode the viewer's own amounts only where a bid exists (a handful of
+    // open auctions at most — the per-auction RPC is fine at league scale).
+    const myBidAuctionIds = myBidRows.map(b => b.auction_id)
+    const amounts = await Promise.all(
+      myBidAuctionIds.map(id => auctions.myBidAmount(id).then(({ data }) => [id, data as number | null] as const)),
+    )
+    const myAmounts = new Map(amounts)
+    const bounceMap = bouncesByAuction(auctionLedgerData)
+    const winnerMap = purchasesByAuction(auctionLedgerData)
 
-      // Decode the viewer's own amounts only where a bid exists (a handful of
-      // open auctions at most — the per-auction RPC is fine at league scale).
-      const myBidAuctionIds = myBidRows.map(b => b.auction_id)
-      const amounts = await Promise.all(
-        myBidAuctionIds.map(id => auctions.myBidAmount(id).then(({ data }) => [id, data as number | null] as const)),
-      )
-      const myAmounts = new Map(amounts)
-      const bounceMap = bouncesByAuction(auctionLedgerData)
-      const winnerMap = purchasesByAuction(auctionLedgerData)
-
-      setBalance(computeBalance(ledgerData))
-      setAuctionList(auctionData.map(row =>
+    return {
+      balance: computeBalance(ledgerData),
+      auctions: auctionData.map(row =>
         normalizeAuction(row, myAmounts.get(row.id) ?? null,
-          bounceMap.get(row.id) ?? [], winnerMap.get(row.id) ?? [])))
-      setMyItems(itemData.map(normalizeInventoryItem))
-    } finally {
-      loadedOnce.current = true
-      setLoading(false)
+          bounceMap.get(row.id) ?? [], winnerMap.get(row.id) ?? [])),
+      myItems: itemData.map(normalizeInventoryItem),
     }
-  }, [playerId, viewSeasonId])
-
-  useEffect(() => { load() }, [load])
+  }, [playerId, viewSeasonId], 'useAuctionHouseData')
 
   // True when reviewing a specific prior season (drives read-only UI gating).
   const readOnly = viewSeasonId != null
 
-  return { loading, balance, auctions: auctionList, myItems, readOnly, reload: load }
+  return { loading, ...(data ?? EMPTY), readOnly, reload }
 }

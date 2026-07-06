@@ -1,6 +1,6 @@
-import { useState, useCallback, useEffect, useRef } from 'react'
 import { seasons, pinLedger, bountyPosts } from '../utils/supabase/db'
 import { computeBalance } from '../utils/ledger'
+import { useAsyncData } from './useAsyncData'
 
 // One hunter's entry, flattened. Name is present only when the query embeds it
 // (getById / detail); board/inbox queries leave it null.
@@ -84,75 +84,60 @@ interface BountyBoardData {
   reload: () => Promise<void>
 }
 
+type BountyBoardPayload = Pick<BountyBoardData, 'balance' | 'openBoard' | 'mySponsored' | 'myHunted' | 'settled'>
+
+const EMPTY: BountyBoardPayload = { balance: 0, openBoard: [], mySponsored: [], myHunted: [], settled: [] }
+
 // One player's Bounty Board state: season balance (stake validation), the open
 // board, and the player's involvement bucketed into sponsored / hunted / settled.
 // In past-season mode (`viewSeasonId` set) the open board is skipped — only the
 // concluded season's settled bounties + the player's involvement load, read-only.
 export function useBountyBoardData(playerId: string | null, viewSeasonId?: string | null): BountyBoardData {
-  const [loading, setLoading] = useState(true)
-  const [balance, setBalance] = useState(0)
-  const [openBoard, setOpenBoard] = useState<BountyView[]>([])
-  const [mySponsored, setMySponsored] = useState<BountyView[]>([])
-  const [myHunted, setMyHunted] = useState<BountyView[]>([])
-  const [settled, setSettled] = useState<BountyView[]>([])
-  const loadedOnce = useRef(false)
+  const { loading, data, reload } = useAsyncData<BountyBoardPayload>(async () => {
+    if (!playerId) return EMPTY
 
-  const load = useCallback(async () => {
-    if (!loadedOnce.current) setLoading(true)
-    try {
-      const reset = () => {
-        setBalance(0); setOpenBoard([]); setMySponsored([]); setMyHunted([]); setSettled([])
-      }
-      if (!playerId) { reset(); return }
+    // Past-season mode points at the requested prior season; the open board is
+    // meaningless there (nothing left to hunt), so it's skipped.
+    const seasonId = viewSeasonId
+      ? (await seasons.getById(viewSeasonId)).data?.id ?? null
+      : (await seasons.getCurrent()).data?.id ?? null
+    if (!seasonId) return EMPTY
 
-      // Past-season mode points at the requested prior season; the open board is
-      // meaningless there (nothing left to hunt), so it's skipped.
-      const seasonId = viewSeasonId
-        ? (await seasons.getById(viewSeasonId)).data?.id ?? null
-        : (await seasons.getCurrent()).data?.id ?? null
-      if (!seasonId) { reset(); return }
+    let ledgerData: any[] = []
+    let boardData: any[] = []
+    let mineData: any[] = []
+    await Promise.all([
+      pinLedger.listByPlayerSeason(playerId, seasonId).then(({ data }) => { ledgerData = data ?? [] }),
+      viewSeasonId
+        ? Promise.resolve()
+        : bountyPosts.listOpenBySeason(seasonId).then(({ data }) => { boardData = data ?? [] }),
+      bountyPosts.listByPlayerSeason(seasonId).then(({ data }) => { mineData = data ?? [] }),
+    ])
 
-      let ledgerData: any[] = []
-      let boardData: any[] = []
-      let mineData: any[] = []
-      await Promise.all([
-        pinLedger.listByPlayerSeason(playerId, seasonId).then(({ data }) => { ledgerData = data ?? [] }),
-        viewSeasonId
-          ? Promise.resolve()
-          : bountyPosts.listOpenBySeason(seasonId).then(({ data }) => { boardData = data ?? [] }),
-        bountyPosts.listByPlayerSeason(seasonId).then(({ data }) => { mineData = data ?? [] }),
-      ])
-
-      setBalance(computeBalance(ledgerData))
-      setOpenBoard(boardData.map(normalizeBounty))
-
-      const mine = mineData.map(normalizeBounty)
-      const sponsored: BountyView[] = []
-      const hunted: BountyView[] = []
-      const done: BountyView[] = []
-      for (const b of mine) {
-        const iSponsor = b.sponsorPlayerId === playerId
-        const iHunt = b.hunters.some(h => h.playerId === playerId)
-        if (!iSponsor && !iHunt) continue // someone else's bounty — not "mine"
-        if (b.status === 'settled') { done.push(b); continue }
-        if (iSponsor) sponsored.push(b)
-        if (iHunt) hunted.push(b)
-      }
-      setMySponsored(sponsored)
-      setMyHunted(hunted)
-      setSettled(done)
-    } catch (e) {
-      console.error('useBountyBoardData error:', e)
-    } finally {
-      loadedOnce.current = true
-      setLoading(false)
+    const mine = mineData.map(normalizeBounty)
+    const mySponsored: BountyView[] = []
+    const myHunted: BountyView[] = []
+    const settled: BountyView[] = []
+    for (const b of mine) {
+      const iSponsor = b.sponsorPlayerId === playerId
+      const iHunt = b.hunters.some(h => h.playerId === playerId)
+      if (!iSponsor && !iHunt) continue // someone else's bounty — not "mine"
+      if (b.status === 'settled') { settled.push(b); continue }
+      if (iSponsor) mySponsored.push(b)
+      if (iHunt) myHunted.push(b)
     }
-  }, [playerId, viewSeasonId])
 
-  useEffect(() => { load() }, [load])
+    return {
+      balance: computeBalance(ledgerData),
+      openBoard: boardData.map(normalizeBounty),
+      mySponsored,
+      myHunted,
+      settled,
+    }
+  }, [playerId, viewSeasonId], 'useBountyBoardData')
 
   // True when reviewing a specific prior season (drives read-only UI gating).
   const readOnly = viewSeasonId != null
 
-  return { loading, balance, openBoard, mySponsored, myHunted, settled, readOnly, reload: load }
+  return { loading, ...(data ?? EMPTY), readOnly, reload }
 }
