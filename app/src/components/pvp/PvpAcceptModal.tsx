@@ -1,6 +1,7 @@
-import { View, Text, StyleSheet } from 'react-native'
+import { Text, StyleSheet } from 'react-native'
 import { colors, fonts } from '../../theme'
 import ConfirmActionSheet from '../ui/ConfirmActionSheet'
+import StatRow from '../ui/StatRow'
 import { pvpChallenges } from '../../utils/supabase/db'
 import { CONTRACT_TYPE_LABEL, CONTRACT_TYPE_RULE } from '../../utils/pvp'
 import type { PvpChallengeView } from '../../hooks/usePvpData'
@@ -34,22 +35,10 @@ export default function PvpAcceptModal({ challenge: c, viewerId, onClose, onDone
       onClose={onClose}
       onDone={onDone}
     >
-      <View style={styles.row}>
-        <Text style={styles.rowLabel}>Your stake</Text>
-        <Text style={styles.rowValue}>{formatPins(myStake)} pins</Text>
-      </View>
-      <View style={styles.row}>
-        <Text style={styles.rowLabel}>Opponent's stake</Text>
-        <Text style={styles.rowValue}>{formatPins(oppStake)} pins</Text>
-      </View>
-      <View style={styles.row}>
-        <Text style={styles.rowLabel}>Total pot</Text>
-        <Text style={styles.rowValueAccent}>{formatPins(c.totalPot)} pins</Text>
-      </View>
-      <View style={styles.row}>
-        <Text style={styles.rowLabel}>Winner's payout</Text>
-        <Text style={styles.rowValueAccent}>{formatPins(c.payoutAmount)} pins</Text>
-      </View>
+      <StatRow label="Your stake" value={`${formatPins(myStake)} pins`} />
+      <StatRow label="Opponent's stake" value={`${formatPins(oppStake)} pins`} />
+      <StatRow label="Total pot" value={`${formatPins(c.totalPot)} pins`} variant="accent" />
+      <StatRow label="Winner's payout" value={`${formatPins(c.payoutAmount)} pins`} variant="accent" />
       <Text style={styles.rule}>{CONTRACT_TYPE_RULE[c.contractType]}</Text>
       <Text style={styles.note}>
         Accepting escrows your stake immediately and locks the contract. It settles automatically
@@ -60,10 +49,6 @@ export default function PvpAcceptModal({ challenge: c, viewerId, onClose, onDone
 }
 
 const styles = StyleSheet.create({
-  row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 10 },
-  rowLabel: { fontFamily: fonts.barlow, fontSize: 14, color: colors.muted },
-  rowValue: { fontFamily: fonts.barlowCondensed, fontSize: 16, color: colors.text },
-  rowValueAccent: { fontFamily: fonts.barlowCondensedHeavy, fontSize: 18, color: colors.accent },
   rule: { fontFamily: fonts.barlow, fontSize: 13, color: colors.muted, lineHeight: 19, marginTop: 6 },
   note: { fontFamily: fonts.barlow, fontSize: 12, color: colors.muted2, lineHeight: 17, marginTop: 10 },
 })

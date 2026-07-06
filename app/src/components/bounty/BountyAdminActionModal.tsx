@@ -5,6 +5,7 @@ import {
 import { colors, fonts, radius } from '../../theme'
 import BottomSheet from '../ui/BottomSheet'
 import Button from '../ui/Button'
+import StatRow from '../ui/StatRow'
 import { useUiStore } from '../../stores/uiStore'
 import { useAdminAction } from '../../hooks/useAdminAction'
 import { bountyPosts } from '../../utils/supabase/db'
@@ -101,15 +102,16 @@ export default function BountyAdminActionModal({ bounty: b, onClose, onDone }: P
           />
 
           <View style={styles.previewCard}>
-            <View style={styles.kv}><Text style={styles.muted}>Sponsor wins → sponsor keeps</Text><Text style={styles.kvValue}>{formatPins(econ.sponsorTakeOnWin)}</Text></View>
+            <StatRow label="Sponsor wins → sponsor keeps" value={formatPins(econ.sponsorTakeOnWin)} />
             {b.hunters.map(h => (
-              <View key={h.id} style={styles.kv}>
-                <Text style={styles.muted}>Hunters win → {h.playerName ?? `Hunter #${h.entryNumber}`}</Text>
-                <Text style={styles.kvValue}>{formatPins(hunterPayout(h.stakeAmount, b.rewardPerHunter))}</Text>
-              </View>
+              <StatRow
+                key={h.id}
+                label={`Hunters win → ${h.playerName ?? `Hunter #${h.entryNumber}`}`}
+                value={formatPins(hunterPayout(h.stakeAmount, b.rewardPerHunter))}
+              />
             ))}
             {b.bountyType === 'house_bounty' && (
-              <View style={styles.kv}><Text style={styles.muted}>House subsidy (hunter win)</Text><Text style={styles.kvValue}>{formatPins(econ.totalReward)}</Text></View>
+              <StatRow label="House subsidy (hunter win)" value={formatPins(econ.totalReward)} />
             )}
           </View>
 
@@ -131,10 +133,7 @@ const styles = StyleSheet.create({
   },
   previewCard: {
     backgroundColor: colors.surface2, borderRadius: radius.cardSm, borderWidth: 1, borderColor: colors.border2,
-    paddingHorizontal: 14, paddingVertical: 8, marginTop: 12, marginBottom: 4,
+    paddingHorizontal: 14, paddingTop: 12, paddingBottom: 2, marginTop: 12, marginBottom: 4,
   },
-  kv: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 6 },
-  kvValue: { fontFamily: fonts.barlowCondensed, fontSize: 15, color: colors.text },
-  muted: { fontFamily: fonts.barlow, fontSize: 13, color: colors.muted, flex: 1, marginRight: 8 },
   actSpacing: { marginBottom: 8 },
 })

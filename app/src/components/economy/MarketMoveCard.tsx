@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native'
+import { View, Text, StyleSheet } from 'react-native'
 import { colors, fonts, radius } from '../../theme'
+import EconomyCard from '../ui/EconomyCard'
 import PlayerAvatar from '../ui/PlayerAvatar'
 import { timeAgo } from '../../utils/helpers'
 import { renderFeedEvent, FeedEventView } from '../../utils/activityFeedTemplates'
@@ -11,18 +12,18 @@ interface Props {
   onPress?: () => void // omit (or undefined) for a non-tappable card
 }
 
-// One row in the Market Moves feed (design §16.1). Mirrors the surface/border
-// card styling used across the Pinsino screens. The feature icon + actor avatar
-// lead; the rendered line follows; a meta row carries the relative timestamp +
-// source label and the optional amount badge.
+// One row in the Market Moves feed (design §16.1). Uses the EconomyCard shell
+// with a fully custom body. The feature icon + actor avatar lead; the rendered
+// line follows; a meta row carries the relative timestamp + source label and
+// the optional amount badge.
 export default function MarketMoveCard({ event, onPress }: Props) {
   const parts = useMemo(() => renderFeedEvent(event), [event])
   const hasActor = event.actorPlayerId != null && event.actorName != null
 
   const winner = parts.winner
 
-  const body = (
-    <View style={styles.card}>
+  return (
+    <EconomyCard onPress={onPress}>
       {winner && (
         <View style={styles.winnerBanner}>
           <Text style={styles.winnerTrophy}>🏆</Text>
@@ -61,26 +62,11 @@ export default function MarketMoveCard({ event, onPress }: Props) {
           </View>
         )}
       </View>
-    </View>
-  )
-
-  if (!onPress) return body
-  return (
-    <TouchableOpacity activeOpacity={0.7} onPress={onPress}>
-      {body}
-    </TouchableOpacity>
+    </EconomyCard>
   )
 }
 
 const styles = StyleSheet.create({
-  card: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.cardMd,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 14,
-    marginBottom: 10,
-  },
   // Victory treatment — a gold trophy banner above an otherwise-standard card.
   winnerBanner: {
     flexDirection: 'row',

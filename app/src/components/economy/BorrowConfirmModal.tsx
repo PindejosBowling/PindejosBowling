@@ -1,6 +1,7 @@
 import { View, Text, StyleSheet } from 'react-native'
 import { colors, fonts, radius } from '../../theme'
 import ConfirmActionSheet from '../ui/ConfirmActionSheet'
+import StatRow from '../ui/StatRow'
 import { loans } from '../../utils/supabase/db'
 import type { LoanProductView } from '../../hooks/useLoanSharkData'
 import { formatPins } from '../../utils/formatting'
@@ -33,10 +34,7 @@ export default function BorrowConfirmModal({ product, onClose, onBorrowed }: Bor
       onClose={onClose}
       onDone={onBorrowed}
     >
-      <View style={styles.statRow}>
-        <Text style={styles.statLabel}>BORROW</Text>
-        <Text style={styles.statValueBig}>{formatPins(product.borrow_amount)} pins</Text>
-      </View>
+      <StatRow label="BORROW" value={`${formatPins(product.borrow_amount)} pins`} variant="big" />
       <View style={styles.statGrid}>
         <View style={styles.statCell}>
           <Text style={styles.statLabel}>WEEKLY PINCOME CUT</Text>
@@ -64,12 +62,6 @@ export default function BorrowConfirmModal({ product, onClose, onBorrowed }: Bor
 }
 
 const styles = StyleSheet.create({
-  statRow: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    justifyContent: 'space-between',
-    marginBottom: 14,
-  },
   statGrid: { flexDirection: 'row', gap: 12, marginBottom: 18 },
   statCell: {
     flex: 1,
@@ -88,11 +80,6 @@ const styles = StyleSheet.create({
     fontSize: 24,
     color: colors.text,
     marginTop: 2,
-  },
-  statValueBig: {
-    fontFamily: fonts.barlowCondensedHeavy,
-    fontSize: 26,
-    color: colors.accent,
   },
   specialWarn: {
     backgroundColor: colors.dangerDim,
