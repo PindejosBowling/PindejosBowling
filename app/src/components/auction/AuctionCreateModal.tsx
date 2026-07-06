@@ -5,6 +5,7 @@ import { colors, fonts, radius } from '../../theme'
 import BottomSheet from '../ui/BottomSheet'
 import Button from '../ui/Button'
 import { useUiStore } from '../../stores/uiStore'
+import { useDatePicker } from '../../hooks/useDatePicker'
 import { AuctionView, CatalogItemView, DEFAULT_BOUNCE_FEE, defaultAuctionCloseAt, itemHowToUse } from '../../utils/auction'
 import { formatCloseTime } from '../../utils/bounty'
 import { auctions, itemCatalog } from '../../utils/supabase/db'
@@ -27,10 +28,12 @@ export default function AuctionCreateModal({ initial, onClose, onDone }: Props) 
   const [itemKey, setItemKey] = useState(initial?.itemKey ?? '')
   const [minimumBid, setMinimumBid] = useState(initial ? String(initial.minimumBid) : '')
   const [quantityText, setQuantityText] = useState(initial ? String(initial.quantity) : '1')
-  const [opensAt, setOpensAt] = useState<Date>(() => (initial ? new Date(initial.opensAt) : new Date()))
-  const [closesAt, setClosesAt] = useState<Date>(() =>
-    initial ? new Date(initial.closesAt) : defaultAuctionCloseAt())
-  const [pickerFor, setPickerFor] = useState<'opens' | 'closes' | null>(null)
+  // One picker instance per date; the toggle buttons close the other so at
+  // most one picker is showing (the pre-hook `pickerFor` behavior).
+  const opensPicker = useDatePicker(() => (initial ? new Date(initial.opensAt) : new Date()))
+  const closesPicker = useDatePicker(() => (initial ? new Date(initial.closesAt) : defaultAuctionCloseAt()))
+  const opensAt = opensPicker.value
+  const closesAt = closesPicker.value
   const [saving, setSaving] = useState(false)
 
   // Active catalog rows feed the item chips; default the selection to the
@@ -90,13 +93,6 @@ export default function AuctionCreateModal({ initial, onClose, onDone }: Props) 
     }
   }
 
-  function onPickerValue(_e: unknown, selected?: Date) {
-    const target = pickerFor
-    if (Platform.OS === 'android') setPickerFor(null)
-    if (!selected || !target) return
-    if (target === 'opens') setOpensAt(selected)
-    else setClosesAt(selected)
-  }
 
   return (
     <BottomSheet
@@ -166,24 +162,41 @@ export default function AuctionCreateModal({ initial, onClose, onDone }: Props) 
       )}
 
       <Text style={styles.label}>OPENS</Text>
-      <TouchableOpacity style={styles.dateBtn} onPress={() => setPickerFor(p => (p === 'opens' ? null : 'opens'))} activeOpacity={0.8}>
+      <TouchableOpacity
+        style={styles.dateBtn}
+        onPress={() => { closesPicker.setOpen(false); opensPicker.setOpen(o => !o) }}
+        activeOpacity={0.8}
+      >
         <Text style={styles.dateBtnText}>{formatCloseTime(opensAt.toISOString())}</Text>
         <Text style={styles.dateBtnChevron}>›</Text>
       </TouchableOpacity>
 
       <Text style={styles.label}>CLOSES (SETTLES IMMEDIATELY)</Text>
-      <TouchableOpacity style={styles.dateBtn} onPress={() => setPickerFor(p => (p === 'closes' ? null : 'closes'))} activeOpacity={0.8}>
+      <TouchableOpacity
+        style={styles.dateBtn}
+        onPress={() => { opensPicker.setOpen(false); closesPicker.setOpen(o => !o) }}
+        activeOpacity={0.8}
+      >
         <Text style={styles.dateBtnText}>{formatCloseTime(closesAt.toISOString())}</Text>
         <Text style={styles.dateBtnChevron}>›</Text>
       </TouchableOpacity>
 
-      {pickerFor && (
+      {opensPicker.open && (
         <DateTimePicker
-          value={pickerFor === 'opens' ? opensAt : closesAt}
+          value={opensAt}
           mode="datetime"
           display={Platform.OS === 'ios' ? 'inline' : 'default'}
-          minimumDate={pickerFor === 'closes' ? new Date() : undefined}
-          onChange={onPickerValue}
+          onChange={opensPicker.onChange}
+          themeVariant="dark"
+        />
+      )}
+      {closesPicker.open && (
+        <DateTimePicker
+          value={closesAt}
+          mode="datetime"
+          display={Platform.OS === 'ios' ? 'inline' : 'default'}
+          minimumDate={new Date()}
+          onChange={closesPicker.onChange}
           themeVariant="dark"
         />
       )}

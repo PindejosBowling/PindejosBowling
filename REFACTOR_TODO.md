@@ -34,7 +34,7 @@ Re-derive this table from the `Verify` commands if in doubt — do not trust it 
 | 1 | 1.2 `<BalancePill>` | [x] |
 | 1 | 1.3 `computeBalance` / `utils/ledger.ts` | [x] |
 | 1 | 1.4 theme tint/shadow tokens | [x] |
-| 1 | 1.5 `useDatePicker` | [ ] |
+| 1 | 1.5 `useDatePicker` | [x] |
 | 1 | 1.6 doc-rot (`references/` path) | [x] |
 | 2 | 2.1 `<EconomyCard>` | [ ] |
 | 2 | 2.2 `<StatRow>` | [ ] |
@@ -82,8 +82,8 @@ _Baseline: none started — every task below was identified by the audit; no ref
 - **Verify:** `grep -n "successTint\|dangerTint" app/src/theme.ts` is non-empty **and** `grep -rn "rgba(74,222,128\|rgba(239,68,68\|shadowColor: '#000'" app/src/components | wc -l` → `0`.
 
 ### 1.5 — `useDatePicker(initial)` hook  ↪ §1.5
-- [ ] Create `app/src/hooks/useDatePicker.ts` returning `{ value, open, setOpen, onChange }` with the Android-dismiss handling.
-- [ ] Adopt it in `BountyCreateScreen`, `BountyHouseCreateModal`, `AuctionCreateModal`.
+- [x] Create `app/src/hooks/useDatePicker.ts` returning `{ value, open, setOpen, onChange }` with the Android-dismiss handling.
+- [x] Adopt it in `BountyCreateScreen`, `BountyHouseCreateModal`, `AuctionCreateModal`. _(Auction uses two instances — one per date — with toggles closing the other, replacing the `pickerFor` multiplex. Three more `DateTimePicker` sites exist (`EditableWeek`, `AdminOpenRegistrationModal`, `AdminEditSeasonModal`) with multi-picker/nullable-date shapes — adopt opportunistically, e.g. alongside 3.3.)_
 - **Verify:** `grep -rln "useDatePicker" app/src | wc -l` → `≥4` (hook + 3 callers).
 
 ### 1.6 — Doc-rot: stale `references/` path  ↪ §1.6
