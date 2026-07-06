@@ -5,6 +5,9 @@ interface AsyncData<T> {
   data: T | null
   error: unknown
   reload: () => Promise<void>
+  // Local write into `data` without a refetch — for appending a pagination page,
+  // optimistic edits, etc. The next load/reload overwrites it with server truth.
+  mutate: (updater: (prev: T | null) => T | null) => void
 }
 
 // The shared load lifecycle behind the use*Data hooks: loads on mount and
@@ -46,5 +49,5 @@ export function useAsyncData<T>(
 
   useEffect(() => { load() }, [load])
 
-  return { loading, data, error, reload: load }
+  return { loading, data, error, reload: load, mutate: setData }
 }
