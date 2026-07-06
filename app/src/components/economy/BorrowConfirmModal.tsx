@@ -95,7 +95,7 @@ const styles = StyleSheet.create({
     color: colors.accent,
   },
   specialWarn: {
-    backgroundColor: 'rgba(255,79,109,0.12)',
+    backgroundColor: colors.dangerDim,
     borderRadius: radius.cardSm,
     borderWidth: 1,
     borderColor: colors.danger,

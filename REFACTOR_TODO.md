@@ -33,7 +33,7 @@ Re-derive this table from the `Verify` commands if in doubt — do not trust it 
 | 1 | 1.1 `utils/formatting.ts` | [x] |
 | 1 | 1.2 `<BalancePill>` | [x] |
 | 1 | 1.3 `computeBalance` / `utils/ledger.ts` | [x] |
-| 1 | 1.4 theme tint/shadow tokens | [ ] |
+| 1 | 1.4 theme tint/shadow tokens | [x] |
 | 1 | 1.5 `useDatePicker` | [ ] |
 | 1 | 1.6 doc-rot (`references/` path) | [x] |
 | 2 | 2.1 `<EconomyCard>` | [ ] |
@@ -77,8 +77,8 @@ _Baseline: none started — every task below was identified by the audit; no ref
 - **Verify:** `grep -rln "reduce((sum, e) => sum + e.amount" app/src/hooks | wc -l` → `0` _(was: 9 hooks)_.
 
 ### 1.4 — Theme tint/shadow tokens  ↪ §1.4
-- [ ] Add `successTint`, `dangerTint`, `shadow` to `app/src/theme.ts` (gold tints already exist — leave them).
-- [ ] Replace inline `rgba(74,222,128,…)` / `rgba(239,68,68,…)` / `rgba(255,79,109,…)` / `shadowColor: '#000'` with the tokens (`LineRow`, `BorrowConfirmModal`, `ConfirmBar`, `Dropdown`, `Toast`).
+- [x] Add `successTint`, `dangerTint`, `shadow` to `app/src/theme.ts` (gold tints already exist — leave them). _(Also added `successDim`/`dangerDim` at 0.12, mirroring `goldDim`/`goldTint`.)_
+- [x] Replace inline `rgba(74,222,128,…)` / `rgba(239,68,68,…)` / `rgba(255,79,109,…)` / `shadowColor: '#000'` with the tokens (`LineRow`, `BorrowConfirmModal`, `ConfirmBar`, `Dropdown`, `Toast`). _(ConfirmBar's rgba values are gold borders at bespoke alphas — out of scope. **Screens** still have ~17 success/danger rgba literals at bespoke alphas (RsvpScreen, LanetalkImportAdminScreen, MatchupsScreen, …) — adopt tokens opportunistically; note `rgba(239,68,68,…)` sites were red-500, now consolidated to theme danger where converted.)_
 - **Verify:** `grep -n "successTint\|dangerTint" app/src/theme.ts` is non-empty **and** `grep -rn "rgba(74,222,128\|rgba(239,68,68\|shadowColor: '#000'" app/src/components | wc -l` → `0`.
 
 ### 1.5 — `useDatePicker(initial)` hook  ↪ §1.5

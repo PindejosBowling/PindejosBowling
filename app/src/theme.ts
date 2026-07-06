@@ -13,9 +13,14 @@ export const colors = {
   text:      '#f0f0f0',
   muted:     '#7a7a85',
   muted2:    '#55555e',
-  success:   '#4ade80',
-  danger:    '#ff4f6d',
+  success:     '#4ade80',
+  successDim:  'rgba(74,222,128,0.12)',
+  successTint: 'rgba(74,222,128,0.05)',
+  danger:      '#ff4f6d',
+  dangerDim:   'rgba(255,79,109,0.12)',
+  dangerTint:  'rgba(255,79,109,0.05)',
   overlay:   'rgba(0,0,0,0.7)',
+  shadow:    '#000',
 
   // Soft desaturated tints reserved for the ambient pixel-art backdrops
   // (components/pixelart/) — not for UI chrome.

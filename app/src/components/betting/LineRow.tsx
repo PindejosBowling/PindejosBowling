@@ -115,8 +115,8 @@ const styles = StyleSheet.create({
   lineRowInProgress: { opacity: 0.5 },
   // Subtle with/against tints — teammates green-cast, matchup opponents
   // red-cast, everyone else on the plain surface (minimal clutter).
-  lineRowWith: { backgroundColor: 'rgba(74,222,128,0.05)' },
-  lineRowAgainst: { backgroundColor: 'rgba(239,68,68,0.05)' },
+  lineRowWith: { backgroundColor: colors.successTint },
+  lineRowAgainst: { backgroundColor: colors.dangerTint },
   lineInfo: { flex: 1 },
   lineInfoStacked: { alignItems: 'center' },
   centered: { textAlign: 'center' },
