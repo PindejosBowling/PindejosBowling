@@ -1,5 +1,6 @@
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native'
-import { colors, fonts, radius } from '../../theme'
+import { View, Text, StyleSheet } from 'react-native'
+import { colors, fonts } from '../../theme'
+import EconomyCard from '../ui/EconomyCard'
 import { CONTRACT_TYPE_LABEL, STATUS_LABEL, formatStakes } from '../../utils/pvp'
 import type { PvpChallengeView } from '../../hooks/usePvpData'
 import { formatPins } from '../../utils/formatting'
@@ -42,12 +43,12 @@ export default function PvpChallengeRow({ challenge: c, viewerId, onPress, cta }
   const typeLabel = (isCustom && c.customTitle) || CONTRACT_TYPE_LABEL[c.contractType] || c.contractType
 
   return (
-    <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.7}>
-      <View style={styles.topRow}>
-        <Text style={styles.type} numberOfLines={1}>{typeLabel}</Text>
-        <Text style={[styles.chip, { color: chip.color }]}>{chip.text}</Text>
-      </View>
-      <Text style={styles.opponent}>{opponentLabel(c, viewerId)}</Text>
+    <EconomyCard
+      title={typeLabel}
+      badge={{ text: chip.text, color: chip.color }}
+      subtitle={opponentLabel(c, viewerId)}
+      onPress={onPress}
+    >
       <View style={styles.metaRow}>
         <Text style={styles.meta}>{scope}</Text>
         <Text style={styles.metaDivider}>·</Text>
@@ -56,38 +57,11 @@ export default function PvpChallengeRow({ challenge: c, viewerId, onPress, cta }
         <Text style={styles.metaPot}>Pot {formatPins(c.totalPot)}</Text>
       </View>
       {cta ? <Text style={styles.cta}>{cta}</Text> : null}
-    </TouchableOpacity>
+    </EconomyCard>
   )
 }
 
 const styles = StyleSheet.create({
-  card: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.cardMd,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 14,
-    marginBottom: 10,
-  },
-  topRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
-  type: {
-    flex: 1,
-    fontFamily: fonts.barlowCondensed,
-    fontSize: 16,
-    color: colors.text,
-    fontWeight: '700',
-  },
-  chip: {
-    fontFamily: fonts.barlowCondensed,
-    fontSize: 11,
-    letterSpacing: 1.5,
-  },
-  opponent: {
-    fontFamily: fonts.barlow,
-    fontSize: 13,
-    color: colors.muted,
-    marginTop: 2,
-  },
   metaRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8 },
   meta: { fontFamily: fonts.barlowCondensed, fontSize: 13, color: colors.muted, letterSpacing: 0.3 },
   metaPot: { fontFamily: fonts.barlowCondensed, fontSize: 13, color: colors.accent, letterSpacing: 0.3 },

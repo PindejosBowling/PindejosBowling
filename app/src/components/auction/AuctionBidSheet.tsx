@@ -1,8 +1,9 @@
 import { useMemo, useState } from 'react'
-import { View, Text, TextInput, StyleSheet } from 'react-native'
+import { View, Text, StyleSheet } from 'react-native'
 import { colors, fonts, radius } from '../../theme'
 import BottomSheet from '../ui/BottomSheet'
 import Button from '../ui/Button'
+import PinAmountInput from '../ui/PinAmountInput'
 import { useUiStore } from '../../stores/uiStore'
 import { AuctionView, isLargeBid } from '../../utils/auction'
 import { auctions } from '../../utils/supabase/db'
@@ -76,13 +77,11 @@ export default function AuctionBidSheet({ auction: a, balance, onClose, onDone }
       </View>
 
       <Text style={styles.label}>YOUR PLEDGE</Text>
-      <TextInput
-        style={styles.input}
+      <PinAmountInput
+        variant="big"
         value={amountText}
-        onChangeText={t => setAmountText(t.replace(/[^0-9]/g, ''))}
-        keyboardType="number-pad"
+        onChangeText={setAmountText}
         placeholder={`min ${a.minimumBid}`}
-        placeholderTextColor={colors.muted2}
       />
       {editing && (
         <Text style={styles.editHint}>
@@ -122,10 +121,6 @@ const styles = StyleSheet.create({
   balanceValue: { fontFamily: fonts.barlowCondensedHeavy, fontSize: 18, color: colors.accent },
 
   label: { fontFamily: fonts.barlowCondensed, fontSize: 12, letterSpacing: 1.5, color: colors.muted, marginTop: 14, marginBottom: 8 },
-  input: {
-    backgroundColor: colors.surface2, borderRadius: radius.cardSm, borderWidth: 1, borderColor: colors.border2,
-    paddingHorizontal: 14, paddingVertical: 12, fontFamily: fonts.barlowCondensedHeavy, fontSize: 22, color: colors.text,
-  },
   editHint: { fontFamily: fonts.barlow, fontSize: 12, color: colors.muted, marginTop: 8, lineHeight: 17 },
 
   pledgeCopy: { fontFamily: fonts.barlow, fontSize: 13, color: colors.muted, marginTop: 14, lineHeight: 19 },

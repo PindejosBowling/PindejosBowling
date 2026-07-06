@@ -2,9 +2,10 @@ import { useMemo, useState } from 'react'
 import {
   View, Text, TextInput, StyleSheet, ActivityIndicator, Alert,
 } from 'react-native'
-import { colors, fonts, radius } from '../../theme'
+import { colors, radius, sheetStyles } from '../../theme'
 import BottomSheet from '../ui/BottomSheet'
 import Button from '../ui/Button'
+import StatRow from '../ui/StatRow'
 import { useUiStore } from '../../stores/uiStore'
 import { useAdminAction } from '../../hooks/useAdminAction'
 import { bountyPosts } from '../../utils/supabase/db'
@@ -68,30 +69,30 @@ export default function BountyAdminActionModal({ bounty: b, onClose, onDone }: P
         // to erase a bounty without scrolling past CLOSE / SETTLE / hunter rows.
         <>
           {saving && <ActivityIndicator size="small" color={colors.accent} style={{ marginTop: 12 }} />}
-          <Button variant="outline" tone="danger" label="Cancel (erase bounty)" disabled={saving} onPress={cancel} style={styles.actSpacing} />
+          <Button variant="outline" tone="danger" label="Cancel (erase bounty)" disabled={saving} onPress={cancel} style={sheetStyles.actSpacing} />
           <Button variant="ghost" label="Close" onPress={() => !saving && onClose()} />
         </>
       }
     >
       {b.status === 'open' && (
         <>
-          <Text style={styles.section}>CLOSE</Text>
+          <Text style={sheetStyles.section}>CLOSE</Text>
           <Button
             variant="outline"
             label="Close to new hunters"
             disabled={saving}
             onPress={() => run('Bounty closed', () => bountyPosts.close(b.id))}
-            style={styles.actSpacing}
+            style={sheetStyles.actSpacing}
           />
         </>
       )}
 
       {b.status !== 'settled' && (
         <>
-          <Text style={styles.section}>SETTLE</Text>
-          <Text style={styles.label}>SETTLEMENT REASONING (REQUIRED, PUBLIC)</Text>
+          <Text style={sheetStyles.section}>SETTLE</Text>
+          <Text style={sheetStyles.label}>SETTLEMENT REASONING (REQUIRED, PUBLIC)</Text>
           <TextInput
-            style={styles.input}
+            style={sheetStyles.input}
             value={reasoning}
             onChangeText={setReasoning}
             placeholder="Explain the outcome — shown publicly on the bounty."
@@ -101,20 +102,21 @@ export default function BountyAdminActionModal({ bounty: b, onClose, onDone }: P
           />
 
           <View style={styles.previewCard}>
-            <View style={styles.kv}><Text style={styles.muted}>Sponsor wins → sponsor keeps</Text><Text style={styles.kvValue}>{formatPins(econ.sponsorTakeOnWin)}</Text></View>
+            <StatRow label="Sponsor wins → sponsor keeps" value={formatPins(econ.sponsorTakeOnWin)} />
             {b.hunters.map(h => (
-              <View key={h.id} style={styles.kv}>
-                <Text style={styles.muted}>Hunters win → {h.playerName ?? `Hunter #${h.entryNumber}`}</Text>
-                <Text style={styles.kvValue}>{formatPins(hunterPayout(h.stakeAmount, b.rewardPerHunter))}</Text>
-              </View>
+              <StatRow
+                key={h.id}
+                label={`Hunters win → ${h.playerName ?? `Hunter #${h.entryNumber}`}`}
+                value={formatPins(hunterPayout(h.stakeAmount, b.rewardPerHunter))}
+              />
             ))}
             {b.bountyType === 'house_bounty' && (
-              <View style={styles.kv}><Text style={styles.muted}>House subsidy (hunter win)</Text><Text style={styles.kvValue}>{formatPins(econ.totalReward)}</Text></View>
+              <StatRow label="House subsidy (hunter win)" value={formatPins(econ.totalReward)} />
             )}
           </View>
 
-          <Button variant="outline" label="Sponsor Wins" disabled={saving} onPress={() => settle('sponsor_win', 'Sponsor wins')} style={styles.actSpacing} />
-          <Button variant="outline" label="Hunters Win" disabled={saving} onPress={() => settle('hunter_win', 'Hunters win')} style={styles.actSpacing} />
+          <Button variant="outline" label="Sponsor Wins" disabled={saving} onPress={() => settle('sponsor_win', 'Sponsor wins')} style={sheetStyles.actSpacing} />
+          <Button variant="outline" label="Hunters Win" disabled={saving} onPress={() => settle('hunter_win', 'Hunters win')} style={sheetStyles.actSpacing} />
         </>
       )}
     </BottomSheet>
@@ -122,19 +124,8 @@ export default function BountyAdminActionModal({ bounty: b, onClose, onDone }: P
 }
 
 const styles = StyleSheet.create({
-  section: { fontFamily: fonts.barlowCondensed, fontSize: 12, letterSpacing: 2, color: colors.muted, marginTop: 18, marginBottom: 8 },
-  label: { fontFamily: fonts.barlowCondensed, fontSize: 12, letterSpacing: 1.5, color: colors.muted, marginBottom: 8 },
-  input: {
-    backgroundColor: colors.surface2, borderRadius: radius.cardSm, borderWidth: 1, borderColor: colors.border2,
-    paddingHorizontal: 14, paddingVertical: 12, fontFamily: fonts.barlow, fontSize: 15, color: colors.text,
-    minHeight: 70, textAlignVertical: 'top',
-  },
   previewCard: {
     backgroundColor: colors.surface2, borderRadius: radius.cardSm, borderWidth: 1, borderColor: colors.border2,
-    paddingHorizontal: 14, paddingVertical: 8, marginTop: 12, marginBottom: 4,
+    paddingHorizontal: 14, paddingTop: 12, paddingBottom: 2, marginTop: 12, marginBottom: 4,
   },
-  kv: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 6 },
-  kvValue: { fontFamily: fonts.barlowCondensed, fontSize: 15, color: colors.text },
-  muted: { fontFamily: fonts.barlow, fontSize: 13, color: colors.muted, flex: 1, marginRight: 8 },
-  actSpacing: { marginBottom: 8 },
 })

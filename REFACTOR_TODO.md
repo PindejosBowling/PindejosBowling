@@ -36,10 +36,10 @@ Re-derive this table from the `Verify` commands if in doubt — do not trust it 
 | 1 | 1.4 theme tint/shadow tokens | [x] |
 | 1 | 1.5 `useDatePicker` | [x] |
 | 1 | 1.6 doc-rot (`references/` path) | [x] |
-| 2 | 2.1 `<EconomyCard>` | [ ] |
-| 2 | 2.2 `<StatRow>` | [ ] |
-| 2 | 2.3 `<PinAmountInput>` | [ ] |
-| 2 | 2.4 shared admin-modal styles | [ ] |
+| 2 | 2.1 `<EconomyCard>` | [x] |
+| 2 | 2.2 `<StatRow>` | [x] |
+| 2 | 2.3 `<PinAmountInput>` | [x] |
+| 2 | 2.4 shared admin-modal styles | [x] |
 | 2 | 2.5 `<ScreenContainer>` | [ ] |
 | 3 | 3.1 `useAsyncData` | [ ] |
 | 3 | 3.2 `useEconomyRefresh` + `bounty` source | [~] |
@@ -96,25 +96,25 @@ _Baseline: none started — every task below was identified by the audit; no ref
 ## Tier 2 — Shared UI primitives
 
 ### 2.1 — `<EconomyCard>` wrapper  ↪ §2.1
-- [ ] Create `app/src/components/ui/EconomyCard.tsx` taking `{ title, subtitle?, badge?, stats: StatCell[], footer?, onPress }`.
-- [ ] Refactor `BountyCard`, `AuctionCard`, `PvpChallengeRow`, `MarketMoveCard` to render it (feature-specific bits as `footer`/children).
+- [x] Create `app/src/components/ui/EconomyCard.tsx` taking `{ title, subtitle?, badge?, stats: StatCell[], footer?, onPress }`.
+- [x] Refactor `BountyCard`, `AuctionCard`, `PvpChallengeRow`, `MarketMoveCard` to render it (feature-specific bits as `footer`/children). _(PvP title/subtitle standardize to the shared 17pt/12pt skeleton — was 16pt/13pt; MarketMoveCard uses the shell only.)_
 - **Depends on:** 1.1 (for stat formatting). **Pairs with:** 2.2.
 - **Verify:** `grep -rln "EconomyCard" app/src/components/{bounty,auction,pvp,economy} | wc -l` → `≥4`.
 - **Manual check:** all four lists look unchanged.
 
 ### 2.2 — `<StatRow>` / KV primitive  ↪ §2.2
-- [ ] Create `app/src/components/ui/StatRow.tsx` (`label`, `value`, `variant?`).
-- [ ] Adopt in `BorrowConfirmModal`, `BountyAdminActionModal`, `PvpAcceptModal` (and inside `EconomyCard` stat cells if natural).
+- [x] Create `app/src/components/ui/StatRow.tsx` (`label`, `value`, `variant?`).
+- [x] Adopt in `BorrowConfirmModal`, `BountyAdminActionModal`, `PvpAcceptModal` (and inside `EconomyCard` stat cells if natural). _(Not natural — EconomyCard's stat cells are vertical value-over-label; StatRow is the horizontal KV pair. Bounty admin kv rows standardize to the shared 14pt/16pt row.)_
 - **Verify:** `grep -rln "StatRow" app/src/components | wc -l` → `≥4`.
 
 ### 2.3 — `<PinAmountInput>` component  ↪ §2.3
-- [ ] Create `app/src/components/ui/PinAmountInput.tsx` owning the `replace(/[^0-9]/g, '')` filter + shared input styling.
-- [ ] Adopt across the 10 amount-entry sites.
+- [x] Create `app/src/components/ui/PinAmountInput.tsx` owning the `replace(/[^0-9]/g, '')` filter + shared input styling.
+- [x] Adopt across the 10 amount-entry sites. _(Actual scope was 19 sites in 11 files — typography tiers preserved as `form`/`stake`/`wager`/`big` variants; `allowDecimal` covers SettleBetModal's prop-line decimals. Only the component itself contains the filter now.)_
 - **Verify:** `grep -rln "replace(/\[\^0-9\]/g" app/src/components app/src/screens | wc -l` → `≤1` _(was: 10 files)_.
 
 ### 2.4 — Shared admin-modal styles  ↪ §2.4
-- [ ] Extract the duplicated `section` / `label` / `input` style objects (export from `theme.ts` or a `<SectionLabel>` + the 2.3 input).
-- [ ] Remove the local copies from `BountyAdminActionModal`, `PvpAdminActionModal`, `AuctionAdminActionModal`.
+- [x] Extract the duplicated `section` / `label` / `input` style objects (export from `theme.ts` or a `<SectionLabel>` + the 2.3 input). _(Went with `sheetStyles` exported from `theme.ts` — the reasoning inputs are multiline text, not numeric, so the 2.3 component didn't apply. Also includes `actSpacing`. Standardized drift: input `minHeight` 70/56 → 64; bounty's label gains the shared `marginTop: 12`.)_
+- [x] Remove the local copies from `BountyAdminActionModal`, `PvpAdminActionModal`, `AuctionAdminActionModal`.
 - **Depends on:** 2.3 (input). **Verify:** the three files no longer each declare their own `section`/`label`/`input` StyleSheet entries.
 
 ### 2.5 — `<ScreenContainer>` scaffold  ↪ §2.5

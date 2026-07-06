@@ -7,6 +7,7 @@ import { useUiStore } from '../../stores/uiStore'
 import { pvpChallenges, seasons, games, CounterPvpArgs } from '../../utils/supabase/db'
 import LineDuelLines from './LineDuelLines'
 import GamePicker from '../ui/GamePicker'
+import PinAmountInput from '../ui/PinAmountInput'
 import { PVP_MIN_STAKE, CONTRACT_TYPE_LABEL, formatHandicap, sanitizeHandicap } from '../../utils/pvp'
 import type { PvpChallengeView } from '../../hooks/usePvpData'
 import { formatPins } from '../../utils/formatting'
@@ -166,13 +167,11 @@ export default function PvpCounterModal({ challenge: c, viewerId, balance, onClo
           <Text style={[styles.customToggleText, customStakes && styles.customToggleTextOn]}>Custom stakes</Text>
         </TouchableOpacity>
       </View>
-      <TextInput
-        style={styles.input}
+      <PinAmountInput
+        variant="stake"
         value={stake}
-        onChangeText={v => setStake(v.replace(/[^0-9]/g, ''))}
-        keyboardType="number-pad"
+        onChangeText={setStake}
         placeholder={`${PVP_MIN_STAKE}`}
-        placeholderTextColor={colors.muted2}
         maxLength={7}
       />
       <Text style={styles.help}>Balance: {formatPins(balance)} pins</Text>
@@ -180,13 +179,11 @@ export default function PvpCounterModal({ challenge: c, viewerId, balance, onClo
       {customStakes && (
         <>
           <Text style={styles.label}>OPPONENT'S STAKE (MIN {PVP_MIN_STAKE})</Text>
-          <TextInput
-            style={styles.input}
+          <PinAmountInput
+            variant="stake"
             value={opponentStake}
-            onChangeText={v => setOpponentStake(v.replace(/[^0-9]/g, ''))}
-            keyboardType="number-pad"
+            onChangeText={setOpponentStake}
             placeholder={`${PVP_MIN_STAKE}`}
-            placeholderTextColor={colors.muted2}
             maxLength={7}
           />
         </>

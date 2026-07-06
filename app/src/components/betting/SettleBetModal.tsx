@@ -1,8 +1,9 @@
 import { useState } from 'react'
-import { View, Text, TextInput, StyleSheet } from 'react-native'
+import { View, Text, StyleSheet } from 'react-native'
 import { colors, fonts, radius } from '../../theme'
 import BottomSheet from '../ui/BottomSheet'
 import Button from '../ui/Button'
+import PinAmountInput from '../ui/PinAmountInput'
 import { useUiStore } from '../../stores/uiStore'
 import { betMarkets } from '../../utils/supabase/db'
 import { betLineSuffix, STAT_LABELS, type BetView } from '../../hooks/usePinsinoData'
@@ -149,19 +150,13 @@ export default function SettleBetModal({ bet, onClose, onSettled }: SettleBetMod
               </Text>
             ) : needsValue ? (
               <>
-                <TextInput
-                  style={styles.wagerInput}
+                <PinAmountInput
+                  variant="wager"
                   value={value}
-                  onChangeText={v => setScores(s => ({
-                    ...s,
-                    // Props accept one decimal point; O/U stays integer-only.
-                    [i]: isProp
-                      ? v.replace(/[^0-9.]/g, '').replace(/(\..*)\./g, '$1')
-                      : v.replace(/[^0-9]/g, ''),
-                  }))}
-                  keyboardType={isProp ? 'decimal-pad' : 'number-pad'}
+                  onChangeText={v => setScores(s => ({ ...s, [i]: v }))}
+                  // Props accept one decimal point; O/U stays integer-only.
+                  allowDecimal={isProp}
                   placeholder={`0 – ${cap}`}
-                  placeholderTextColor={colors.muted2}
                   maxLength={isProp ? 5 : 4}
                 />
                 <Text style={styles.wagerHint}>
@@ -197,18 +192,6 @@ const styles = StyleSheet.create({
     fontFamily: fonts.barlow,
     fontSize: 13,
     color: colors.success,
-  },
-  wagerInput: {
-    backgroundColor: colors.surface2,
-    borderRadius: radius.cardSm,
-    borderWidth: 1,
-    borderColor: colors.border2,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontFamily: fonts.barlowCondensed,
-    fontSize: 20,
-    color: colors.text,
-    letterSpacing: 1,
   },
   wagerHint: {
     fontFamily: fonts.barlow,

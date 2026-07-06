@@ -1,9 +1,10 @@
 import { useMemo, useState } from 'react'
-import { View, Text, TextInput, TouchableOpacity, StyleSheet } from 'react-native'
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native'
 import { colors, fonts, radius } from '../../theme'
 import BottomSheet from '../ui/BottomSheet'
 import Button from '../ui/Button'
 import Dropdown from '../ui/Dropdown'
+import PinAmountInput from '../ui/PinAmountInput'
 import { PlayerPickerItem } from '../ui/PlayerPickerModal'
 import { useUiStore } from '../../stores/uiStore'
 import { CatalogItemAdminView } from '../../utils/auction'
@@ -103,13 +104,10 @@ export default function GrantItemSheet({ playerOptions, catalog, onClose, onDone
       </View>
 
       <Text style={styles.label}>QUANTITY</Text>
-      <TextInput
-        style={styles.input}
+      <PinAmountInput
         value={quantityText}
-        onChangeText={t => setQuantityText(t.replace(/[^0-9]/g, ''))}
-        keyboardType="number-pad"
+        onChangeText={setQuantityText}
         placeholder="1"
-        placeholderTextColor={colors.muted2}
       />
 
       {error && <Text style={styles.errorText}>{error}</Text>}
@@ -127,10 +125,6 @@ const styles = StyleSheet.create({
   itemChipActive: { borderColor: colors.accent, backgroundColor: colors.accentDim },
   itemChipText: { fontFamily: fonts.barlowCondensed, fontSize: 14, color: colors.muted },
   itemChipTextActive: { color: colors.accent },
-  input: {
-    backgroundColor: colors.surface2, borderRadius: radius.cardSm, borderWidth: 1, borderColor: colors.border2,
-    paddingHorizontal: 14, paddingVertical: 12, fontFamily: fonts.barlow, fontSize: 15, color: colors.text,
-  },
   errorText: { fontFamily: fonts.barlow, fontSize: 13, color: colors.danger, marginTop: 10 },
   submitBtn: { marginTop: 14 },
 })

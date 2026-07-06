@@ -1,5 +1,6 @@
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native'
-import { colors, fonts, radius } from '../../theme'
+import { Text, StyleSheet } from 'react-native'
+import { colors, fonts } from '../../theme'
+import EconomyCard, { StatCell } from '../ui/EconomyCard'
 import { AuctionView, formatTimeRemaining } from '../../utils/auction'
 import { formatPins } from '../../utils/formatting'
 
@@ -23,39 +24,24 @@ export default function AuctionCard({ auction: a, onPress }: Props) {
   const open = a.status === 'open'
   const done = a.status === 'settled' || a.status === 'settled_no_winner'
 
+  const stats: StatCell[] = [
+    { value: formatPins(a.minimumBid), label: 'MIN BID' },
+  ]
+  if (open) stats.push({ value: String(a.bidderCount), label: a.bidderCount === 1 ? 'BIDDER' : 'BIDDERS' })
+  stats.push({
+    value: open ? formatTimeRemaining(a.closesAt) : scheduled ? formatTimeRemaining(a.opensAt) : '—',
+    label: open ? 'CLOSES IN' : scheduled ? 'OPENS IN' : 'CLOSED',
+  })
+
   return (
-    <TouchableOpacity
-      style={[styles.card, scheduled && styles.cardDim]}
+    <EconomyCard
+      title={`${a.itemIcon} ${a.itemName}${a.quantity > 1 ? ` ×${a.quantity}` : ''}`}
+      badge={{ text: STATUS_LABEL[a.status], color: open ? colors.success : undefined }}
+      subtitle={a.description}
+      stats={stats}
+      dim={scheduled}
       onPress={onPress}
-      activeOpacity={0.7}
     >
-      <View style={styles.headerRow}>
-        <Text style={styles.title} numberOfLines={1}>
-          {a.itemIcon} {a.itemName}{a.quantity > 1 ? ` ×${a.quantity}` : ''}
-        </Text>
-        <Text style={[styles.status, open && styles.statusOpen]}>{STATUS_LABEL[a.status]}</Text>
-      </View>
-      <Text style={styles.description} numberOfLines={1}>{a.description}</Text>
-
-      <View style={styles.amountRow}>
-        <View style={styles.amountCell}>
-          <Text style={styles.amountValue}>{formatPins(a.minimumBid)}</Text>
-          <Text style={styles.amountLabel}>MIN BID</Text>
-        </View>
-        {open && (
-          <View style={styles.amountCell}>
-            <Text style={styles.amountValue}>{a.bidderCount}</Text>
-            <Text style={styles.amountLabel}>{a.bidderCount === 1 ? 'BIDDER' : 'BIDDERS'}</Text>
-          </View>
-        )}
-        <View style={styles.amountCell}>
-          <Text style={styles.amountValue}>
-            {open ? formatTimeRemaining(a.closesAt) : scheduled ? formatTimeRemaining(a.opensAt) : '—'}
-          </Text>
-          <Text style={styles.amountLabel}>{open ? 'CLOSES IN' : scheduled ? 'OPENS IN' : 'CLOSED'}</Text>
-        </View>
-      </View>
-
       {open && a.myBidAmount != null && <Text style={styles.bidTag}>BID PLACED</Text>}
 
       {done && (
@@ -70,31 +56,11 @@ export default function AuctionCard({ auction: a, onPress }: Props) {
             : ''}
         </Text>
       )}
-    </TouchableOpacity>
+    </EconomyCard>
   )
 }
 
 const styles = StyleSheet.create({
-  card: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.cardMd,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 14,
-    marginBottom: 10,
-  },
-  cardDim: { opacity: 0.7 },
-  headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  title: { flex: 1, fontFamily: fonts.barlowCondensed, fontSize: 17, color: colors.text, letterSpacing: 0.3, marginRight: 8 },
-  status: { fontFamily: fonts.barlowCondensed, fontSize: 11, letterSpacing: 1.5, color: colors.muted },
-  statusOpen: { color: colors.success },
-  description: { fontFamily: fonts.barlow, fontSize: 12, color: colors.muted, marginTop: 2 },
-
-  amountRow: { flexDirection: 'row', marginTop: 12, marginBottom: 4 },
-  amountCell: { flex: 1, alignItems: 'center' },
-  amountValue: { fontFamily: fonts.barlowCondensedHeavy, fontSize: 20, color: colors.accent },
-  amountLabel: { fontFamily: fonts.barlowCondensed, fontSize: 10, letterSpacing: 1, color: colors.muted, marginTop: 1 },
-
   bidTag: { fontFamily: fonts.barlowCondensed, fontSize: 13, color: colors.success, letterSpacing: 1, marginTop: 6 },
   result: { fontFamily: fonts.barlowCondensed, fontSize: 13, color: colors.text, letterSpacing: 0.3, marginTop: 6 },
 })

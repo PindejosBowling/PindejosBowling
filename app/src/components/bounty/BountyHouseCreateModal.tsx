@@ -4,6 +4,7 @@ import DateTimePicker from '@react-native-community/datetimepicker'
 import { colors, fonts, radius } from '../../theme'
 import BottomSheet from '../ui/BottomSheet'
 import Button from '../ui/Button'
+import PinAmountInput from '../ui/PinAmountInput'
 import { useUiStore } from '../../stores/uiStore'
 import { useDatePicker } from '../../hooks/useDatePicker'
 import { bountyPosts, players, seasons } from '../../utils/supabase/db'
@@ -126,15 +127,15 @@ export default function BountyHouseCreateModal({ weekId, onClose, onDone }: Prop
       <View style={styles.row}>
         <View style={styles.rowCol}>
           <Text style={styles.label}>HUNTER STAKE</Text>
-          <TextInput style={styles.input} value={hunterStake} onChangeText={t => setHunterStake(t.replace(/[^0-9]/g, ''))} placeholder={`min ${MIN_HUNTER_STAKE}`} placeholderTextColor={colors.muted2} keyboardType="number-pad" />
+          <PinAmountInput value={hunterStake} onChangeText={setHunterStake} placeholder={`min ${MIN_HUNTER_STAKE}`} />
         </View>
         <View style={styles.rowCol}>
           <Text style={styles.label}>REWARD / HUNTER</Text>
-          <TextInput style={styles.input} value={reward} onChangeText={t => setReward(t.replace(/[^0-9]/g, ''))} placeholder={`min ${MIN_REWARD_PER_HUNTER}`} placeholderTextColor={colors.muted2} keyboardType="number-pad" />
+          <PinAmountInput value={reward} onChangeText={setReward} placeholder={`min ${MIN_REWARD_PER_HUNTER}`} />
         </View>
         <View style={styles.rowCol}>
           <Text style={styles.label}>MAX HUNTERS</Text>
-          <TextInput style={styles.input} value={maxHunters} onChangeText={t => setMaxHunters(t.replace(/[^0-9]/g, ''))} placeholder={`1–${MAX_MAX_HUNTERS}`} placeholderTextColor={colors.muted2} keyboardType="number-pad" />
+          <PinAmountInput value={maxHunters} onChangeText={setMaxHunters} placeholder={`1–${MAX_MAX_HUNTERS}`} />
         </View>
       </View>
 

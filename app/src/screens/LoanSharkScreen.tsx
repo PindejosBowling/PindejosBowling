@@ -4,7 +4,6 @@ import {
   Text,
   ScrollView,
   TouchableOpacity,
-  TextInput,
   StyleSheet,
   RefreshControl,
 } from 'react-native'
@@ -19,6 +18,7 @@ import Toast from '../components/ui/Toast'
 import BorrowConfirmModal from '../components/economy/BorrowConfirmModal'
 import Button from '../components/ui/Button'
 import BalancePill from '../components/ui/BalancePill'
+import PinAmountInput from '../components/ui/PinAmountInput'
 import { useLoanSharkData, LoanProductView, DebtLedgerEntry } from '../hooks/useLoanSharkData'
 import { usePinsinoSeasonContext } from '../hooks/usePinsinoSeasonContext'
 import ReadOnlySeasonBanner from '../components/betting/ReadOnlySeasonBanner'
@@ -162,13 +162,12 @@ export default function LoanSharkScreen() {
 
             {/* Manual repayment form */}
             <View style={styles.repayRow}>
-              <TextInput
+              <PinAmountInput
                 style={styles.repayInput}
+                variant="stake"
                 value={repayAmount}
-                onChangeText={v => setRepayAmount(v.replace(/[^0-9]/g, ''))}
-                keyboardType="number-pad"
+                onChangeText={setRepayAmount}
                 placeholder="Amount"
-                placeholderTextColor={colors.muted2}
                 maxLength={7}
               />
               <Button label="Repay" onPress={repay} disabled={repaying} style={styles.repayBtn} />
@@ -302,18 +301,7 @@ const styles = StyleSheet.create({
   rateDivider: { color: colors.muted2 },
 
   repayRow: { flexDirection: 'row', gap: 8 },
-  repayInput: {
-    flex: 1,
-    backgroundColor: colors.surface2,
-    borderRadius: radius.cardSm,
-    borderWidth: 1,
-    borderColor: colors.border2,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontFamily: fonts.barlowCondensed,
-    fontSize: 18,
-    color: colors.text,
-  },
+  repayInput: { flex: 1 },
   repayBtn: { paddingHorizontal: 20 },
 
   historyToggle: {

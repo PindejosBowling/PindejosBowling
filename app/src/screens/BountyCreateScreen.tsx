@@ -12,6 +12,7 @@ import LoadingView from '../components/ui/LoadingView'
 import Toast from '../components/ui/Toast'
 import Button from '../components/ui/Button'
 import BalancePill from '../components/ui/BalancePill'
+import PinAmountInput from '../components/ui/PinAmountInput'
 import { useRefresh } from '../hooks/useRefresh'
 import { useDatePicker } from '../hooks/useDatePicker'
 import { useAuthStore } from '../stores/authStore'
@@ -141,36 +142,15 @@ export default function BountyCreateScreen() {
         <View style={styles.row}>
           <View style={styles.rowCol}>
             <Text style={styles.label}>REWARD / HUNTER</Text>
-            <TextInput
-              style={styles.input}
-              value={reward}
-              onChangeText={t => setReward(t.replace(/[^0-9]/g, ''))}
-              placeholder={`min ${MIN_REWARD_PER_HUNTER}`}
-              placeholderTextColor={colors.muted2}
-              keyboardType="number-pad"
-            />
+            <PinAmountInput value={reward} onChangeText={setReward} placeholder={`min ${MIN_REWARD_PER_HUNTER}`} />
           </View>
           <View style={styles.rowCol}>
             <Text style={styles.label}>HUNTER STAKE</Text>
-            <TextInput
-              style={styles.input}
-              value={hunterStake}
-              onChangeText={t => setHunterStake(t.replace(/[^0-9]/g, ''))}
-              placeholder={`min ${MIN_HUNTER_STAKE}`}
-              placeholderTextColor={colors.muted2}
-              keyboardType="number-pad"
-            />
+            <PinAmountInput value={hunterStake} onChangeText={setHunterStake} placeholder={`min ${MIN_HUNTER_STAKE}`} />
           </View>
           <View style={styles.rowCol}>
             <Text style={styles.label}>MAX HUNTERS</Text>
-            <TextInput
-              style={styles.input}
-              value={maxHunters}
-              onChangeText={t => setMaxHunters(t.replace(/[^0-9]/g, ''))}
-              placeholder={`1–${MAX_MAX_HUNTERS}`}
-              placeholderTextColor={colors.muted2}
-              keyboardType="number-pad"
-            />
+            <PinAmountInput value={maxHunters} onChangeText={setMaxHunters} placeholder={`1–${MAX_MAX_HUNTERS}`} />
           </View>
         </View>
 
