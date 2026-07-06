@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from 'react'
 import { seasons, pinLedger, bountyPosts } from '../utils/supabase/db'
+import { computeBalance } from '../utils/ledger'
 
 // One hunter's entry, flattened. Name is present only when the query embeds it
 // (getById / detail); board/inbox queries leave it null.
@@ -122,7 +123,7 @@ export function useBountyBoardData(playerId: string | null, viewSeasonId?: strin
         bountyPosts.listByPlayerSeason(seasonId).then(({ data }) => { mineData = data ?? [] }),
       ])
 
-      setBalance(ledgerData.reduce((sum, e) => sum + e.amount, 0))
+      setBalance(computeBalance(ledgerData))
       setOpenBoard(boardData.map(normalizeBounty))
 
       const mine = mineData.map(normalizeBounty)

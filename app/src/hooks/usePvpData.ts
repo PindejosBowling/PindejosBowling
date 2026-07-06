@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from 'react'
 import { seasons, pinLedger, pvpChallenges } from '../utils/supabase/db'
+import { computeBalance } from '../utils/ledger'
 
 // A flattened pvp_challenges row with resolved participant names. The screen
 // derives its display (record, CTA, etc.) via useMemo; no memo in the hook.
@@ -157,7 +158,7 @@ export function usePvpData(playerId: string | null, viewSeasonId?: string | null
         pvpChallenges.listWonBySeason(seasonId).then(({ data }) => { wonData = data ?? [] }),
       ])
 
-      setBalance(ledgerData.reduce((sum, e) => sum + e.amount, 0))
+      setBalance(computeBalance(ledgerData))
 
       const mine = mineData.map(normalizeChallenge)
       const next: PvpInbox = { received: [], sent: [], active: [], settled: [] }

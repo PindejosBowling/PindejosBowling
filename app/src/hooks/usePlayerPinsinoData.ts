@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect } from 'react'
 import { seasons, bets, pinLedger } from '../utils/supabase/db'
 import { BetView, normalizeBet } from './usePinsinoData'
+import { computeBalance } from '../utils/ledger'
 
 export interface LedgerEntry {
   id: string
@@ -106,7 +107,7 @@ export function usePlayerPinsinoData(playerId: string | null, viewSeasonId?: str
       }))
 
       // Calculate balance
-      const playerBalance = ledgerData.reduce((sum, e) => sum + e.amount, 0)
+      const playerBalance = computeBalance(ledgerData)
 
       setBalance(playerBalance)
       setLedger(ledgerEntries)

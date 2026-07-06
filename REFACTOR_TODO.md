@@ -32,7 +32,7 @@ Re-derive this table from the `Verify` commands if in doubt — do not trust it 
 |---|---|---|
 | 1 | 1.1 `utils/formatting.ts` | [x] |
 | 1 | 1.2 `<BalancePill>` | [x] |
-| 1 | 1.3 `computeBalance` / `utils/ledger.ts` | [ ] |
+| 1 | 1.3 `computeBalance` / `utils/ledger.ts` | [x] |
 | 1 | 1.4 theme tint/shadow tokens | [ ] |
 | 1 | 1.5 `useDatePicker` | [ ] |
 | 1 | 1.6 doc-rot (`references/` path) | [x] |
@@ -42,7 +42,7 @@ Re-derive this table from the `Verify` commands if in doubt — do not trust it 
 | 2 | 2.4 shared admin-modal styles | [ ] |
 | 2 | 2.5 `<ScreenContainer>` | [ ] |
 | 3 | 3.1 `useAsyncData` | [ ] |
-| 3 | 3.2 `useEconomyRefresh` + `bounty` source | [ ] |
+| 3 | 3.2 `useEconomyRefresh` + `bounty` source | [~] |
 | 3 | 3.3 migrate `visible`-prop admin modals | [ ] |
 | 3 | 3.4 `db.ts` embed/filter helpers | [ ] |
 | 3 | 3.5 compute-in-hooks | [ ] |
@@ -71,8 +71,8 @@ _Baseline: none started — every task below was identified by the audit; no ref
 - **Verify:** `grep -rln "balancePill" app/src/screens | wc -l` → `0` _(was: 5: BountyBoard, AuctionHouse, PvP, LoanShark, BountyCreate)_.
 
 ### 1.3 — `computeBalance(ledger)` → `utils/ledger.ts`  ↪ §1.3
-- [ ] Create `app/src/utils/ledger.ts` exporting `computeBalance(rows)` (and `computeDebt` if useful).
-- [ ] Replace `reduce((sum, e) => sum + e.amount, 0)` in the 9 hooks with `computeBalance(...)`.
+- [x] Create `app/src/utils/ledger.ts` exporting `computeBalance(rows)` (and `computeDebt` if useful).
+- [x] Replace `reduce((sum, e) => sum + e.amount, 0)` in the 9 hooks with `computeBalance(...)`. _(Actual scope was 8 hooks + the loan-debt reduce in `useLoanSharkData` → `computeDebt`; the audit's 9th hook, `useWeekEditor`, sums team scores, not ledger amounts — left as-is.)_
 - **Depends on:** none. **Unblocks:** cleaner hooks for 3.1.
 - **Verify:** `grep -rln "reduce((sum, e) => sum + e.amount" app/src/hooks | wc -l` → `0` _(was: 9 hooks)_.
 
@@ -135,7 +135,7 @@ _Baseline: none started — every task below was identified by the audit; no ref
 ### 3.2 — `useEconomyRefresh` + `bounty` notification source  ↪ §3.2
 - [ ] Create `app/src/hooks/useEconomyRefresh.ts` (`Promise.all([reload(), notificationStore.refresh()])`).
 - [ ] Use it in `BountyBoardScreen`, `AuctionHouseScreen`, `LoanSharkScreen` (PvP/Pinsino already refresh).
-- [ ] Add a `bounty` entry to `NOTIFICATION_SOURCES` in `app/src/utils/notifications.ts` (open bounties with slots the player hasn't joined).
+- [x] Add a `bounty` entry to `NOTIFICATION_SOURCES` in `app/src/utils/notifications.ts` (open bounties with slots the player hasn't joined). _(landed independently of this checklist — verified 2026-07-06)_
 - **Verify:** `grep -n "key: 'bounty'" app/src/utils/notifications.ts` is non-empty **and** `grep -rln "useEconomyRefresh" app/src/screens | wc -l` → `≥3`.
 - **Manual check:** join a bounty / place a bid → the tab badge updates without re-focusing.
 
