@@ -1,23 +1,21 @@
 import { useState } from 'react'
-import {
-  Modal,
-  View,
-  Text,
-  TouchableOpacity,
-  StyleSheet,
-} from 'react-native'
+import { View, Text, StyleSheet } from 'react-native'
 import { useUiStore } from '../../stores/uiStore'
 import { weeks, archives } from '../../utils/supabase/db'
 import { colors, fonts, radius } from '../../theme'
-import Toast from '../ui/Toast'
+import BottomSheet from '../ui/BottomSheet'
 import Button from '../ui/Button'
 
 interface Props {
-  visible: boolean
+  // Mount conditionally so the force-arm state resets between opens.
   onClose: () => void
 }
 
-export default function AdminArchiveModal({ visible, onClose }: Props) {
+// Built on BottomSheet directly (not ConfirmActionSheet): the no-pending-bets
+// backstop turns the confirm into an armed two-step — the first failure surfaces
+// the server warning and rearms the button as a forced retry — which doesn't fit
+// the single-action contract.
+export default function AdminArchiveModal({ onClose }: Props) {
   const [saving, setSaving] = useState(false)
   // Armed after the server's settlement backstop rejects the archive because
   // bets would remain pending (unsettleable markets). Forcing voids + refunds them.
@@ -53,8 +51,6 @@ export default function AdminArchiveModal({ visible, onClose }: Props) {
       }
 
       showToast(`Week ${activeWeek.week_number} archived`, 'success')
-      setForceArmed(false)
-      setWarning(null)
       onClose()
     } catch {
       showToast('Archive failed', 'error')
@@ -62,83 +58,57 @@ export default function AdminArchiveModal({ visible, onClose }: Props) {
     }
   }
 
-  function handleClose() {
-    if (saving) return
-    setForceArmed(false)
-    setWarning(null)
-    onClose()
-  }
-
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={handleClose}>
-      <TouchableOpacity style={styles.backdrop} activeOpacity={1} onPress={handleClose}>
-        <TouchableOpacity style={styles.sheet} activeOpacity={1} onPress={() => {}}>
-          <Text style={styles.title}>Archive &amp; Advance Week?</Text>
-          <Text style={styles.subtitle}>
-            Locks this week's scores into the standings and creates a new week for team generation.
+    <BottomSheet
+      title="Archive & Advance Week?"
+      onClose={onClose}
+      busy={saving}
+      footer={
+        <>
+          <Button
+            label={forceArmed ? 'Force Archive' : 'Archive & Advance'}
+            variant={forceArmed ? 'danger' : 'primary'}
+            size="lg"
+            onPress={confirm}
+            loading={saving}
+            disabled={saving}
+            style={styles.confirmBtn}
+          />
+          <Button label="Cancel" variant="ghost" onPress={() => !saving && onClose()} />
+        </>
+      }
+    >
+      <Text style={styles.body}>
+        Locks this week's scores into the standings and creates a new week for team generation.
+      </Text>
+      {warning && (
+        <View style={styles.warnBox}>
+          <Text style={styles.warnText}>{warning}</Text>
+          <Text style={styles.warnSub}>
+            Forcing voids those bets and refunds their stakes before archiving.
           </Text>
-          {warning && (
-            <View style={styles.warnBox}>
-              <Text style={styles.warnText}>{warning}</Text>
-              <Text style={styles.warnSub}>
-                Forcing voids those bets and refunds their stakes before archiving.
-              </Text>
-            </View>
-          )}
-          <View style={styles.btnRow}>
-            <Button label="Cancel" variant="secondary" onPress={handleClose} fullWidth />
-            <Button
-              label={forceArmed ? 'Force Archive' : 'Archive & Advance'}
-              variant={forceArmed ? 'danger' : 'primary'}
-              onPress={confirm}
-              loading={saving}
-              disabled={saving}
-              fullWidth
-            />
-          </View>
-        </TouchableOpacity>
-      </TouchableOpacity>
-      {/* Rendered inside the Modal so toasts aren't occluded by the native modal layer. */}
-      <Toast />
-    </Modal>
+        </View>
+      )}
+    </BottomSheet>
   )
 }
 
 const styles = StyleSheet.create({
-  backdrop: {
-    flex: 1,
-    backgroundColor: colors.overlay,
-    justifyContent: 'center',
-    paddingHorizontal: 24,
-  },
-  sheet: {
-    backgroundColor: colors.surface,
-    borderRadius: 20,
-    padding: 24,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  title: {
-    fontFamily: fonts.barlowCondensed,
-    fontSize: 22,
-    color: colors.text,
-    fontWeight: '700',
-    marginBottom: 8,
-  },
-  subtitle: {
+  body: {
     fontFamily: fonts.barlow,
     fontSize: 13,
     color: colors.muted,
     lineHeight: 20,
-    marginBottom: 20,
+    marginTop: 8,
+    marginBottom: 4,
   },
   warnBox: {
+    marginTop: 12,
     backgroundColor: colors.bg,
     borderRadius: radius.cardMd,
     borderWidth: 1,
     borderColor: colors.danger,
     padding: 12,
-    marginBottom: 18,
   },
   warnText: {
     fontFamily: fonts.barlow,
@@ -152,8 +122,5 @@ const styles = StyleSheet.create({
     color: colors.muted,
     marginTop: 6,
   },
-  btnRow: {
-    flexDirection: 'row',
-    gap: 10,
-  },
+  confirmBtn: { marginTop: 18 },
 })

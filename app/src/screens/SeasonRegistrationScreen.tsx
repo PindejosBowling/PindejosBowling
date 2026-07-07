@@ -276,16 +276,19 @@ export default function SeasonRegistrationScreen() {
 
       {/* Native modals render in an overlay layer, so mounting them inside the
           container's ScrollView is visually identical to the old sibling mount. */}
-      <AdminOpenRegistrationModal
-        visible={showOpenModal}
-        onClose={() => setShowOpenModal(false)}
-        onCreated={reload}
-      />
-      <AdminEditSeasonModal
-        season={editSeason}
-        onClose={() => setEditSeason(null)}
-        onSaved={reload}
-      />
+      {showOpenModal && (
+        <AdminOpenRegistrationModal
+          onClose={() => setShowOpenModal(false)}
+          onCreated={reload}
+        />
+      )}
+      {editSeason && (
+        <AdminEditSeasonModal
+          season={editSeason}
+          onClose={() => setEditSeason(null)}
+          onSaved={reload}
+        />
+      )}
     </ScreenContainer>
   )
 }

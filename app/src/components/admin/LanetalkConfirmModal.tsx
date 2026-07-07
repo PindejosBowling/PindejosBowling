@@ -1,16 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
-import {
-  Modal,
-  View,
-  Text,
-  TouchableOpacity,
-  StyleSheet,
-} from 'react-native'
+import { View, Text, StyleSheet } from 'react-native'
 import { useUiStore } from '../../stores/uiStore'
 import { betMarkets, lanetalkImports, scores } from '../../utils/supabase/db'
 import { gameStats } from '../../data/lanetalk/stats'
 import { colors, fonts, radius } from '../../theme'
-import Toast from '../ui/Toast'
+import BottomSheet from '../ui/BottomSheet'
 import Button from '../ui/Button'
 
 interface Props {
@@ -28,6 +22,8 @@ interface Props {
 // "Confirm LaneTalk Data" — settles the week's stat props off the imported
 // official games via ONE atomic, idempotent RPC (settle_lanetalk_props_for_week,
 // pattern: AdminArchiveModal — summary, warning box, armed second action).
+// Built on BottomSheet directly (not ConfirmActionSheet): two settle actions
+// plus the armed void two-step don't fit the single-action contract.
 //
 //  • Settle Available: settles every market whose data landed; the rest stay
 //    pending, so the flow is safely re-runnable after late imports.
@@ -112,105 +108,79 @@ export default function LanetalkConfirmModal({ weekId, weekTitle, markets, onClo
     settle(true)
   }
 
-  function handleClose() {
-    if (saving) return
-    onClose()
-  }
-
   return (
-    <Modal visible transparent animationType="fade" onRequestClose={handleClose}>
-      <TouchableOpacity style={styles.backdrop} activeOpacity={1} onPress={handleClose}>
-        <TouchableOpacity style={styles.sheet} activeOpacity={1} onPress={() => {}}>
-          <Text style={styles.title}>Confirm LaneTalk Data?</Text>
-          <Text style={styles.subtitle}>
-            Settles {weekTitle}'s stat props from the imported official games. Values are
-            derived server-side; this preview is informational.
-          </Text>
-
-          {previewLoading ? (
-            <Text style={styles.previewLoading}>Checking data coverage…</Text>
-          ) : (
-            <View style={styles.previewBox}>
-              <Text style={styles.previewLine}>
-                {ready.length} market{ready.length === 1 ? '' : 's'} with data ·{' '}
-                {missing.length} missing data
-              </Text>
-              {missing.slice(0, 6).map(m => (
-                <Text key={m.id} style={styles.previewMissing}>· {m.title}</Text>
-              ))}
-              {missing.length > 6 && (
-                <Text style={styles.previewMissing}>· …and {missing.length - 6} more</Text>
-              )}
-            </View>
-          )}
-
-          {voidArmed && (
-            <View style={styles.warnBox}>
-              <Text style={styles.warnText}>
-                Voiding deletes the {missing.length} missing-data market{missing.length === 1 ? '' : 's'} and
-                refunds every bet touching them in full.
-              </Text>
-              <Text style={styles.warnSub}>
-                Prefer Settle Available if more imports are still coming — it leaves them
-                pending and can be re-run.
-              </Text>
-            </View>
-          )}
-
-          <View style={styles.btnCol}>
+    <BottomSheet
+      title="Confirm LaneTalk Data?"
+      onClose={onClose}
+      busy={saving}
+      footer={
+        <View style={styles.btnCol}>
+          <Button
+            label="Settle Available"
+            onPress={() => settle(false)}
+            loading={saving && !voidArmed}
+            disabled={saving}
+            fullWidth
+          />
+          {missing.length > 0 && !previewLoading && (
             <Button
-              label="Settle Available"
-              onPress={() => settle(false)}
-              loading={saving && !voidArmed}
+              label={voidArmed ? 'Confirm: Settle + Void Missing' : 'Settle + Void Missing'}
+              variant="danger"
+              onPress={onVoidPress}
+              loading={saving && voidArmed}
               disabled={saving}
               fullWidth
             />
-            {missing.length > 0 && !previewLoading && (
-              <Button
-                label={voidArmed ? 'Confirm: Settle + Void Missing' : 'Settle + Void Missing'}
-                variant="danger"
-                onPress={onVoidPress}
-                loading={saving && voidArmed}
-                disabled={saving}
-                fullWidth
-              />
-            )}
-            <Button label="Cancel" variant="secondary" onPress={handleClose} disabled={saving} fullWidth />
-          </View>
-        </TouchableOpacity>
-      </TouchableOpacity>
-      {/* Rendered inside the Modal so toasts aren't occluded by the native modal layer. */}
-      <Toast />
-    </Modal>
+          )}
+          <Button label="Cancel" variant="ghost" onPress={() => !saving && onClose()} />
+        </View>
+      }
+    >
+      <Text style={styles.body}>
+        Settles {weekTitle}'s stat props from the imported official games. Values are
+        derived server-side; this preview is informational.
+      </Text>
+
+      {previewLoading ? (
+        <Text style={styles.previewLoading}>Checking data coverage…</Text>
+      ) : (
+        <View style={styles.previewBox}>
+          <Text style={styles.previewLine}>
+            {ready.length} market{ready.length === 1 ? '' : 's'} with data ·{' '}
+            {missing.length} missing data
+          </Text>
+          {missing.slice(0, 6).map(m => (
+            <Text key={m.id} style={styles.previewMissing}>· {m.title}</Text>
+          ))}
+          {missing.length > 6 && (
+            <Text style={styles.previewMissing}>· …and {missing.length - 6} more</Text>
+          )}
+        </View>
+      )}
+
+      {voidArmed && (
+        <View style={styles.warnBox}>
+          <Text style={styles.warnText}>
+            Voiding deletes the {missing.length} missing-data market{missing.length === 1 ? '' : 's'} and
+            refunds every bet touching them in full.
+          </Text>
+          <Text style={styles.warnSub}>
+            Prefer Settle Available if more imports are still coming — it leaves them
+            pending and can be re-run.
+          </Text>
+        </View>
+      )}
+    </BottomSheet>
   )
 }
 
 const styles = StyleSheet.create({
-  backdrop: {
-    flex: 1,
-    backgroundColor: colors.overlay,
-    justifyContent: 'center',
-    paddingHorizontal: 24,
-  },
-  sheet: {
-    backgroundColor: colors.surface,
-    borderRadius: 20,
-    padding: 24,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  title: {
-    fontFamily: fonts.barlowCondensed,
-    fontSize: 22,
-    color: colors.text,
-    fontWeight: '700',
-    marginBottom: 8,
-  },
-  subtitle: {
+  body: {
     fontFamily: fonts.barlow,
     fontSize: 13,
     color: colors.muted,
     lineHeight: 20,
+    marginTop: 8,
     marginBottom: 14,
   },
   previewLoading: {
@@ -218,7 +188,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: colors.muted,
     fontStyle: 'italic',
-    marginBottom: 14,
   },
   previewBox: {
     backgroundColor: colors.bg,
@@ -226,7 +195,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
     padding: 12,
-    marginBottom: 14,
   },
   previewLine: {
     fontFamily: fonts.barlowCondensed,
@@ -246,7 +214,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.danger,
     padding: 12,
-    marginBottom: 14,
+    marginTop: 14,
   },
   warnText: {
     fontFamily: fonts.barlow,
@@ -260,5 +228,5 @@ const styles = StyleSheet.create({
     color: colors.muted,
     marginTop: 6,
   },
-  btnCol: { gap: 10 },
+  btnCol: { gap: 10, marginTop: 18 },
 })

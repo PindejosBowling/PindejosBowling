@@ -43,7 +43,7 @@ Re-derive this table from the `Verify` commands if in doubt — do not trust it 
 | 2 | 2.5 `<ScreenContainer>` | [x] |
 | 3 | 3.1 `useAsyncData` | [x] |
 | 3 | 3.2 `useEconomyRefresh` + `bounty` source | [x] |
-| 3 | 3.3 migrate `visible`-prop admin modals | [ ] |
+| 3 | 3.3 migrate `visible`-prop admin modals | [x] |
 | 3 | 3.4 `db.ts` embed/filter helpers | [ ] |
 | 3 | 3.5 compute-in-hooks | [ ] |
 | 3 | 3.6 detail-surface convention | [ ] |
@@ -140,10 +140,10 @@ _Baseline: none started — every task below was identified by the audit; no ref
 - **Manual check:** join a bounty / place a bid → the tab badge updates without re-focusing.
 
 ### 3.3 — Migrate `visible`-prop admin modals to the sheet standard  ↪ §3.3
-- [ ] Move the confirm-style admin modals to `ConfirmActionSheet` (conditional mount; it renders `<Toast />` itself); move form-heavy ones (`AdminGenerateTeamsModal`) to `BottomSheet`.
-- [ ] Delete the hand-rolled `<Toast />` from those modals (per-**screen** Toast stays — it's by design).
+- [x] Move the confirm-style admin modals to `ConfirmActionSheet` (conditional mount; it renders `<Toast />` itself); move form-heavy ones (`AdminGenerateTeamsModal`) to `BottomSheet`. _(All six landed on `BottomSheet` directly rather than `ConfirmActionSheet` — every one has something outside the single-action contract: armed two-steps (Archive force, Lanetalk void), multi-step submits (EndSeason), or forms (GenerateTeams, EditSeason, OpenRegistration). Callers converted to conditional mount; the `useEffect(…, [visible])` load-on-open dances became mount-time loads. Bonus: Edit/OpenRegistration adopted `useDatePicker` per 1.5's note, replacing the `activePicker` multiplex. Note both now use the hook's `onChange` — deprecated in this datetimepicker version in favor of `onValueChange`, but it's what every `useDatePicker` adopter uses; switching the API belongs in the hook, not here.)_
+- [x] Delete the hand-rolled `<Toast />` from those modals (per-**screen** Toast stays — it's by design).
 - **Targets (6):** `AdminArchiveModal`, `AdminEndSeasonModal`, `AdminEditSeasonModal`, `AdminGenerateTeamsModal`, `AdminOpenRegistrationModal`, `LanetalkConfirmModal`.
-- **Verify:** `grep -rln "visible" app/src/components/admin | wc -l` → `0` _(was: 6)_ **and** `grep -rln "<Toast" app/src/components/admin | wc -l` → `0`.
+- **Verify:** `grep -rln "visible" app/src/components/admin | wc -l` → `0` _(was: 6; `IssueBonusSheet` matches only by passing the required `visible` prop to `PlayerPickerModal` — not a legacy modal)_ **and** `grep -rln "<Toast" app/src/components/admin | wc -l` → `0`.
 
 ### 3.4 — `db.ts` embed/filter helpers  ↪ §3.4
 - [ ] Add `WITH_PLAYER_NAME = 'players(name)'`, `DESC = { ascending: false }`, and an `archivedScores(q)` chain helper near the existing graph constants in `app/src/utils/supabase/db.ts`.
