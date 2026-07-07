@@ -23,6 +23,7 @@ import { useLoanSharkData, LoanProductView, DebtLedgerEntry } from '../hooks/use
 import { usePinsinoSeasonContext } from '../hooks/usePinsinoSeasonContext'
 import ReadOnlySeasonBanner from '../components/betting/ReadOnlySeasonBanner'
 import { useRefresh } from '../hooks/useRefresh'
+import { useEconomyRefresh } from '../hooks/useEconomyRefresh'
 import { useAuthStore } from '../stores/authStore'
 import { useUiStore } from '../stores/uiStore'
 import { loans } from '../utils/supabase/db'
@@ -65,7 +66,8 @@ export default function LoanSharkScreen() {
   const pinsinoViewSeasonId = useUiStore(s => s.pinsinoViewSeasonId)
   const { readOnly, viewSeasonNumber } = usePinsinoSeasonContext()
   const { loading, balance, products, activeLoan, reload } = useLoanSharkData(playerId, pinsinoViewSeasonId)
-  const { refreshing, onRefresh } = useRefresh(reload)
+  const reloadAll = useEconomyRefresh(reload)
+  const { refreshing, onRefresh } = useRefresh(reloadAll)
   const insets = useSafeAreaInsets()
 
   const [confirmProduct, setConfirmProduct] = useState<LoanProductView | null>(null)
@@ -106,7 +108,7 @@ export default function LoanSharkScreen() {
       if (error) { showToast(error.message, 'error'); return }
       showToast(`Repaid ${formatPins(amount)} pins`, 'success')
       setRepayAmount('')
-      await reload()
+      await reloadAll()
     } catch {
       showToast('Failed to repay', 'error')
     } finally {
@@ -251,7 +253,7 @@ export default function LoanSharkScreen() {
         <BorrowConfirmModal
           product={confirmProduct}
           onClose={() => setConfirmProduct(null)}
-          onBorrowed={reload}
+          onBorrowed={reloadAll}
         />
       )}
       <Toast />

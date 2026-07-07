@@ -9,6 +9,7 @@ import BountyCard from '../components/bounty/BountyCard'
 import BalancePill from '../components/ui/BalancePill'
 import ReadOnlySeasonBanner from '../components/betting/ReadOnlySeasonBanner'
 import { useBountyBoardData, BountyView } from '../hooks/useBountyBoardData'
+import { useEconomyRefresh } from '../hooks/useEconomyRefresh'
 import { usePinsinoSeasonContext } from '../hooks/usePinsinoSeasonContext'
 import { useAuthStore } from '../stores/authStore'
 import { useUiStore } from '../stores/uiStore'
@@ -25,7 +26,9 @@ export default function BountyBoardScreen() {
   const { loading, balance, openBoard, mySponsored, myHunted, settled, reload } = useBountyBoardData(playerId, pinsinoViewSeasonId)
 
   // Refresh on return (e.g. after posting or entering). Silent after first load.
-  useFocusEffect(useCallback(() => { reload() }, [reload]))
+  // Badges reload alongside the data so the bounty count never goes stale.
+  const reloadAll = useEconomyRefresh(reload)
+  useFocusEffect(useCallback(() => { reloadAll() }, [reloadAll]))
 
   const section = (title: string, rows: BountyView[]) =>
     rows.length > 0 ? (
@@ -50,7 +53,7 @@ export default function BountyBoardScreen() {
       title="Bounties"
       subtitle="Join the hunt & prosper together"
       backdrop={<BountyBoardBackdrop />}
-      onRefresh={reload}
+      onRefresh={reloadAll}
     >
         {readOnly && <ReadOnlySeasonBanner seasonNumber={viewSeasonNumber} />}
 

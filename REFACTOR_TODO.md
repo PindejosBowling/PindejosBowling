@@ -42,7 +42,7 @@ Re-derive this table from the `Verify` commands if in doubt — do not trust it 
 | 2 | 2.4 shared admin-modal styles | [x] |
 | 2 | 2.5 `<ScreenContainer>` | [x] |
 | 3 | 3.1 `useAsyncData` | [x] |
-| 3 | 3.2 `useEconomyRefresh` + `bounty` source | [~] |
+| 3 | 3.2 `useEconomyRefresh` + `bounty` source | [x] |
 | 3 | 3.3 migrate `visible`-prop admin modals | [ ] |
 | 3 | 3.4 `db.ts` embed/filter helpers | [ ] |
 | 3 | 3.5 compute-in-hooks | [ ] |
@@ -133,8 +133,8 @@ _Baseline: none started — every task below was identified by the audit; no ref
 - **Depends on:** 1.3 helps. **Verify:** `grep -rln "loadedOnce" app/src/hooks | wc -l` → `1` = `useAsyncData.ts` itself _(was: 6 legacy)_ **and** `grep -rn "useEffect(() => { load() }" app/src/hooks | wc -l` → `1` = `useAsyncData.ts` itself _(was: 21 hand-rolled)_.
 
 ### 3.2 — `useEconomyRefresh` + `bounty` notification source  ↪ §3.2
-- [ ] Create `app/src/hooks/useEconomyRefresh.ts` (`Promise.all([reload(), notificationStore.refresh()])`).
-- [ ] Use it in `BountyBoardScreen`, `AuctionHouseScreen`, `LoanSharkScreen` (PvP/Pinsino already refresh).
+- [x] Create `app/src/hooks/useEconomyRefresh.ts` (`Promise.all([reload(), notificationStore.refresh()])`).
+- [x] Use it in `BountyBoardScreen`, `AuctionHouseScreen`, `LoanSharkScreen` (PvP/Pinsino already refresh). _(Also deduped the pre-existing inline copies in `PvPScreen`/`BountyDetailScreen` into the hook, and adopted it in `AuctionDetailScreen` — bidding changes the auction badge count (open auctions with no bid), so its focus/refresh/`onDone` reloads refresh badges too. PinsinoScreen keeps its direct store refresh — it has no paired data `reload`.)_
 - [x] Add a `bounty` entry to `NOTIFICATION_SOURCES` in `app/src/utils/notifications.ts` (open bounties with slots the player hasn't joined). _(landed independently of this checklist — verified 2026-07-06)_
 - **Verify:** `grep -n "key: 'bounty'" app/src/utils/notifications.ts` is non-empty **and** `grep -rln "useEconomyRefresh" app/src/screens | wc -l` → `≥3`.
 - **Manual check:** join a bounty / place a bid → the tab badge updates without re-focusing.

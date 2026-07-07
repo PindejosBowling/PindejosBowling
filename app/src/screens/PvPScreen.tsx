@@ -11,10 +11,10 @@ import Button from '../components/ui/Button'
 import BalancePill from '../components/ui/BalancePill'
 import { usePvpData, PvpChallengeView } from '../hooks/usePvpData'
 import { usePinsinoSeasonContext } from '../hooks/usePinsinoSeasonContext'
+import { useEconomyRefresh } from '../hooks/useEconomyRefresh'
 import ReadOnlySeasonBanner from '../components/betting/ReadOnlySeasonBanner'
 import { useAuthStore } from '../stores/authStore'
 import { useUiStore } from '../stores/uiStore'
-import { useNotificationStore } from '../stores/notificationStore'
 import { PinsinoStackParamList } from '../navigation/types'
 
 type Nav = NativeStackNavigationProp<PinsinoStackParamList>
@@ -27,14 +27,9 @@ export default function PvPScreen() {
   const { readOnly, viewSeasonNumber } = usePinsinoSeasonContext()
   const { loading, balance, inbox, openBoard, record, reload } = usePvpData(playerId, pinsinoViewSeasonId)
 
-  // Reload the inbox AND the Pinsino notification badges together. The pending-action
-  // count (tile + tab-bar badge) is derived from the same "received" contracts shown
-  // here, so any mutation that changes this list must re-fetch the badge counts too —
-  // otherwise the badge stays stale until PinsinoScreen re-focuses.
-  const reloadAll = useCallback(
-    () => Promise.all([reload(), useNotificationStore.getState().refresh()]).then(() => {}),
-    [reload],
-  )
+  // Reload the inbox AND the Pinsino notification badges together — the pending-action
+  // count is derived from the same "received" contracts shown here.
+  const reloadAll = useEconomyRefresh(reload)
 
   const [detailId, setDetailId] = useState<string | null>(null)
 
