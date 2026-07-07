@@ -8,6 +8,7 @@ import Button from '../components/ui/Button'
 import AuctionBidSheet from '../components/auction/AuctionBidSheet'
 import { useAuctionDetailData } from '../hooks/useAuctionDetailData'
 import { usePinsinoSeasonContext } from '../hooks/usePinsinoSeasonContext'
+import { useEconomyRefresh } from '../hooks/useEconomyRefresh'
 import { useAuthStore } from '../stores/authStore'
 import { formatCountdown } from '../utils/auction'
 import { formatCloseTime } from '../utils/bounty'
@@ -29,7 +30,10 @@ export default function AuctionDetailScreen() {
   // Ticking clock for the live countdown (detail screen only; cards are static).
   const [now, setNow] = useState(() => new Date())
 
-  useFocusEffect(useCallback(() => { reload() }, [reload]))
+  // Placing a bid changes the auction badge count (open auctions with no bid),
+  // so reloads here refresh the Pinsino badges too.
+  const reloadAll = useEconomyRefresh(reload)
+  useFocusEffect(useCallback(() => { reloadAll() }, [reloadAll]))
 
   const ticking = auction != null && (auction.status === 'open' || auction.status === 'scheduled')
   useEffect(() => {
@@ -57,7 +61,7 @@ export default function AuctionDetailScreen() {
   const hammerFalling = open && countdown == null
 
   return (
-    <ScreenContainer title="Auction" subtitle={a.itemName} onRefresh={reload}>
+    <ScreenContainer title="Auction" subtitle={a.itemName} onRefresh={reloadAll}>
         {/* Item header */}
         <View style={styles.card}>
           <View style={styles.headerRow}>
@@ -194,7 +198,7 @@ export default function AuctionDetailScreen() {
         {/* Modal-based sheet: renders in the native overlay layer, so mounting
             inside the ScrollView children is visually identical. */}
         {bidOpen && (
-          <AuctionBidSheet auction={a} balance={balance} onClose={() => setBidOpen(false)} onDone={reload} />
+          <AuctionBidSheet auction={a} balance={balance} onClose={() => setBidOpen(false)} onDone={reloadAll} />
         )}
     </ScreenContainer>
   )

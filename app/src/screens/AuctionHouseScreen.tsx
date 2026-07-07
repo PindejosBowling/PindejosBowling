@@ -11,6 +11,7 @@ import ItemInfoSheet from '../components/auction/ItemInfoSheet'
 import BalancePill from '../components/ui/BalancePill'
 import ReadOnlySeasonBanner from '../components/betting/ReadOnlySeasonBanner'
 import { useAuctionHouseData } from '../hooks/useAuctionHouseData'
+import { useEconomyRefresh } from '../hooks/useEconomyRefresh'
 import { usePinsinoSeasonContext } from '../hooks/usePinsinoSeasonContext'
 import { useAuthStore } from '../stores/authStore'
 import { useUiStore } from '../stores/uiStore'
@@ -32,7 +33,9 @@ export default function AuctionHouseScreen() {
   const [infoGroup, setInfoGroup] = useState<InventoryGroupView | null>(null)
 
   // Refresh on return (e.g. after bidding on detail). Silent after first load.
-  useFocusEffect(useCallback(() => { reload() }, [reload]))
+  // Badges reload alongside the data so the auction count never goes stale.
+  const reloadAll = useEconomyRefresh(reload)
+  useFocusEffect(useCallback(() => { reloadAll() }, [reloadAll]))
 
   const sections = useMemo(() => auctionSections(auctions), [auctions])
   const itemGroups = useMemo(() => groupInventory(myItems), [myItems])
@@ -59,7 +62,7 @@ export default function AuctionHouseScreen() {
       subtitle="Sealed bids · the hammer falls on its own"
       backdrop={<AuctionBankBackdrop />}
       loading={loading}
-      onRefresh={reload}
+      onRefresh={reloadAll}
     >
         {readOnly && <ReadOnlySeasonBanner seasonNumber={viewSeasonNumber} />}
 

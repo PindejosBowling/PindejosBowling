@@ -8,8 +8,8 @@ import BountyEntryModal from '../components/bounty/BountyEntryModal'
 import Button from '../components/ui/Button'
 import { useBountyDetail } from '../hooks/useBountyDetail'
 import { usePinsinoSeasonContext } from '../hooks/usePinsinoSeasonContext'
+import { useEconomyRefresh } from '../hooks/useEconomyRefresh'
 import { useAuthStore } from '../stores/authStore'
-import { useNotificationStore } from '../stores/notificationStore'
 import { bountyEconomics, formatCloseTime } from '../utils/bounty'
 import { PinsinoStackParamList } from '../navigation/types'
 import { formatPins } from '../utils/formatting'
@@ -34,11 +34,8 @@ export default function BountyDetailScreen() {
   useFocusEffect(useCallback(() => { reload() }, [reload]))
 
   // After a join, refresh both the detail and the Pinsino badge so the count drops
-  // immediately rather than waiting for the next hub focus (mirrors the PvP pattern).
-  const onEntryDone = useCallback(
-    () => Promise.all([reload(), useNotificationStore.getState().refresh()]).then(() => {}),
-    [reload],
-  )
+  // immediately rather than waiting for the next hub focus.
+  const onEntryDone = useEconomyRefresh(reload)
 
   // Live economics over the current hunters (pre-settlement estimate, design §34.4).
   const econ = useMemo(
