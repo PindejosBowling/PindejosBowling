@@ -12,7 +12,7 @@ import { useWeekEditor } from '../hooks/useWeekEditor'
 import { MoreStackParamList } from '../navigation/types'
 import LoadingView from '../components/ui/LoadingView'
 import ScreenContainer from '../components/ui/ScreenContainer'
-import PillFilter from '../components/ui/PillFilter'
+import SeasonDropdown from '../components/ui/SeasonDropdown'
 import HistoricalTeamBlock from '../components/league/HistoricalTeamBlock'
 import EditableWeek from '../components/league/EditableWeek'
 import ConfirmBar from '../components/ui/ConfirmBar'
@@ -115,11 +115,11 @@ export default function HistoryScreen() {
           <Text style={styles.empty}>No completed seasons yet.</Text>
         ) : (
           <>
-            <PillFilter
-              items={seasonNumbers}
+            <SeasonDropdown
+              seasons={seasonNumbers}
               value={activeSeason}
               onChange={(s) => { setEditingWeekId(null); set({ historySeason: s }) }}
-              renderLabel={(s) => `Season ${s}`}
+              includeAllTime={false}
             />
 
             {summary && (

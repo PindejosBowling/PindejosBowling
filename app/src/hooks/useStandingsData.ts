@@ -183,6 +183,7 @@ export function computeRankMovement(
 export function useStandingsData() {
   const [loading, setLoading] = useState(true)
   const [seasonList, setSeasonList] = useState<{ id: string; number: number }[]>([])
+  const [currentSeasonNumber, setCurrentSeasonNumber] = useState<number | null>(null)
   const [championPlayerIds, setChampionPlayerIds] = useState<Set<string>>(new Set())
   const [topPinBalancePlayerId, setTopPinBalancePlayerId] = useState<string | null>(null)
   const [rawScores, setRawScores] = useState<any[]>([])
@@ -201,6 +202,7 @@ export function useStandingsData() {
         registrations.list(),
       ])
       setSeasonList((seasonsRes.data ?? []).filter(s => !s.registration_open).map(s => ({ id: s.id, number: s.number })))
+      setCurrentSeasonNumber(currentRes.data?.number ?? null)
       // Crown only the reigning champion(s) — winners of the most recently ended
       // season — not everyone who has ever won a championship.
       const lastEndedId = lastEndedRes.data?.id
@@ -233,5 +235,5 @@ export function useStandingsData() {
 
   useEffect(() => { load() }, [load])
 
-  return { loading, seasonList, championPlayerIds, topPinBalancePlayerId, rawScores, rawSchedule, rawRegistrations, reload: load }
+  return { loading, seasonList, currentSeasonNumber, championPlayerIds, topPinBalancePlayerId, rawScores, rawSchedule, rawRegistrations, reload: load }
 }

@@ -21,7 +21,7 @@ import {
 } from '../hooks/usePlayerDetailData'
 import { useFrameStatsData, computeFrameRecords } from '../hooks/useFrameStatsData'
 import LoadingView from '../components/ui/LoadingView'
-import PillFilter from '../components/ui/PillFilter'
+import SeasonDropdown from '../components/ui/SeasonDropdown'
 import ScreenHeader from '../components/ui/ScreenHeader'
 import PlayerAvatar from '../components/ui/PlayerAvatar'
 
@@ -131,11 +131,10 @@ export default function PlayerDetailScreen() {
           <PlayerAvatar name={name} size={96} />
         </View>
 
-        <PillFilter
-          items={['all', ...playerSeasons.map(s => String(s.number))]}
+        <SeasonDropdown
+          seasons={playerSeasons.map(s => String(s.number))}
           value={activeSeason}
           onChange={(s) => set({ playerSeason: s })}
-          renderLabel={(s) => s === 'all' ? 'All-time' : `Season ${s}`}
         />
 
         {/* Stat tiles */}
