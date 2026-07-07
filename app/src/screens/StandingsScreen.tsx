@@ -13,26 +13,29 @@ import { useStandingsData, computeStandingsFromSupabase, computeRankMovement } f
 import { StandingsStackParamList } from '../navigation/types'
 import AppHeader from '../components/league/AppHeader'
 import LoadingView from '../components/ui/LoadingView'
-import PillFilter from '../components/ui/PillFilter'
+import SeasonDropdown from '../components/ui/SeasonDropdown'
 import PlayerBadges from '../components/ui/PlayerBadges'
 import { badgesForPlayer } from '../utils/badges'
 
 type Nav = NativeStackNavigationProp<StandingsStackParamList>
 
 export default function StandingsScreen() {
-  const { loading, seasonList, championPlayerIds, topPinBalancePlayerId, rawScores, rawSchedule, rawRegistrations, reload } = useStandingsData()
+  const { loading, seasonList, currentSeasonNumber, championPlayerIds, topPinBalancePlayerId, rawScores, rawSchedule, rawRegistrations, reload } = useStandingsData()
   const { standingsSeason, set } = useUiStore()
   const navigation = useNavigation<Nav>()
   const { refreshing, onRefresh } = useRefresh(reload)
 
   const seasonNumbers = useMemo(
-    () => ['all', ...seasonList.map(s => String(s.number))],
+    () => seasonList.map(s => String(s.number)),
     [seasonList],
   )
 
+  // Default to the current active season, else the newest listed, else all-time.
   const activeSeason = useMemo(
-    () => standingsSeason ?? (seasonList.length ? String(seasonList[seasonList.length - 1].number) : 'all'),
-    [standingsSeason, seasonList],
+    () => standingsSeason
+      ?? (currentSeasonNumber != null ? String(currentSeasonNumber) : null)
+      ?? (seasonList.length ? String(seasonList[seasonList.length - 1].number) : 'all'),
+    [standingsSeason, currentSeasonNumber, seasonList],
   )
 
   const activeSeasonId = useMemo(
@@ -65,8 +68,6 @@ export default function StandingsScreen() {
     return totalGames > 0 ? totalPins / totalGames : 0
   }, [standings])
 
-  const sourceLabel = activeSeason === 'all' ? 'All-time Avg' : `Season ${activeSeason} Avg`
-
   function goToPlayer(name: string) {
     navigation.navigate('PlayerDetail', { name })
   }
@@ -78,18 +79,17 @@ export default function StandingsScreen() {
       <AppHeader />
 
       <ScrollView refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent} />}>
-      <PillFilter
-        items={seasonNumbers}
-        value={activeSeason}
-        onChange={(s) => set({ standingsSeason: s })}
-        renderLabel={(s) => s === 'all' ? 'All-time' : `Season ${s}`}
-      />
-
-      {/* League avg banner */}
-      <View style={styles.leagueBanner}>
-        <View>
-          <Text style={styles.bannerLabel}>League {sourceLabel}</Text>
-          <Text style={styles.bannerVal}>{leagueAvg > 0 ? leagueAvg.toFixed(1) : '—'}</Text>
+      {/* Season selector + league avg in one compact row to leave room for the board */}
+      <View style={styles.filterRow}>
+        <SeasonDropdown
+          seasons={seasonNumbers}
+          value={activeSeason}
+          onChange={(s) => set({ standingsSeason: s })}
+          style={styles.seasonDropdown}
+        />
+        <View style={styles.avgChip}>
+          <Text style={styles.avgChipLabel}>League Avg</Text>
+          <Text style={styles.avgChipVal}>{leagueAvg > 0 ? leagueAvg.toFixed(1) : '—'}</Text>
         </View>
       </View>
 
@@ -139,30 +139,40 @@ export default function StandingsScreen() {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.bg },
 
-  leagueBanner: {
+  filterRow: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    gap: 8,
+    marginHorizontal: 16,
+    marginVertical: 10,
+  },
+  // Cancel the dropdown's own margins — the row carries the spacing.
+  seasonDropdown: {
+    flex: 1,
+    marginHorizontal: 0,
+    marginVertical: 0,
+  },
+  avgChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: colors.surface,
+    gap: 8,
+    paddingHorizontal: 12,
     borderRadius: radius.cardSm,
     borderWidth: 1,
-    borderColor: colors.border,
-    padding: 12,
-    marginHorizontal: 16,
-    marginBottom: 12,
+    borderColor: colors.border2,
+    backgroundColor: colors.surface2,
   },
-  bannerLabel: {
+  avgChipLabel: {
     fontFamily: fonts.barlowCondensed,
     fontSize: 11,
-    letterSpacing: 1.5,
+    letterSpacing: 1,
     textTransform: 'uppercase',
     color: colors.muted,
-    marginBottom: 2,
   },
-  bannerVal: {
+  avgChipVal: {
     fontFamily: fonts.barlowCondensed,
-    fontSize: 24,
-    color: colors.text,
+    fontSize: 16,
+    color: colors.accent,
   },
   card: {
     marginHorizontal: 16,

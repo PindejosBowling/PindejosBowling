@@ -182,6 +182,7 @@ export function computeRankMovement(
 
 interface StandingsPayload {
   seasonList: { id: string; number: number }[]
+  currentSeasonNumber: number | null
   championPlayerIds: Set<string>
   topPinBalancePlayerId: string | null
   rawScores: any[]
@@ -191,6 +192,7 @@ interface StandingsPayload {
 
 const EMPTY: StandingsPayload = {
   seasonList: [],
+  currentSeasonNumber: null,
   championPlayerIds: new Set(),
   topPinBalancePlayerId: null,
   rawScores: [],
@@ -228,6 +230,7 @@ export function useStandingsData() {
     }
     return {
       seasonList: (seasonsRes.data ?? []).filter(s => !s.registration_open).map(s => ({ id: s.id, number: s.number })),
+      currentSeasonNumber: currentRes.data?.number ?? null,
       championPlayerIds: new Set<string>((champRes.data ?? []).map((c: any) => c.player_id)),
       topPinBalancePlayerId: topId,
       rawScores: scoresRes.data ?? [],

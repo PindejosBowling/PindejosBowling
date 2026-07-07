@@ -15,6 +15,7 @@ import {
 import { MoreStackParamList } from '../navigation/types'
 import LoadingView from '../components/ui/LoadingView'
 import PillFilter from '../components/ui/PillFilter'
+import SeasonDropdown from '../components/ui/SeasonDropdown'
 import ScreenContainer from '../components/ui/ScreenContainer'
 
 type Nav = NativeStackNavigationProp<MoreStackParamList>
@@ -28,7 +29,7 @@ export default function LeagueRecordsScreen() {
   const navigation = useNavigation<Nav>()
 
   const seasonNumbers = useMemo(
-    () => ['all', ...seasonList.map(s => String(s.number))],
+    () => seasonList.map(s => String(s.number)),
     [seasonList],
   )
 
@@ -58,11 +59,10 @@ export default function LeagueRecordsScreen() {
       onRefresh={reload}
       contentStyle={{ paddingHorizontal: 0 }}
     >
-        <PillFilter
-          items={seasonNumbers}
+        <SeasonDropdown
+          seasons={seasonNumbers}
           value={activeSeason}
           onChange={(s) => set({ recordsSeason: s })}
-          renderLabel={(s) => s === 'all' ? 'All-time' : `Season ${s}`}
         />
         <PillFilter
           items={SCOPES}
