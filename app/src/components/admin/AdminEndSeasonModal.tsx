@@ -1,24 +1,20 @@
 import { useState, useEffect } from 'react'
-import {
-  Modal,
-  View,
-  Text,
-  TouchableOpacity,
-  ScrollView,
-  StyleSheet,
-} from 'react-native'
+import { View, Text, TouchableOpacity, ScrollView, StyleSheet } from 'react-native'
 import { useUiStore } from '../../stores/uiStore'
 import { players, seasons, seasonChampions } from '../../utils/supabase/db'
 import { colors, fonts, radius } from '../../theme'
-import Toast from '../ui/Toast'
+import BottomSheet from '../ui/BottomSheet'
 import Button from '../ui/Button'
 
 interface Props {
-  visible: boolean
+  // Mount conditionally so the champion selection resets between opens.
   onClose: () => void
 }
 
-export default function AdminEndSeasonModal({ visible, onClose }: Props) {
+// Built on BottomSheet directly (not ConfirmActionSheet): the champion checkbox
+// list makes this a form, and the submit runs a multi-step sequence (settle
+// loans → end season → record champions), not a single RPC.
+export default function AdminEndSeasonModal({ onClose }: Props) {
   const [championIds, setChampionIds] = useState<string[]>([])
   const [saving, setSaving] = useState(false)
   const [playerList, setPlayerList] = useState<{ id: string; name: string | null }[]>([])
@@ -26,12 +22,11 @@ export default function AdminEndSeasonModal({ visible, onClose }: Props) {
   const { showToast } = useUiStore()
 
   useEffect(() => {
-    if (!visible) return
     Promise.all([players.listActive(), seasons.getCurrent()]).then(([pRes, sRes]) => {
       setPlayerList(pRes.data ?? [])
       setSeason(sRes.data ? { id: sRes.data.id, number: sRes.data.number } : null)
     })
-  }, [visible])
+  }, [])
 
   function toggleChampion(id: string) {
     setChampionIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
@@ -56,7 +51,6 @@ export default function AdminEndSeasonModal({ visible, onClose }: Props) {
       }
 
       showToast(`Season ${season.number} closed`, 'success')
-      setChampionIds([])
       onClose()
     } catch {
       showToast('Failed to end season', 'error')
@@ -64,95 +58,67 @@ export default function AdminEndSeasonModal({ visible, onClose }: Props) {
     }
   }
 
-  function handleClose() {
-    if (saving) return
-    setChampionIds([])
-    onClose()
-  }
-
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={handleClose}>
-      <TouchableOpacity style={styles.backdrop} activeOpacity={1} onPress={handleClose}>
-        <TouchableOpacity style={styles.sheet} activeOpacity={1} onPress={() => {}}>
-          <Text style={styles.title}>End Season {season?.number ?? '…'}</Text>
-          <Text style={styles.subtitle}>
-            Choose champion(s). For team championships, select all members.{'\n'}
-            Season will be marked as ended.
-          </Text>
+    <BottomSheet
+      title={`End Season ${season?.number ?? '…'}`}
+      onClose={onClose}
+      busy={saving}
+      footer={
+        <>
+          <Button
+            label="End Season"
+            size="lg"
+            onPress={submit}
+            loading={saving}
+            disabled={saving}
+            style={styles.confirmBtn}
+          />
+          <Button label="Cancel" variant="ghost" onPress={() => !saving && onClose()} />
+        </>
+      }
+    >
+      <Text style={styles.body}>
+        Choose champion(s). For team championships, select all members.{'\n'}
+        Season will be marked as ended.
+      </Text>
 
-          <ScrollView style={styles.playerList} contentContainerStyle={{ paddingVertical: 4 }}>
-            {playerList.map(player => {
-              const selected = championIds.includes(player.id)
-              return (
-                <TouchableOpacity
-                  key={player.id}
-                  style={styles.playerRow}
-                  onPress={() => toggleChampion(player.id)}
-                  activeOpacity={0.7}
-                >
-                  <View style={[styles.checkbox, selected && styles.checkboxSelected]}>
-                    {selected && <Text style={styles.checkmark}>✓</Text>}
-                  </View>
-                  <Text style={[styles.playerName, selected && styles.playerNameSelected]}>
-                    {player.name}
-                  </Text>
-                </TouchableOpacity>
-              )
-            })}
-          </ScrollView>
-
-          <View style={styles.btnRow}>
-            <Button label="Cancel" variant="secondary" onPress={handleClose} fullWidth />
-            <Button
-              label="End Season"
-              onPress={submit}
-              loading={saving}
-              disabled={saving}
-              fullWidth
-            />
-          </View>
-        </TouchableOpacity>
-      </TouchableOpacity>
-      {/* Rendered inside the Modal so toasts aren't occluded by the native modal layer. */}
-      <Toast />
-    </Modal>
+      <ScrollView style={styles.playerList} contentContainerStyle={{ paddingVertical: 4 }}>
+        {playerList.map(player => {
+          const selected = championIds.includes(player.id)
+          return (
+            <TouchableOpacity
+              key={player.id}
+              style={styles.playerRow}
+              onPress={() => toggleChampion(player.id)}
+              activeOpacity={0.7}
+            >
+              <View style={[styles.checkbox, selected && styles.checkboxSelected]}>
+                {selected && <Text style={styles.checkmark}>✓</Text>}
+              </View>
+              <Text style={[styles.playerName, selected && styles.playerNameSelected]}>
+                {player.name}
+              </Text>
+            </TouchableOpacity>
+          )
+        })}
+      </ScrollView>
+    </BottomSheet>
   )
 }
 
 const styles = StyleSheet.create({
-  backdrop: {
-    flex: 1,
-    backgroundColor: colors.overlay,
-    justifyContent: 'center',
-    paddingHorizontal: 24,
-  },
-  sheet: {
-    backgroundColor: colors.surface,
-    borderRadius: 20,
-    padding: 24,
-    borderWidth: 1,
-    borderColor: colors.border,
-    maxHeight: '85%',
-  },
-  title: {
-    fontFamily: fonts.barlowCondensed,
-    fontSize: 22,
-    color: colors.text,
-    fontWeight: '700',
-    marginBottom: 8,
-  },
-  subtitle: {
+  body: {
     fontFamily: fonts.barlow,
     fontSize: 13,
     color: colors.muted,
     lineHeight: 18,
+    marginTop: 8,
     marginBottom: 14,
   },
   playerList: {
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: radius.cardSm,
-    marginBottom: 16,
     maxHeight: 220,
   },
   playerRow: {
@@ -191,8 +157,5 @@ const styles = StyleSheet.create({
     color: colors.gold,
     fontWeight: '700',
   },
-  btnRow: {
-    flexDirection: 'row',
-    gap: 10,
-  },
+  confirmBtn: { marginTop: 18 },
 })

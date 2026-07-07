@@ -123,10 +123,8 @@ export default function MoreHomeScreen() {
         <View style={styles.contentFixed}>{body}</View>
       )}
 
-      {isAdmin && (
-        <>
-          <AdminEndSeasonModal visible={showEndSeason} onClose={() => setShowEndSeason(false)} />
-        </>
+      {isAdmin && showEndSeason && (
+        <AdminEndSeasonModal onClose={() => setShowEndSeason(false)} />
       )}
     </SafeAreaView>
   )

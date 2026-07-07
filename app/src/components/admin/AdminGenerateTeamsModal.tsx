@@ -1,10 +1,8 @@
 import { useState, useEffect } from 'react'
 import {
-  Modal,
   View,
   Text,
   TouchableOpacity,
-  ScrollView,
   ActivityIndicator,
   StyleSheet,
 } from 'react-native'
@@ -14,12 +12,13 @@ import { weeks, rsvp, players, teamSlots, teams as teamsDb, games, scores, seaso
 import { aggregatePlayerAverages, type AverageRow } from '../../utils/averages'
 import type { TablesInsert } from '../../utils/supabase/database.types'
 import { colors, fonts, radius } from '../../theme'
-import Toast from '../ui/Toast'
+import BottomSheet from '../ui/BottomSheet'
 import Button from '../ui/Button'
 import ToggleGroup from '../ui/ToggleGroup'
 
 interface Props {
-  visible: boolean
+  // Mount conditionally so the RSVP load reruns per open (generated-team state
+  // lives in usePendingStore and is reset explicitly on close).
   onClose: () => void
 }
 
@@ -75,7 +74,7 @@ export function buildRotation(numTeams: number, numGames = 2): ScheduleTemplate[
   return out
 }
 
-export default function AdminGenerateTeamsModal({ visible, onClose }: Props) {
+export default function AdminGenerateTeamsModal({ onClose }: Props) {
   const { showToast } = useUiStore()
   const {
     genNumTeams, genNumGames, genTeamSize, genAvgSource,
@@ -91,7 +90,6 @@ export default function AdminGenerateTeamsModal({ visible, onClose }: Props) {
   const [allSeasons, setAllSeasons] = useState<any[]>([])
 
   useEffect(() => {
-    if (!visible) return
     setRsvpLoading(true)
     async function load() {
       const [weekRes, seasonsRes, playersRes] = await Promise.all([
@@ -117,7 +115,7 @@ export default function AdminGenerateTeamsModal({ visible, onClose }: Props) {
       }
     }
     load().finally(() => setRsvpLoading(false))
-  }, [visible])
+  }, [])
 
   const availCount = weekRsvps.filter((r: any) => r.status === 'in').length
   const requiredCount = genNumTeams * genTeamSize
@@ -313,17 +311,23 @@ export default function AdminGenerateTeamsModal({ visible, onClose }: Props) {
   }
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={handleClose}>
-      <View style={styles.backdrop}>
-        <TouchableOpacity style={StyleSheet.absoluteFill} onPress={handleClose} activeOpacity={1} />
-        <View style={styles.sheet}>
-          <Text style={styles.title}>Generate Teams</Text>
-
-          <ScrollView style={styles.scrollArea} contentContainerStyle={[styles.scrollContent, rsvpLoading && styles.scrollContentCentered]} showsVerticalScrollIndicator={false}>
-            {rsvpLoading ? (
-              <ActivityIndicator size="large" color={colors.accent} />
-            ) : null}
-            {!rsvpLoading ? (<>
+    <BottomSheet
+      title="Generate Teams"
+      onClose={handleClose}
+      busy={generating || confirming}
+      bodyMaxHeight={540}
+      footer={
+        <View style={styles.footer}>
+          <Button label="Cancel" variant="ghost" onPress={handleClose} />
+        </View>
+      }
+    >
+      {rsvpLoading ? (
+        <View style={styles.loadingBox}>
+          <ActivityIndicator size="large" color={colors.accent} />
+        </View>
+      ) : null}
+      {!rsvpLoading ? (<>
             <View style={styles.controlsCard}>
               <View style={styles.controlRow}>
                 <Text style={styles.controlLabel}>Number of Teams</Text>
@@ -430,57 +434,19 @@ export default function AdminGenerateTeamsModal({ visible, onClose }: Props) {
                 <Button label="Use These Teams" onPress={useTeams} loading={confirming} disabled={confirming} style={styles.useTeamsBtn} />
               </>
             )}
-            </>) : null}
-          </ScrollView>
-
-          <View style={styles.btnRow}>
-            <Button label="Cancel" variant="secondary" onPress={handleClose} />
-          </View>
-        </View>
-      </View>
-      {/* Rendered inside the Modal so toasts aren't occluded by the native modal layer. */}
-      <Toast />
-    </Modal>
+      </>) : null}
+    </BottomSheet>
   )
 }
 
 const styles = StyleSheet.create({
-  backdrop: {
-    flex: 1,
-    backgroundColor: colors.overlay,
-    paddingHorizontal: 24,
-    paddingVertical: 60,
-  },
-  sheet: {
-    flex: 1,
-    backgroundColor: colors.surface,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: colors.border,
-    overflow: 'hidden',
-  },
-  title: {
-    fontFamily: fonts.barlowCondensed,
-    fontSize: 22,
-    color: colors.text,
-    fontWeight: '700',
-    paddingHorizontal: 24,
-    paddingTop: 24,
-    paddingBottom: 12,
-  },
-  scrollArea: {
-    flex: 1,
-  },
-  scrollContent: {
-    paddingHorizontal: 24,
-    paddingBottom: 8,
-  },
-  scrollContentCentered: {
-    flex: 1,
+  loadingBox: {
+    paddingVertical: 40,
     alignItems: 'center',
     justifyContent: 'center',
   },
   controlsCard: {
+    marginTop: 8,
     backgroundColor: colors.surface2,
     borderRadius: radius.cardSm,
     borderWidth: 1,
@@ -613,10 +579,5 @@ const styles = StyleSheet.create({
     color: colors.accent,
   },
   useTeamsBtn: { marginTop: 4, marginBottom: 4 },
-  btnRow: {
-    paddingHorizontal: 24,
-    paddingVertical: 16,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-  },
+  footer: { marginTop: 14 },
 })

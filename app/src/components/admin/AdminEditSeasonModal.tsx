@@ -1,61 +1,43 @@
-import { useState, useEffect } from 'react'
-import {
-  Modal,
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  StyleSheet,
-  Platform,
-} from 'react-native'
+import { useState } from 'react'
+import { Text, TextInput, TouchableOpacity, StyleSheet, Platform } from 'react-native'
 import DateTimePicker from '@react-native-community/datetimepicker'
 import { useUiStore } from '../../stores/uiStore'
 import { seasons } from '../../utils/supabase/db'
 import { SeasonOption } from '../../hooks/useRegistrationData'
 import { colors, fonts, radius } from '../../theme'
-import Toast from '../ui/Toast'
+import BottomSheet from '../ui/BottomSheet'
 import Button from '../ui/Button'
+import { useDatePicker } from '../../hooks/useDatePicker'
 import { toISO, fromISO, formatDateLong } from '../../utils/helpers'
 
 interface Props {
-  season: SeasonOption | null
+  // Mount conditionally (`{editSeason && <… />}`) so the form resets per season.
+  season: SeasonOption
   onClose: () => void
   onSaved?: () => void | Promise<void>
 }
 
-type ActivePicker = 'start' | 'end' | null
-
 export default function AdminEditSeasonModal({ season, onClose, onSaved }: Props) {
-  const [bowlingNight, setBowlingNight] = useState('')
-  const [startDate, setStartDate] = useState<Date>(new Date())
-  const [endDate, setEndDate] = useState<Date | null>(null)
-  const [activePicker, setActivePicker] = useState<ActivePicker>(null)
+  const [bowlingNight, setBowlingNight] = useState(season.bowling_night ?? '')
+  // One picker instance per date; the toggle buttons close the other so at most
+  // one picker is showing. `endSet` keeps the "Select end date" placeholder for
+  // seasons without an end date until the admin actually picks one.
+  const startPicker = useDatePicker(() => fromISO(season.start_date) ?? new Date())
+  const endPicker = useDatePicker(() => fromISO(season.end_date) ?? fromISO(season.start_date) ?? new Date())
+  const [endSet, setEndSet] = useState(fromISO(season.end_date) != null)
   const [saving, setSaving] = useState(false)
   const { showToast } = useUiStore()
 
-  useEffect(() => {
-    if (!season) return
-    setBowlingNight(season.bowling_night ?? '')
-    setStartDate(fromISO(season.start_date) ?? new Date())
-    setEndDate(fromISO(season.end_date))
-    setActivePicker(null)
-  }, [season])
+  const startDate = startPicker.value
+  const endDate = endSet ? endPicker.value : null
 
-  function onPickerValue(field: 'start' | 'end') {
-    return (_event: unknown, selected?: Date) => {
-      if (Platform.OS === 'android') setActivePicker(null)
-      if (!selected) return
-      if (field === 'start') setStartDate(selected)
-      else setEndDate(selected)
-    }
-  }
-
-  function onPickerDismiss() {
-    if (Platform.OS === 'android') setActivePicker(null)
+  function onEndChange(e: unknown, selected?: Date) {
+    endPicker.onChange(e, selected)
+    if (selected) setEndSet(true)
   }
 
   async function submit() {
-    if (saving || !season) return
+    if (saving) return
     if (!bowlingNight.trim()) {
       showToast('Bowling night is required', 'error')
       return
@@ -86,121 +68,88 @@ export default function AdminEditSeasonModal({ season, onClose, onSaved }: Props
     }
   }
 
-  function handleClose() {
-    if (saving) return
-    setActivePicker(null)
-    onClose()
-  }
-
-  const showInlinePicker = Platform.OS === 'ios'
-
   return (
-    <Modal visible={season !== null} transparent animationType="fade" onRequestClose={handleClose}>
-      <TouchableOpacity style={styles.backdrop} activeOpacity={1} onPress={handleClose}>
-        <TouchableOpacity style={styles.sheet} activeOpacity={1} onPress={() => {}}>
-          <Text style={styles.title}>Edit Season {season?.number ?? ''}</Text>
-
-          <Text style={styles.fieldLabel}>Bowling night</Text>
-          <TextInput
-            style={styles.input}
-            value={bowlingNight}
-            onChangeText={setBowlingNight}
-            placeholder="e.g. Monday"
-            placeholderTextColor={colors.muted2}
+    <BottomSheet
+      title={`Edit Season ${season.number}`}
+      onClose={onClose}
+      busy={saving}
+      keyboardAvoiding
+      footer={
+        <>
+          <Button
+            label="Save Changes"
+            size="lg"
+            onPress={submit}
+            loading={saving}
+            disabled={saving}
+            style={styles.confirmBtn}
           />
+          <Button label="Cancel" variant="ghost" onPress={() => !saving && onClose()} />
+        </>
+      }
+    >
+      <Text style={styles.fieldLabel}>BOWLING NIGHT</Text>
+      <TextInput
+        style={styles.input}
+        value={bowlingNight}
+        onChangeText={setBowlingNight}
+        placeholder="e.g. Monday"
+        placeholderTextColor={colors.muted2}
+      />
 
-          {/* Start date */}
-          <Text style={styles.fieldLabel}>Start date</Text>
-          <TouchableOpacity
-            style={[styles.dateBtn, activePicker === 'start' && styles.dateBtnActive]}
-            onPress={() => setActivePicker(activePicker === 'start' ? null : 'start')}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.dateBtnText}>{formatDateLong(startDate)}</Text>
-            <Text style={styles.dateBtnChevron}>›</Text>
-          </TouchableOpacity>
-          {activePicker === 'start' && (
-            <DateTimePicker
-              value={startDate}
-              mode="date"
-              display={Platform.OS === 'ios' ? 'inline' : 'default'}
-              onValueChange={onPickerValue('start')}
-              onDismiss={onPickerDismiss}
-              style={showInlinePicker ? styles.iosPicker : undefined}
-              themeVariant="dark"
-            />
-          )}
-
-          {/* End date */}
-          <Text style={[styles.fieldLabel, { marginTop: 4 }]}>End date</Text>
-          <TouchableOpacity
-            style={[styles.dateBtn, activePicker === 'end' && styles.dateBtnActive, !endDate && styles.dateBtnEmpty]}
-            onPress={() => setActivePicker(activePicker === 'end' ? null : 'end')}
-            activeOpacity={0.8}
-          >
-            <Text style={[styles.dateBtnText, !endDate && styles.dateBtnPlaceholder]}>
-              {endDate ? formatDateLong(endDate) : 'Select end date'}
-            </Text>
-            <Text style={styles.dateBtnChevron}>›</Text>
-          </TouchableOpacity>
-          {activePicker === 'end' && (
-            <DateTimePicker
-              value={endDate ?? startDate}
-              mode="date"
-              display={Platform.OS === 'ios' ? 'inline' : 'default'}
-              minimumDate={startDate}
-              onValueChange={onPickerValue('end')}
-              onDismiss={onPickerDismiss}
-              style={showInlinePicker ? styles.iosPicker : undefined}
-              themeVariant="dark"
-            />
-          )}
-
-          <View style={styles.btnRow}>
-            <Button label="Cancel" variant="secondary" onPress={handleClose} fullWidth />
-            <Button
-              label="Save Changes"
-              onPress={submit}
-              loading={saving}
-              disabled={saving}
-              fullWidth
-            />
-          </View>
-        </TouchableOpacity>
+      <Text style={styles.fieldLabel}>START DATE</Text>
+      <TouchableOpacity
+        style={[styles.dateBtn, startPicker.open && styles.dateBtnActive]}
+        onPress={() => { endPicker.setOpen(false); startPicker.setOpen(o => !o) }}
+        activeOpacity={0.8}
+      >
+        <Text style={styles.dateBtnText}>{formatDateLong(startDate)}</Text>
+        <Text style={styles.dateBtnChevron}>›</Text>
       </TouchableOpacity>
-      {/* Rendered inside the Modal so toasts aren't occluded by the native modal layer. */}
-      <Toast />
-    </Modal>
+      {startPicker.open && (
+        <DateTimePicker
+          value={startDate}
+          mode="date"
+          display={Platform.OS === 'ios' ? 'inline' : 'default'}
+          onChange={startPicker.onChange}
+          style={Platform.OS === 'ios' ? styles.iosPicker : undefined}
+          themeVariant="dark"
+        />
+      )}
+
+      <Text style={[styles.fieldLabel, { marginTop: 4 }]}>END DATE</Text>
+      <TouchableOpacity
+        style={[styles.dateBtn, endPicker.open && styles.dateBtnActive]}
+        onPress={() => { startPicker.setOpen(false); endPicker.setOpen(o => !o) }}
+        activeOpacity={0.8}
+      >
+        <Text style={[styles.dateBtnText, !endDate && styles.dateBtnPlaceholder]}>
+          {endDate ? formatDateLong(endDate) : 'Select end date'}
+        </Text>
+        <Text style={styles.dateBtnChevron}>›</Text>
+      </TouchableOpacity>
+      {endPicker.open && (
+        <DateTimePicker
+          value={endDate ?? startDate}
+          mode="date"
+          display={Platform.OS === 'ios' ? 'inline' : 'default'}
+          minimumDate={startDate}
+          onChange={onEndChange}
+          style={Platform.OS === 'ios' ? styles.iosPicker : undefined}
+          themeVariant="dark"
+        />
+      )}
+    </BottomSheet>
   )
 }
 
 const styles = StyleSheet.create({
-  backdrop: {
-    flex: 1,
-    backgroundColor: colors.overlay,
-    justifyContent: 'center',
-    paddingHorizontal: 24,
-  },
-  sheet: {
-    backgroundColor: colors.surface,
-    borderRadius: 20,
-    padding: 24,
-    borderWidth: 1,
-    borderColor: colors.border,
-    maxHeight: '92%',
-  },
-  title: {
-    fontFamily: fonts.barlowCondensed,
-    fontSize: 22,
-    color: colors.text,
-    fontWeight: '700',
-    marginBottom: 16,
-  },
   fieldLabel: {
     fontFamily: fonts.barlowCondensed,
     fontSize: 11,
     color: colors.muted,
     letterSpacing: 1.5,
+    marginTop: 8,
     marginBottom: 6,
   },
   input: {
@@ -213,7 +162,7 @@ const styles = StyleSheet.create({
     fontFamily: fonts.barlow,
     fontSize: 15,
     color: colors.text,
-    marginBottom: 14,
+    marginBottom: 8,
   },
   dateBtn: {
     flexDirection: 'row',
@@ -228,10 +177,9 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   dateBtnActive: { borderColor: colors.accent },
-  dateBtnEmpty: { borderColor: colors.border2 },
   dateBtnText: { fontFamily: fonts.barlow, fontSize: 15, color: colors.text },
   dateBtnPlaceholder: { color: colors.muted2 },
   dateBtnChevron: { fontFamily: fonts.barlow, fontSize: 18, color: colors.muted, marginTop: -1 },
-  iosPicker: { marginBottom: 8, tintColor: colors.accent },
-  btnRow: { flexDirection: 'row', gap: 10, marginTop: 14 },
+  iosPicker: { marginBottom: 8 },
+  confirmBtn: { marginTop: 18 },
 })

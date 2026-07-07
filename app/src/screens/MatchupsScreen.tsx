@@ -647,12 +647,11 @@ export default function MatchupsScreen() {
         )}
       </KeyboardAvoidingView>
 
-      <AdminArchiveModal visible={showArchive} onClose={() => { setShowArchive(false); reload() }} />
-      {isAdmin && (
-        <AdminGenerateTeamsModal
-          visible={showGenerateTeams}
-          onClose={() => { setShowGenerateTeams(false); reload() }}
-        />
+      {showArchive && (
+        <AdminArchiveModal onClose={() => { setShowArchive(false); reload() }} />
+      )}
+      {isAdmin && showGenerateTeams && (
+        <AdminGenerateTeamsModal onClose={() => { setShowGenerateTeams(false); reload() }} />
       )}
     </SafeAreaView>
   )

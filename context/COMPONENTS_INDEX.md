@@ -5,7 +5,7 @@ Every reusable component in [app/src/components/](../app/src/components/), group
 ## Shared conventions
 
 - **Theme tokens only.** Every component styles via `colors` / `fonts` / `radius` from `src/theme` — never hard-coded values. `theme.ts` also exports `sheetStyles` (`section` / `label` / `input` / `actSpacing`) — the bottom-sheet form idioms (SECTION heading, small-caps field label, multiline reason/notes input, stacked action-button spacing) used by the admin action sheets; reuse it instead of re-declaring those styles.
-- **Two modal-mounting patterns.** Older modals take a `visible` prop and stay mounted; newer ones (everything in the betting / loan / PvP / bounty families) are **mounted conditionally** (`{thing && <Modal … />}`) so their internal state resets between opens. Each entry below notes which.
+- **Conditional mounting is the standard.** Modals are **mounted conditionally** (`{thing && <Modal … />}`) so their internal state resets between opens; the sheet family (`BottomSheet` / `ConfirmActionSheet`) assumes it. The only `visible`-prop holdouts are `PlayerPickerModal` (a picker layered *over* an already-open sheet) and `ProfileMenuModal`.
 - **`<Toast />` inside every RN `<Modal>` that calls `showToast`** — the app-root Toast is occluded by the native modal layer (see [toast.md](toast.md)).
 - **Presentational rows gate behavior by callback.** List rows (`BetRow`, `LineRow`, …) become tappable/cancellable only when the caller passes `onPress` / `onCancelPress`-style callbacks; read-only surfaces simply omit them. Reuse this pattern instead of `isAdmin` props.
 - **Betting data shape.** The betting components all consume the flat `BetView` / `LineView` / `LedgerEntry` views produced by the hooks (`usePinsinoData`, `usePlayerPinsinoData`) — never raw DB rows.
@@ -73,17 +73,18 @@ Ambient retro pixel-art scenes behind the Pinsino landing screens — decorative
 | `HistoricalTeamBlock` | `{ team, players: {name,score?,present,isFill?}[], total, winner }` | Archived-week team card: roster with `PlayerAvatar`s and scores, OUT tags, League-Avg-Fill rows (`∅` glyph), winner-highlighted total. |
 | `OddsBlock` | `{ teamA, teamB, leagueAvg, label }` | Betting-style spread + moneyline card computed from expected team scores (`spreadAndML` helper). Easter egg on MatchupsScreen (`Expected` mode). |
 
-## Admin season/week modals (`components/admin/`, `visible`-prop mounted)
+## Admin season/week modals (`components/admin/`)
 
-All follow confirm → `db.ts` call(s) → toast → close, with `<Toast />` inside the Modal.
+All on `BottomSheet` (Toast built in), **mounted conditionally**, following confirm → `db.ts` call(s) → toast → close. They compose `BottomSheet` directly rather than `ConfirmActionSheet` — each has something outside the single-action contract (armed two-steps, multi-step submits, forms).
 
 | Component | Props | Purpose |
 |---|---|---|
-| `AdminArchiveModal` | `{ visible, onClose }` | Archives the active week via the atomic `archive_week` RPC (snapshot → lock → settle → next week). If the no-pending-bets backstop rejects, shows the warning and arms a **force** retry (voids + refunds). See [archive-and-settlement.md](archive-and-settlement.md). |
-| `AdminEndSeasonModal` | `{ visible, onClose }` | Ends the current season: settles active loans first (`seasons.settleLoansForClose`, aborts on error), records selected champions, sets `is_active = false`. |
-| `AdminOpenRegistrationModal` | `{ visible, onClose, onCreated? }` | Creates season N+1 with `registration_open = true` (number from `seasons.getLatest()`), date pickers for start/end, +100 pin champion bonus to prior champs. |
-| `AdminEditSeasonModal` | `{ season: SeasonOption \| null, onClose, onSaved? }` | Edits a season's bowling night + start/end dates (local-date-safe ISO handling). Conditionally mounted via the `season` prop. |
-| `AdminGenerateTeamsModal` | `{ visible, onClose }` | Generates balanced teams from RSVPs (state in `usePendingStore.gen*`), writes teams/slots/schedule, then idempotently syncs O/U markets via `sync_over_under_markets_for_week`. |
+| `AdminArchiveModal` | `{ onClose }` | Archives the active week via the atomic `archive_week` RPC (snapshot → lock → settle → next week). If the no-pending-bets backstop rejects, shows the warning and arms a **force** retry (voids + refunds). See [archive-and-settlement.md](archive-and-settlement.md). |
+| `AdminEndSeasonModal` | `{ onClose }` | Ends the current season: settles active loans first (`seasons.settleLoansForClose`, aborts on error), records selected champions, sets `is_active = false`. |
+| `AdminOpenRegistrationModal` | `{ onClose, onCreated? }` | Creates season N+1 with `registration_open = true` (number from `seasons.getLatest()`), `useDatePicker` start/end dates, +100 pin champion bonus to prior champs. |
+| `AdminEditSeasonModal` | `{ season: SeasonOption, onClose, onSaved? }` | Edits a season's bowling night + `useDatePicker` start/end dates (local-date-safe ISO handling). |
+| `AdminGenerateTeamsModal` | `{ onClose }` | Generates balanced teams from RSVPs (state in `usePendingStore.gen*`), writes teams/slots/schedule, then idempotently syncs O/U markets via `sync_over_under_markets_for_week`. |
+| `LanetalkConfirmModal` | `{ weekId, weekTitle, markets, onClose, onDone }` | "Confirm LaneTalk Data" — settles a week's stat props via the atomic `settle_lanetalk_props_for_week` RPC: coverage preview (informational; the RPC recomputes), **Settle Available** (re-runnable), and an armed **Settle + Void Missing** (deletes no-data markets, delete-refund rail). See [lanetalk-stat-bets.md](lanetalk-stat-bets.md). |
 | `ProfileMenuModal` | `{ visible, onClose }` | *(lives in `components/league/`)* Bottom sheet from the AppHeader avatar: identity (`PlayerAvatar`, 64px) + My Profile (cross-tab nav to PlayerDetail) + Log Out. |
 
 ## Betting / Sportsbook & ledger (`components/betting/`)
