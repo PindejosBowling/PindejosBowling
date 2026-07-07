@@ -1,8 +1,8 @@
-import { useState, useCallback, useEffect, useRef } from 'react'
 import { auctions, auctionLedger, pinLedger, seasons } from '../utils/supabase/db'
 import { AuctionView } from '../utils/auction'
 import { computeBalance } from '../utils/ledger'
 import { bouncesByAuction, normalizeAuction, purchasesByAuction } from './useAuctionHouseData'
+import { useAsyncData } from './useAsyncData'
 
 export interface AuctionDetailData {
   loading: boolean
@@ -11,47 +11,40 @@ export interface AuctionDetailData {
   reload: () => Promise<void>
 }
 
+type AuctionDetailPayload = Pick<AuctionDetailData, 'balance' | 'auction'>
+
+const EMPTY: AuctionDetailPayload = { balance: 0, auction: null }
+
 // One auction with the viewer's decoded bid (owner-only) and the public
 // bounce story. Countdown ticking lives in the screen, not here.
 export function useAuctionDetailData(auctionId: string, playerId: string | null): AuctionDetailData {
-  const [loading, setLoading] = useState(true)
-  const [balance, setBalance] = useState(0)
-  const [auction, setAuction] = useState<AuctionView | null>(null)
-  const loadedOnce = useRef(false)
+  const { loading, data, reload } = useAsyncData<AuctionDetailPayload>(async () => {
+    if (!playerId) return EMPTY
 
-  const load = useCallback(async () => {
-    if (!loadedOnce.current) setLoading(true)
-    try {
-      const reset = () => { setBalance(0); setAuction(null) }
-      if (!playerId) { reset(); return }
+    const seasonRes = await seasons.getCurrent()
+    const seasonId = seasonRes.data?.id ?? null
+    if (!seasonId) return EMPTY
 
-      const seasonRes = await seasons.getCurrent()
-      const seasonId = seasonRes.data?.id ?? null
-      if (!seasonId) { reset(); return }
+    let row: any = null
+    let myAmount: number | null = null
+    let ledgerData: any[] = []
+    let auctionLedgerData: any[] = []
+    await Promise.all([
+      auctions.getById(auctionId).then(({ data }) => { row = data }),
+      auctions.myBidAmount(auctionId).then(({ data }) => { myAmount = (data as number | null) ?? null }),
+      pinLedger.listByPlayerSeason(playerId, seasonId).then(({ data }) => { ledgerData = data ?? [] }),
+      auctionLedger.listBySeason(seasonId).then(({ data }) => { auctionLedgerData = data ?? [] }),
+    ])
 
-      let row: any = null
-      let myAmount: number | null = null
-      let ledgerData: any[] = []
-      let auctionLedgerData: any[] = []
-      await Promise.all([
-        auctions.getById(auctionId).then(({ data }) => { row = data }),
-        auctions.myBidAmount(auctionId).then(({ data }) => { myAmount = (data as number | null) ?? null }),
-        pinLedger.listByPlayerSeason(playerId, seasonId).then(({ data }) => { ledgerData = data ?? [] }),
-        auctionLedger.listBySeason(seasonId).then(({ data }) => { auctionLedgerData = data ?? [] }),
-      ])
-
-      setBalance(computeBalance(ledgerData))
-      if (!row) { setAuction(null); return }
-      const bounceMap = bouncesByAuction(auctionLedgerData)
-      const winnerMap = purchasesByAuction(auctionLedgerData)
-      setAuction(normalizeAuction(row, myAmount, bounceMap.get(row.id) ?? [], winnerMap.get(row.id) ?? []))
-    } finally {
-      loadedOnce.current = true
-      setLoading(false)
+    const balance = computeBalance(ledgerData)
+    if (!row) return { balance, auction: null }
+    const bounceMap = bouncesByAuction(auctionLedgerData)
+    const winnerMap = purchasesByAuction(auctionLedgerData)
+    return {
+      balance,
+      auction: normalizeAuction(row, myAmount, bounceMap.get(row.id) ?? [], winnerMap.get(row.id) ?? []),
     }
-  }, [auctionId, playerId])
+  }, [auctionId, playerId], 'useAuctionDetailData')
 
-  useEffect(() => { load() }, [load])
-
-  return { loading, balance, auction, reload: load }
+  return { loading, ...(data ?? EMPTY), reload }
 }

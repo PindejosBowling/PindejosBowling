@@ -1,6 +1,6 @@
-import { useState, useCallback, useEffect, useRef } from 'react'
 import { seasons, pinLedger, pvpChallenges } from '../utils/supabase/db'
 import { computeBalance } from '../utils/ledger'
+import { useAsyncData } from './useAsyncData'
 
 // A flattened pvp_challenges row with resolved participant names. The screen
 // derives its display (record, CTA, etc.) via useMemo; no memo in the hook.
@@ -102,105 +102,94 @@ export interface PvpRecord { wins: number; losses: number; pushes: number }
 const EMPTY_INBOX: PvpInbox = { received: [], sent: [], active: [], settled: [] }
 const EMPTY_RECORD: PvpRecord = { wins: 0, losses: 0, pushes: 0 }
 
+interface PvpPayload {
+  balance: number
+  inbox: PvpInbox
+  openBoard: PvpChallengeView[]
+  // Every settled challenge leaguewide for the displayed season, newest first —
+  // a public results feed (the "Challenges Won" board).
+  wonBoard: PvpChallengeView[]
+  record: PvpRecord
+  // True when no season is live and we're showing the most-recently-ended
+  // season's frozen state (mirrors the Pinsino between-seasons behavior).
+  seasonConcluded: boolean
+}
+
+const EMPTY: PvpPayload = {
+  balance: 0, inbox: EMPTY_INBOX, openBoard: [], wonBoard: [], record: EMPTY_RECORD, seasonConcluded: false,
+}
+
 // One player's PvP state: season balance (for stake validation), the bucketed
 // inbox, the open board they can accept, and their challenge record.
 export function usePvpData(playerId: string | null, viewSeasonId?: string | null) {
-  const [loading, setLoading] = useState(true)
-  const [balance, setBalance] = useState(0)
-  const [inbox, setInbox] = useState<PvpInbox>(EMPTY_INBOX)
-  const [openBoard, setOpenBoard] = useState<PvpChallengeView[]>([])
-  // Every settled challenge leaguewide for the displayed season, newest first —
-  // a public results feed (the "Challenges Won" board).
-  const [wonBoard, setWonBoard] = useState<PvpChallengeView[]>([])
-  const [record, setRecord] = useState<PvpRecord>(EMPTY_RECORD)
-  // True when no season is live and we're showing the most-recently-ended
-  // season's frozen state (mirrors the Pinsino between-seasons behavior).
-  const [seasonConcluded, setSeasonConcluded] = useState(false)
-  // Only the first load shows the full-screen LoadingView; later reloads (focus,
-  // pull-to-refresh) update silently — pull-to-refresh has its own RefreshControl spinner.
-  const loadedOnce = useRef(false)
+  const { loading, data, reload } = useAsyncData<PvpPayload>(async () => {
+    if (!playerId) return EMPTY
 
-  const load = useCallback(async () => {
-    if (!loadedOnce.current) setLoading(true)
-    try {
-      if (!playerId) {
-        setBalance(0); setInbox(EMPTY_INBOX); setOpenBoard([]); setWonBoard([]); setRecord(EMPTY_RECORD); setSeasonConcluded(false)
-        return
-      }
+    // Past-season mode points at the requested prior season; otherwise falls
+    // back to the most-recently-ended season between seasons so results (and
+    // the Challenges Won board) stay visible until the next season starts.
+    // The pending/open buckets come back empty for a concluded season, leaving
+    // the settled inbox + Challenges Won board as the read-only review.
+    let seasonId: string | null
+    let seasonConcluded: boolean
+    if (viewSeasonId) {
+      seasonId = (await seasons.getById(viewSeasonId)).data?.id ?? null
+      seasonConcluded = true
+    } else {
+      const seasonRes = await seasons.getCurrentOrLastEnded()
+      seasonId = seasonRes.data?.id ?? null
+      seasonConcluded = seasonRes.concluded
+    }
+    if (!seasonId) return { ...EMPTY, seasonConcluded }
 
-      // Past-season mode points at the requested prior season; otherwise falls
-      // back to the most-recently-ended season between seasons so results (and
-      // the Challenges Won board) stay visible until the next season starts.
-      // The pending/open buckets come back empty for a concluded season, leaving
-      // the settled inbox + Challenges Won board as the read-only review.
-      let seasonId: string | null
-      if (viewSeasonId) {
-        seasonId = (await seasons.getById(viewSeasonId)).data?.id ?? null
-        setSeasonConcluded(true)
+    let ledgerData: any[] = []
+    let mineData: any[] = []
+    let boardData: any[] = []
+    let wonData: any[] = []
+    await Promise.all([
+      pinLedger.listByPlayerSeason(playerId, seasonId).then(({ data }) => { ledgerData = data ?? [] }),
+      pvpChallenges.listByPlayerSeason(playerId, seasonId).then(({ data }) => { mineData = data ?? [] }),
+      pvpChallenges.listOpenBySeason(seasonId).then(({ data }) => { boardData = data ?? [] }),
+      pvpChallenges.listWonBySeason(seasonId).then(({ data }) => { wonData = data ?? [] }),
+    ])
+
+    const mine = mineData.map(normalizeChallenge)
+    const next: PvpInbox = { received: [], sent: [], active: [], settled: [] }
+    const rec: PvpRecord = { wins: 0, losses: 0, pushes: 0 }
+
+    for (const c of mine) {
+      if (c.status === 'pending' || c.status === 'countered') {
+        // It's my turn unless I'm the one who made the latest live offer.
+        if (isReceivedForPlayer(c, playerId)) next.received.push(c)
+        else next.sent.push(c)
+      } else if (c.status === 'locked' || c.status === 'accepted') {
+        next.active.push(c)
       } else {
-        const seasonRes = await seasons.getCurrentOrLastEnded()
-        seasonId = seasonRes.data?.id ?? null
-        setSeasonConcluded(seasonRes.concluded)
-      }
-      if (!seasonId) {
-        setBalance(0); setInbox(EMPTY_INBOX); setOpenBoard([]); setWonBoard([]); setRecord(EMPTY_RECORD)
-        return
-      }
-
-      let ledgerData: any[] = []
-      let mineData: any[] = []
-      let boardData: any[] = []
-      let wonData: any[] = []
-      await Promise.all([
-        pinLedger.listByPlayerSeason(playerId, seasonId).then(({ data }) => { ledgerData = data ?? [] }),
-        pvpChallenges.listByPlayerSeason(playerId, seasonId).then(({ data }) => { mineData = data ?? [] }),
-        pvpChallenges.listOpenBySeason(seasonId).then(({ data }) => { boardData = data ?? [] }),
-        pvpChallenges.listWonBySeason(seasonId).then(({ data }) => { wonData = data ?? [] }),
-      ])
-
-      setBalance(computeBalance(ledgerData))
-
-      const mine = mineData.map(normalizeChallenge)
-      const next: PvpInbox = { received: [], sent: [], active: [], settled: [] }
-      const rec: PvpRecord = { wins: 0, losses: 0, pushes: 0 }
-
-      for (const c of mine) {
-        if (c.status === 'pending' || c.status === 'countered') {
-          // It's my turn unless I'm the one who made the latest live offer.
-          if (isReceivedForPlayer(c, playerId)) next.received.push(c)
-          else next.sent.push(c)
-        } else if (c.status === 'locked' || c.status === 'accepted') {
-          next.active.push(c)
-        } else {
-          next.settled.push(c)
-          if (c.status === 'settled') {
-            if (c.winnerId === playerId) rec.wins += 1
-            else if (c.winnerId) rec.losses += 1
-          } else if (c.status === 'pushed') {
-            rec.pushes += 1
-          }
+        next.settled.push(c)
+        if (c.status === 'settled') {
+          if (c.winnerId === playerId) rec.wins += 1
+          else if (c.winnerId) rec.losses += 1
+        } else if (c.status === 'pushed') {
+          rec.pushes += 1
         }
       }
-
-      // Open board: everyone's open contracts except the caller's own.
-      const board = boardData.map(normalizeChallenge).filter(c => c.creatorId !== playerId)
-
-      setInbox(next)
-      setOpenBoard(board)
-      setWonBoard(wonData.map(normalizeChallenge))
-      setRecord(rec)
-    } catch (e) {
-      console.error('usePvpData error:', e)
-    } finally {
-      loadedOnce.current = true
-      setLoading(false)
     }
-  }, [playerId, viewSeasonId])
 
-  useEffect(() => { load() }, [load])
+    // Open board: everyone's open contracts except the caller's own.
+    const board = boardData.map(normalizeChallenge).filter(c => c.creatorId !== playerId)
+
+    return {
+      balance: computeBalance(ledgerData),
+      inbox: next,
+      openBoard: board,
+      wonBoard: wonData.map(normalizeChallenge),
+      record: rec,
+      seasonConcluded,
+    }
+  }, [playerId, viewSeasonId], 'usePvpData')
 
   // True when reviewing a specific prior season (drives read-only UI gating).
   const readOnly = viewSeasonId != null
 
-  return { loading, balance, inbox, openBoard, wonBoard, record, seasonConcluded, readOnly, reload: load }
+  return { loading, ...(data ?? EMPTY), readOnly, reload }
 }

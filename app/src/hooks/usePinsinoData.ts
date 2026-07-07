@@ -1,6 +1,6 @@
-import { useState, useCallback, useEffect } from 'react'
 import { weeks, seasons, betMarkets, bets, pinLedger, loanLedger, loans, pvpChallenges, bountyPosts, teamSlots, customLines, games, players, auctionHouseState } from '../utils/supabase/db'
 import { computeBalance } from '../utils/ledger'
+import { useAsyncData } from './useAsyncData'
 
 // One bettable side of a market (a single `bet_selections` row, flattened).
 // Generic over market_type — over/under is the first consumer, but the shape
@@ -597,48 +597,68 @@ function resolveCustomLine(
   }
 }
 
-export function usePinsinoData(playerId: string | null, viewSeasonId?: string | null) {
-  const [loading, setLoading] = useState(true)
-  const [balance, setBalance] = useState(0)
-  const [openLines, setOpenLines] = useState<LineView[]>([])
-  const [myBets, setMyBets] = useState<BetView[]>([])
+interface PinsinoPayload {
+  balance: number
+  openLines: LineView[]
+  myBets: BetView[]
   // All bets placed by every player this week (for the "Active Bets" view)
-  const [weekBets, setWeekBets] = useState<BetView[]>([])
+  weekBets: BetView[]
   // All settled (won/lost/push) bets this season (for the "Settled Bets" view)
-  const [settledBets, setSettledBets] = useState<BetView[]>([])
+  settledBets: BetView[]
   // Season pin-balance scoreboard: active players sorted high → low.
   // `movement` = rank change vs. the prior week (null = no prior week / new entry).
-  const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([])
-  const [currentWeekId, setCurrentWeekId] = useState<string | null>(null)
-  const [currentSeasonId, setCurrentSeasonId] = useState<string | null>(null)
+  leaderboard: LeaderboardEntry[]
+  currentWeekId: string | null
+  currentSeasonId: string | null
   // The displayed season's number, and whether it is a concluded season being
   // shown as a frozen final outcome (no live season active). Drives the
   // "Final Results" banner between season close and the next season's start.
-  const [seasonNumber, setSeasonNumber] = useState<number | null>(null)
-  const [seasonConcluded, setSeasonConcluded] = useState(false)
+  seasonNumber: number | null
+  seasonConcluded: boolean
   // Set of market ids the current player has already placed a bet on
-  const [myBetMarketIds, setMyBetMarketIds] = useState<Set<string>>(new Set())
+  myBetMarketIds: Set<string>
   // Admin custom lines ("Specials") resolved + available this week.
-  const [customLineViews, setCustomLineViews] = useState<CustomLineView[]>([])
+  customLines: CustomLineView[]
   // Caller's own loan figures (net-worth context near the balance card)
-  const [debt, setDebt] = useState(0)
+  debt: number
   // Caller's own at-risk pins escrowed across the Pinsino — pending sportsbook
   // bets + locked PvP contracts + active bounty entries. Already debited from
   // balance at placement, so this recovers the at-risk portion for the net calc.
-  const [openAction, setOpenAction] = useState(0)
-  const [activeLoan, setActiveLoan] = useState<ActiveLoanSummary | null>(null)
+  openAction: number
+  activeLoan: ActiveLoanSummary | null
   // This week's team topology, for the board's with/against presentation:
   // every player's team, the viewer's team, and per game the team the
   // viewer's team is matched up against.
-  const [weekTeams, setWeekTeams] = useState<WeekTeams>(EMPTY_WEEK_TEAMS)
+  weekTeams: WeekTeams
   // Auction House admin kill-switch for the live season. Drives the "closed"
   // status overlay + entry gate on the Pinsino tile (live mode only).
-  const [auctionHouseClosed, setAuctionHouseClosed] = useState(false)
-  const [auctionHouseClosedMessage, setAuctionHouseClosedMessage] = useState<string | null>(null)
+  auctionHouseClosed: boolean
+  auctionHouseClosedMessage: string | null
+}
 
-  const load = useCallback(async () => {
-    setLoading(true)
-    try {
+const EMPTY: PinsinoPayload = {
+  balance: 0,
+  openLines: [],
+  myBets: [],
+  weekBets: [],
+  settledBets: [],
+  leaderboard: [],
+  currentWeekId: null,
+  currentSeasonId: null,
+  seasonNumber: null,
+  seasonConcluded: false,
+  myBetMarketIds: new Set(),
+  customLines: [],
+  debt: 0,
+  openAction: 0,
+  activeLoan: null,
+  weekTeams: EMPTY_WEEK_TEAMS,
+  auctionHouseClosed: false,
+  auctionHouseClosedMessage: null,
+}
+
+export function usePinsinoData(playerId: string | null, viewSeasonId?: string | null) {
+  const { loading, data, reload } = useAsyncData<PinsinoPayload>(async () => {
       // Past-season mode: an explicit prior season is requested. The economy is
       // season-scoped, so we just point `seasonId` at it and null out `weekId` —
       // every live/week-scoped fetch below is guarded by `if (weekId)`, so the
@@ -649,16 +669,14 @@ export function usePinsinoData(playerId: string | null, viewSeasonId?: string | 
       // The resolved season's number — used to scope the player's all-time bets
       // to the viewed season in past-season mode.
       let resolvedSeasonNumber: number | null
+      let seasonConcluded: boolean
       if (viewSeasonId) {
         const seasonRes = await seasons.getById(viewSeasonId)
         weekId = null
         seasonId = seasonRes.data?.id ?? null
         resolvedSeasonNumber = seasonRes.data?.number ?? null
-        setCurrentWeekId(null)
-        setCurrentSeasonId(seasonId)
-        setSeasonNumber(resolvedSeasonNumber)
         // A prior season is by definition concluded → show the FINAL banner.
-        setSeasonConcluded(true)
+        seasonConcluded = true
       } else {
         const [weekRes, seasonRes] = await Promise.all([
           weeks.getCurrent(),
@@ -671,10 +689,7 @@ export function usePinsinoData(playerId: string | null, viewSeasonId?: string | 
         weekId = weekRes.data?.id ?? null
         seasonId = seasonRes.data?.id ?? null
         resolvedSeasonNumber = seasonRes.data?.number ?? null
-        setCurrentWeekId(weekId)
-        setCurrentSeasonId(seasonId)
-        setSeasonNumber(resolvedSeasonNumber)
-        setSeasonConcluded(seasonRes.concluded)
+        seasonConcluded = seasonRes.concluded
       }
 
       const fetches: PromiseLike<any>[] = []
@@ -1000,19 +1015,6 @@ export function usePinsinoData(playerId: string | null, viewSeasonId?: string | 
       const myDebt = playerId ? (debtByPlayer[playerId] ?? 0) : 0
       const myActiveLoan = myLoansData.find((l: any) => l.status === 'active')
 
-      setDebt(myDebt)
-      // The caller's own at-risk pins fall straight out of the per-player map.
-      setOpenAction(playerId ? (openActionByPlayer[playerId] ?? 0) : 0)
-      setActiveLoan(
-        myActiveLoan
-          ? {
-              loanId: myActiveLoan.id,
-              productName: myActiveLoan.loan_products?.display_name ?? '—',
-              outstanding: myDebt,
-            }
-          : null
-      )
-
       // Build the board: O/U lines pass through; moneylines are reduced to the
       // player's own team ("Your Team"), dropping matchups they're not in;
       // team props keep every team but relabel the viewer's own.
@@ -1027,28 +1029,39 @@ export function usePinsinoData(playerId: string | null, viewSeasonId?: string | 
           openLinesResolved.push(line)
         }
       }
-      setOpenLines(openLinesResolved)
-      setWeekTeams({ myTeamId, teamByPlayer, opponentTeamByGame })
-      setCustomLineViews(resolvedCustom)
-      setWeekBets(weekBetViews)
-      setSettledBets(settledBetsData.map(normalizeBet).map(brandBet))
-      setLeaderboard(board)
-      setMyBets(myBetViews)
-      setBalance(computeBalance(ledgerData))
-      setMyBetMarketIds(new Set(myBetViews.map(b => b.marketId)))
-      setAuctionHouseClosed(auctionStateData?.is_closed ?? false)
-      setAuctionHouseClosedMessage(auctionStateData?.closed_message ?? null)
-    } catch (e) {
-      console.error('usePinsinoData error:', e)
-    } finally {
-      setLoading(false)
-    }
-  }, [playerId, viewSeasonId])
 
-  useEffect(() => { load() }, [load])
+      return {
+        balance: computeBalance(ledgerData),
+        openLines: openLinesResolved,
+        myBets: myBetViews,
+        weekBets: weekBetViews,
+        settledBets: settledBetsData.map(normalizeBet).map(brandBet),
+        leaderboard: board,
+        currentWeekId: weekId,
+        currentSeasonId: seasonId,
+        seasonNumber: resolvedSeasonNumber,
+        seasonConcluded,
+        myBetMarketIds: new Set(myBetViews.map(b => b.marketId)),
+        customLines: resolvedCustom,
+        debt: myDebt,
+        // The caller's own at-risk pins fall straight out of the per-player map.
+        openAction: playerId ? (openActionByPlayer[playerId] ?? 0) : 0,
+        activeLoan: myActiveLoan
+          ? {
+              loanId: myActiveLoan.id,
+              productName: myActiveLoan.loan_products?.display_name ?? '—',
+              outstanding: myDebt,
+            }
+          : null,
+        weekTeams: { myTeamId, teamByPlayer, opponentTeamByGame },
+        auctionHouseClosed: auctionStateData?.is_closed ?? false,
+        auctionHouseClosedMessage: auctionStateData?.closed_message ?? null,
+      }
+  }, [playerId, viewSeasonId], 'usePinsinoData')
 
   // True when viewing a specific prior season (drives read-only UI gating).
   const readOnly = viewSeasonId != null
 
-  return { loading, balance, debt, openAction, netWorth: balance + openAction - debt, activeLoan, openLines, weekTeams, customLines: customLineViews, myBets, weekBets, settledBets, leaderboard, myBetMarketIds, currentWeekId, currentSeasonId, seasonNumber, seasonConcluded, readOnly, auctionHouseClosed, auctionHouseClosedMessage, reload: load }
+  const view = data ?? EMPTY
+  return { loading, ...view, netWorth: view.balance + view.openAction - view.debt, readOnly, reload }
 }

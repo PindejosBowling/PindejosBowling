@@ -1,6 +1,7 @@
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useEffect } from 'react'
 import { supabase } from '../utils/supabase/client'
 import { playoffDrafts, seasons, weeks, scores, games } from '../utils/supabase/db'
+import { useAsyncData } from './useAsyncData'
 
 export type DraftStatus = 'setup' | 'drafting' | 'completed' | 'materialized'
 export type DraftType = 'snake' | 'straight'
@@ -80,48 +81,46 @@ export function useIsPlayoffCaptain(playerId: string | null) {
   return isCaptain
 }
 
+interface PlayoffDraftPayload {
+  seasonId: string | null
+  rawDraft: any | null
+  rawWeeks: any[]
+  rawDraftablePlayers: any[]
+  rawScores: any[]
+  rawSchedule: any[]
+}
+
+const EMPTY: PlayoffDraftPayload = {
+  seasonId: null,
+  rawDraft: null,
+  rawWeeks: [],
+  rawDraftablePlayers: [],
+  rawScores: [],
+  rawSchedule: [],
+}
+
 export function usePlayoffDraftData() {
-  const [loading, setLoading] = useState(true)
-  const [seasonId, setSeasonId] = useState<string | null>(null)
-  const [rawDraft, setRawDraft] = useState<any | null>(null)
-  const [rawWeeks, setRawWeeks] = useState<any[]>([])
-  const [rawDraftablePlayers, setRawDraftablePlayers] = useState<any[]>([])
-  const [rawScores, setRawScores] = useState<any[]>([])
-  const [rawSchedule, setRawSchedule] = useState<any[]>([])
-
-  const load = useCallback(async () => {
-    setLoading(true)
-    try {
-      const seasonRes = await seasons.getCurrent()
-      const sid = seasonRes.data?.id ?? null
-      setSeasonId(sid)
-      if (!sid) {
-        setRawDraft(null)
-        setRawWeeks([])
-        setRawDraftablePlayers([])
-        return
-      }
-      // Standings raw data feeds the seed ordering of chosen captains at setup.
-      const [draftRes, weeksRes, playersRes, scoresRes, scheduleRes] = await Promise.all([
-        playoffDrafts.getBySeasonWithGraph(sid),
-        weeks.listBySeason(sid),
-        playoffDrafts.listDraftablePlayers(sid),
-        scores.listForStandings(),
-        games.listForArchivedWeeks(),
-      ])
-      setRawDraft(draftRes.data ?? null)
-      setRawWeeks(weeksRes.data ?? [])
-      setRawDraftablePlayers(playersRes.data ?? [])
-      setRawScores(scoresRes.data ?? [])
-      setRawSchedule(scheduleRes.data ?? [])
-    } catch (e) {
-      console.error('usePlayoffDraftData error:', e)
-    } finally {
-      setLoading(false)
+  const { loading, data, reload } = useAsyncData<PlayoffDraftPayload>(async () => {
+    const seasonRes = await seasons.getCurrent()
+    const sid = seasonRes.data?.id ?? null
+    if (!sid) return EMPTY
+    // Standings raw data feeds the seed ordering of chosen captains at setup.
+    const [draftRes, weeksRes, playersRes, scoresRes, scheduleRes] = await Promise.all([
+      playoffDrafts.getBySeasonWithGraph(sid),
+      weeks.listBySeason(sid),
+      playoffDrafts.listDraftablePlayers(sid),
+      scores.listForStandings(),
+      games.listForArchivedWeeks(),
+    ])
+    return {
+      seasonId: sid,
+      rawDraft: draftRes.data ?? null,
+      rawWeeks: weeksRes.data ?? [],
+      rawDraftablePlayers: playersRes.data ?? [],
+      rawScores: scoresRes.data ?? [],
+      rawSchedule: scheduleRes.data ?? [],
     }
-  }, [])
-
-  useEffect(() => { load() }, [load])
+  }, [], 'usePlayoffDraftData')
 
   // Live draft room: any change to the draft or its pick log on another device
   // means "refetch" (the useWeekClock pattern — DB is the source of truth).
@@ -129,23 +128,18 @@ export function usePlayoffDraftData() {
     const channel = supabase
       .channel('playoff-draft')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'playoff_draft_picks' }, () => {
-        load()
+        reload()
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'playoff_drafts' }, () => {
-        load()
+        reload()
       })
       .subscribe()
     return () => { supabase.removeChannel(channel) }
-  }, [load])
+  }, [reload])
 
   return {
     loading,
-    seasonId,
-    rawDraft,
-    rawWeeks,
-    rawDraftablePlayers,
-    rawScores,
-    rawSchedule,
-    reload: load,
+    ...(data ?? EMPTY),
+    reload,
   }
 }

@@ -1,5 +1,5 @@
-import { useState, useCallback, useEffect } from 'react'
 import { registrations, seasons, players } from '../utils/supabase/db'
+import { useAsyncData } from './useAsyncData'
 
 export interface RegistrationRow {
   id: string
@@ -25,41 +25,35 @@ export interface RosterPlayer {
   name: string | null
 }
 
+interface RegistrationPayload {
+  rawRegistrations: RegistrationRow[]
+  seasonList: SeasonOption[]
+  allPlayers: RosterPlayer[]
+}
+
+const EMPTY: RegistrationPayload = { rawRegistrations: [], seasonList: [], allPlayers: [] }
+
 export function useRegistrationData() {
-  const [loading, setLoading] = useState(true)
-  const [rawRegistrations, setRawRegistrations] = useState<RegistrationRow[]>([])
-  const [seasonList, setSeasonList] = useState<SeasonOption[]>([])
-  const [allPlayers, setAllPlayers] = useState<RosterPlayer[]>([])
-
-  const load = useCallback(async () => {
-    setLoading(true)
-    try {
-      const [regRes, seasonsRes, playersRes] = await Promise.all([
-        registrations.list(),
-        seasons.list(),
-        players.list(),
-      ])
-      setRawRegistrations((regRes.data ?? []) as RegistrationRow[])
-      setSeasonList(
-        (seasonsRes.data ?? []).map(s => ({
-          id: s.id,
-          number: s.number,
-          registration_open: s.registration_open,
-          is_active: s.is_active,
-          bowling_night: s.bowling_night,
-          start_date: s.start_date,
-          end_date: s.end_date,
-        })),
-      )
-      setAllPlayers((playersRes.data ?? []).map(p => ({ id: p.id, name: p.name })))
-    } catch (e) {
-      console.error('useRegistrationData error:', e)
-    } finally {
-      setLoading(false)
+  const { loading, data, reload } = useAsyncData<RegistrationPayload>(async () => {
+    const [regRes, seasonsRes, playersRes] = await Promise.all([
+      registrations.list(),
+      seasons.list(),
+      players.list(),
+    ])
+    return {
+      rawRegistrations: (regRes.data ?? []) as RegistrationRow[],
+      seasonList: (seasonsRes.data ?? []).map(s => ({
+        id: s.id,
+        number: s.number,
+        registration_open: s.registration_open,
+        is_active: s.is_active,
+        bowling_night: s.bowling_night,
+        start_date: s.start_date,
+        end_date: s.end_date,
+      })),
+      allPlayers: (playersRes.data ?? []).map(p => ({ id: p.id, name: p.name })),
     }
-  }, [])
+  }, [], 'useRegistrationData')
 
-  useEffect(() => { load() }, [load])
-
-  return { loading, rawRegistrations, seasonList, allPlayers, reload: load }
+  return { loading, ...(data ?? EMPTY), reload }
 }

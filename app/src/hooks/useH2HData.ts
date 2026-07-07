@@ -1,5 +1,5 @@
-import { useState, useCallback, useEffect } from 'react'
 import { players as playersDb, scores as scoresDb, games } from '../utils/supabase/db'
+import { useAsyncData } from './useAsyncData'
 
 export interface H2HGame {
   season: number
@@ -112,31 +112,27 @@ export function computeH2HFromSupabase(
   return result
 }
 
+interface H2HPayload {
+  playerNames: string[]
+  rawScores: any[]
+  rawSchedule: any[]
+}
+
+const EMPTY: H2HPayload = { playerNames: [], rawScores: [], rawSchedule: [] }
+
 export function useH2HData() {
-  const [loading, setLoading] = useState(true)
-  const [playerNames, setPlayerNames] = useState<string[]>([])
-  const [rawScores, setRawScores] = useState<any[]>([])
-  const [rawSchedule, setRawSchedule] = useState<any[]>([])
-
-  const load = useCallback(async () => {
-    setLoading(true)
-    try {
-      const [playersRes, scoresRes, scheduleRes] = await Promise.all([
-        playersDb.list(),
-        scoresDb.listForH2H(),
-        games.listForArchivedWeeks(),
-      ])
-      setPlayerNames((playersRes.data ?? []).map((p: any) => p.name))
-      setRawScores(scoresRes.data ?? [])
-      setRawSchedule(scheduleRes.data ?? [])
-    } catch (e) {
-      console.error('useH2HData error:', e)
-    } finally {
-      setLoading(false)
+  const { loading, data, reload } = useAsyncData<H2HPayload>(async () => {
+    const [playersRes, scoresRes, scheduleRes] = await Promise.all([
+      playersDb.list(),
+      scoresDb.listForH2H(),
+      games.listForArchivedWeeks(),
+    ])
+    return {
+      playerNames: (playersRes.data ?? []).map((p: any) => p.name),
+      rawScores: scoresRes.data ?? [],
+      rawSchedule: scheduleRes.data ?? [],
     }
-  }, [])
+  }, [], 'useH2HData')
 
-  useEffect(() => { load() }, [load])
-
-  return { loading, playerNames, rawScores, rawSchedule, reload: load }
+  return { loading, ...(data ?? EMPTY), reload }
 }
