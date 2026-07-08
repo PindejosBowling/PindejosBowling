@@ -99,6 +99,12 @@ export const useAuthStore = create<AuthStore>((set) => ({
   },
 
   signOut: async () => {
+    // Best-effort: forget this device's push token while the session is still
+    // valid. Dynamic import — pushTokens imports this store (cycle otherwise).
+    try {
+      const { unregisterPushToken } = await import('../utils/pushTokens')
+      await unregisterPushToken()
+    } catch { /* never block sign-out on push cleanup */ }
     set({ role: null, userId: null, playerId: null, playerName: null, isReadOnly: false })
     await supabase.auth.signOut()
   },

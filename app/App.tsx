@@ -22,6 +22,7 @@ import { useAuthStore } from './src/stores/authStore'
 import { useAvatarStore } from './src/stores/avatarStore'
 import { useNotificationStore } from './src/stores/notificationStore'
 import { useWeekClock } from './src/hooks/useWeekClock'
+import { syncPushToken } from './src/utils/pushTokens'
 
 const BASE = 'PindejosBowling'
 
@@ -68,6 +69,8 @@ const linking = {
         initialRouteName: 'MoreHome',
         screens: {
           MoreHome: `${BASE}/more`,
+          NotificationSettings: `${BASE}/more/notifications`,
+          BroadcastAdmin: `${BASE}/more/broadcasts`,
           LeagueRecords: `${BASE}/more/records`,
           HeadToHead: `${BASE}/more/head-to-head`,
           Chemistry: `${BASE}/more/chemistry`,
@@ -123,6 +126,9 @@ export default function App() {
     if (role) {
       useAvatarStore.getState().load()
       useNotificationStore.getState().refresh()
+      // Push Broadcasts: prompt for permission (first run) / heartbeat the
+      // device token. No-op on web, simulators, and read-only sessions.
+      syncPushToken()
     } else {
       useNotificationStore.getState().clear()
     }

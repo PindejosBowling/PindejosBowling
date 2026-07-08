@@ -39,6 +39,7 @@ export default function MoreHomeScreen() {
     { icon: '📜', label: 'History',      onPress: () => navigation.navigate('History') },
     { icon: '🗑️', label: 'Trash Board',  onPress: () => navigation.navigate('TrashBoard') },
     { icon: '📝', label: 'Registration', onPress: () => navigation.navigate('Registration') },
+    { icon: '🔔', label: 'Notifications', onPress: () => navigation.navigate('NotificationSettings') },
     ...(!isAdmin && isPlayoffCaptain
       ? [{ icon: '🏁', label: 'Playoffs', onPress: () => navigation.navigate('Playoffs') }]
       : []),
@@ -61,6 +62,7 @@ export default function MoreHomeScreen() {
       ? [{ icon: '🏦', label: 'Pinsino Admin', onPress: () => navigation.navigate('PinsinoAdmin') }]
       : []),
     { icon: '🎳', label: 'Lanetalk Import', onPress: () => navigation.navigate('LanetalkImportAdmin') },
+    { icon: '📣', label: 'Broadcasts',     onPress: () => navigation.navigate('BroadcastAdmin') },
     { icon: '🗄️', label: 'Archives',       onPress: () => navigation.navigate('Archives') },
     { icon: '🏁', label: 'Playoffs',       onPress: () => navigation.navigate('Playoffs') },
     { icon: '🥇', label: 'End Season',     onPress: () => setShowEndSeason(true) },
