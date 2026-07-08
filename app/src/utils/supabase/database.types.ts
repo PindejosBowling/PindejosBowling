@@ -1056,6 +1056,165 @@ export type Database = {
           },
         ]
       }
+      broadcast_categories: {
+        Row: {
+          created_at: string
+          description: string
+          id: string
+          is_active: boolean
+          key: string
+          label: string
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string
+          id?: string
+          is_active?: boolean
+          key: string
+          label: string
+          sort_order: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string
+          id?: string
+          is_active?: boolean
+          key?: string
+          label?: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      broadcast_push_tickets: {
+        Row: {
+          broadcast_id: string
+          created_at: string
+          error_code: string | null
+          id: string
+          push_token_id: string | null
+          status: string
+          ticket_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          broadcast_id: string
+          created_at?: string
+          error_code?: string | null
+          id?: string
+          push_token_id?: string | null
+          status?: string
+          ticket_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          broadcast_id?: string
+          created_at?: string
+          error_code?: string | null
+          id?: string
+          push_token_id?: string | null
+          status?: string
+          ticket_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "broadcast_push_tickets_broadcast_id_fkey"
+            columns: ["broadcast_id"]
+            isOneToOne: false
+            referencedRelation: "broadcasts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "broadcast_push_tickets_push_token_id_fkey"
+            columns: ["push_token_id"]
+            isOneToOne: false
+            referencedRelation: "push_tokens"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      broadcasts: {
+        Row: {
+          body: string
+          category_id: string
+          claimed_at: string | null
+          created_at: string
+          created_by: string
+          data: Json
+          delivered_count: number | null
+          error: string | null
+          failed_count: number | null
+          id: string
+          recipient_count: number | null
+          scheduled_for: string
+          sent_at: string | null
+          source: string
+          status: string
+          target_player_ids: string[] | null
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          body: string
+          category_id: string
+          claimed_at?: string | null
+          created_at?: string
+          created_by: string
+          data?: Json
+          delivered_count?: number | null
+          error?: string | null
+          failed_count?: number | null
+          id?: string
+          recipient_count?: number | null
+          scheduled_for?: string
+          sent_at?: string | null
+          source?: string
+          status?: string
+          target_player_ids?: string[] | null
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          body?: string
+          category_id?: string
+          claimed_at?: string | null
+          created_at?: string
+          created_by?: string
+          data?: Json
+          delivered_count?: number | null
+          error?: string | null
+          failed_count?: number | null
+          id?: string
+          recipient_count?: number | null
+          scheduled_for?: string
+          sent_at?: string | null
+          source?: string
+          status?: string
+          target_player_ids?: string[] | null
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "broadcasts_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "broadcast_categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "broadcasts_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       custom_lines: {
         Row: {
           category: string
@@ -1875,6 +2034,115 @@ export type Database = {
           },
         ]
       }
+      push_category_prefs: {
+        Row: {
+          category_id: string
+          created_at: string
+          enabled: boolean
+          id: string
+          player_id: string
+          updated_at: string
+        }
+        Insert: {
+          category_id: string
+          created_at?: string
+          enabled: boolean
+          id?: string
+          player_id: string
+          updated_at?: string
+        }
+        Update: {
+          category_id?: string
+          created_at?: string
+          enabled?: boolean
+          id?: string
+          player_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "push_category_prefs_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "broadcast_categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "push_category_prefs_player_id_fkey"
+            columns: ["player_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      push_preferences: {
+        Row: {
+          created_at: string
+          master_enabled: boolean
+          player_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          master_enabled?: boolean
+          player_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          master_enabled?: boolean
+          player_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "push_preferences_player_id_fkey"
+            columns: ["player_id"]
+            isOneToOne: true
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      push_tokens: {
+        Row: {
+          created_at: string
+          expo_push_token: string
+          id: string
+          last_registered_at: string
+          platform: string
+          player_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          expo_push_token: string
+          id?: string
+          last_registered_at?: string
+          platform?: string
+          player_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          expo_push_token?: string
+          id?: string
+          last_registered_at?: string
+          platform?: string
+          player_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "push_tokens_player_id_fkey"
+            columns: ["player_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       pvp_challenge_offers: {
         Row: {
           accepted_at: string | null
@@ -2642,6 +2910,21 @@ export type Database = {
       }
       assert_admin: { Args: never; Returns: undefined }
       auction_bid_key: { Args: never; Returns: string }
+      broadcast_cancel: { Args: { p_id: string }; Returns: undefined }
+      broadcast_reach: {
+        Args: { p_category_id: string; p_target_player_ids?: string[] }
+        Returns: {
+          reachable: number
+          targeted: number
+        }[]
+      }
+      broadcast_recipients: {
+        Args: { p_category_id: string; p_target_player_ids?: string[] }
+        Returns: {
+          expo_push_token: string
+          player_id: string
+        }[]
+      }
       cancel_auction: { Args: { p_auction_id: string }; Returns: undefined }
       cancel_bet: { Args: { p_bet_id: string }; Returns: undefined }
       cancel_bounty: { Args: { p_bounty_post_id: string }; Returns: undefined }
@@ -2773,6 +3056,7 @@ export type Database = {
         Args: { p_item_id: string; p_target_bet_id: string }
         Returns: string
       }
+      invoke_broadcast_sender: { Args: never; Returns: undefined }
       is_admin: { Args: never; Returns: boolean }
       is_registered_player: { Args: { phone: string }; Returns: boolean }
       issue_pin_bonus: {
@@ -2892,6 +3176,10 @@ export type Database = {
         Args: { p_player_id: string; p_season_id: string }
         Returns: number
       }
+      register_push_token: {
+        Args: { p_platform?: string; p_token: string }
+        Returns: undefined
+      }
       remove_over_under_markets_for_game: {
         Args: { p_game_number: number; p_week_id: string }
         Returns: undefined
@@ -3006,6 +3294,7 @@ export type Database = {
         Args: { p_force?: boolean; p_week_id: string }
         Returns: undefined
       }
+      unregister_push_token: { Args: { p_token: string }; Returns: undefined }
       update_auction: {
         Args: {
           p_auction_id: string
