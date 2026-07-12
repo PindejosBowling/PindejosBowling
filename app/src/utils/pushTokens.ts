@@ -12,11 +12,33 @@
 import { Platform } from 'react-native'
 import { push } from './supabase/db'
 import { useAuthStore } from '../stores/authStore'
+import { openBroadcastTarget } from '../navigation/navigationRef'
 
 // The token registered this session, so sign-out can best-effort unregister
 // without asking the OS again.
 let sessionToken: string | null = null
 let handlerInstalled = false
+
+// Tap identifiers already routed this session. getLastNotificationResponseAsync
+// (the cold-start path) returns the same response on every call, and the live
+// listener may also have fired for it — dedupe so a tap navigates once.
+const handledTapIds = new Set<string>()
+
+/** Route a notification tap to its broadcast landing page (`data.route`,
+ *  set by the admin composer — see utils/broadcastTargets.ts). Pushes without
+ *  a route (or with a key this build doesn't know) just open the app. */
+function handleNotificationTap(response: {
+  notification: { request: { identifier: string; content: { data?: Record<string, unknown> } } }
+}) {
+  const id = response?.notification?.request?.identifier
+  if (id) {
+    if (handledTapIds.has(id)) return
+    handledTapIds.add(id)
+  }
+  const route = response?.notification?.request?.content?.data?.route
+  console.log('[pushTokens] notification tap:', id, 'route =', route ?? '(none)')
+  if (typeof route === 'string') openBroadcastTarget(route)
+}
 
 async function loadModules() {
   const [Notifications, Device, Constants] = await Promise.all([
@@ -62,6 +84,15 @@ export async function syncPushToken(): Promise<void> {
           shouldSetBadge: false,
         }),
       })
+
+      // Tap → deep link. The listener covers foreground/background taps; the
+      // last-response probe covers a cold start from a killed app, where the
+      // tap happened before this listener existed. openBroadcastTarget queues
+      // internally if the navigator isn't mounted yet.
+      Notifications.addNotificationResponseReceivedListener(handleNotificationTap)
+      console.log('[pushTokens] tap listener installed')
+      const last = await Notifications.getLastNotificationResponseAsync()
+      if (last) handleNotificationTap(last)
     }
 
     let { status } = await Notifications.getPermissionsAsync()

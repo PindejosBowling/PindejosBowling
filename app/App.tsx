@@ -16,6 +16,7 @@ import {
 } from '@expo-google-fonts/barlow'
 
 import RootNavigator from './src/navigation/RootNavigator'
+import { navigationRef, flushPendingBroadcastTarget } from './src/navigation/navigationRef'
 import LoginScreen from './src/screens/LoginScreen'
 import Toast from './src/components/ui/Toast'
 import { useAuthStore } from './src/stores/authStore'
@@ -146,7 +147,11 @@ export default function App() {
 
   return (
     <SafeAreaProvider>
-      <NavigationContainer linking={linking as any}>
+      <NavigationContainer
+        ref={navigationRef}
+        linking={linking as any}
+        onReady={flushPendingBroadcastTarget}
+      >
         <View style={{ flex: 1 }}>
           <RootNavigator />
           <Toast />

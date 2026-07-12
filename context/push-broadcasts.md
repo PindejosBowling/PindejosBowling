@@ -42,11 +42,21 @@ Per broadcast: **idempotent claim** (`pending → sending` guarded UPDATE; a row
 
 ## App layer
 
-- **`app/src/utils/pushTokens.ts`** — the ONLY file touching `expo-notifications` (dynamic imports + web guards; the GitHub Pages bundle never evaluates the native module). `syncPushToken()` runs on every authenticated app open (`App.tsx`): prompts once when `undetermined`, no-ops when denied/web/simulator/read-only, otherwise registers via RPC (the heartbeat). Sign-out best-effort unregisters (dynamic import from `authStore` to avoid the import cycle).
+- **`app/src/utils/pushTokens.ts`** — the ONLY file touching `expo-notifications` (dynamic imports + web guards; the GitHub Pages bundle never evaluates the native module). `syncPushToken()` runs on every authenticated app open (`App.tsx`): prompts once when `undetermined`, no-ops when denied/web/simulator/read-only, otherwise registers via RPC (the heartbeat). Sign-out best-effort unregisters (dynamic import from `authStore` to avoid the import cycle). Also installs the **tap handler** (see "Tap destinations" below).
 - **`db.ts`** — `push` (token RPCs, categories, pref upserts) and `broadcasts` (listRecent/create/cancel/reach/sendNow; `sendNow` normalizes Edge-Function errors like `lanetalkImports`).
 - **`NotificationSettingsScreen`** (More → league tools 🔔) — master + per-category `SettingToggleRow`s, optimistic writes, absent-row-=-ON derivation, iOS-permission banners (`undetermined` → enable CTA; `denied` → `Linking.openSettings()`; web → informational, toggles still editable since prefs are cross-device).
 - **`BroadcastAdminScreen`** (More → admin 📣) — composer (category `ToggleGroup`, title/body, whole-category vs targeted via `PlayerPickerModal` chips), debounced reach line (red at 0 reachable), **Send Now** / **Schedule…** (datetime picker; the sweep fires it), history with status badges + cancel-pending confirm.
 - **Deep links**: `${BASE}/more/notifications`, `${BASE}/more/broadcasts`.
+
+## Tap destinations (push deep links)
+
+An admin can pick a **landing page** per broadcast — tapping the push navigates there (e.g. an RSVP nag lands on RSVP, an auction announcement lands on Auction House). No schema or Edge-Function change was needed: the composer stores a catalog key in `broadcasts.data.route`, and the sender already spreads `data` into every push payload.
+
+- **`app/src/utils/broadcastTargets.ts`** — the catalog: `key → { label, tab, screen? }`. Keys are a **wire format** (they live in sent pushes and DB rows) — never rename one; add a new entry instead. Unknown/absent keys are a silent no-op (the push just opens the app), so old builds tolerate new targets. **Adding a target = adding one row here** (plus nothing else).
+- **`app/src/navigation/navigationRef.ts`** — module-level `createNavigationContainerRef` (wired in `App.tsx`) + `openBroadcastTarget(key)`, which queues the navigation until the container's `onReady` when a cold-start tap arrives before the navigator mounts.
+- **Tap handling** lives in `pushTokens.ts`: `addNotificationResponseReceivedListener` (foreground/background taps) + `getLastNotificationResponseAsync` (cold start from a killed app), deduped by notification identifier so a tap navigates exactly once.
+- **Composer**: the "TAP DESTINATION" pill row (default "None (opens app)"); history rows show `→ <label>`.
+- **Event-driven pushes (v2)** get this for free: insert the `broadcasts` row with `data: {'route': '<catalog key>'}`.
 
 ## Build requirement
 

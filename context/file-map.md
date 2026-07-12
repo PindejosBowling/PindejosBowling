@@ -28,6 +28,7 @@ app/
 │   │   ├── StandingsStackNavigator.tsx  # Stack: StandingsList → PlayerDetail
 │   │   ├── PinsinoStackNavigator.tsx    # Stack: PinsinoHome → PinsinoLeaderboard / Sportsbook / PlayerPinsino
 │   │   ├── MoreStackNavigator.tsx       # Stack: MoreHome + tools (incl. PinsinoAdmin → PinsinoAccounting / AdminSportsbook)
+│   │   ├── navigationRef.ts     # Module-level navigation ref + openBroadcastTarget (push-tap deep links, queued until onReady)
 │   │   └── types.ts             # MoreStackParamList, StandingsStackParamList, PinsinoStackParamList
 │   ├── stores/
 │   │   ├── pendingStore.ts      # Optimistic edit buffer (scores, RSVPs, team gen state)
@@ -38,6 +39,7 @@ app/
 │   │   ├── badges.ts            # BADGE_RULES + badgesForPlayer — status→emoji rule list (see Player Badges)
 │   │   ├── bets.ts              # Bet display helpers: resultBadge, betPayout, betReturn, betReturnDisplay, betReturnText, signed
 │   │   ├── bounty.ts            # Bounty pure helpers — mirrors the DB's All Comers settlement math for UI previews
+│   │   ├── broadcastTargets.ts  # Push-tap landing-page catalog (key → tab/screen); keys are wire format, never rename
 │   │   ├── helpers.ts           # initials, timeAgo, combinations, spreadAndML, date helpers (toISO/fromISO/formatDateLong/formatDateShort)
 │   │   ├── notifications.ts     # Pinsino pending-action notification sources (per-tile + tab-bar badge counts)
 │   │   ├── pvp.ts               # PvP display helpers — contract-type/status vocabulary, stake bounds

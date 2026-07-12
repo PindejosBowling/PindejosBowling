@@ -21,6 +21,7 @@ import PlayerPickerModal from '../components/ui/PlayerPickerModal'
 import { useAuthStore } from '../stores/authStore'
 import { useUiStore } from '../stores/uiStore'
 import { broadcasts } from '../utils/supabase/db'
+import { BROADCAST_TARGETS, getBroadcastTarget } from '../utils/broadcastTargets'
 import { useBroadcastAdminData, BroadcastRow } from '../hooks/useBroadcastAdminData'
 import { useDatePicker } from '../hooks/useDatePicker'
 
@@ -49,6 +50,8 @@ export default function BroadcastAdminScreen() {
   const [title, setTitle] = useState('')
   const [body, setBody] = useState('')
   const [audience, setAudience] = useState<'category' | 'targeted'>('category')
+  // Landing page a tap deep-links to; 'none' = the push just opens the app.
+  const [targetKey, setTargetKey] = useState<string>('none')
   const [targets, setTargets] = useState<{ id: string; name: string }[]>([])
   const [pickerOpen, setPickerOpen] = useState(false)
   const [scheduleOpen, setScheduleOpen] = useState(false)
@@ -85,6 +88,7 @@ export default function BroadcastAdminScreen() {
     setBody('')
     setTargets([])
     setAudience('category')
+    setTargetKey('none')
   }
 
   async function createBroadcast(scheduledFor: Date | null): Promise<string | null> {
@@ -94,6 +98,9 @@ export default function BroadcastAdminScreen() {
       title: title.trim(),
       body: body.trim(),
       target_player_ids: audience === 'targeted' ? targets.map(t => t.id) : null,
+      // `data` rides in the push payload verbatim; the tap handler
+      // (pushTokens.ts) navigates to `data.route` via broadcastTargets.ts.
+      data: targetKey !== 'none' ? { route: targetKey } : {},
       created_by: playerId,
       ...(scheduledFor ? { scheduled_for: scheduledFor.toISOString() } : {}),
     })
@@ -191,6 +198,18 @@ export default function BroadcastAdminScreen() {
           maxLength={1000}
         />
 
+        <Text style={styles.fieldLabel}>TAP DESTINATION</Text>
+        <ToggleGroup
+          variant="pill"
+          scrollable
+          options={[
+            { key: 'none', label: 'None (opens app)' },
+            ...BROADCAST_TARGETS.map(t => ({ key: t.key, label: t.label })),
+          ]}
+          value={targetKey}
+          onChange={setTargetKey}
+        />
+
         <Text style={styles.fieldLabel}>AUDIENCE</Text>
         <ToggleGroup
           options={[
@@ -273,6 +292,7 @@ export default function BroadcastAdminScreen() {
               <Text style={styles.histMeta}>
                 {b.broadcast_categories?.label ?? '—'}
                 {b.target_player_ids ? ` · ${b.target_player_ids.length} targeted` : ' · everyone'}
+                {getBroadcastTarget(b.data?.route) ? ` · → ${getBroadcastTarget(b.data?.route)!.label}` : ''}
                 {b.players?.name ? ` · by ${b.players.name}` : ''}
               </Text>
               <Text style={[styles.histMeta, b.status === 'failed' && styles.histError]}>{when}</Text>

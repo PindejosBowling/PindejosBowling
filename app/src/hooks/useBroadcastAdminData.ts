@@ -8,6 +8,7 @@ export interface BroadcastRow {
   title: string
   body: string
   target_player_ids: string[] | null
+  data: { route?: string } | null
   status: 'pending' | 'sending' | 'sent' | 'failed' | 'canceled'
   scheduled_for: string
   sent_at: string | null
