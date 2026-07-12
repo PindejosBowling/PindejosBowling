@@ -49,6 +49,16 @@ gh pr merge <number> --squash
 - If the merge fails (branch protection, required checks, conflicts), report `gh`'s error verbatim and stop — don't retry with a different merge strategy.
 - Report the merge result, including the squash commit SHA on main (`gh pr view <number> --json mergeCommit`), since that's the handle for any future rollback.
 
+### After the merge: does this need a TestFlight build?
+
+Merging to main auto-ships two of the three delivery channels (`context/tech-stack.md` "Shipping changes to devices"): the web app (`deploy.yml`) and an OTA JS update to installed iOS builds (`ota-update.yml`). The third — a **TestFlight binary** (`testflight.yml`) — is **manual-only** (no cron) and OTA cannot substitute for it when the PR contains a **native change**:
+
+- a native module added/removed/upgraded in `app/package.json` (anything with native code — most `expo-*` packages qualify)
+- `app/app.json` changes to `plugins`, `ios`/`android` config, permissions/infoPlist, or `runtimeVersion`
+- `app/eas.json` build-profile changes, or an Expo SDK / React Native upgrade
+
+If the merged diff touches any of those, tell the user this change won't reach phones over the air and offer to trigger the build: `gh workflow run testflight.yml`. If the PR is JS/assets only, say nothing — OTA covers it.
+
 ## Roll back a merged PR
 
 When the user asks to undo / revert / roll back a merged PR:
