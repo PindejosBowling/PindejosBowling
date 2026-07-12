@@ -23,6 +23,18 @@ React Native / Expo app for a recreational bowling league called "Pindejos." Pla
 
 Run with `expo start` from `app/`. Use `--ios`, `--android`, or `--web` flags.
 
+## Shipping changes to devices
+
+Three delivery channels, each with its own trigger:
+
+| Channel | Trigger | Ships |
+|---|---|---|
+| GitHub Pages (web) | every merge to main (`deploy.yml` build+deploy jobs) | the read-only web app |
+| **EAS Update (OTA)** | every merge to main (`deploy.yml` `ota-update` job) | **JS + assets only**, to installed iOS builds whose runtime matches; picked up over two launches (download, then apply) |
+| TestFlight binary | `testflight.yml` — cron every ~3 days + manual dispatch | the full native app; bumps the patch version (which IS the update runtime, `runtimeVersion.policy = "appVersion"`) |
+
+**The rule:** JS-only changes just merge — OTA delivers them. A **native change** (new native module, config-plugin change, `app.json` native config, SDK bump) MUST go out as a TestFlight build — trigger `testflight.yml` manually rather than waiting for the cron, and be aware the OTA job will still publish JS that older binaries with the same version could pull; guard new native-module calls behind dynamic imports / availability checks (the `pushTokens.ts` pattern) so that window is harmless.
+
 ---
 
 ## Backend / Data Layer
