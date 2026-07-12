@@ -21,6 +21,8 @@ export type MoreStackParamList = {
   AuctionHouseAdmin: undefined
   Archives: undefined
   LanetalkImportAdmin: undefined
+  NotificationSettings: undefined
+  BroadcastAdmin: undefined
 }
 
 export type StandingsStackParamList = {

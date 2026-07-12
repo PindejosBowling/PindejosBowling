@@ -1554,3 +1554,89 @@ export const lanetalkImports = {
       .update({ classification })
       .eq('id', id),
 }
+
+// ── Push Broadcasts ──────────────────────────────────────────────────────────
+// "Broadcast" = an admin-composed push notification (see context/push-broadcasts.md).
+// Tokens are secrets: they only ever move through the two SECURITY DEFINER RPCs;
+// there is no client read path at all.
+
+export const push = {
+  registerToken: (token: string, platform: 'ios' | 'android') =>
+    supabase.rpc('register_push_token', { p_token: token, p_platform: platform }),
+  unregisterToken: (token: string) =>
+    supabase.rpc('unregister_push_token', { p_token: token }),
+  listCategories: () =>
+    supabase
+      .from('broadcast_categories')
+      .select('*')
+      .eq('is_active', true)
+      .order('sort_order'),
+  // Both pref reads return only the caller's rows via RLS. An ABSENT row means
+  // enabled — the hooks default missing entries to ON.
+  getPrefs: (playerId: string) =>
+    supabase.from('push_preferences').select('*').eq('player_id', playerId).maybeSingle(),
+  listCategoryPrefs: (playerId: string) =>
+    supabase.from('push_category_prefs').select('*').eq('player_id', playerId),
+  setMaster: (playerId: string, enabled: boolean) =>
+    supabase
+      .from('push_preferences')
+      .upsert({ player_id: playerId, master_enabled: enabled }, { onConflict: 'player_id' }),
+  setCategoryPref: (playerId: string, categoryId: string, enabled: boolean) =>
+    supabase
+      .from('push_category_prefs')
+      .upsert(
+        { player_id: playerId, category_id: categoryId, enabled },
+        { onConflict: 'player_id,category_id' },
+      ),
+}
+
+/** Shape returned by the send-broadcasts Edge Function. */
+export interface BroadcastSendSummary {
+  ok: boolean
+  broadcastId?: string
+  skipped?: boolean
+  recipients?: number
+  delivered?: number
+  failed?: number
+  failedWith?: string
+  message?: string
+  stage?: string
+  reqId?: string
+}
+
+export const broadcasts = {
+  listRecent: () =>
+    supabase
+      .from('broadcasts')
+      .select('*, broadcast_categories(key, label), players!broadcasts_created_by_fkey(name)')
+      .order('created_at', { ascending: false })
+      .limit(50),
+  create: (data: TablesInsert<'broadcasts'>) =>
+    supabase.from('broadcasts').insert(data).select('id').single(),
+  cancel: (id: string) => supabase.rpc('broadcast_cancel', { p_id: id }),
+  // Counts only — tokens never leave the DB (admin-gated in SQL).
+  reach: (categoryId: string, targetPlayerIds: string[] | null) =>
+    supabase.rpc('broadcast_reach', {
+      p_category_id: categoryId,
+      p_target_player_ids: targetPlayerIds ?? undefined,
+    }),
+  // Send-now: fire the Edge Function directly so the admin isn't waiting on
+  // the next cron tick. If the invoke fails the sweep still picks the row up.
+  sendNow: async (broadcastId: string): Promise<BroadcastSendSummary> => {
+    const { data, error } = await supabase.functions.invoke<BroadcastSendSummary>(
+      'send-broadcasts',
+      { body: { broadcastId } },
+    )
+    if (error) {
+      const ctx = (error as { context?: unknown }).context
+      if (ctx instanceof Response) {
+        try {
+          const parsed = await ctx.json()
+          if (parsed && typeof parsed === 'object') return parsed as BroadcastSendSummary
+        } catch { /* body wasn't JSON — fall through */ }
+      }
+      return { ok: false, stage: 'invoke', message: error.message ?? 'Request failed' }
+    }
+    return data ?? { ok: false, stage: 'invoke', message: 'Empty response' }
+  },
+}

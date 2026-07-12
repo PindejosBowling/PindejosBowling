@@ -25,6 +25,8 @@ import BountyAdminScreen from '../screens/BountyAdminScreen'
 import AuctionHouseAdminScreen from '../screens/AuctionHouseAdminScreen'
 import ArchivesScreen from '../screens/ArchivesScreen'
 import LanetalkImportAdminScreen from '../screens/LanetalkImportAdminScreen'
+import NotificationSettingsScreen from '../screens/NotificationSettingsScreen'
+import BroadcastAdminScreen from '../screens/BroadcastAdminScreen'
 
 const Stack = createNativeStackNavigator<MoreStackParamList>()
 
@@ -58,6 +60,8 @@ export default function MoreStackNavigator() {
       <Stack.Screen name="AuctionHouseAdmin" component={AuctionHouseAdminScreen} options={{ title: 'Auction House Admin' }} />
       <Stack.Screen name="Archives" component={ArchivesScreen} options={{ title: 'Archives' }} />
       <Stack.Screen name="LanetalkImportAdmin" component={LanetalkImportAdminScreen} options={{ title: 'Lanetalk Import' }} />
+      <Stack.Screen name="NotificationSettings" component={NotificationSettingsScreen} options={{ title: 'Notifications' }} />
+      <Stack.Screen name="BroadcastAdmin" component={BroadcastAdminScreen} options={{ title: 'Broadcasts' }} />
     </Stack.Navigator>
   )
 }

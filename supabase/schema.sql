@@ -232,6 +232,49 @@ CREATE TABLE bounty_settlements (
   updated_at timestamp with time zone NOT NULL DEFAULT now()
 );
 
+CREATE TABLE broadcast_categories (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  key text NOT NULL,
+  label text NOT NULL,
+  description text NOT NULL DEFAULT ''::text,
+  sort_order integer NOT NULL,
+  is_active boolean NOT NULL DEFAULT true,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now()
+);
+
+CREATE TABLE broadcast_push_tickets (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  broadcast_id uuid NOT NULL,
+  push_token_id uuid,
+  ticket_id text,
+  status text NOT NULL DEFAULT 'pending_receipt'::text,
+  error_code text,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now()
+);
+
+CREATE TABLE broadcasts (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  category_id uuid NOT NULL,
+  title text NOT NULL,
+  body text NOT NULL,
+  target_player_ids uuid[],
+  data jsonb NOT NULL DEFAULT '{}'::jsonb,
+  source text NOT NULL DEFAULT 'admin'::text,
+  status text NOT NULL DEFAULT 'pending'::text,
+  scheduled_for timestamp with time zone NOT NULL DEFAULT now(),
+  created_by uuid NOT NULL,
+  claimed_at timestamp with time zone,
+  sent_at timestamp with time zone,
+  recipient_count integer,
+  delivered_count integer,
+  failed_count integer,
+  error text,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now()
+);
+
 CREATE TABLE custom_lines (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   title text NOT NULL,
@@ -417,6 +460,32 @@ CREATE TABLE playoff_drafts (
   week_id uuid NOT NULL,
   draft_type text NOT NULL DEFAULT 'snake'::text,
   status text NOT NULL DEFAULT 'setup'::text,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now()
+);
+
+CREATE TABLE push_category_prefs (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  player_id uuid NOT NULL,
+  category_id uuid NOT NULL,
+  enabled boolean NOT NULL,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now()
+);
+
+CREATE TABLE push_preferences (
+  player_id uuid NOT NULL,
+  master_enabled boolean NOT NULL DEFAULT true,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now()
+);
+
+CREATE TABLE push_tokens (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  player_id uuid NOT NULL,
+  expo_push_token text NOT NULL,
+  platform text NOT NULL DEFAULT 'ios'::text,
+  last_registered_at timestamp with time zone NOT NULL DEFAULT now(),
   created_at timestamp with time zone NOT NULL DEFAULT now(),
   updated_at timestamp with time zone NOT NULL DEFAULT now()
 );
@@ -812,6 +881,34 @@ ALTER TABLE bounty_settlements ADD CONSTRAINT bounty_settlements_settlement_outc
 
 ALTER TABLE bounty_settlements ADD CONSTRAINT bounty_settlements_settlement_source_check CHECK ((settlement_source = 'admin'::text));
 
+ALTER TABLE broadcast_categories ADD CONSTRAINT broadcast_categories_key_key UNIQUE (key);
+
+ALTER TABLE broadcast_categories ADD CONSTRAINT broadcast_categories_pkey PRIMARY KEY (id);
+
+ALTER TABLE broadcast_push_tickets ADD CONSTRAINT broadcast_push_tickets_broadcast_id_fkey FOREIGN KEY (broadcast_id) REFERENCES broadcasts(id) ON DELETE CASCADE;
+
+ALTER TABLE broadcast_push_tickets ADD CONSTRAINT broadcast_push_tickets_pkey PRIMARY KEY (id);
+
+ALTER TABLE broadcast_push_tickets ADD CONSTRAINT broadcast_push_tickets_push_token_id_fkey FOREIGN KEY (push_token_id) REFERENCES push_tokens(id) ON DELETE SET NULL;
+
+ALTER TABLE broadcast_push_tickets ADD CONSTRAINT broadcast_push_tickets_status_check CHECK ((status = ANY (ARRAY['pending_receipt'::text, 'ok'::text, 'error'::text])));
+
+ALTER TABLE broadcasts ADD CONSTRAINT broadcasts_body_check CHECK (((char_length(body) >= 1) AND (char_length(body) <= 1000)));
+
+ALTER TABLE broadcasts ADD CONSTRAINT broadcasts_category_id_fkey FOREIGN KEY (category_id) REFERENCES broadcast_categories(id);
+
+ALTER TABLE broadcasts ADD CONSTRAINT broadcasts_created_by_fkey FOREIGN KEY (created_by) REFERENCES players(id);
+
+ALTER TABLE broadcasts ADD CONSTRAINT broadcasts_pkey PRIMARY KEY (id);
+
+ALTER TABLE broadcasts ADD CONSTRAINT broadcasts_source_check CHECK ((source = ANY (ARRAY['admin'::text, 'event'::text])));
+
+ALTER TABLE broadcasts ADD CONSTRAINT broadcasts_status_check CHECK ((status = ANY (ARRAY['pending'::text, 'sending'::text, 'sent'::text, 'failed'::text, 'canceled'::text])));
+
+ALTER TABLE broadcasts ADD CONSTRAINT broadcasts_target_player_ids_check CHECK (((target_player_ids IS NULL) OR (cardinality(target_player_ids) > 0)));
+
+ALTER TABLE broadcasts ADD CONSTRAINT broadcasts_title_check CHECK (((char_length(title) >= 1) AND (char_length(title) <= 120)));
+
 ALTER TABLE custom_lines ADD CONSTRAINT custom_lines_category_check CHECK ((category = ANY (ARRAY['default'::text, 'special'::text])));
 
 ALTER TABLE custom_lines ADD CONSTRAINT custom_lines_created_by_player_id_fkey FOREIGN KEY (created_by_player_id) REFERENCES players(id);
@@ -979,6 +1076,26 @@ ALTER TABLE playoff_drafts ADD CONSTRAINT playoff_drafts_season_id_key UNIQUE (s
 ALTER TABLE playoff_drafts ADD CONSTRAINT playoff_drafts_status_check CHECK ((status = ANY (ARRAY['setup'::text, 'drafting'::text, 'completed'::text, 'materialized'::text])));
 
 ALTER TABLE playoff_drafts ADD CONSTRAINT playoff_drafts_week_id_fkey FOREIGN KEY (week_id) REFERENCES weeks(id);
+
+ALTER TABLE push_category_prefs ADD CONSTRAINT push_category_prefs_category_id_fkey FOREIGN KEY (category_id) REFERENCES broadcast_categories(id) ON DELETE CASCADE;
+
+ALTER TABLE push_category_prefs ADD CONSTRAINT push_category_prefs_pkey PRIMARY KEY (id);
+
+ALTER TABLE push_category_prefs ADD CONSTRAINT push_category_prefs_player_id_category_id_key UNIQUE (player_id, category_id);
+
+ALTER TABLE push_category_prefs ADD CONSTRAINT push_category_prefs_player_id_fkey FOREIGN KEY (player_id) REFERENCES players(id) ON DELETE CASCADE;
+
+ALTER TABLE push_preferences ADD CONSTRAINT push_preferences_pkey PRIMARY KEY (player_id);
+
+ALTER TABLE push_preferences ADD CONSTRAINT push_preferences_player_id_fkey FOREIGN KEY (player_id) REFERENCES players(id) ON DELETE CASCADE;
+
+ALTER TABLE push_tokens ADD CONSTRAINT push_tokens_expo_push_token_key UNIQUE (expo_push_token);
+
+ALTER TABLE push_tokens ADD CONSTRAINT push_tokens_pkey PRIMARY KEY (id);
+
+ALTER TABLE push_tokens ADD CONSTRAINT push_tokens_platform_check CHECK ((platform = ANY (ARRAY['ios'::text, 'android'::text])));
+
+ALTER TABLE push_tokens ADD CONSTRAINT push_tokens_player_id_fkey FOREIGN KEY (player_id) REFERENCES players(id) ON DELETE CASCADE;
 
 ALTER TABLE pvp_challenge_offers ADD CONSTRAINT pvp_challenge_offers_challenge_id_fkey FOREIGN KEY (challenge_id) REFERENCES pvp_challenges(id) ON DELETE CASCADE;
 
@@ -1201,6 +1318,12 @@ CREATE INDEX bounty_settlements_admin_idx ON public.bounty_settlements USING btr
 
 CREATE UNIQUE INDEX bounty_settlements_one_per_post ON public.bounty_settlements USING btree (bounty_post_id);
 
+CREATE INDEX broadcast_push_tickets_broadcast_idx ON public.broadcast_push_tickets USING btree (broadcast_id);
+
+CREATE INDEX broadcast_push_tickets_pending_idx ON public.broadcast_push_tickets USING btree (created_at) WHERE (status = 'pending_receipt'::text);
+
+CREATE INDEX broadcasts_due_idx ON public.broadcasts USING btree (scheduled_for) WHERE (status = 'pending'::text);
+
 CREATE INDEX custom_lines_created_by_idx ON public.custom_lines USING btree (created_by_player_id);
 
 CREATE INDEX games_team_a_id_idx ON public.games USING btree (team_a_id);
@@ -1284,6 +1407,10 @@ CREATE INDEX playoff_draft_captains_draft_idx ON public.playoff_draft_captains U
 CREATE INDEX playoff_draft_picks_draft_idx ON public.playoff_draft_picks USING btree (draft_id);
 
 CREATE INDEX playoff_draft_pool_draft_idx ON public.playoff_draft_pool USING btree (draft_id);
+
+CREATE INDEX push_category_prefs_player_idx ON public.push_category_prefs USING btree (player_id);
+
+CREATE INDEX push_tokens_player_idx ON public.push_tokens USING btree (player_id);
 
 CREATE INDEX pvp_challenge_offers_challenge_id_idx ON public.pvp_challenge_offers USING btree (challenge_id);
 
@@ -1528,6 +1655,21 @@ CREATE POLICY "admin can update" ON bounty_settlements AS PERMISSIVE FOR UPDATE 
 CREATE POLICY "authenticated can read" ON bounty_settlements AS PERMISSIVE FOR SELECT TO authenticated
   USING (true);
 
+ALTER TABLE broadcast_categories ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "authenticated can read categories" ON broadcast_categories AS PERMISSIVE FOR SELECT TO authenticated
+  USING (true);
+
+ALTER TABLE broadcast_push_tickets ENABLE ROW LEVEL SECURITY;
+
+ALTER TABLE broadcasts ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "admin can insert broadcasts" ON broadcasts AS PERMISSIVE FOR INSERT TO authenticated
+  WITH CHECK (( SELECT is_admin() AS is_admin));
+
+CREATE POLICY "admin can read broadcasts" ON broadcasts AS PERMISSIVE FOR SELECT TO authenticated
+  USING (( SELECT is_admin() AS is_admin));
+
 ALTER TABLE custom_lines ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "admin can delete" ON custom_lines AS PERMISSIVE FOR DELETE TO authenticated
@@ -1678,6 +1820,42 @@ CREATE POLICY "admin can write" ON playoff_drafts AS PERMISSIVE FOR ALL TO authe
 
 CREATE POLICY "authenticated can read" ON playoff_drafts AS PERMISSIVE FOR SELECT TO authenticated
   USING (true);
+
+ALTER TABLE push_category_prefs ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "own category prefs insert" ON push_category_prefs AS PERMISSIVE FOR INSERT TO authenticated
+  WITH CHECK ((player_id IN ( SELECT p.id
+   FROM players p
+  WHERE (p.user_id = ( SELECT auth.uid() AS uid)))));
+
+CREATE POLICY "own category prefs or admin can read" ON push_category_prefs AS PERMISSIVE FOR SELECT TO authenticated
+  USING ((( SELECT is_admin() AS is_admin) OR (player_id IN ( SELECT p.id
+   FROM players p
+  WHERE (p.user_id = ( SELECT auth.uid() AS uid))))));
+
+CREATE POLICY "own category prefs update" ON push_category_prefs AS PERMISSIVE FOR UPDATE TO authenticated
+  USING ((player_id IN ( SELECT p.id
+   FROM players p
+  WHERE (p.user_id = ( SELECT auth.uid() AS uid)))));
+
+ALTER TABLE push_preferences ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "own prefs insert" ON push_preferences AS PERMISSIVE FOR INSERT TO authenticated
+  WITH CHECK ((player_id IN ( SELECT p.id
+   FROM players p
+  WHERE (p.user_id = ( SELECT auth.uid() AS uid)))));
+
+CREATE POLICY "own prefs or admin can read" ON push_preferences AS PERMISSIVE FOR SELECT TO authenticated
+  USING ((( SELECT is_admin() AS is_admin) OR (player_id IN ( SELECT p.id
+   FROM players p
+  WHERE (p.user_id = ( SELECT auth.uid() AS uid))))));
+
+CREATE POLICY "own prefs update" ON push_preferences AS PERMISSIVE FOR UPDATE TO authenticated
+  USING ((player_id IN ( SELECT p.id
+   FROM players p
+  WHERE (p.user_id = ( SELECT auth.uid() AS uid)))));
+
+ALTER TABLE push_tokens ENABLE ROW LEVEL SECURITY;
 
 ALTER TABLE pvp_challenge_offers ENABLE ROW LEVEL SECURITY;
 
@@ -2133,6 +2311,67 @@ BEGIN
   END IF;
   RETURN v_key;
 END;
+$function$
+;
+
+CREATE OR REPLACE FUNCTION public.broadcast_cancel(p_id uuid)
+ RETURNS void
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+BEGIN
+  PERFORM public.assert_admin();
+  UPDATE public.broadcasts
+     SET status = 'canceled'
+   WHERE id = p_id AND status = 'pending';
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Only a pending broadcast can be canceled';
+  END IF;
+END;
+$function$
+;
+
+CREATE OR REPLACE FUNCTION public.broadcast_reach(p_category_id uuid, p_target_player_ids uuid[] DEFAULT NULL::uuid[])
+ RETURNS TABLE(targeted integer, reachable integer)
+ LANGUAGE plpgsql
+ STABLE SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+BEGIN
+  PERFORM public.assert_admin();
+  RETURN QUERY
+    SELECT
+      CASE WHEN p_target_player_ids IS NULL
+           THEN (SELECT count(*) FROM public.players WHERE is_active)::integer
+           ELSE cardinality(p_target_player_ids) END,
+      (SELECT count(DISTINCT r.player_id)
+         FROM public.broadcast_recipients(p_category_id, p_target_player_ids) r)::integer;
+END;
+$function$
+;
+
+CREATE OR REPLACE FUNCTION public.broadcast_recipients(p_category_id uuid, p_target_player_ids uuid[] DEFAULT NULL::uuid[])
+ RETURNS TABLE(player_id uuid, expo_push_token text)
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+  SELECT t.player_id, t.expo_push_token
+    FROM public.push_tokens t
+    JOIN public.players pl ON pl.id = t.player_id
+   WHERE pl.is_active
+     AND (p_target_player_ids IS NULL OR t.player_id = ANY (p_target_player_ids))
+     AND NOT EXISTS (
+       SELECT 1 FROM public.push_preferences pp
+        WHERE pp.player_id = t.player_id AND pp.master_enabled = false
+     )
+     AND NOT EXISTS (
+       SELECT 1 FROM public.push_category_prefs cp
+        WHERE cp.player_id = t.player_id
+          AND cp.category_id = p_category_id
+          AND cp.enabled = false
+     );
 $function$
 ;
 
@@ -3622,6 +3861,54 @@ END;
 $function$
 ;
 
+CREATE OR REPLACE FUNCTION public.invoke_broadcast_sender()
+ RETURNS void
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+DECLARE
+  v_url text;
+  v_key text;
+BEGIN
+  -- Anything to do? Due pending sends, stale 'sending' reclaims, or receipts
+  -- old enough to resolve (the Edge Function owns the exact cutoffs; these
+  -- probes just avoid pointless invokes).
+  IF NOT EXISTS (
+       SELECT 1 FROM public.broadcasts
+        WHERE (status = 'pending' AND scheduled_for <= now())
+           OR (status = 'sending' AND claimed_at < now() - interval '10 minutes')
+     )
+     AND NOT EXISTS (
+       SELECT 1 FROM public.broadcast_push_tickets
+        WHERE status = 'pending_receipt' AND created_at < now() - interval '15 minutes'
+     )
+  THEN
+    RETURN;
+  END IF;
+
+  SELECT decrypted_secret INTO v_url FROM vault.decrypted_secrets WHERE name = 'project_url';
+  SELECT decrypted_secret INTO v_key FROM vault.decrypted_secrets WHERE name = 'service_role_key';
+  IF v_url IS NULL OR v_key IS NULL THEN
+    RAISE WARNING 'invoke_broadcast_sender: vault secrets project_url / service_role_key missing — scheduled broadcasts will not send';
+    RETURN;
+  END IF;
+
+  -- Fire-and-forget (pg_net is async): the cron transaction never blocks on
+  -- the send. Failures land in net._http_response.
+  PERFORM net.http_post(
+    url     := v_url || '/functions/v1/send-broadcasts',
+    headers := jsonb_build_object(
+      'Content-Type', 'application/json',
+      'Authorization', 'Bearer ' || v_key
+    ),
+    body    := '{"sweep":true}'::jsonb,
+    timeout_milliseconds := 10000
+  );
+END;
+$function$
+;
+
 CREATE OR REPLACE FUNCTION public.is_admin()
  RETURNS boolean
  LANGUAGE sql
@@ -4832,6 +5119,36 @@ BEGIN
    );
 
   RETURN OLD;  -- let the market delete proceed; it cascades to its bet_selections
+END;
+$function$
+;
+
+CREATE OR REPLACE FUNCTION public.register_push_token(p_token text, p_platform text DEFAULT 'ios'::text)
+ RETURNS void
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+DECLARE
+  v_player_id uuid;
+BEGIN
+  v_player_id := public.current_player_id();
+  IF v_player_id IS NULL THEN
+    RAISE EXCEPTION 'No player for the current user';
+  END IF;
+  IF p_token IS NULL OR btrim(p_token) = '' THEN
+    RAISE EXCEPTION 'A push token is required';
+  END IF;
+  IF p_platform NOT IN ('ios', 'android') THEN
+    RAISE EXCEPTION 'Unknown platform %', p_platform;
+  END IF;
+
+  INSERT INTO public.push_tokens (player_id, expo_push_token, platform)
+  VALUES (v_player_id, btrim(p_token), p_platform)
+  ON CONFLICT (expo_push_token)
+  DO UPDATE SET player_id = EXCLUDED.player_id,
+                platform = EXCLUDED.platform,
+                last_registered_at = now();
 END;
 $function$
 ;
@@ -7601,6 +7918,20 @@ END;
 $function$
 ;
 
+CREATE OR REPLACE FUNCTION public.unregister_push_token(p_token text)
+ RETURNS void
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+BEGIN
+  DELETE FROM public.push_tokens
+   WHERE expo_push_token = btrim(p_token)
+     AND player_id = public.current_player_id();
+END;
+$function$
+;
+
 CREATE OR REPLACE FUNCTION public.update_auction(p_auction_id uuid, p_catalog_key text, p_description text, p_minimum_bid integer, p_opens_at timestamp with time zone, p_closes_at timestamp with time zone, p_quantity integer DEFAULT NULL::integer)
  RETURNS void
  LANGUAGE plpgsql
@@ -7796,6 +8127,12 @@ CREATE TRIGGER set_updated_at BEFORE UPDATE ON public.bounty_post FOR EACH ROW E
 
 CREATE TRIGGER set_updated_at BEFORE UPDATE ON public.bounty_settlements FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
+CREATE TRIGGER set_updated_at BEFORE UPDATE ON public.broadcast_categories FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+CREATE TRIGGER set_updated_at BEFORE UPDATE ON public.broadcast_push_tickets FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+CREATE TRIGGER set_updated_at BEFORE UPDATE ON public.broadcasts FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
 CREATE TRIGGER set_updated_at BEFORE UPDATE ON public.custom_lines FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
 CREATE TRIGGER games_participation_seed_ins AFTER INSERT ON public.games REFERENCING NEW TABLE AS new_rows FOR EACH STATEMENT EXECUTE FUNCTION trg_seed_participation_games();
@@ -7837,6 +8174,12 @@ CREATE TRIGGER set_updated_at BEFORE UPDATE ON public.playoff_draft_picks FOR EA
 CREATE TRIGGER set_updated_at BEFORE UPDATE ON public.playoff_draft_pool FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
 CREATE TRIGGER set_updated_at BEFORE UPDATE ON public.playoff_drafts FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+CREATE TRIGGER set_updated_at BEFORE UPDATE ON public.push_category_prefs FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+CREATE TRIGGER set_updated_at BEFORE UPDATE ON public.push_preferences FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+CREATE TRIGGER set_updated_at BEFORE UPDATE ON public.push_tokens FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
 CREATE TRIGGER set_updated_at BEFORE UPDATE ON public.pvp_challenge_offers FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
