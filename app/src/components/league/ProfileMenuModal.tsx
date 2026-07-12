@@ -25,6 +25,13 @@ export default function ProfileMenuModal({ visible, onClose }: Props) {
     })
   }
 
+  function handleNotifications() {
+    onClose()
+    // initial: false keeps MoreHome as the stack's base route, so the back
+    // arrow pops to the More menu instead of stranding the tab on this screen.
+    ;(navigation as any).navigate('More', { screen: 'NotificationSettings', initial: false })
+  }
+
   async function handleLogout() {
     onClose()
     await signOut()
@@ -47,6 +54,13 @@ export default function ProfileMenuModal({ visible, onClose }: Props) {
           <TouchableOpacity style={styles.row} onPress={handleViewProfile} activeOpacity={0.7}>
             <Text style={styles.rowIcon}>📊</Text>
             <Text style={styles.rowLabel}>My Profile</Text>
+          </TouchableOpacity>
+
+          <View style={styles.divider} />
+
+          <TouchableOpacity style={styles.row} onPress={handleNotifications} activeOpacity={0.7}>
+            <Text style={styles.rowIcon}>🔔</Text>
+            <Text style={styles.rowLabel}>Notifications</Text>
           </TouchableOpacity>
 
           <View style={styles.divider} />

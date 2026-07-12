@@ -12,7 +12,7 @@ A push is delivered by Apple to a *device token*, not a user — tokens must liv
 
 | Table | Purpose | RLS posture |
 |---|---|---|
-| `broadcast_categories` | Catalog users toggle / admins pick (`league`, `economy`, `reminders` seeded). Future event types = new rows | authenticated SELECT; writes are migrations |
+| `broadcast_categories` | Catalog users toggle / admins pick (`league`, `pinsino`, `reminders` seeded). Future event types = new rows | authenticated SELECT; writes are migrations |
 | `push_tokens` | One row per device (`expo_push_token` UNIQUE; upsert steals the row on owner change). `last_registered_at` = per-launch heartbeat | **RLS on, zero policies** — tokens are secrets; writes via `register_push_token`/`unregister_push_token` (definer RPCs), reads service-role only |
 | `push_preferences` | Master switch, one row per player. **Absent row = ON** (defaults-on, no backfill) | own-row R/W + admin |
 | `push_category_prefs` | Per-category toggles, rows not jsonb. **Absent row = ON** | own-row R/W + admin |

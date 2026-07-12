@@ -39,7 +39,6 @@ export default function MoreHomeScreen() {
     { icon: '📜', label: 'History',      onPress: () => navigation.navigate('History') },
     { icon: '🗑️', label: 'Trash Board',  onPress: () => navigation.navigate('TrashBoard') },
     { icon: '📝', label: 'Registration', onPress: () => navigation.navigate('Registration') },
-    { icon: '🔔', label: 'Notifications', onPress: () => navigation.navigate('NotificationSettings') },
     ...(!isAdmin && isPlayoffCaptain
       ? [{ icon: '🏁', label: 'Playoffs', onPress: () => navigation.navigate('Playoffs') }]
       : []),
