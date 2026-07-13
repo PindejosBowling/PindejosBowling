@@ -57,9 +57,9 @@ _Baseline: none started — every task below was identified by the audit; no ref
 ## Tier 1 — Quick wins
 
 ### 1.1 — Centralize formatting → `utils/formatting.ts`  ↪ §1.1
-- [ ] Create `app/src/utils/formatting.ts` with `formatPins(n, { signed })`, `formatCountdown(iso, now)`, `formatCloseTime(iso)`.
-- [ ] Move `signed` (from `utils/bets.ts`), `formatStakes`/`formatHandicap` (`utils/pvp.ts`), `formatCloseTime` (`utils/bounty.ts`), `formatTimeRemaining`/`formatCountdown` (`utils/auction.ts`) into it; **re-export from the old modules** for back-compat.
-- [ ] Replace inline `.toLocaleString()` pin rendering in components/screens with `formatPins`.
+- [x] Create `app/src/utils/formatting.ts` with `formatPins(n, { signed })`, `formatCountdown(iso, now)`, `formatCloseTime(iso)`.
+- [x] Move `signed` (from `utils/bets.ts`), `formatStakes`/`formatHandicap` (`utils/pvp.ts`), `formatCloseTime` (`utils/bounty.ts`), `formatTimeRemaining`/`formatCountdown` (`utils/auction.ts`) into it; **re-export from the old modules** for back-compat.
+- [x] Replace inline `.toLocaleString()` pin rendering in components/screens with `formatPins`.
 - **Depends on:** none. **Unblocks:** 1.2, 2.1.
 - **Verify:** `test -f app/src/utils/formatting.ts && grep -rn "toLocaleString" app/src/components app/src/screens | wc -l` → trends to ~0 _(was: 96 across 27 files)_.
 - **Manual check:** open Bounties/Auction/PvP screens; amounts and countdowns render identically.
