@@ -111,7 +111,7 @@ const FEATURE_META: Record<string, { icon: string; sourceLabel: string }> = {
   admin: { icon: '📊', sourceLabel: 'The House' },
 }
 
-function featureMeta(sourceFeature: string): { icon: string; sourceLabel: string } {
+export function featureMeta(sourceFeature: string): { icon: string; sourceLabel: string } {
   return FEATURE_META[sourceFeature] ?? { icon: '📊', sourceLabel: 'Pinsino' }
 }
 

@@ -243,6 +243,17 @@ CREATE TABLE broadcast_categories (
   updated_at timestamp with time zone NOT NULL DEFAULT now()
 );
 
+CREATE TABLE broadcast_event_rules (
+  event_type text NOT NULL,
+  enabled boolean NOT NULL DEFAULT false,
+  category_id uuid NOT NULL,
+  title_template text NOT NULL,
+  body_template text NOT NULL,
+  route_key text DEFAULT 'market_moves'::text,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now()
+);
+
 CREATE TABLE broadcast_push_tickets (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   broadcast_id uuid NOT NULL,
@@ -264,7 +275,7 @@ CREATE TABLE broadcasts (
   source text NOT NULL DEFAULT 'admin'::text,
   status text NOT NULL DEFAULT 'pending'::text,
   scheduled_for timestamp with time zone NOT NULL DEFAULT now(),
-  created_by uuid NOT NULL,
+  created_by uuid,
   claimed_at timestamp with time zone,
   sent_at timestamp with time zone,
   recipient_count integer,
@@ -885,6 +896,16 @@ ALTER TABLE broadcast_categories ADD CONSTRAINT broadcast_categories_key_key UNI
 
 ALTER TABLE broadcast_categories ADD CONSTRAINT broadcast_categories_pkey PRIMARY KEY (id);
 
+ALTER TABLE broadcast_event_rules ADD CONSTRAINT broadcast_event_rules_body_template_check CHECK (((char_length(body_template) >= 1) AND (char_length(body_template) <= 1000)));
+
+ALTER TABLE broadcast_event_rules ADD CONSTRAINT broadcast_event_rules_category_id_fkey FOREIGN KEY (category_id) REFERENCES broadcast_categories(id);
+
+ALTER TABLE broadcast_event_rules ADD CONSTRAINT broadcast_event_rules_event_type_fkey FOREIGN KEY (event_type) REFERENCES activity_event_catalog(event_type) ON DELETE CASCADE;
+
+ALTER TABLE broadcast_event_rules ADD CONSTRAINT broadcast_event_rules_pkey PRIMARY KEY (event_type);
+
+ALTER TABLE broadcast_event_rules ADD CONSTRAINT broadcast_event_rules_title_template_check CHECK (((char_length(title_template) >= 1) AND (char_length(title_template) <= 120)));
+
 ALTER TABLE broadcast_push_tickets ADD CONSTRAINT broadcast_push_tickets_broadcast_id_fkey FOREIGN KEY (broadcast_id) REFERENCES broadcasts(id) ON DELETE CASCADE;
 
 ALTER TABLE broadcast_push_tickets ADD CONSTRAINT broadcast_push_tickets_pkey PRIMARY KEY (id);
@@ -898,6 +919,8 @@ ALTER TABLE broadcasts ADD CONSTRAINT broadcasts_body_check CHECK (((char_length
 ALTER TABLE broadcasts ADD CONSTRAINT broadcasts_category_id_fkey FOREIGN KEY (category_id) REFERENCES broadcast_categories(id);
 
 ALTER TABLE broadcasts ADD CONSTRAINT broadcasts_created_by_fkey FOREIGN KEY (created_by) REFERENCES players(id);
+
+ALTER TABLE broadcasts ADD CONSTRAINT broadcasts_created_by_required CHECK (((created_by IS NOT NULL) OR (source = 'event'::text)));
 
 ALTER TABLE broadcasts ADD CONSTRAINT broadcasts_pkey PRIMARY KEY (id);
 
@@ -1659,6 +1682,12 @@ ALTER TABLE broadcast_categories ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "authenticated can read categories" ON broadcast_categories AS PERMISSIVE FOR SELECT TO authenticated
   USING (true);
+
+ALTER TABLE broadcast_event_rules ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "admin can manage event rules" ON broadcast_event_rules AS PERMISSIVE FOR ALL TO authenticated
+  USING (( SELECT is_admin() AS is_admin))
+  WITH CHECK (( SELECT is_admin() AS is_admin));
 
 ALTER TABLE broadcast_push_tickets ENABLE ROW LEVEL SECURITY;
 
@@ -3422,6 +3451,59 @@ BEGIN
       );
     END IF;
   END LOOP;
+END;
+$function$
+;
+
+CREATE OR REPLACE FUNCTION public.enqueue_broadcast_for_activity_event()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+DECLARE
+  v_rule  public.broadcast_event_rules;
+  v_title text;
+  v_body  text;
+BEGIN
+  IF NEW.visibility <> 'public' OR NEW.status <> 'published' THEN
+    RETURN NEW;
+  END IF;
+
+  SELECT * INTO v_rule
+    FROM public.broadcast_event_rules
+   WHERE event_type = NEW.event_type AND enabled;
+  IF NOT FOUND THEN
+    RETURN NEW;
+  END IF;
+
+  BEGIN
+    v_title := left(btrim(public.render_broadcast_event_template(v_rule.title_template, NEW)), 120);
+    v_body  := left(btrim(public.render_broadcast_event_template(v_rule.body_template, NEW)), 1000);
+    -- Satisfy the broadcasts length CHECKs even if a template renders empty.
+    v_title := COALESCE(NULLIF(v_title, ''), 'Market Moves');
+    v_body  := COALESCE(NULLIF(v_body, ''), 'Something just happened in the Pinsino.');
+
+    INSERT INTO public.broadcasts (category_id, title, body, target_player_ids, data, source, scheduled_for)
+    VALUES (
+      v_rule.category_id,
+      v_title,
+      v_body,
+      NULL,
+      -- event_type + activity_event_id are the audit thread back to the feed
+      -- row (and what suppress_activity_event uses to cancel a pending push).
+      (CASE WHEN v_rule.route_key IS NULL THEN '{}'::jsonb
+            ELSE jsonb_build_object('route', v_rule.route_key) END)
+        || jsonb_build_object('event_type', NEW.event_type, 'activity_event_id', NEW.id),
+      'event',
+      now()
+    );
+  EXCEPTION WHEN OTHERS THEN
+    RAISE WARNING 'enqueue_broadcast_for_activity_event: event % (%) not pushed: %',
+      NEW.id, NEW.event_type, SQLERRM;
+  END;
+
+  RETURN NEW;
 END;
 $function$
 ;
@@ -5192,6 +5274,43 @@ END;
 $function$
 ;
 
+CREATE OR REPLACE FUNCTION public.render_broadcast_event_template(p_template text, p_event activity_feed_events)
+ RETURNS text
+ LANGUAGE plpgsql
+ STABLE
+ SET search_path TO ''
+AS $function$
+DECLARE
+  v_out  text := p_template;
+  v_name text;
+  v_key  text;
+BEGIN
+  IF position('{actor}' IN v_out) > 0 THEN
+    SELECT first_name INTO v_name FROM public.players WHERE id = p_event.actor_player_id;
+    v_out := replace(v_out, '{actor}', COALESCE(v_name, 'Someone'));
+  END IF;
+  IF position('{subject}' IN v_out) > 0 THEN
+    SELECT first_name INTO v_name FROM public.players WHERE id = p_event.subject_player_id;
+    v_out := replace(v_out, '{subject}', COALESCE(v_name, 'Someone'));
+  END IF;
+  IF position('{secondary}' IN v_out) > 0 THEN
+    SELECT first_name INTO v_name FROM public.players WHERE id = p_event.secondary_player_id;
+    v_out := replace(v_out, '{secondary}', COALESCE(v_name, 'Someone'));
+  END IF;
+
+  FOR v_key IN
+    SELECT DISTINCT m[1]
+      FROM regexp_matches(v_out, '\{payload\.([a-zA-Z0-9_]+)\}', 'g') AS m
+  LOOP
+    v_out := replace(v_out, '{payload.' || v_key || '}',
+                     COALESCE(p_event.public_payload ->> v_key, ''));
+  END LOOP;
+
+  RETURN v_out;
+END;
+$function$
+;
+
 CREATE OR REPLACE FUNCTION public.repay_loan(p_loan_id uuid, p_amount integer)
  RETURNS void
  LANGUAGE plpgsql
@@ -6663,6 +6782,13 @@ BEGIN
         suppressed_at = now(),
         suppression_reason = p_reason
     WHERE id = p_event_id;
+
+  -- Cancel the coupled push if it hasn't been claimed by the sweep yet.
+  UPDATE public.broadcasts
+     SET status = 'canceled'
+   WHERE source = 'event'
+     AND status = 'pending'
+     AND data ->> 'activity_event_id' = p_event_id::text;
 END;
 $function$
 ;
@@ -8095,6 +8221,8 @@ $function$
 
 CREATE TRIGGER set_updated_at BEFORE UPDATE ON public.activity_event_catalog FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
+CREATE TRIGGER enqueue_event_broadcast AFTER INSERT ON public.activity_feed_events FOR EACH ROW EXECUTE FUNCTION enqueue_broadcast_for_activity_event();
+
 CREATE TRIGGER set_updated_at BEFORE UPDATE ON public.activity_feed_events FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
 CREATE TRIGGER set_updated_at BEFORE UPDATE ON public.auction_bids FOR EACH ROW EXECUTE FUNCTION set_updated_at();
@@ -8128,6 +8256,8 @@ CREATE TRIGGER set_updated_at BEFORE UPDATE ON public.bounty_post FOR EACH ROW E
 CREATE TRIGGER set_updated_at BEFORE UPDATE ON public.bounty_settlements FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
 CREATE TRIGGER set_updated_at BEFORE UPDATE ON public.broadcast_categories FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+CREATE TRIGGER set_updated_at BEFORE UPDATE ON public.broadcast_event_rules FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
 CREATE TRIGGER set_updated_at BEFORE UPDATE ON public.broadcast_push_tickets FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 

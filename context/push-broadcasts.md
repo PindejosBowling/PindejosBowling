@@ -2,7 +2,7 @@
 
 **"Broadcast" = an admin-composed push notification** (send-now or scheduled), delivered to iOS devices via the Expo Push Service. Deliberately distinct from the in-app badge **notification framework** ([notifications.md](notifications.md)) — that system counts pending actions inside the app; this one sends real APNs pushes. Nothing in this feature uses the bare word "notification" except the user-facing screen title.
 
-Design contract (grilled 2026-07-07): broadcasts only in v1 (event-driven pushes later slot in via `broadcasts.source='event'` + new catalog rows); three fixed categories; defaults ON after iOS permission; **opt-out always wins, including targeted sends**.
+Design contract (grilled 2026-07-07): admin-composed broadcasts in v1; event-driven pushes via `broadcasts.source='event'` (now built — see "Automated event-driven pushes" below); fixed category catalog; defaults ON after iOS permission; **opt-out always wins, including targeted sends**.
 
 ## Why the DB is involved at all
 
@@ -12,7 +12,7 @@ A push is delivered by Apple to a *device token*, not a user — tokens must liv
 
 | Table | Purpose | RLS posture |
 |---|---|---|
-| `broadcast_categories` | Catalog users toggle / admins pick (`league`, `pinsino`, `reminders` seeded). Future event types = new rows | authenticated SELECT; writes are migrations |
+| `broadcast_categories` | Catalog users toggle / admins pick. Live rows: `league` (announcements incl. reminders) and `pinsino` (economy incl. automated Market Moves). History: `economy`→`pinsino` rename `20260712201406`; `market_moves` consolidated into `pinsino` `20260713130611`; `reminders` consolidated into `league` `20260713132059`. Future push types = new rows | authenticated SELECT; writes are migrations |
 | `push_tokens` | One row per device (`expo_push_token` UNIQUE; upsert steals the row on owner change). `last_registered_at` = per-launch heartbeat | **RLS on, zero policies** — tokens are secrets; writes via `register_push_token`/`unregister_push_token` (definer RPCs), reads service-role only |
 | `push_preferences` | Master switch, one row per player. **Absent row = ON** (defaults-on, no backfill) | own-row R/W + admin |
 | `push_category_prefs` | Per-category toggles, rows not jsonb. **Absent row = ON** | own-row R/W + admin |
@@ -62,11 +62,16 @@ An admin can pick a **landing page** per broadcast — tapping the push navigate
 
 `expo-notifications` is a native module: **push requires an EAS dev/prod build — Expo Go cannot receive remote pushes (SDK 53+).** EAS Build manages the APNs key on the first iOS build. iOS-only in v1 (the `platform` column and plugin already accommodate Android; no FCM configured).
 
-## Adding an event-driven push later (the v2 seam)
+## Automated event-driven pushes — Market Moves rules (the v2 seam, as built)
 
-1. New `broadcast_categories` row (users are default-ON for it; the settings screen renders it automatically).
-2. Publisher inserts a `broadcasts` row with `source='event'`, the category, and `scheduled_for = now()` — the sweep delivers within a minute. Do NOT call Expo from SQL; the row *is* the send request.
-3. Optional `data` payload for client-side routing (`broadcastId`/`categoryKey` already ride in every push).
+The v2 seam is now implemented (migration `20260713122551_broadcast_event_rules`): admins couple individual Activity Feed event types to automatic pushes. **Future-proofing is structural** — the UI enumerates the live `activity_event_catalog` and the trigger looks rules up by `event_type`, so a new Market Moves event type (activity-feed.md Recipe A) appears in the admin UI automatically (rule-less = off) with zero changes to this layer.
+
+- **`broadcast_event_rules`** — one optional rule per catalog `event_type` (PK + FK → `activity_event_catalog` ON DELETE CASCADE): `enabled`, `category_id` (admin-picked; default choice = the `pinsino` category — all Market Moves are Pinsino activity, so one category covers admin-composed economy pushes and automated ones), `title_template`/`body_template`, `route_key` (a `broadcastTargets.ts` wire key, NULL = push just opens the app; not FK'd — unknown keys are the documented client no-op). Admin-RLS direct writes, same posture as `broadcasts` INSERT. **No seeded rules**: all couplings ship off, and notification copy never lives in migrations.
+- **Templates** render server-side at event time via `render_broadcast_event_template(template, event)`: `{actor}`/`{subject}`/`{secondary}` → `players.first_name` (missing player → `Someone`), `{payload.<key>}` → `public_payload->>key` (missing key → empty string). Unrecognized token shapes (`{typo}`) pass through verbatim — visible in the delivered push, self-correcting. Output is trimmed + clamped to the `broadcasts` length CHECKs, with hardcoded fallbacks if a template renders empty.
+- **The publisher is a trigger**: `enqueue_broadcast_for_activity_event()` (SECURITY DEFINER), AFTER INSERT on `activity_feed_events`. Skips non-`public`/non-`published` rows and rule-less/disabled types; otherwise inserts a `broadcasts` row with `source='event'`, `created_by = NULL` (column now nullable, CHECK `created_by IS NOT NULL OR source='event'`), `scheduled_for = now()` (the sweep delivers within a minute — the row *is* the send request, never call Expo from SQL), and `data = {route, event_type, activity_event_id}` (the audit thread back to the feed row). **Exactly-once**: `publish_activity_event`'s `ON CONFLICT DO NOTHING` dedup means replays never insert a row, so the trigger never re-fires. **Non-fatal by construction**: the body is wrapped in an `EXCEPTION WHEN OTHERS → RAISE WARNING` guard — a push failure can never roll back the economy transaction that published the event. AFTER **INSERT only**, deliberately: `restore_activity_event` (suppressed→published UPDATE) must not push a stale event late.
+- **Suppress cancels pending**: `suppress_activity_event` also flips the coupled broadcast `pending → canceled` (matched via `data->>'activity_event_id'`). Only within the ≤60 s pre-sweep window — after the sweep the push is sent (accepted).
+- **Admin UI**: `BroadcastAdminScreen` → collapsible "AUTOMATED — MARKET MOVES" section between composer and history: every catalog type grouped by feature (`featureMeta` icons), a Switch per type, tap → `RuleEditModal` (templates with placeholder hint, category `ToggleGroup`, tap-destination pills, enabled toggle). First enable on an unconfigured type routes through the editor so templates/category are confirmed before anything can fire. History rows for `source='event'` show an **AUTO** badge (`created_by` is NULL, so the `by <name>` fragment self-hides); pending ones keep the normal Cancel affordance. Data path: `db.ts broadcastEventRules` (`listCatalog` = catalog LEFT JOIN rules to-one embed, `upsert`, `setEnabled`) via `useBroadcastAdminData.rawEventRules`.
+- **Caveats**: an `unarchive_week` → re-archive re-publishes non-auction feed rows (unarchive *deletes* them, so the dedup indexes don't protect) and therefore re-pushes — rare admin op, accepted. High-volume types (`sportsbook_bet_placed` = one push per bet) are the admin's toggle choice; the rule editor says so.
 
 ## Debugging a send
 

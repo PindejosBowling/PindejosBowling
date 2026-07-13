@@ -1089,6 +1089,54 @@ export type Database = {
         }
         Relationships: []
       }
+      broadcast_event_rules: {
+        Row: {
+          body_template: string
+          category_id: string
+          created_at: string
+          enabled: boolean
+          event_type: string
+          route_key: string | null
+          title_template: string
+          updated_at: string
+        }
+        Insert: {
+          body_template: string
+          category_id: string
+          created_at?: string
+          enabled?: boolean
+          event_type: string
+          route_key?: string | null
+          title_template: string
+          updated_at?: string
+        }
+        Update: {
+          body_template?: string
+          category_id?: string
+          created_at?: string
+          enabled?: boolean
+          event_type?: string
+          route_key?: string | null
+          title_template?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "broadcast_event_rules_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "broadcast_categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "broadcast_event_rules_event_type_fkey"
+            columns: ["event_type"]
+            isOneToOne: true
+            referencedRelation: "activity_event_catalog"
+            referencedColumns: ["event_type"]
+          },
+        ]
+      }
       broadcast_push_tickets: {
         Row: {
           broadcast_id: string
@@ -1143,7 +1191,7 @@ export type Database = {
           category_id: string
           claimed_at: string | null
           created_at: string
-          created_by: string
+          created_by: string | null
           data: Json
           delivered_count: number | null
           error: string | null
@@ -1163,7 +1211,7 @@ export type Database = {
           category_id: string
           claimed_at?: string | null
           created_at?: string
-          created_by: string
+          created_by?: string | null
           data?: Json
           delivered_count?: number | null
           error?: string | null
@@ -1183,7 +1231,7 @@ export type Database = {
           category_id?: string
           claimed_at?: string | null
           created_at?: string
-          created_by?: string
+          created_by?: string | null
           data?: Json
           delivered_count?: number | null
           error?: string | null
@@ -3183,6 +3231,13 @@ export type Database = {
       remove_over_under_markets_for_game: {
         Args: { p_game_number: number; p_week_id: string }
         Returns: undefined
+      }
+      render_broadcast_event_template: {
+        Args: {
+          p_event: Database["public"]["Tables"]["activity_feed_events"]["Row"]
+          p_template: string
+        }
+        Returns: string
       }
       repay_loan: {
         Args: { p_amount: number; p_loan_id: string }
