@@ -8,6 +8,8 @@ import {
   Modal,
   Platform,
   KeyboardAvoidingView,
+  ScrollView,
+  Switch,
 } from 'react-native'
 import DateTimePicker from '@react-native-community/datetimepicker'
 import { colors, fonts, radius } from '../theme'
@@ -18,11 +20,18 @@ import Button from '../components/ui/Button'
 import ToggleGroup from '../components/ui/ToggleGroup'
 import EmptyCard from '../components/ui/EmptyCard'
 import PlayerPickerModal from '../components/ui/PlayerPickerModal'
+import SettingToggleRow from '../components/ui/SettingToggleRow'
 import { useAuthStore } from '../stores/authStore'
 import { useUiStore } from '../stores/uiStore'
-import { broadcasts } from '../utils/supabase/db'
+import { broadcasts, broadcastEventRules } from '../utils/supabase/db'
 import { BROADCAST_TARGETS, getBroadcastTarget } from '../utils/broadcastTargets'
-import { useBroadcastAdminData, BroadcastRow } from '../hooks/useBroadcastAdminData'
+import { featureMeta } from '../utils/activityFeedTemplates'
+import {
+  useBroadcastAdminData,
+  BroadcastRow,
+  EventRuleCatalogRow,
+  prettifyEventType,
+} from '../hooks/useBroadcastAdminData'
 import { useDatePicker } from '../hooks/useDatePicker'
 
 // Broadcasts — the admin push composer + history (Push Broadcasts,
@@ -43,7 +52,8 @@ export default function BroadcastAdminScreen() {
   const isAdmin = useAuthStore(s => s.role) === 'admin'
   const playerId = useAuthStore(s => s.playerId)
   const { showToast } = useUiStore()
-  const { loading, rawCategories, rawPlayers, rawBroadcasts, reload } = useBroadcastAdminData()
+  const { loading, rawCategories, rawPlayers, rawBroadcasts, rawEventRules, reload } =
+    useBroadcastAdminData()
 
   // Composer state.
   const [categoryId, setCategoryId] = useState<string | null>(null)
@@ -144,6 +154,43 @@ export default function BroadcastAdminScreen() {
     }
   }
 
+  // ── Automated Market Moves rules ──
+  // Every catalog event type, grouped by feature; a row without a rule is an
+  // unconfigured (off) coupling. New catalog types appear here automatically.
+  const [autoOpen, setAutoOpen] = useState(false)
+  const [editTarget, setEditTarget] =
+    useState<{ row: EventRuleCatalogRow; presetEnabled: boolean } | null>(null)
+
+  const ruleGroups = useMemo(() => {
+    const groups: { feature: string; rows: EventRuleCatalogRow[] }[] = []
+    for (const r of rawEventRules) {
+      const g = groups.find(x => x.feature === r.source_feature)
+      if (g) g.rows.push(r)
+      else groups.push({ feature: r.source_feature, rows: [r] })
+    }
+    return groups
+  }, [rawEventRules])
+  const enabledRuleCount = useMemo(
+    () => rawEventRules.filter(r => r.broadcast_event_rules?.enabled).length,
+    [rawEventRules],
+  )
+  const categoryLabelById = useMemo(
+    () => new Map(rawCategories.map(c => [c.id, c.label])),
+    [rawCategories],
+  )
+
+  async function onToggleRule(row: EventRuleCatalogRow, value: boolean) {
+    // First enable on an unconfigured type goes through the editor — the
+    // admin confirms templates + category before anything can fire.
+    if (!row.broadcast_event_rules) {
+      setEditTarget({ row, presetEnabled: true })
+      return
+    }
+    const { error } = await broadcastEventRules.setEnabled(row.event_type, value)
+    if (error) showToast(error.message, 'error')
+    reload()
+  }
+
   const [cancelTarget, setCancelTarget] = useState<BroadcastRow | null>(null)
   async function onCancel(b: BroadcastRow) {
     const { error } = await broadcasts.cancel(b.id)
@@ -175,7 +222,7 @@ export default function BroadcastAdminScreen() {
       <Text style={styles.sectionHeader}>NEW BROADCAST</Text>
       <View style={styles.card}>
         <Text style={styles.fieldLabel}>CATEGORY</Text>
-        <ToggleGroup options={categoryOptions} value={categoryId} onChange={setCategoryId} />
+        <ToggleGroup scrollable options={categoryOptions} value={categoryId} onChange={setCategoryId} />
 
         <Text style={styles.fieldLabel}>TITLE</Text>
         <TextInput
@@ -266,6 +313,66 @@ export default function BroadcastAdminScreen() {
         </View>
       </View>
 
+      {/* ── Automated Market Moves rules ── */}
+      <TouchableOpacity
+        style={styles.autoHeader}
+        onPress={() => setAutoOpen(o => !o)}
+        activeOpacity={0.7}
+      >
+        <Text style={styles.sectionHeader}>
+          AUTOMATED — MARKET MOVES {autoOpen ? '▾' : '▸'}
+        </Text>
+        {!autoOpen && (
+          <Text style={styles.autoCount}>
+            {enabledRuleCount > 0 ? `${enabledRuleCount} on` : 'all off'}
+          </Text>
+        )}
+      </TouchableOpacity>
+      {autoOpen &&
+        ruleGroups.map(g => {
+          const meta = featureMeta(g.feature)
+          return (
+            <View key={g.feature} style={styles.card}>
+              <Text style={styles.autoGroupHeader}>
+                {meta.icon} {meta.sourceLabel.toUpperCase()}
+              </Text>
+              {g.rows.map(r => {
+                const rule = r.broadcast_event_rules
+                const subLine = rule
+                  ? `${categoryLabelById.get(rule.category_id) ?? '—'} · → ${
+                      rule.route_key
+                        ? getBroadcastTarget(rule.route_key)?.label ?? 'Opens app'
+                        : 'Opens app'
+                    }`
+                  : 'Not configured'
+                return (
+                  <View key={r.event_type} style={styles.autoRow}>
+                    <TouchableOpacity
+                      style={styles.autoRowText}
+                      onPress={() => setEditTarget({ row: r, presetEnabled: false })}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={styles.autoRowLabel}>
+                        {prettifyEventType(r.event_type, r.source_feature)}
+                      </Text>
+                      <Text style={styles.autoRowMeta} numberOfLines={1}>
+                        {subLine}
+                      </Text>
+                    </TouchableOpacity>
+                    <Switch
+                      value={rule?.enabled ?? false}
+                      onValueChange={v => onToggleRule(r, v)}
+                      trackColor={{ false: colors.surface2, true: colors.accentDim }}
+                      thumbColor={rule?.enabled ? colors.accent : colors.muted}
+                      ios_backgroundColor={colors.surface2}
+                    />
+                  </View>
+                )
+              })}
+            </View>
+          )
+        })}
+
       {/* ── History ── */}
       <Text style={styles.sectionHeader}>HISTORY</Text>
       {rawBroadcasts.length === 0 ? (
@@ -284,6 +391,11 @@ export default function BroadcastAdminScreen() {
             <View key={b.id} style={styles.card}>
               <View style={styles.histHead}>
                 <Text style={styles.histTitle} numberOfLines={1}>{b.title}</Text>
+                {b.source === 'event' && (
+                  <View style={[styles.badge, styles.badgeAuto]}>
+                    <Text style={styles.badgeText}>AUTO</Text>
+                  </View>
+                )}
                 <View style={[styles.badge, { backgroundColor: badge.bg }]}>
                   <Text style={styles.badgeText}>{badge.label}</Text>
                 </View>
@@ -329,7 +441,166 @@ export default function BroadcastAdminScreen() {
           onClose={() => setCancelTarget(null)}
         />
       )}
+
+      {editTarget && (
+        <RuleEditModal
+          row={editTarget.row}
+          presetEnabled={editTarget.presetEnabled}
+          categories={rawCategories}
+          onSaved={() => {
+            setEditTarget(null)
+            showToast('Automated notification saved', 'success')
+            reload()
+          }}
+          onClose={() => setEditTarget(null)}
+        />
+      )}
     </ScreenContainer>
+  )
+}
+
+// ── Rule editor — configure one Market Moves → push coupling ──
+// Templates render server-side at event time (render_broadcast_event_template):
+// {actor}/{subject}/{secondary} → player first names, {payload.<key>} → the
+// event's public_payload. Saving upserts the whole rule.
+function RuleEditModal({
+  row,
+  presetEnabled,
+  categories,
+  onSaved,
+  onClose,
+}: {
+  row: EventRuleCatalogRow
+  presetEnabled: boolean
+  categories: { id: string; key: string; label: string }[]
+  onSaved: () => void
+  onClose: () => void
+}) {
+  const { showToast } = useUiStore()
+  const rule = row.broadcast_event_rules
+  const defaultCategoryId =
+    categories.find(c => c.key === 'pinsino')?.id ?? categories[0]?.id ?? null
+
+  const [titleTemplate, setTitleTemplate] = useState(rule?.title_template ?? 'Market Moves')
+  const [bodyTemplate, setBodyTemplate] = useState(
+    rule?.body_template ?? '{actor} just made a move — check Market Moves',
+  )
+  const [categoryId, setCategoryId] = useState<string | null>(
+    rule?.category_id ?? defaultCategoryId,
+  )
+  const [routeKey, setRouteKey] = useState<string>(
+    rule ? rule.route_key ?? 'none' : 'market_moves',
+  )
+  const [enabled, setEnabled] = useState(rule?.enabled ?? presetEnabled)
+  const [saving, setSaving] = useState(false)
+
+  const valid =
+    titleTemplate.trim().length > 0 && bodyTemplate.trim().length > 0 && !!categoryId
+
+  async function onSave() {
+    if (!categoryId) return
+    setSaving(true)
+    try {
+      const { error } = await broadcastEventRules.upsert({
+        event_type: row.event_type,
+        enabled,
+        category_id: categoryId,
+        title_template: titleTemplate.trim(),
+        body_template: bodyTemplate.trim(),
+        route_key: routeKey === 'none' ? null : routeKey,
+      })
+      if (error) {
+        showToast(error.message, 'error')
+        return
+      }
+      onSaved()
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <Modal transparent animationType="fade" onRequestClose={onClose}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={styles.modalOverlay}
+      >
+        <View style={[styles.modalCard, styles.ruleModalCard]}>
+          <Text style={styles.modalTitle}>
+            {prettifyEventType(row.event_type, row.source_feature)}
+          </Text>
+          <Text style={styles.modalHint}>
+            Sends automatically whenever this Market Move is published. Placeholders:{' '}
+            {'{actor} {subject} {secondary} {payload.<key>}'} — unknown payload keys render
+            blank. High-volume events send one push each.
+          </Text>
+
+          <ScrollView keyboardShouldPersistTaps="handled">
+            <Text style={styles.fieldLabel}>TITLE TEMPLATE</Text>
+            <TextInput
+              style={styles.input}
+              value={titleTemplate}
+              onChangeText={setTitleTemplate}
+              placeholder="e.g. Big win at the Sportsbook"
+              placeholderTextColor={colors.muted2}
+              maxLength={120}
+            />
+
+            <Text style={styles.fieldLabel}>MESSAGE TEMPLATE</Text>
+            <TextInput
+              style={[styles.input, styles.inputMultiline]}
+              value={bodyTemplate}
+              onChangeText={setBodyTemplate}
+              placeholder="e.g. {actor} just cashed {payload.payout} pins"
+              placeholderTextColor={colors.muted2}
+              multiline
+              maxLength={1000}
+            />
+
+            <Text style={styles.fieldLabel}>CATEGORY (WHAT USERS CAN MUTE)</Text>
+            <ToggleGroup
+              scrollable
+              options={categories.map(c => ({ key: c.id, label: c.label }))}
+              value={categoryId}
+              onChange={setCategoryId}
+            />
+
+            <Text style={styles.fieldLabel}>TAP DESTINATION</Text>
+            <ToggleGroup
+              variant="pill"
+              scrollable
+              options={[
+                { key: 'none', label: 'None (opens app)' },
+                ...BROADCAST_TARGETS.map(t => ({ key: t.key, label: t.label })),
+              ]}
+              value={routeKey}
+              onChange={setRouteKey}
+            />
+
+            <View style={{ marginTop: 16 }}>
+              <SettingToggleRow
+                label="Enabled"
+                description="Send a push for every new event of this type"
+                value={enabled}
+                onChange={setEnabled}
+              />
+            </View>
+          </ScrollView>
+
+          <View style={styles.modalBtns}>
+            <Button variant="outline" label="Back" onPress={onClose} fullWidth style={styles.modalCancel} />
+            <Button
+              label="Save"
+              onPress={onSave}
+              disabled={!valid || saving}
+              loading={saving}
+              fullWidth
+            />
+          </View>
+        </View>
+        <Toast />
+      </KeyboardAvoidingView>
+    </Modal>
   )
 }
 
@@ -492,6 +763,44 @@ const styles = StyleSheet.create({
   reachZero: { color: colors.danger },
   ctaRow: { flexDirection: 'row', gap: 10, marginTop: 16 },
   ctaBtn: { flex: 1 },
+
+  autoHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  autoCount: {
+    fontFamily: fonts.barlowCondensed,
+    fontSize: 11,
+    color: colors.muted2,
+    letterSpacing: 1,
+  },
+  autoGroupHeader: {
+    fontFamily: fonts.barlowCondensed,
+    fontSize: 12,
+    color: colors.muted,
+    letterSpacing: 1.2,
+    marginBottom: 4,
+  },
+  autoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 8,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.border2,
+  },
+  autoRowText: { flex: 1 },
+  autoRowLabel: {
+    fontFamily: fonts.barlowCondensed,
+    fontSize: 15,
+    color: colors.text,
+    letterSpacing: 0.3,
+  },
+  autoRowMeta: {
+    fontFamily: fonts.barlow,
+    fontSize: 12,
+    color: colors.muted,
+    marginTop: 1,
+  },
+  ruleModalCard: { maxHeight: '85%' },
+  badgeAuto: { backgroundColor: 'rgba(255,255,255,0.08)' },
 
   histHead: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   histTitle: { flex: 1, fontFamily: fonts.barlowCondensed, fontSize: 16, color: colors.text, letterSpacing: 0.3 },

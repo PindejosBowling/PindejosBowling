@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect } from 'react'
-import { push, broadcasts, players } from '../utils/supabase/db'
+import { push, broadcasts, broadcastEventRules, players } from '../utils/supabase/db'
 import type { BroadcastCategoryRow } from './useNotificationSettingsData'
 
 export interface BroadcastRow {
@@ -9,6 +9,7 @@ export interface BroadcastRow {
   body: string
   target_player_ids: string[] | null
   data: { route?: string } | null
+  source: 'admin' | 'event'
   status: 'pending' | 'sending' | 'sent' | 'failed' | 'canceled'
   scheduled_for: string
   sent_at: string | null
@@ -21,6 +22,33 @@ export interface BroadcastRow {
   players: { name: string } | null
 }
 
+// One row per activity_event_catalog entry; the embed is null until the admin
+// configures a rule (rule-less = automated push off).
+export interface EventRuleCatalogRow {
+  event_type: string
+  source_feature: string
+  broadcast_event_rules: {
+    enabled: boolean
+    category_id: string
+    title_template: string
+    body_template: string
+    route_key: string | null
+  } | null
+}
+
+// 'sportsbook_big_win' (source 'sportsbook') → 'Big Win'. Pure string
+// prettifying — event types are machine keys, so the label is derived, never
+// stored, and new catalog rows get a readable label for free.
+export function prettifyEventType(eventType: string, sourceFeature: string): string {
+  const stripped = eventType.startsWith(`${sourceFeature}_`)
+    ? eventType.slice(sourceFeature.length + 1)
+    : eventType
+  return stripped
+    .split('_')
+    .map(w => (w ? w[0].toUpperCase() + w.slice(1) : w))
+    .join(' ')
+}
+
 // Broadcast Admin data: the category catalog, the active-player roster (for
 // targeting), and the sent/scheduled history.
 export function useBroadcastAdminData() {
@@ -28,18 +56,21 @@ export function useBroadcastAdminData() {
   const [rawCategories, setRawCategories] = useState<BroadcastCategoryRow[]>([])
   const [rawPlayers, setRawPlayers] = useState<{ id: string; name: string }[]>([])
   const [rawBroadcasts, setRawBroadcasts] = useState<BroadcastRow[]>([])
+  const [rawEventRules, setRawEventRules] = useState<EventRuleCatalogRow[]>([])
 
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const [catsRes, playersRes, historyRes] = await Promise.all([
+      const [catsRes, playersRes, historyRes, rulesRes] = await Promise.all([
         push.listCategories(),
         players.listActive(),
         broadcasts.listRecent(),
+        broadcastEventRules.listCatalog(),
       ])
       setRawCategories((catsRes.data ?? []) as BroadcastCategoryRow[])
       setRawPlayers((playersRes.data ?? []).map(p => ({ id: p.id, name: p.name ?? '' })))
       setRawBroadcasts((historyRes.data ?? []) as unknown as BroadcastRow[])
+      setRawEventRules((rulesRes.data ?? []) as unknown as EventRuleCatalogRow[])
     } catch (e) {
       console.error('useBroadcastAdminData error:', e)
     } finally {
@@ -49,5 +80,5 @@ export function useBroadcastAdminData() {
 
   useEffect(() => { load() }, [load])
 
-  return { loading, rawCategories, rawPlayers, rawBroadcasts, reload: load }
+  return { loading, rawCategories, rawPlayers, rawBroadcasts, rawEventRules, reload: load }
 }

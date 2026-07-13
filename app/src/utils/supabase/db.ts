@@ -1640,3 +1640,24 @@ export const broadcasts = {
     return data ?? { ok: false, stage: 'invoke', message: 'Empty response' }
   },
 }
+
+// Automated Market Moves pushes — one optional rule per activity_event_catalog
+// event type (context/push-broadcasts.md). The catalog LEFT JOIN is the
+// future-proofing contract: new event types appear here rule-less (= off)
+// with zero code changes.
+export const broadcastEventRules = {
+  // To-one embed: broadcast_event_rules.event_type is both its PK and the FK,
+  // so PostgREST returns an object-or-null per catalog row.
+  listCatalog: () =>
+    supabase
+      .from('activity_event_catalog')
+      .select(
+        'event_type, source_feature, broadcast_event_rules(enabled, category_id, title_template, body_template, route_key)',
+      )
+      .order('source_feature')
+      .order('event_type'),
+  upsert: (rule: TablesInsert<'broadcast_event_rules'>) =>
+    supabase.from('broadcast_event_rules').upsert(rule, { onConflict: 'event_type' }),
+  setEnabled: (eventType: string, enabled: boolean) =>
+    supabase.from('broadcast_event_rules').update({ enabled }).eq('event_type', eventType),
+}

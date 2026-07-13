@@ -189,6 +189,11 @@ Use this when the source feature already has a source-FK column on `activity_fee
    trigger the source action, confirm exactly one row with the right FK/payload, confirm
    re-running the RPC does not double-post, and confirm the card renders.
 
+> **Push coupling is automatic.** Every catalog event type appears (off) in Broadcast
+> Admin's "Automated — Market Moves" section the moment step 1 lands — enabling a push
+> for it is admin configuration (`broadcast_event_rules`), never code. See
+> [push-broadcasts.md](push-broadcasts.md) "Automated event-driven pushes".
+
 ## ⭐ Recipe B — add a new PUBLISHER (a brand-new feature: Merchant, PvP, Bounty, …)
 
 Use this when a new feature needs its own source table linked into the feed. **This is
