@@ -25,6 +25,9 @@ import LineRowContainer from '../components/betting/LineRowContainer'
 import CustomLineRow from '../components/betting/CustomLineRow'
 import ReadOnlySeasonBanner from '../components/betting/ReadOnlySeasonBanner'
 import ConfirmActionSheet from '../components/ui/ConfirmActionSheet'
+import FeatureExplainerSheet from '../components/pinsino/FeatureExplainerSheet'
+import TermsBlock from '../components/ui/TermsBlock'
+import { EXPLAINERS, TERMS } from '../data/pinsinoExplainers'
 import {
   usePinsinoData,
   selectionBetsAgainstSubject,
@@ -102,6 +105,7 @@ export default function SportsbookScreen() {
   const [slipOpen, setSlipOpen] = useState(false)
   const [placing, setPlacing] = useState(false)
   const [detailModal, setDetailModal] = useState<BetView | null>(null)
+  const [helpOpen, setHelpOpen] = useState(false)
 
   // Attachable items (auction-won), oldest first — the slip spends [0] of the
   // chosen kind: Golden Tickets (bet insurance), Winner's Crutches (parlay save),
@@ -462,7 +466,7 @@ export default function SportsbookScreen() {
         }
       >
         <ScreenBackdrop backdrop={<SportsbookPokerTableBackdrop />} loading={loading}>
-        <ScreenHeader title="Sportsbook" onBack={() => navigation.goBack()} right={<ArtworkToggle />} />
+        <ScreenHeader title="Sportsbook" onBack={() => navigation.goBack()} right={<ArtworkToggle />} onHelp={() => setHelpOpen(true)} />
 
         {/* Kept laid out (not unmounted) while artwork is revealed — only made
             invisible + inert — so the poker table, which measures the scroll
@@ -646,11 +650,13 @@ export default function SportsbookScreen() {
           onDone={() => { reloadTickets(); reloadHaunts() }}
         >
           <Text style={styles.hauntSheetCopy}>
-            Spend 1 Ghost in the Slip to secretly attach it to this pending bet. If the bet
-            wins, you take the profit — the bettor keeps only their stake. If other ghosts are
-            on it too, the profit splits evenly. Spent the moment you attach it, win or lose.
+            Spend 1 Ghost in the Slip to secretly attach it to this pending bet.
           </Text>
+          <TermsBlock terms={TERMS.haunt} />
         </ConfirmActionSheet>
+      )}
+      {helpOpen && (
+        <FeatureExplainerSheet explainer={EXPLAINERS.sportsbook} onClose={() => setHelpOpen(false)} />
       )}
     </View>
   )

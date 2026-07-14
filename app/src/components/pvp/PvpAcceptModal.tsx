@@ -2,6 +2,8 @@ import { Text, StyleSheet } from 'react-native'
 import { colors, fonts } from '../../theme'
 import ConfirmActionSheet from '../ui/ConfirmActionSheet'
 import StatRow from '../ui/StatRow'
+import TermsBlock from '../ui/TermsBlock'
+import { TERMS } from '../../data/pinsinoExplainers'
 import { pvpChallenges } from '../../utils/supabase/db'
 import { CONTRACT_TYPE_LABEL, CONTRACT_TYPE_RULE } from '../../utils/pvp'
 import type { PvpChallengeView } from '../../hooks/usePvpData'
@@ -40,15 +42,11 @@ export default function PvpAcceptModal({ challenge: c, viewerId, onClose, onDone
       <StatRow label="Total pot" value={`${formatPins(c.totalPot)} pins`} variant="accent" />
       <StatRow label="Winner's payout" value={`${formatPins(c.payoutAmount)} pins`} variant="accent" />
       <Text style={styles.rule}>{CONTRACT_TYPE_RULE[c.contractType]}</Text>
-      <Text style={styles.note}>
-        Accepting escrows your stake immediately and locks the contract. It settles automatically
-        when the week is archived. Winner takes the whole pot.
-      </Text>
+      <TermsBlock terms={TERMS.pvpAccept} />
     </ConfirmActionSheet>
   )
 }
 
 const styles = StyleSheet.create({
   rule: { fontFamily: fonts.barlow, fontSize: 13, color: colors.muted, lineHeight: 19, marginTop: 6 },
-  note: { fontFamily: fonts.barlow, fontSize: 12, color: colors.muted2, lineHeight: 17, marginTop: 10 },
 })

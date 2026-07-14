@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native'
 import { colors, fonts, radius } from '../../theme'
+import ExplainerBody from './ExplainerBody'
 
 interface FeatureAccordionProps {
   icon: string // emoji, matches the landing tile (🏟️ ⚔️ 🎯 🦈 📣 👀)
@@ -41,13 +42,7 @@ export default function FeatureAccordion({
       </TouchableOpacity>
       {!collapsed && (
         <View style={styles.card}>
-          {bullets.map((b, idx) => (
-            <View key={idx} style={styles.bulletRow}>
-              <Text style={styles.bulletDot}>•</Text>
-              <Text style={styles.bulletText}>{b}</Text>
-            </View>
-          ))}
-          {caveat ? <Text style={styles.caveat}>{caveat}</Text> : null}
+          <ExplainerBody bullets={bullets} caveat={caveat} />
         </View>
       )}
     </View>
@@ -96,30 +91,5 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 12,
     marginTop: 6,
-  },
-  bulletRow: {
-    flexDirection: 'row',
-    gap: 8,
-    marginBottom: 8,
-  },
-  bulletDot: {
-    fontFamily: fonts.barlow,
-    fontSize: 14,
-    color: colors.accent,
-    lineHeight: 20,
-  },
-  bulletText: {
-    flex: 1,
-    fontFamily: fonts.barlow,
-    fontSize: 14,
-    color: colors.text,
-    lineHeight: 20,
-  },
-  caveat: {
-    fontFamily: fonts.barlow,
-    fontSize: 13,
-    fontStyle: 'italic',
-    color: colors.gold,
-    marginTop: 2,
   },
 })

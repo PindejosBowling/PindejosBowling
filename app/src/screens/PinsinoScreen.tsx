@@ -25,6 +25,7 @@ import { useNotificationStore } from '../stores/notificationStore'
 import { useUiStore } from '../stores/uiStore'
 import { countForRoute } from '../utils/notifications'
 import { SHOW_AUCTION_HOUSE, SHOW_PINSINO_ART } from '../utils/featureFlags'
+import { EXPLAINERS, PinsinoFeatureKey } from '../data/pinsinoExplainers'
 import { AUCTION_HOUSE_CLOSED_DEFAULT_MESSAGE } from '../utils/auction'
 import { PinsinoStackParamList } from '../navigation/types'
 import { formatPins } from '../utils/formatting'
@@ -38,15 +39,17 @@ const TILE_WIDTH = (Dimensions.get('window').width - 32 - TILE_GAP * 2) / 3
 // scrolling is the graceful fallback on pathologically short viewports.
 const MIN_FIT_SCALE = 0.6
 
-// Subpage menu tiles (groundwork for more Pinsino subpages — add one line each)
-const MENU_TILES: { icon: string; label: string; route: 'PinsinoLeaderboard' | 'Sportsbook' | 'LoanShark' | 'PvP' | 'MarketMoves' | 'BountyBoard' | 'AuctionHouse' }[] = [
-  { icon: '🏟️', label: 'Sportsbook', route: 'Sportsbook' },
-  { icon: '⚔️', label: 'PvP', route: 'PvP' },
-  { icon: '🎯', label: 'Bounties', route: 'BountyBoard' },
+// Subpage menu tiles (groundwork for more Pinsino subpages — add one line each).
+// Each tile shows its feature's one-line hook from the explainer catalog, so
+// the landing page doubles as a menu of what each game actually is.
+const MENU_TILES: { key: PinsinoFeatureKey; icon: string; label: string; route: 'PinsinoLeaderboard' | 'Sportsbook' | 'LoanShark' | 'PvP' | 'MarketMoves' | 'BountyBoard' | 'AuctionHouse' }[] = [
+  { key: 'sportsbook', icon: '🏟️', label: 'Sportsbook', route: 'Sportsbook' },
+  { key: 'pvp', icon: '⚔️', label: 'PvP', route: 'PvP' },
+  { key: 'bounties', icon: '🎯', label: 'Bounties', route: 'BountyBoard' },
   // Mock-backed while the auction DB layer is built — flag-gated independently.
-  ...(SHOW_AUCTION_HOUSE ? [{ icon: '📣', label: 'Auction House', route: 'AuctionHouse' as const }] : []),
-  { icon: '🦈', label: 'Loan Shark', route: 'LoanShark' },
-  { icon: '👀', label: 'Market Moves', route: 'MarketMoves' },
+  ...(SHOW_AUCTION_HOUSE ? [{ key: 'auctionHouse' as const, icon: '📣', label: 'Auction House', route: 'AuctionHouse' as const }] : []),
+  { key: 'loanShark', icon: '🦈', label: 'Loan Shark', route: 'LoanShark' },
+  { key: 'marketMoves', icon: '👀', label: 'Market Moves', route: 'MarketMoves' },
 ]
 
 export default function PinsinoScreen() {
@@ -121,8 +124,9 @@ export default function PinsinoScreen() {
       netRow: { marginTop: s(10) },
       grid: { rowGap: s(TILE_GAP) },
       tile: { height: s(TILE_WIDTH) },
-      tileIcon: { fontSize: s(40), marginBottom: s(10) },
+      tileIcon: { fontSize: s(34), marginBottom: s(6) },
       tileLabel: { fontSize: s(13) },
+      tileHook: { fontSize: s(10), marginTop: s(2) },
     }
   }, [fitScale])
 
@@ -245,6 +249,12 @@ export default function PinsinoScreen() {
               >
                 <Text style={[styles.tileIcon, sc.tileIcon, closed && styles.tileIconClosed]}>{tile.icon}</Text>
                 <Text style={[styles.tileLabel, sc.tileLabel, closed && styles.tileLabelClosed]}>{tile.label}</Text>
+                <Text
+                  style={[styles.tileHook, sc.tileHook, closed && styles.tileLabelClosed]}
+                  numberOfLines={2}
+                >
+                  {EXPLAINERS[tile.key].tileHook ?? EXPLAINERS[tile.key].hook}
+                </Text>
                 {badge > 0 && !closed && (
                   <View style={styles.badge}>
                     <Text style={styles.badgeText}>{badge > 99 ? '99+' : badge}</Text>
@@ -409,7 +419,7 @@ const styles = StyleSheet.create({
     color: colors.bg,
     lineHeight: 14,
   },
-  tileIcon: { fontSize: 40, marginBottom: 10 },
+  tileIcon: { fontSize: 34, marginBottom: 6 },
   tileIconClosed: { opacity: 0.25 },
   tileLabel: {
     fontFamily: fonts.barlowCondensed,
@@ -417,6 +427,14 @@ const styles = StyleSheet.create({
     color: colors.text,
     letterSpacing: 0.3,
     textAlign: 'center',
+  },
+  tileHook: {
+    fontFamily: fonts.barlow,
+    fontSize: 10,
+    color: colors.muted,
+    textAlign: 'center',
+    marginTop: 2,
+    lineHeight: 13,
   },
   tileLabelClosed: { opacity: 0.25 },
 

@@ -1,3 +1,8 @@
+// League structure: every player bowls this many games on a league night.
+// Referenced anywhere a "typical week" needs projecting (e.g. the Loan Shark
+// payoff schedule's weekly-pinfall estimate).
+export const GAMES_PER_WEEK = 2
+
 export function initials(name: string | null | undefined): string {
   if (!name) return '?'
   return name.split(' ').map(w => w[0]).join('').substring(0, 2).toUpperCase()

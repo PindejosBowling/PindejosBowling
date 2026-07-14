@@ -9,6 +9,8 @@ import PvpChallengeRow from '../components/pvp/PvpChallengeRow'
 import PvpChallengeDetailModal from '../components/pvp/PvpChallengeDetailModal'
 import Button from '../components/ui/Button'
 import BalancePill from '../components/ui/BalancePill'
+import FeatureExplainerSheet from '../components/pinsino/FeatureExplainerSheet'
+import { EXPLAINERS } from '../data/pinsinoExplainers'
 import { usePvpData, PvpChallengeView } from '../hooks/usePvpData'
 import { usePinsinoSeasonContext } from '../hooks/usePinsinoSeasonContext'
 import { useEconomyRefresh } from '../hooks/useEconomyRefresh'
@@ -32,6 +34,7 @@ export default function PvPScreen() {
   const reloadAll = useEconomyRefresh(reload)
 
   const [detailId, setDetailId] = useState<string | null>(null)
+  const [helpOpen, setHelpOpen] = useState(false)
 
   // Refresh on return (e.g. after creating a challenge). The hook's own mount load
   // covers the first paint; subsequent focus reloads are silent (no full-screen loader).
@@ -74,6 +77,7 @@ export default function PvPScreen() {
       backdrop={<PvPShootoutBackdrop />}
       loading={loading}
       onRefresh={reloadAll}
+      onHelp={() => setHelpOpen(true)}
     >
         {readOnly && <ReadOnlySeasonBanner seasonNumber={viewSeasonNumber} />}
 
@@ -133,6 +137,9 @@ export default function PvPScreen() {
           onClose={() => setDetailId(null)}
           onChanged={reloadAll}
         />
+      )}
+      {helpOpen && (
+        <FeatureExplainerSheet explainer={EXPLAINERS.pvp} onClose={() => setHelpOpen(false)} />
       )}
     </ScreenContainer>
   )

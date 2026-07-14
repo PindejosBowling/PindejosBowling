@@ -16,6 +16,9 @@ import LoanSharkDepthBackdrop from '../components/pixelart/LoanSharkDepthBackdro
 import ScreenBackdrop from '../components/pixelart/ScreenBackdrop'
 import Toast from '../components/ui/Toast'
 import BorrowConfirmModal from '../components/economy/BorrowConfirmModal'
+import LoanPayoffSchedule from '../components/economy/LoanPayoffSchedule'
+import FeatureExplainerSheet from '../components/pinsino/FeatureExplainerSheet'
+import { EXPLAINERS } from '../data/pinsinoExplainers'
 import Button from '../components/ui/Button'
 import BalancePill from '../components/ui/BalancePill'
 import PinAmountInput from '../components/ui/PinAmountInput'
@@ -29,6 +32,9 @@ import { useUiStore } from '../stores/uiStore'
 import { loans } from '../utils/supabase/db'
 import EmptyCard from '../components/ui/EmptyCard'
 import { formatPins } from '../utils/formatting'
+import { aggregatePlayerAverages, effectiveAverage } from '../utils/averages'
+import { simulateLoanPayoff } from '../utils/loanSchedule'
+import { GAMES_PER_WEEK } from '../utils/helpers'
 
 // loan_ledger type → display label for the payment history.
 const DEBT_TYPE_LABEL: Record<string, string> = {
@@ -65,7 +71,7 @@ export default function LoanSharkScreen() {
 
   const pinsinoViewSeasonId = useUiStore(s => s.pinsinoViewSeasonId)
   const { readOnly, viewSeasonNumber } = usePinsinoSeasonContext()
-  const { loading, balance, products, activeLoan, reload } = useLoanSharkData(playerId, pinsinoViewSeasonId)
+  const { loading, balance, products, activeLoan, scoreRows, reload } = useLoanSharkData(playerId, pinsinoViewSeasonId)
   const reloadAll = useEconomyRefresh(reload)
   const { refreshing, onRefresh } = useRefresh(reloadAll)
   const insets = useSafeAreaInsets()
@@ -73,9 +79,28 @@ export default function LoanSharkScreen() {
   const [confirmProduct, setConfirmProduct] = useState<LoanProductView | null>(null)
   const [repayAmount, setRepayAmount] = useState('')
   const [historyOpen, setHistoryOpen] = useState(false)
+  const [payoffOpen, setPayoffOpen] = useState(false)
+  const [helpOpen, setHelpOpen] = useState(false)
   const [repaying, setRepaying] = useState(false)
 
   const availableProducts = useMemo(() => products.filter(p => p.available), [products])
+
+  // Season average → weekly pinfall estimate for the payoff projection.
+  // League-average fallback for players with no bowled games yet.
+  const avgAgg = useMemo(() => aggregatePlayerAverages(scoreRows), [scoreRows])
+  const avgPerGame = effectiveAverage(avgAgg, playerId)
+  const usingLeagueAvg = !playerId || !avgAgg.byPlayer.has(playerId)
+
+  // Projected payoff of the active loan from its current outstanding.
+  const activeSchedule = useMemo(() => {
+    if (!activeLoan) return null
+    return simulateLoanPayoff({
+      startingDebt: activeLoan.outstanding,
+      garnishRate: activeLoan.product.garnishment_rate,
+      interestRate: activeLoan.product.weekly_interest_rate,
+      weeklyPincome: Math.round(avgPerGame) * GAMES_PER_WEEK,
+    })
+  }, [activeLoan, avgPerGame])
 
   // Newest-first, but tie-break same-instant rows by mechanical sequence so a
   // week's GARNISHED row always sits below its INTEREST row (garnishment happens
@@ -133,7 +158,7 @@ export default function LoanSharkScreen() {
         }
       >
         <ScreenBackdrop backdrop={<LoanSharkDepthBackdrop />} loading={loading}>
-        <ScreenHeader title="Loan Shark" subtitle="Borrow at your own risk" onBack={() => navigation.goBack()} right={<ArtworkToggle />} />
+        <ScreenHeader title="Loan Shark" subtitle="Borrow at your own risk" onBack={() => navigation.goBack()} right={<ArtworkToggle />} onHelp={() => setHelpOpen(true)} />
         {/* Kept laid out (not unmounted) while artwork is revealed — only made
             invisible + inert — so the depth field, which measures the scroll
             content height, stays full-length and scrollable instead of
@@ -158,7 +183,7 @@ export default function LoanSharkScreen() {
               </Text>
               <Text style={styles.rateDivider}>·</Text>
               <Text style={styles.rateText}>
-                {Math.round(activeLoan.product.garnishment_rate * 100)}% cut of your weekly pincome
+                {Math.round(activeLoan.product.garnishment_rate * 100)}% of your weekly pinfall
               </Text>
             </View>
 
@@ -174,6 +199,32 @@ export default function LoanSharkScreen() {
               />
               <Button label="Repay" onPress={repay} disabled={repaying} style={styles.repayBtn} />
             </View>
+
+            {/* Projected payoff (collapsible) — from the current outstanding.
+                Hidden in read-only review: no projections on a frozen season. */}
+            {!readOnly && activeSchedule && (
+              <>
+                <TouchableOpacity
+                  style={styles.historyToggle}
+                  onPress={() => setPayoffOpen(o => !o)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.historyToggleText}>PROJECTED PAYOFF</Text>
+                  <Text style={styles.historyChevron}>{payoffOpen ? '▾' : '▸'}</Text>
+                </TouchableOpacity>
+                {payoffOpen && (
+                  <View style={styles.payoffBody}>
+                    <LoanPayoffSchedule
+                      schedule={activeSchedule}
+                      startingDebt={activeLoan.outstanding}
+                      avgPerGame={avgPerGame}
+                      usingLeagueAvg={usingLeagueAvg}
+                      showTitle={false}
+                    />
+                  </View>
+                )}
+              </>
+            )}
 
             {/* Payment history (collapsible) */}
             <TouchableOpacity
@@ -228,11 +279,11 @@ export default function LoanSharkScreen() {
                   <Text style={styles.productAmount}>{formatPins(p.borrow_amount)} pins</Text>
                   <View style={styles.productRates}>
                     <Text style={styles.productRate}>
-                      {Math.round(p.weekly_interest_rate * 100)}% pinterest/week
+                      {Math.round(p.weekly_interest_rate * 100)}% weekly interest
                     </Text>
                     <Text style={styles.rateDivider}>·</Text>
                     <Text style={styles.productRate}>
-                      {Math.round(p.garnishment_rate * 100)}% cut of your weekly pincome
+                      {Math.round(p.garnishment_rate * 100)}% of your weekly pinfall
                     </Text>
                   </View>
                   <Text style={styles.productDesc}>{p.description}</Text>
@@ -252,9 +303,14 @@ export default function LoanSharkScreen() {
       {confirmProduct && (
         <BorrowConfirmModal
           product={confirmProduct}
+          avgPerGame={avgPerGame}
+          usingLeagueAvg={usingLeagueAvg}
           onClose={() => setConfirmProduct(null)}
           onBorrowed={reloadAll}
         />
+      )}
+      {helpOpen && (
+        <FeatureExplainerSheet explainer={EXPLAINERS.loanShark} onClose={() => setHelpOpen(false)} />
       )}
       <Toast />
     </View>
@@ -323,6 +379,7 @@ const styles = StyleSheet.create({
   },
   historyChevron: { color: colors.muted, fontSize: 14 },
   historyList: { marginTop: 8 },
+  payoffBody: { marginTop: 10 },
   historyEmpty: { fontFamily: fonts.barlow, fontSize: 13, color: colors.muted2, paddingVertical: 8 },
   historyRow: {
     flexDirection: 'row',

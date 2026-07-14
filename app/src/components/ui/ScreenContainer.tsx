@@ -17,6 +17,9 @@ interface ScreenContainerProps {
   // Pinned top-right in the header. Ignored when `backdrop` is set — backdrop
   // screens always get the <ArtworkToggle /> there instead.
   headerRight?: ReactNode
+  // Shows the header "?" button. Unlike `headerRight`, this survives backdrop
+  // screens — it renders alongside the ArtworkToggle.
+  onHelp?: () => void
   // Fixed pixel-art scene mounted as the first child inside the SafeAreaView
   // (behind header + content). Providing it also wires the ArtworkToggle and
   // hides the scrollable content while uiStore.artworkReveal is on. Scroll-length
@@ -51,6 +54,7 @@ export default function ScreenContainer({
   subtitle,
   onBack,
   headerRight,
+  onHelp,
   backdrop,
   loading = false,
   loadingLabel = 'Loading…',
@@ -85,6 +89,7 @@ export default function ScreenContainer({
         subtitle={subtitle}
         onBack={onBack ?? (() => navigation.goBack())}
         right={backdrop ? <ArtworkToggle /> : headerRight}
+        onHelp={onHelp}
       />
       {!contentHidden && pinned}
       {!contentHidden &&

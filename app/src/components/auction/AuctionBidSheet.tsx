@@ -4,6 +4,8 @@ import { colors, fonts, radius } from '../../theme'
 import BottomSheet from '../ui/BottomSheet'
 import Button from '../ui/Button'
 import PinAmountInput from '../ui/PinAmountInput'
+import TermsBlock from '../ui/TermsBlock'
+import { TERMS } from '../../data/pinsinoExplainers'
 import { useUiStore } from '../../stores/uiStore'
 import { AuctionView, isLargeBid } from '../../utils/auction'
 import { auctions } from '../../utils/supabase/db'
@@ -90,14 +92,17 @@ export default function AuctionBidSheet({ auction: a, balance, onClose, onDone }
         </Text>
       )}
 
-      {/* §18.3 pledge copy — always shown. */}
-      <Text style={styles.pledgeCopy}>
-        You are pledging {amount > 0 ? formatPins(amount) : 'these'} pins. No pins move now. If you
-        win this auction and still have enough pins at settlement, you pay the House. If you can't pay,
-        your check bounces and you immediately pay up to {a.bounceFee} pins. You can change your number
-        until close, but you can't take it back.
-        {a.quantity > 1 ? ` The top ${a.quantity} bids each win one — one per player, every winner pays their own pledge.` : ''}
-      </Text>
+      {/* §18.3 pledge terms — always shown. Dynamic lines (bounce fee, multi-unit)
+          are composed here; the static rules live in the catalog. */}
+      <TermsBlock
+        terms={TERMS.auctionBid}
+        extraLines={[
+          `The bounce penalty on this auction is up to ${formatPins(a.bounceFee)} pins.`,
+          ...(a.quantity > 1
+            ? [`The top ${a.quantity} bids each win one — one per player, every winner pays their own pledge.`]
+            : []),
+        ]}
+      />
 
       {!error && isLargeBid(amount, balance) && (
         <Text style={styles.largeBidWarning}>
@@ -123,7 +128,6 @@ const styles = StyleSheet.create({
   label: { fontFamily: fonts.barlowCondensed, fontSize: 12, letterSpacing: 1.5, color: colors.muted, marginTop: 14, marginBottom: 8 },
   editHint: { fontFamily: fonts.barlow, fontSize: 12, color: colors.muted, marginTop: 8, lineHeight: 17 },
 
-  pledgeCopy: { fontFamily: fonts.barlow, fontSize: 13, color: colors.muted, marginTop: 14, lineHeight: 19 },
   largeBidWarning: { fontFamily: fonts.barlow, fontSize: 13, color: colors.gold, marginTop: 10, lineHeight: 19 },
   errorText: { fontFamily: fonts.barlow, fontSize: 13, color: colors.danger, marginTop: 10 },
   submitBtn: { marginTop: 14 },

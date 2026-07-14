@@ -3,11 +3,19 @@ import { colors, fonts, radius } from '../theme'
 import PinsinoNoirBackdrop from '../components/pixelart/PinsinoNoirBackdrop'
 import ScreenContainer from '../components/ui/ScreenContainer'
 import FeatureAccordion from '../components/pinsino/FeatureAccordion'
+import { EXPLAINERS, PinsinoFeatureKey } from '../data/pinsinoExplainers'
 import { SHOW_AUCTION_HOUSE } from '../utils/featureFlags'
 
-// Player-facing explainer for the Pinsino. Pure copy — no data layer. Each live
-// Pinsino feature gets one collapsible section, in the same order as the landing
-// tiles. The Auction House section is gated on the same flag as its tile.
+// Player-facing explainer for the Pinsino. All copy lives in
+// data/pinsinoExplainers.ts (shared with the per-screen "?" sheets and hub
+// tiles) — this screen just orders the sections. The Auction House and Items
+// sections are gated on the same flag as the Auction House tile: items enter
+// play via the auction block.
+const GAMES: PinsinoFeatureKey[] = ['sportsbook', 'statProps', 'pvp', 'bounties']
+const MONEY: PinsinoFeatureKey[] = SHOW_AUCTION_HOUSE
+  ? ['loanShark', 'auctionHouse', 'items', 'marketMoves']
+  : ['loanShark', 'marketMoves']
+
 export default function PinsinoHelpScreen() {
   return (
     <ScreenContainer
@@ -26,80 +34,34 @@ export default function PinsinoHelpScreen() {
         </View>
 
         <Text style={styles.sectionLabel}>THE GAMES</Text>
-
-        <FeatureAccordion
-          icon="🏟️"
-          title="Sportsbook"
-          hook="Bet on the bowling."
-          bullets={[
-            'Back a player to beat their projected line for the week, or back your own team to win its matchup.',
-            'Stack multiple picks into a parlay — every leg has to hit, but the payout multiplies.',
-            'Night stat props (strikes, spares, clean frames) open up once the lane data is in.',
-            'Tickets settle automatically when the week is finalized.',
-          ]}
-          caveat="You back the over, or back your own team — those are the sides the house puts on the board."
-        />
-
-        <FeatureAccordion
-          icon="⚔️"
-          title="PvP Challenges"
-          hook="Go head-to-head with a rival."
-          bullets={[
-            'Send a challenge to a specific player, or post it to the open board for anyone to take.',
-            'Both sides stake equal pins into escrow — the house holds them, and takes no cut.',
-            'Winner takes the whole pot. It settles automatically off the week’s scores.',
-            'Lose one? You can offer a double-or-nothing rematch.',
-          ]}
-        />
-
-        <FeatureAccordion
-          icon="🎯"
-          title="Bounties"
-          hook="Hunt the house's challenges."
-          bullets={[
-            'The house posts a bounty with a target — pay the entry to join the hunt.',
-            'If any hunter pulls it off, every hunter cashes in (your stake back plus a protected profit).',
-            'More hunters joining never shrinks your cut — your profit is locked when you enter.',
-          ]}
-          caveat="For now, bounties are posted and settled by the house."
-        />
+        {GAMES.map(key => {
+          const e = EXPLAINERS[key]
+          return (
+            <FeatureAccordion
+              key={key}
+              icon={e.icon}
+              title={e.title}
+              hook={e.hook}
+              bullets={e.bullets}
+              caveat={e.caveat}
+            />
+          )
+        })}
 
         <Text style={styles.sectionLabel}>THE MONEY</Text>
-
-        <FeatureAccordion
-          icon="🦈"
-          title="Loan Shark"
-          hook="Borrow now, bowl it off later."
-          bullets={[
-            'Take a loan for an instant pile of pins to put into play.',
-            'The debt charges interest every week, and a slice of your weekly bowling score is garnished to pay it down.',
-            'You can repay early, in part or in full, anytime — no penalty.',
-          ]}
-          caveat="Interest compounds, so the bigger loans can spiral. What counts is net worth: balance minus debt."
-        />
-
-        {SHOW_AUCTION_HOUSE && (
-          <FeatureAccordion
-            icon="📣"
-            title="Auction House"
-            hook="Sealed-bid auctions for scarce goods."
-            bullets={[
-              'The house lists something rare. You submit a single hidden bid — nobody sees what anyone else pledged.',
-              'When it closes, the highest bidder who can still cover their bid wins and pays it.',
-            ]}
-            caveat="Bids are pledges, not held pins. Be able to cover yours at settlement, or take a small bounce penalty."
-          />
-        )}
-
-        <FeatureAccordion
-          icon="👀"
-          title="Market Moves"
-          hook="The league's money newswire."
-          bullets={[
-            'A live feed of the notable action — big tickets, parlay hits, loans, settled challenges, and bounty and auction results.',
-            'Tap any card to jump straight to the action behind it.',
-          ]}
-        />
+        {MONEY.map(key => {
+          const e = EXPLAINERS[key]
+          return (
+            <FeatureAccordion
+              key={key}
+              icon={e.icon}
+              title={e.title}
+              hook={e.hook}
+              bullets={e.bullets}
+              caveat={e.caveat}
+            />
+          )
+        })}
 
         <Text style={styles.footer}>The house always remembers.</Text>
     </ScreenContainer>

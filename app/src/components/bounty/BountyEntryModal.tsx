@@ -1,6 +1,8 @@
 import { Text, StyleSheet } from 'react-native'
 import { colors, fonts } from '../../theme'
 import ConfirmActionSheet from '../ui/ConfirmActionSheet'
+import TermsBlock from '../ui/TermsBlock'
+import { TERMS } from '../../data/pinsinoExplainers'
 import { bountyPosts } from '../../utils/supabase/db'
 import { hunterPayout } from '../../utils/bounty'
 import type { BountyView } from '../../hooks/useBountyBoardData'
@@ -39,12 +41,8 @@ export default function BountyEntryModal({ bounty: b, onClose, onDone }: Props) 
         If the hunters win, you receive <Text style={styles.bold}>{formatPins(total)}</Text> pins total
         (your stake back + <Text style={styles.bold}>{formatPins(reward)}</Text> reward).
       </Text>
-      <Text style={styles.copy}>Every hunter gets the same reward — more hunters never reduce your payout.</Text>
-      <Text style={styles.copy}>If <Text style={styles.bold}>any</Text> hunter pulls it off, the whole pack wins. Bringing friends only helps.</Text>
-      <Text style={styles.note}>
-        An admin will manually settle this bounty based on the posted description. Your slot is an
-        estimate until the server confirms it.
-      </Text>
+      <TermsBlock terms={TERMS.bountyEnter} />
+      <Text style={styles.note}>Your slot is an estimate until the server confirms it.</Text>
     </ConfirmActionSheet>
   )
 }

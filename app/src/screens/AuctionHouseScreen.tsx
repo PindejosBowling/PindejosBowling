@@ -10,6 +10,8 @@ import MyItemRow from '../components/auction/MyItemRow'
 import ItemInfoSheet from '../components/auction/ItemInfoSheet'
 import BalancePill from '../components/ui/BalancePill'
 import ReadOnlySeasonBanner from '../components/betting/ReadOnlySeasonBanner'
+import FeatureExplainerSheet from '../components/pinsino/FeatureExplainerSheet'
+import { EXPLAINERS } from '../data/pinsinoExplainers'
 import { useAuctionHouseData } from '../hooks/useAuctionHouseData'
 import { useEconomyRefresh } from '../hooks/useEconomyRefresh'
 import { usePinsinoSeasonContext } from '../hooks/usePinsinoSeasonContext'
@@ -31,6 +33,7 @@ export default function AuctionHouseScreen() {
   const { loading, balance, auctions, myItems, reload } = useAuctionHouseData(playerId, pinsinoViewSeasonId)
 
   const [infoGroup, setInfoGroup] = useState<InventoryGroupView | null>(null)
+  const [helpOpen, setHelpOpen] = useState(false)
 
   // Refresh on return (e.g. after bidding on detail). Silent after first load.
   // Badges reload alongside the data so the auction count never goes stale.
@@ -63,6 +66,7 @@ export default function AuctionHouseScreen() {
       backdrop={<AuctionBankBackdrop />}
       loading={loading}
       onRefresh={reloadAll}
+      onHelp={() => setHelpOpen(true)}
     >
         {readOnly && <ReadOnlySeasonBanner seasonNumber={viewSeasonNumber} />}
 
@@ -96,6 +100,9 @@ export default function AuctionHouseScreen() {
             inside the ScrollView children is visually identical. */}
         {infoGroup && (
           <ItemInfoSheet group={infoGroup} onClose={() => setInfoGroup(null)} />
+        )}
+        {helpOpen && (
+          <FeatureExplainerSheet explainer={EXPLAINERS.auctionHouse} onClose={() => setHelpOpen(false)} />
         )}
     </ScreenContainer>
   )

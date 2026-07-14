@@ -13,6 +13,8 @@ import Button from '../components/ui/Button'
 import LineDuelLines from '../components/pvp/LineDuelLines'
 import GamePicker from '../components/ui/GamePicker'
 import PinAmountInput from '../components/ui/PinAmountInput'
+import TermsBlock from '../components/ui/TermsBlock'
+import { TERMS } from '../data/pinsinoExplainers'
 import Toast from '../components/ui/Toast'
 import { useAuthStore } from '../stores/authStore'
 import { useUiStore } from '../stores/uiStore'
@@ -504,9 +506,7 @@ export default function PvPCreateScreen() {
             <Text style={styles.confirmValueAccent}>{formatPins(pot)} pins</Text>
           </View>
           <Text style={styles.confirmRule}>{CONTRACT_TYPE_RULE[contractType]}</Text>
-          <Text style={styles.confirmNote}>
-            Winner takes the whole pot — no house cut.
-          </Text>
+          <TermsBlock terms={TERMS.pvpCreate} />
         </View>
 
         <Button
@@ -631,7 +631,6 @@ const styles = StyleSheet.create({
   confirmValue: { fontFamily: fonts.barlowCondensed, fontSize: 15, color: colors.text },
   confirmValueAccent: { fontFamily: fonts.barlowCondensedHeavy, fontSize: 16, color: colors.accent },
   confirmRule: { fontFamily: fonts.barlow, fontSize: 13, color: colors.muted, lineHeight: 19, marginVertical: 6 },
-  confirmNote: { fontFamily: fonts.barlow, fontSize: 12, color: colors.muted2, lineHeight: 17, marginTop: 6 },
 
   submitBtn: { marginTop: 20 },
 })

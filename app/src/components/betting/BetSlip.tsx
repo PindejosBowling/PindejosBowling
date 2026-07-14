@@ -5,6 +5,8 @@ import BottomSheet from '../ui/BottomSheet'
 import Button from '../ui/Button'
 import ToggleGroup from '../ui/ToggleGroup'
 import WagerField from './WagerField'
+import TermsBlock from '../ui/TermsBlock'
+import { TERMS } from '../../data/pinsinoExplainers'
 import GoldenTicketToggle from '../auction/GoldenTicketToggle'
 import WinnersCrutchToggle from '../auction/WinnersCrutchToggle'
 import EnergyDrinkToggle from '../auction/EnergyDrinkToggle'
@@ -326,6 +328,7 @@ export default function BetSlip({
           {count > 0 && grandTotal > balance && (
             <Text style={styles.warning}>Total stake exceeds your balance.</Text>
           )}
+          <TermsBlock terms={TERMS.betSlip} heading="SETTLEMENT" />
           <Text style={styles.warning}>⚠ Bets can't be canceled once placed.</Text>
         </BottomSheet>
       )}

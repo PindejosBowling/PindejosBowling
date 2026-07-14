@@ -1,8 +1,14 @@
+import { useMemo } from 'react'
 import { View, Text, StyleSheet } from 'react-native'
 import { colors, fonts, radius } from '../../theme'
 import ConfirmActionSheet from '../ui/ConfirmActionSheet'
 import StatRow from '../ui/StatRow'
+import TermsBlock from '../ui/TermsBlock'
+import LoanPayoffSchedule from './LoanPayoffSchedule'
+import { TERMS } from '../../data/pinsinoExplainers'
 import { loans } from '../../utils/supabase/db'
+import { simulateLoanPayoff } from '../../utils/loanSchedule'
+import { GAMES_PER_WEEK } from '../../utils/helpers'
 import type { LoanProductView } from '../../hooks/useLoanSharkData'
 import { formatPins } from '../../utils/formatting'
 
@@ -10,18 +16,28 @@ interface BorrowConfirmModalProps {
   // The product being borrowed. Mount conditionally (`{product && <… />}`) so the
   // modal resets between opens. Confirm → take_loan RPC → toast + reload + close.
   product: LoanProductView
+  // Season average per game for the payoff projection (screen computes it via
+  // aggregatePlayerAverages / effectiveAverage in useMemo).
+  avgPerGame: number
+  usingLeagueAvg: boolean
   onClose: () => void
   onBorrowed: () => void
 }
 
-const GENERAL_WARNING =
-  'Borrowed pins increase your available balance immediately. In exchange, the shark will take his cut of your weekly pincome before charging interest on the remaining balance. ' +
-  'If you miss a week in the PBL, there will be no pincome to garnish, but weekly interest ' +
-  'is still accumulated.'
-
-export default function BorrowConfirmModal({ product, onClose, onBorrowed }: BorrowConfirmModalProps) {
+export default function BorrowConfirmModal({ product, avgPerGame, usingLeagueAvg, onClose, onBorrowed }: BorrowConfirmModalProps) {
   const interestPct = Math.round(product.weekly_interest_rate * 100)
   const garnishPct = Math.round(product.garnishment_rate * 100)
+
+  const schedule = useMemo(
+    () =>
+      simulateLoanPayoff({
+        startingDebt: product.borrow_amount,
+        garnishRate: product.garnishment_rate,
+        interestRate: product.weekly_interest_rate,
+        weeklyPincome: Math.round(avgPerGame) * GAMES_PER_WEEK,
+      }),
+    [product, avgPerGame],
+  )
 
   return (
     <ConfirmActionSheet
@@ -31,17 +47,18 @@ export default function BorrowConfirmModal({ product, onClose, onBorrowed }: Bor
       action={() => loans.take(product.id)}
       successMessage={`Borrowed ${formatPins(product.borrow_amount)} pins`}
       failureMessage="Failed to take loan"
+      bodyMaxHeight={440}
       onClose={onClose}
       onDone={onBorrowed}
     >
       <StatRow label="BORROW" value={`${formatPins(product.borrow_amount)} pins`} variant="big" />
       <View style={styles.statGrid}>
         <View style={styles.statCell}>
-          <Text style={styles.statLabel}>WEEKLY PINCOME CUT</Text>
+          <Text style={styles.statLabel}>SHARK'S WEEKLY CUT</Text>
           <Text style={styles.statValue}>{garnishPct}%</Text>
         </View>
         <View style={styles.statCell}>
-          <Text style={styles.statLabel}>WEEKLY PINTEREST</Text>
+          <Text style={styles.statLabel}>WEEKLY INTEREST</Text>
           <Text style={styles.statValue}>{interestPct}%</Text>
         </View>
       </View>
@@ -53,10 +70,14 @@ export default function BorrowConfirmModal({ product, onClose, onBorrowed }: Bor
         </View>
       ) : null}
 
-      <Text style={styles.warnText}>{GENERAL_WARNING}</Text>
-      <Text style={styles.warnText}>
-        You have the option to pay off this loan, in part or in full, at any time. The loan is closed when the outstanding balance reaches zero.
-      </Text>
+      <LoanPayoffSchedule
+        schedule={schedule}
+        startingDebt={product.borrow_amount}
+        avgPerGame={avgPerGame}
+        usingLeagueAvg={usingLeagueAvg}
+      />
+
+      <TermsBlock terms={TERMS.loanBorrow} />
     </ConfirmActionSheet>
   )
 }
@@ -94,12 +115,5 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: colors.danger,
     lineHeight: 18,
-  },
-  warnText: {
-    fontFamily: fonts.barlow,
-    fontSize: 13,
-    color: colors.muted,
-    lineHeight: 19,
-    marginBottom: 10,
   },
 })

@@ -1,6 +1,7 @@
-import { seasons, pinLedger, loans, loanProducts, loanLedger } from '../utils/supabase/db'
+import { seasons, pinLedger, loans, loanProducts, loanLedger, scores } from '../utils/supabase/db'
 import type { Tables } from '../utils/supabase/database.types'
 import { computeBalance, computeDebt } from '../utils/ledger'
+import type { AverageRow } from '../utils/averages'
 import { useAsyncData } from './useAsyncData'
 
 export type LoanProductView = Tables<'loan_products'> & {
@@ -28,9 +29,13 @@ interface LoanSharkPayload {
   balance: number
   products: LoanProductView[]
   activeLoan: ActiveLoanView | null
+  // Raw season score rows for the payoff-schedule projection (empty in
+  // read-only past-season review — no projections there). The screen does the
+  // average math via aggregatePlayerAverages in useMemo (rule 6).
+  scoreRows: AverageRow[]
 }
 
-const EMPTY: LoanSharkPayload = { balance: 0, products: [], activeLoan: null }
+const EMPTY: LoanSharkPayload = { balance: 0, products: [], activeLoan: null, scoreRows: [] }
 
 // One player's loan-shark state: their balance, what they can borrow (when no
 // active loan), and their current loan + payment history. No memoization in the
@@ -65,6 +70,15 @@ export function useLoanSharkData(playerId: string | null, viewSeasonId?: string 
         productData = data ?? []
       })
     )
+
+    let scoreRows: AverageRow[] = []
+    if (seasonId && !readOnly) {
+      fetches.push(
+        scores.listBySeason(seasonId).then(({ data }) => {
+          scoreRows = (data ?? []) as AverageRow[]
+        })
+      )
+    }
 
     await Promise.all(fetches)
 
@@ -104,7 +118,7 @@ export function useLoanSharkData(playerId: string | null, viewSeasonId?: string 
       return { ...p, available: !readOnly && !active && fromOk && untilOk && seasonOk }
     })
 
-    return { balance: playerBalance, products: productViews, activeLoan: active }
+    return { balance: playerBalance, products: productViews, activeLoan: active, scoreRows }
   }, [playerId, viewSeasonId], 'useLoanSharkData')
 
   return { loading, ...(data ?? EMPTY), readOnly, reload }

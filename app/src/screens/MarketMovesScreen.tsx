@@ -11,6 +11,8 @@ import ReadOnlySeasonBanner from '../components/betting/ReadOnlySeasonBanner'
 import { usePinsinoSeasonContext } from '../hooks/usePinsinoSeasonContext'
 import BetDetailModal from '../components/betting/BetDetailModal'
 import PvpChallengeDetailModal from '../components/pvp/PvpChallengeDetailModal'
+import FeatureExplainerSheet from '../components/pinsino/FeatureExplainerSheet'
+import { EXPLAINERS } from '../data/pinsinoExplainers'
 import { useMarketMovesData, FeedFilter, WeekInfoById } from '../hooks/useMarketMovesData'
 import { useRefresh } from '../hooks/useRefresh'
 import { useAuthStore } from '../stores/authStore'
@@ -100,6 +102,7 @@ export default function MarketMovesScreen() {
   const [detailBet, setDetailBet] = useState<BetView | null>(null)
   // The challenge behind a tapped PvP card → the shared PvP detail overlay.
   const [detailChallengeId, setDetailChallengeId] = useState<string | null>(null)
+  const [helpOpen, setHelpOpen] = useState(false)
 
   // Fetch the bet anchoring a Sportsbook card and open Bet Details. Stake/payout
   // are public in the Sportsbook view, so this surfaces the same breakdown.
@@ -155,6 +158,7 @@ export default function MarketMovesScreen() {
       backdrop={<MarketMovesTownBackdrop />}
       loading={loading}
       scroll={false}
+      onHelp={() => setHelpOpen(true)}
     >
       {readOnly && (
         <View style={styles.pillBar}>
@@ -213,6 +217,9 @@ export default function MarketMovesScreen() {
           onClose={() => setDetailChallengeId(null)}
           onChanged={reload}
         />
+      )}
+      {helpOpen && (
+        <FeatureExplainerSheet explainer={EXPLAINERS.marketMoves} onClose={() => setHelpOpen(false)} />
       )}
     </ScreenContainer>
   )

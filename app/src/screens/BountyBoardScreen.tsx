@@ -1,4 +1,4 @@
-import { useCallback } from 'react'
+import { useCallback, useState } from 'react'
 import { View, Text, StyleSheet } from 'react-native'
 import { useNavigation, useFocusEffect } from '@react-navigation/native'
 import { NativeStackNavigationProp } from '@react-navigation/native-stack'
@@ -8,6 +8,8 @@ import BountyBoardBackdrop from '../components/pixelart/BountyBoardBackdrop'
 import BountyCard from '../components/bounty/BountyCard'
 import BalancePill from '../components/ui/BalancePill'
 import ReadOnlySeasonBanner from '../components/betting/ReadOnlySeasonBanner'
+import FeatureExplainerSheet from '../components/pinsino/FeatureExplainerSheet'
+import { EXPLAINERS } from '../data/pinsinoExplainers'
 import { useBountyBoardData, BountyView } from '../hooks/useBountyBoardData'
 import { useEconomyRefresh } from '../hooks/useEconomyRefresh'
 import { usePinsinoSeasonContext } from '../hooks/usePinsinoSeasonContext'
@@ -24,6 +26,7 @@ export default function BountyBoardScreen() {
   const pinsinoViewSeasonId = useUiStore(s => s.pinsinoViewSeasonId)
   const { readOnly, viewSeasonNumber } = usePinsinoSeasonContext()
   const { loading, balance, openBoard, mySponsored, myHunted, settled, reload } = useBountyBoardData(playerId, pinsinoViewSeasonId)
+  const [helpOpen, setHelpOpen] = useState(false)
 
   // Refresh on return (e.g. after posting or entering). Silent after first load.
   // Badges reload alongside the data so the bounty count never goes stale.
@@ -54,6 +57,7 @@ export default function BountyBoardScreen() {
       subtitle="Join the hunt & prosper together"
       backdrop={<BountyBoardBackdrop />}
       onRefresh={reloadAll}
+      onHelp={() => setHelpOpen(true)}
     >
         {readOnly && <ReadOnlySeasonBanner seasonNumber={viewSeasonNumber} />}
 
@@ -77,6 +81,9 @@ export default function BountyBoardScreen() {
             {section('MY HUNTED', myHunted)}
             {section('SETTLED', settled)}
           </>
+        )}
+        {helpOpen && (
+          <FeatureExplainerSheet explainer={EXPLAINERS.bounties} onClose={() => setHelpOpen(false)} />
         )}
     </ScreenContainer>
   )
