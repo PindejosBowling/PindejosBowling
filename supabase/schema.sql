@@ -589,6 +589,18 @@ CREATE TABLE rsvp (
   created_at timestamp with time zone NOT NULL DEFAULT now()
 );
 
+CREATE TABLE rsvp_bonus_config (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  season_id uuid,
+  is_enabled boolean NOT NULL DEFAULT true,
+  bonus_amount integer NOT NULL DEFAULT 50,
+  deadline_time time without time zone NOT NULL DEFAULT '18:00:00'::time without time zone,
+  timezone text NOT NULL DEFAULT 'America/New_York'::text,
+  updated_by uuid,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now()
+);
+
 CREATE TABLE scores (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   team_slot_id uuid NOT NULL,
@@ -1028,7 +1040,7 @@ ALTER TABLE pin_ledger ADD CONSTRAINT pin_ledger_pvp_ledger_id_fkey FOREIGN KEY 
 
 ALTER TABLE pin_ledger ADD CONSTRAINT pin_ledger_season_id_fkey FOREIGN KEY (season_id) REFERENCES seasons(id) ON DELETE CASCADE;
 
-ALTER TABLE pin_ledger ADD CONSTRAINT pin_ledger_type_check CHECK ((type = ANY (ARRAY['bonus'::text, 'score_credit'::text, 'bet_stake'::text, 'bet_payout'::text, 'bet_refund'::text, 'loan_issued'::text, 'loan_manual_repayment'::text, 'loan_weekly_garnishment'::text, 'loan_season_close_settlement'::text, 'pvp_stake'::text, 'pvp_payout'::text, 'pvp_refund'::text, 'pvp_rake'::text, 'bounty_sponsor_stake'::text, 'bounty_hunter_stake'::text, 'bounty_payout'::text, 'auction_purchase'::text, 'auction_check_bounce'::text, 'bet_insurance_refund'::text, 'bet_odds_boost'::text, 'bet_haunt_steal'::text])));
+ALTER TABLE pin_ledger ADD CONSTRAINT pin_ledger_type_check CHECK ((type = ANY (ARRAY['bonus'::text, 'score_credit'::text, 'bet_stake'::text, 'bet_payout'::text, 'bet_refund'::text, 'loan_issued'::text, 'loan_manual_repayment'::text, 'loan_weekly_garnishment'::text, 'loan_season_close_settlement'::text, 'pvp_stake'::text, 'pvp_payout'::text, 'pvp_refund'::text, 'pvp_rake'::text, 'bounty_sponsor_stake'::text, 'bounty_hunter_stake'::text, 'bounty_payout'::text, 'auction_purchase'::text, 'auction_check_bounce'::text, 'bet_insurance_refund'::text, 'bet_odds_boost'::text, 'bet_haunt_steal'::text, 'rsvp_bonus'::text])));
 
 ALTER TABLE pin_ledger ADD CONSTRAINT pin_ledger_week_id_fkey FOREIGN KEY (week_id) REFERENCES weeks(id) ON DELETE SET NULL;
 
@@ -1199,6 +1211,14 @@ ALTER TABLE rsvp ADD CONSTRAINT rsvp_status_check CHECK ((status = ANY (ARRAY['i
 ALTER TABLE rsvp ADD CONSTRAINT rsvp_week_id_fkey FOREIGN KEY (week_id) REFERENCES weeks(id);
 
 ALTER TABLE rsvp ADD CONSTRAINT rsvp_week_id_player_id_key UNIQUE (week_id, player_id);
+
+ALTER TABLE rsvp_bonus_config ADD CONSTRAINT rsvp_bonus_config_bonus_amount_check CHECK ((bonus_amount > 0));
+
+ALTER TABLE rsvp_bonus_config ADD CONSTRAINT rsvp_bonus_config_pkey PRIMARY KEY (id);
+
+ALTER TABLE rsvp_bonus_config ADD CONSTRAINT rsvp_bonus_config_season_id_fkey FOREIGN KEY (season_id) REFERENCES seasons(id) ON DELETE CASCADE;
+
+ALTER TABLE rsvp_bonus_config ADD CONSTRAINT rsvp_bonus_config_updated_by_fkey FOREIGN KEY (updated_by) REFERENCES players(id) ON DELETE SET NULL;
 
 ALTER TABLE scores ADD CONSTRAINT scores_game_id_fkey FOREIGN KEY (game_id) REFERENCES games(id) ON DELETE CASCADE;
 
@@ -1474,6 +1494,10 @@ CREATE INDEX pvp_ledger_week_id_idx ON public.pvp_ledger USING btree (week_id);
 CREATE INDEX registrations_player_id_idx ON public.registrations USING btree (player_id);
 
 CREATE INDEX registrations_season_id_idx ON public.registrations USING btree (season_id);
+
+CREATE UNIQUE INDEX rsvp_bonus_config_global_uniq ON public.rsvp_bonus_config USING btree ((true)) WHERE (season_id IS NULL);
+
+CREATE UNIQUE INDEX rsvp_bonus_config_season_uniq ON public.rsvp_bonus_config USING btree (season_id) WHERE (season_id IS NOT NULL);
 
 CREATE INDEX rsvp_player_id_idx ON public.rsvp USING btree (player_id);
 
@@ -1972,6 +1996,15 @@ CREATE POLICY "player can manage own rsvp" ON rsvp AS PERMISSIVE FOR ALL TO auth
   WITH CHECK ((player_id = ( SELECT players.id
    FROM players
   WHERE (players.user_id = ( SELECT auth.uid() AS uid)))));
+
+ALTER TABLE rsvp_bonus_config ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "admin can manage" ON rsvp_bonus_config AS PERMISSIVE FOR ALL TO authenticated
+  USING (is_admin())
+  WITH CHECK (is_admin());
+
+CREATE POLICY "authenticated can read" ON rsvp_bonus_config AS PERMISSIVE FOR SELECT TO authenticated
+  USING (true);
 
 ALTER TABLE scores ENABLE ROW LEVEL SECURITY;
 
@@ -7260,6 +7293,92 @@ END;
 $function$
 ;
 
+CREATE OR REPLACE FUNCTION public.submit_own_rsvp(p_week_id uuid, p_status text)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+DECLARE
+  v_player   uuid;
+  v_week     public.weeks%ROWTYPE;
+  v_season   public.seasons%ROWTYPE;
+  v_cfg      public.rsvp_bonus_config%ROWTYPE;
+  v_deadline timestamptz;
+  v_awarded  boolean := false;
+  v_amount   integer := 0;
+  v_reason   text;
+BEGIN
+  -- 1. Caller → player.
+  SELECT id INTO v_player FROM public.players WHERE user_id = auth.uid();
+  IF v_player IS NULL THEN
+    RAISE EXCEPTION 'No player is linked to the current user';
+  END IF;
+
+  -- 2. Status.
+  IF p_status IS NULL OR p_status NOT IN ('in', 'out') THEN
+    RAISE EXCEPTION 'RSVP status must be ''in'' or ''out''';
+  END IF;
+
+  -- 3. Week must exist, not be archived, and belong to the current playing
+  --    season (is_active AND NOT registration_open — the getCurrent() rule).
+  SELECT * INTO v_week FROM public.weeks WHERE id = p_week_id;
+  IF v_week.id IS NULL THEN
+    RAISE EXCEPTION 'Week not found';
+  END IF;
+  IF v_week.is_archived THEN
+    RAISE EXCEPTION 'This week is archived — RSVPs are closed';
+  END IF;
+  SELECT * INTO v_season FROM public.seasons WHERE id = v_week.season_id;
+  IF v_season.id IS NULL OR NOT v_season.is_active OR v_season.registration_open THEN
+    RAISE EXCEPTION 'This week is not in the current playing season';
+  END IF;
+
+  -- 4. Upsert the caller's OWN row (never anyone else's).
+  INSERT INTO public.rsvp (week_id, player_id, status)
+    VALUES (p_week_id, v_player, p_status)
+  ON CONFLICT (player_id, week_id)
+    DO UPDATE SET status = EXCLUDED.status, updated_at = now();
+
+  -- 5. Resolve config: current-season row first, else global.
+  SELECT * INTO v_cfg FROM public.rsvp_bonus_config
+    WHERE season_id = v_season.id;
+  IF v_cfg.id IS NULL THEN
+    SELECT * INTO v_cfg FROM public.rsvp_bonus_config
+      WHERE season_id IS NULL;
+  END IF;
+
+  -- 6. Award, guarded.
+  IF v_cfg.id IS NULL OR NOT v_cfg.is_enabled THEN
+    v_reason := 'disabled';
+  ELSIF EXISTS (
+    SELECT 1 FROM public.pin_ledger
+    WHERE player_id = v_player AND week_id = p_week_id AND type = 'rsvp_bonus'
+  ) THEN
+    v_reason := 'already_claimed';
+  ELSE
+    -- bowled_at NULL ⇒ deadline unknown ⇒ treat as not yet passed.
+    IF v_week.bowled_at IS NOT NULL THEN
+      v_deadline := (v_week.bowled_at + v_cfg.deadline_time) AT TIME ZONE v_cfg.timezone;
+    END IF;
+
+    IF v_deadline IS NOT NULL AND now() > v_deadline THEN
+      v_reason := 'past_deadline';
+    ELSE
+      PERFORM public.pin_ledger_double_entry(
+        v_player, v_season.id, p_week_id, v_cfg.bonus_amount, 'rsvp_bonus',
+        'RSVP bonus — thanks from the House', 'RSVP bonus (house)');
+      v_awarded := true;
+      v_amount  := v_cfg.bonus_amount;
+      v_reason  := 'ok';
+    END IF;
+  END IF;
+
+  RETURN jsonb_build_object('awarded', v_awarded, 'amount', v_amount, 'reason', v_reason);
+END;
+$function$
+;
+
 CREATE OR REPLACE FUNCTION public.suppress_activity_event(p_event_id uuid, p_reason text)
  RETURNS void
  LANGUAGE plpgsql
@@ -9010,6 +9129,8 @@ CREATE TRIGGER rsvp_resync_markets_ins AFTER INSERT ON public.rsvp REFERENCING N
 CREATE TRIGGER rsvp_resync_markets_upd AFTER UPDATE ON public.rsvp REFERENCING OLD TABLE AS old_rows NEW TABLE AS new_rows FOR EACH STATEMENT EXECUTE FUNCTION trg_resync_markets_rsvp();
 
 CREATE TRIGGER set_updated_at BEFORE UPDATE ON public.rsvp FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+CREATE TRIGGER set_updated_at BEFORE UPDATE ON public.rsvp_bonus_config FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
 CREATE TRIGGER scores_resync_markets_del AFTER DELETE ON public.scores REFERENCING OLD TABLE AS old_rows FOR EACH STATEMENT EXECUTE FUNCTION trg_resync_markets_scores();
 

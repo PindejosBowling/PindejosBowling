@@ -2625,6 +2625,57 @@ export type Database = {
           },
         ]
       }
+      rsvp_bonus_config: {
+        Row: {
+          bonus_amount: number
+          created_at: string
+          deadline_time: string
+          id: string
+          is_enabled: boolean
+          season_id: string | null
+          timezone: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          bonus_amount?: number
+          created_at?: string
+          deadline_time?: string
+          id?: string
+          is_enabled?: boolean
+          season_id?: string | null
+          timezone?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          bonus_amount?: number
+          created_at?: string
+          deadline_time?: string
+          id?: string
+          is_enabled?: boolean
+          season_id?: string | null
+          timezone?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rsvp_bonus_config_season_id_fkey"
+            columns: ["season_id"]
+            isOneToOne: false
+            referencedRelation: "seasons"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rsvp_bonus_config_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       scores: {
         Row: {
           created_at: string
@@ -3352,6 +3403,10 @@ export type Database = {
       settle_pvp_for_week: { Args: { p_week_id: string }; Returns: undefined }
       settle_week: {
         Args: { p_force?: boolean; p_void_missing?: boolean; p_week_id: string }
+        Returns: Json
+      }
+      submit_own_rsvp: {
+        Args: { p_status: string; p_week_id: string }
         Returns: Json
       }
       suppress_activity_event: {

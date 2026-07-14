@@ -62,6 +62,7 @@ export default function MoreHomeScreen() {
       : []),
     { icon: '🎳', label: 'Lanetalk Import', onPress: () => navigation.navigate('LanetalkImportAdmin') },
     { icon: '📣', label: 'Broadcasts',     onPress: () => navigation.navigate('BroadcastAdmin') },
+    { icon: '📋', label: 'RSVP',           onPress: () => navigation.navigate('RsvpBonusAdmin') },
     { icon: '🗄️', label: 'Archives',       onPress: () => navigation.navigate('Archives') },
     { icon: '🏁', label: 'Playoffs',       onPress: () => navigation.navigate('Playoffs') },
     { icon: '🥇', label: 'End Season',     onPress: () => setShowEndSeason(true) },

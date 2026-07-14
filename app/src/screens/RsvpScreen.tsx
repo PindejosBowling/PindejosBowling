@@ -15,14 +15,18 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import AppHeader from '../components/league/AppHeader'
 import ConfirmBar from '../components/ui/ConfirmBar'
 import LoadingView from '../components/ui/LoadingView'
+import Toast from '../components/ui/Toast'
 import { usePendingStore } from '../stores/pendingStore'
 import { useAuthStore } from '../stores/authStore'
+import { useUiStore } from '../stores/uiStore'
 import {
   players as dbPlayers,
   rsvp as dbRsvp,
   weeks as dbWeeks,
   betMarkets as dbBetMarkets,
   seasons as dbSeasons,
+  rsvpBonusConfig as dbRsvpBonusConfig,
+  pinLedger as dbPinLedger,
 } from '../utils/supabase/db'
 import type { Tables } from '../utils/supabase/database.types'
 import { initials } from '../utils/helpers'
@@ -30,15 +34,20 @@ import { colors, fonts, radius } from '../theme'
 
 type Player = Tables<'players'>
 type RsvpRow = Tables<'rsvp'>
+type RsvpBonusConfig = Tables<'rsvp_bonus_config'>
 
 export default function RsvpScreen() {
   const [playerList, setPlayerList] = useState<Player[]>([])
   const [rsvpRows, setRsvpRows] = useState<RsvpRow[]>([])
   const [weekId, setWeekId] = useState<string | null>(null)
+  const [bowledAt, setBowledAt] = useState<string | null>(null)
+  const [bonusConfig, setBonusConfig] = useState<RsvpBonusConfig | null>(null)
+  const [bonusClaimed, setBonusClaimed] = useState(false)
   const [loading, setLoading] = useState(true)
   const { pendingRSVP, set } = usePendingStore()
   const [saving, setSaving] = useState(false)
   const { role, playerId: myPlayerId } = useAuthStore()
+  const { showToast } = useUiStore()
   const isAdmin = role === 'admin'
 
   function canEdit(playerId: string) {
@@ -47,22 +56,30 @@ export default function RsvpScreen() {
 
   const load = useCallback(async () => {
     const seasonRes = await dbSeasons.getCurrent()
-    const [weekRes, playersRes] = await Promise.all([
+    const [weekRes, playersRes, cfgRes] = await Promise.all([
       dbWeeks.getCurrent(),
       // Only show players registered for the current season.
       seasonRes.data ? dbPlayers.listBySeason(seasonRes.data.id) : dbPlayers.list(),
+      dbRsvpBonusConfig.getGlobal(),
     ])
     if (playersRes.data) setPlayerList(playersRes.data)
+    if (cfgRes.data) setBonusConfig(cfgRes.data)
     if (weekRes.data) {
       const wid = weekRes.data.id
       setWeekId(wid)
+      setBowledAt(weekRes.data.bowled_at)
       const rsvpRes = await dbRsvp.listByWeek(wid)
       if (rsvpRes.data) setRsvpRows(rsvpRes.data)
+      // Whether I've already earned this week's RSVP bonus — hides the banner.
+      if (myPlayerId) {
+        const claimRes = await dbPinLedger.rsvpBonusForWeek(wid, myPlayerId)
+        setBonusClaimed(!!claimRes.data)
+      }
     } else {
       console.warn('RsvpScreen: no current week found', weekRes.error?.message)
     }
     setLoading(false)
-  }, [])
+  }, [myPlayerId])
 
   useEffect(() => { load() }, [load])
 
@@ -106,6 +123,20 @@ export default function RsvpScreen() {
     return [...mine, ...playerList.filter(p => p.id !== myPlayerId)]
   }, [playerList, myPlayerId])
 
+  // Deadline banner (display only — submit_own_rsvp is authoritative). The exact
+  // cutoff is (bowled_at + deadline_time) in the configured timezone; here we
+  // parse it as a wall-clock Date for the "by <day> <time>" label and to hide the
+  // banner once the moment has passed. Shown while enabled, unclaimed, and open.
+  const bonusBanner = useMemo(() => {
+    if (!bonusConfig?.is_enabled || bonusClaimed || !bowledAt) return null
+    // deadline_time is 'HH:MM:SS'; treat bowled_at + time as local wall-clock.
+    const deadline = new Date(`${bowledAt}T${bonusConfig.deadline_time}`)
+    if (isNaN(deadline.getTime()) || Date.now() > deadline.getTime()) return null
+    const day = deadline.toLocaleDateString(undefined, { weekday: 'long' })
+    const time = deadline.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
+    return { amount: bonusConfig.bonus_amount, day, time }
+  }, [bonusConfig, bonusClaimed, bowledAt])
+
   const inCount = playerList.filter(p => currentStatus(p.id) === 'in').length
   const outCount = playerList.filter(p => currentStatus(p.id) === 'out').length
   const noReply = playerList.filter(p => !currentStatus(p.id)).length
@@ -135,16 +166,41 @@ export default function RsvpScreen() {
     }
     setSaving(true)
     try {
-      const upsertData = Object.entries(pendingRSVP).map(([player_id, status]) => ({
-        week_id: weekId,
-        player_id,
-        status,
-      }))
-      const { error } = await dbRsvp.upsert(upsertData)
-      if (error) {
-        Alert.alert('Save failed', error.message)
-        return
+      // Split the batch: my OWN row goes through submit_own_rsvp (which pays the
+      // house bonus for a personal submission), everyone else's stays a plain
+      // upsert (admin/proxy — never earns a bonus).
+      const entries = Object.entries(pendingRSVP)
+      const mine = entries.find(([player_id]) => player_id === myPlayerId)
+      const others = entries.filter(([player_id]) => player_id !== myPlayerId)
+
+      if (others.length > 0) {
+        const upsertData = others.map(([player_id, status]) => ({
+          week_id: weekId,
+          player_id,
+          status,
+        }))
+        const { error } = await dbRsvp.upsert(upsertData)
+        if (error) {
+          Alert.alert('Save failed', error.message)
+          return
+        }
       }
+
+      if (mine) {
+        const { data, error } = await dbRsvp.submitOwn(weekId, mine[1])
+        if (error) {
+          Alert.alert('Save failed', error.message)
+          return
+        }
+        const result = data as { awarded: boolean; amount: number; reason: string } | null
+        if (result?.awarded) {
+          setBonusClaimed(true)
+          showToast(`🎳 +${result.amount} pins from the House for RSVPing!`, 'success')
+        } else if (result?.reason === 'already_claimed') {
+          setBonusClaimed(true)
+        }
+      }
+
       const rsvpRes = await dbRsvp.listByWeek(weekId)
       if (rsvpRes.data) setRsvpRows(rsvpRes.data)
       set({ pendingRSVP: {} })
@@ -193,6 +249,15 @@ export default function RsvpScreen() {
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent} />}
           ListHeaderComponent={
             <>
+              {bonusBanner && (
+                <View style={styles.bonusBanner}>
+                  <Text style={styles.bonusBannerEmoji}>🎳</Text>
+                  <Text style={styles.bonusBannerText}>
+                    RSVP yourself by {bonusBanner.day} {bonusBanner.time} to earn{' '}
+                    <Text style={styles.bonusBannerAmount}>+{bonusBanner.amount} pins</Text> from the House.
+                  </Text>
+                </View>
+              )}
               <View style={styles.summaryRow}>
                 <View style={[styles.statCard, styles.statIn]}>
                   <Text style={styles.statLabel}>In</Text>
@@ -260,6 +325,7 @@ export default function RsvpScreen() {
           />
         )}
       </KeyboardAvoidingView>
+      <Toast />
     </SafeAreaView>
   )
 }
@@ -267,6 +333,31 @@ export default function RsvpScreen() {
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: colors.bg },
   listContent: { paddingHorizontal: 16, paddingBottom: 24 },
+  bonusBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginTop: 12,
+    padding: 12,
+    borderRadius: radius.cardSm,
+    backgroundColor: 'rgba(74,222,128,0.10)',
+    borderWidth: 1,
+    borderColor: 'rgba(74,222,128,0.3)',
+  },
+  bonusBannerEmoji: {
+    fontSize: 20,
+  },
+  bonusBannerText: {
+    flex: 1,
+    fontFamily: fonts.barlow,
+    fontSize: 13,
+    color: colors.text,
+    lineHeight: 18,
+  },
+  bonusBannerAmount: {
+    fontFamily: fonts.barlowCondensed,
+    color: colors.success,
+  },
   summaryRow: {
     flexDirection: 'row',
     gap: 10,

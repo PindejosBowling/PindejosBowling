@@ -224,6 +224,7 @@ season at credit time.
 | Event | Player row | House row | `week_id` set? |
 |---|---|---|---|
 | Season opens | `+100` `bonus` per prior-season champion | `−100` `bonus` (house-funded) | **NULL** (no week exists yet) |
+| RSVP self-submit | `+amount` `rsvp_bonus` (player personally RSVPs before the weekly deadline) | `−amount` `rsvp_bonus` (house-funded) | **YES** — the RSVP'd week (the dedup key) |
 | Week archived | `+score` `score_credit` per game per player (**only faucet**) | — | **YES** — the archived week |
 | Bet placed | `−stake` `bet_stake` | `+stake` `bet_stake` | **YES** — the market's week |
 | Bet won | `+potential_payout` `bet_payout` | `−potential_payout` `bet_payout` | **YES** — the market's week |
@@ -238,6 +239,15 @@ season at credit time.
 > are paid *out of house income* rather than minted — they net to zero and the
 > house balance reflects them. The `house_seed` type has been **dropped** (it was a
 > per-season amount-0 marker with no balance impact and no code path).
+
+> `rsvp_bonus` is a house-funded, **week-stamped** bonus (double-entry, exactly like
+> `bonus`) paid by `submit_own_rsvp` when a player **personally** RSVPs their own row
+> for the week before a configurable deadline (default 6:00pm on the bowl night, ET;
+> edited via `rsvp_bonus_config`). Once per `(player, week)` — the guard is
+> `NOT EXISTS` a prior `rsvp_bonus` row for that pair, so toggling In↔Out never
+> re-pays. Admin/proxy RSVPs (the plain `rsvp` upsert path) never earn it. Deadline
+> is enforced server-side inside the RPC (untrusted client clock). See
+> [context/rsvp-bonus.md](../context/rsvp-bonus.md).
 
 > The economy's only inflation is `score_credit` (every game score becomes pins).
 > `bonus` and `bet_*` movements balance against the house; only `score_credit`

@@ -36,6 +36,15 @@ export function formatDateLong(date: Date): string {
   return date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })
 }
 
+// The immediate coming Monday (today if today is Monday), at local midnight.
+// The league's default game night; used as the admin game-night editor's default.
+export function comingMonday(from: Date = new Date()): Date {
+  const d = new Date(from)
+  d.setHours(0, 0, 0, 0)
+  d.setDate(d.getDate() + ((8 - d.getDay()) % 7)) // Sun→+1, Mon→+0, Tue→+6, …
+  return d
+}
+
 export function formatDateShort(date: string | Date): string {
   return new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 }

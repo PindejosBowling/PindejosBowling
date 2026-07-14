@@ -27,6 +27,7 @@ import ArchivesScreen from '../screens/ArchivesScreen'
 import LanetalkImportAdminScreen from '../screens/LanetalkImportAdminScreen'
 import NotificationSettingsScreen from '../screens/NotificationSettingsScreen'
 import BroadcastAdminScreen from '../screens/BroadcastAdminScreen'
+import RsvpBonusAdminScreen from '../screens/RsvpBonusAdminScreen'
 
 const Stack = createNativeStackNavigator<MoreStackParamList>()
 
@@ -66,6 +67,7 @@ export default function MoreStackNavigator() {
       <Stack.Screen name="LanetalkImportAdmin" component={LanetalkImportAdminScreen} options={{ title: 'Lanetalk Import' }} />
       <Stack.Screen name="NotificationSettings" component={NotificationSettingsScreen} options={{ title: 'Notifications' }} />
       <Stack.Screen name="BroadcastAdmin" component={BroadcastAdminScreen} options={{ title: 'Broadcasts' }} />
+      <Stack.Screen name="RsvpBonusAdmin" component={RsvpBonusAdminScreen} options={{ title: 'RSVP' }} />
     </Stack.Navigator>
   )
 }

@@ -103,10 +103,29 @@ export const rsvp = {
       .eq('week_id', weekId),
   upsert: (data: TablesInsert<'rsvp'> | TablesInsert<'rsvp'>[]) =>
     supabase.from('rsvp').upsert(data, { onConflict: 'player_id,week_id' }),
+  // Self-service path: the caller RSVPs their OWN row and, if before the weekly
+  // deadline, earns a one-time house-funded bonus (see submit_own_rsvp). The
+  // player is resolved server-side from auth.uid() — this must NOT be used to
+  // RSVP on behalf of another player (admins keep using upsert() for that, which
+  // never pays a bonus). Returns { awarded, amount, reason }.
+  submitOwn: (weekId: string, status: string) =>
+    supabase.rpc('submit_own_rsvp', { p_week_id: weekId, p_status: status }),
   remove: (id: string) =>
     supabase.from('rsvp').delete().eq('id', id),
   removeByWeek: (weekId: string) =>
     supabase.from('rsvp').delete().eq('week_id', weekId),
+}
+
+// Admin-editable config for the RSVP self-submit bonus (enable, amount, weekly
+// deadline). season_id NULL = the global default; v1 only ever seeds/edits that
+// row (the per-season override is reserved for later). The award RPC reads this
+// server-side; these wrappers back the admin editor + the player deadline banner.
+export const rsvpBonusConfig = {
+  // The global default row (season_id IS NULL) — the effective config in v1.
+  getGlobal: () =>
+    supabase.from('rsvp_bonus_config').select('*').is('season_id', null).maybeSingle(),
+  update: (id: string, data: TablesUpdate<'rsvp_bonus_config'>) =>
+    supabase.from('rsvp_bonus_config').update(data).eq('id', id),
 }
 
 export const scores = {
@@ -815,6 +834,17 @@ export const pinLedger = {
       .eq('is_house', false),
   insert: (data: TablesInsert<'pin_ledger'> | TablesInsert<'pin_ledger'>[]) =>
     supabase.from('pin_ledger').insert(data),
+  // Whether a player has already earned the RSVP self-submit bonus for a week —
+  // backs the deadline banner's hide-once-claimed. Reads are RLS-open.
+  rsvpBonusForWeek: (weekId: string, playerId: string) =>
+    supabase
+      .from('pin_ledger')
+      .select('id')
+      .eq('week_id', weekId)
+      .eq('player_id', playerId)
+      .eq('type', 'rsvp_bonus')
+      .limit(1)
+      .maybeSingle(),
 }
 
 // Admin-issued, house-funded `bonus` pins (e.g. a "Reigning Champion" bonus).

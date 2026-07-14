@@ -23,6 +23,7 @@ export type MoreStackParamList = {
   LanetalkImportAdmin: undefined
   NotificationSettings: undefined
   BroadcastAdmin: undefined
+  RsvpBonusAdmin: undefined
 }
 
 export type StandingsStackParamList = {
