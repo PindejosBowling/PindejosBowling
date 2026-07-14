@@ -65,11 +65,11 @@ Three load-bearing properties:
 
 ---
 
-## 2. `archive_week(p_week_id uuid, p_force boolean default false)` → run id
+## 2. `archive_week(p_week_id uuid, p_force boolean default false, p_fill_scores jsonb default null)` → run id
 
 Admin-only `SECURITY DEFINER` RPC. Called from `AdminArchiveModal`
 (MatchupsScreen's "Archive & Advance" floating bar) via
-`archives.archiveWeek(weekId, force)` in `db.ts`.
+`archives.archiveWeek(weekId, force, fillScores)` in `db.ts`.
 
 **Guards** (before any mutation):
 - JWT `app_metadata.role = 'admin'`.
@@ -91,6 +91,7 @@ the new `week_archive_runs` row:
 | `preimage_row` | `pvp_challenges` | week-N: `status, winner_player_id, result_detail, settled_at, admin_note` |
 | `preimage_row` | `pvp_challenge_offers` | week-N challenges' offers: `superseded_at, accepted_at, declined_at` |
 | `preimage_row` | `loans` | season's **active** loans: `status, paid_off_at` |
+| `preimage_row` | `scores` | the `p_fill_scores`-listed unscored fill rows: `score` (always NULL at capture) |
 
 The `preexisting_id` set defines "what existed before settlement" — unarchive
 deletes everything matching the predicate that is **not** in the set (i.e.,
@@ -98,6 +99,29 @@ exactly what settlement inserted). The `preimage_row` payloads are restored
 verbatim. Reversal is snapshot-driven, **not** rule-based, so it cannot
 resurrect pre-archive actions (a challenge cancelled by Start Game stays
 cancelled — its pre-image was already in that state).
+
+**Then — fill materialization**: `p_fill_scores`
+(`[{team_slot_id, game_id, score}, ...]`) carries the value each **unscored
+fill** slot displayed on the live matchup screen (`Math.round(effectiveAvg)` —
+computed client-side by `computeUnscoredFillScores` in `useMatchupsData.ts` and
+threaded through `AdminArchiveModal`). The RPC validates every row (belongs to
+week N through `team_slots → teams`, `is_fill = true`, `score` currently NULL,
+positive integer, no duplicate pairs — any violation RAISEs, i.e. a stale
+screen aborts the whole archive), snapshots the pre-images (the `scores` row
+above), and UPDATEs the scores **before the lock and settlement**, so archived
+standings/history AND bet settlement (moneyline, team `total_pins`) grade on
+the same totals the screen showed. Stored scores — admin-typed fill values
+included — are the source of truth and are never touched. Fills still mint no
+pincome and never feed player markets/averages (step a's and b's `is_fill`
+filters are unaffected).
+
+**Coverage guard** (migration `…160000_archive_fill_coverage_guard`): after
+materialization, the RPC RAISEs if any unscored fill row remains — so an
+outdated client (or any caller omitting `p_fill_scores`) cannot silently
+archive without the fill's contribution. Exemptions: a never-bowled week (no
+stored scores — nothing to grade), and a league with zero archived counted
+scores (the server proxy for "league average = 0", when the client
+legitimately omits the rows).
 
 **Then**: lock (`is_archived = true`, `bowled_at = current_date`) → settle (§3)
 → `INSERT weeks (season, N+1) ON CONFLICT DO NOTHING`.
@@ -178,7 +202,8 @@ or ledger rows (the app surfaces the message and arms **Force Unarchive**).
    via `reverse_settled_auction`; see
    [economy/SILENT_AUCTIONS_DB.md](economy/SILENT_AUCTIONS_DB.md) §5.
 2. **Restore what settlement updated** — `bet_markets`, `bet_selections`,
-   `bets`, `bet_legs`, `pvp_challenges`, `pvp_challenge_offers`, `loans` from
+   `bets`, `bet_legs`, `pvp_challenges`, `pvp_challenge_offers`, `loans`, and
+   the materialized fill `scores` (§2 — back to NULL, i.e. unscored again) from
    the `preimage_row` payloads.
 3. **Destroy week N+1**: delete its `rsvp` rows (no cascade FK), then the week
    — teams/games/markets cascade and the market-delete refund trigger refunds
@@ -229,6 +254,13 @@ week editor adds/removes rows for per-game lineup changes; the score pad
 deleting the row, because deletion means "out of the lineup". All stats and
 settlement queries filter `score IS NOT NULL`, so null rows are inert outside
 lineup semantics.
+
+**Fill slots at archive time:** an unscored **fill** row (null score on an
+`is_fill` slot) is not left null forever — the live screen displays its
+league-average estimate, and `archive_week` stamps that displayed value into
+the row via `p_fill_scores` (§2) so the archived record and settlement match
+the screen. Unarchive reverts it to null. An admin-typed fill score is a
+normal stored score and rides through untouched.
 
 ### 5b. Line eligibility ladder (`sync_over_under_markets_for_week`)
 
