@@ -3,7 +3,7 @@ import { View, Text, TouchableOpacity, StyleSheet } from 'react-native'
 import { colors, fonts, radius } from '../../theme'
 import { LeaderboardEntry } from '../../hooks/usePinsinoData'
 import EmptyCard from '../ui/EmptyCard'
-import { formatPins } from '../../utils/formatting'
+import { formatPins, signed } from '../../utils/formatting'
 
 type Props = {
   leaderboard: LeaderboardEntry[]
@@ -16,6 +16,19 @@ type Props = {
    * `detail` shows the full pins/open-action/debt/net breakdown. Defaults to `detail`.
    */
   mode?: 'summary' | 'detail'
+}
+
+// One label-over-value stat tile in the expanded breakdown. Rendered in a
+// wrapping row so 2–4 tiles reflow onto a second line instead of overflowing.
+function Metric({ label, value, tone }: { label: string; value: string; tone: 'pos' | 'neg' }) {
+  return (
+    <View style={styles.sbMetric}>
+      <Text style={styles.sbMetricLabel}>{label}</Text>
+      <Text style={[styles.sbMetricValue, tone === 'neg' ? styles.sbBreakNeg : styles.sbBreakPos]}>
+        {value}
+      </Text>
+    </View>
+  )
 }
 
 export default function PinsinoLeaderboardTable({
@@ -42,23 +55,16 @@ export default function PinsinoLeaderboardTable({
       <View style={styles.sbHeaderRow}>
         <Text style={[styles.sbHeaderCell, styles.sbRankCell]}>#</Text>
         <View style={styles.sbMoveCell} />
-        <Text style={[styles.sbHeaderCell, styles.sbNameCell]}>Titan</Text>
-        {showCols && (
-          <>
-            <Text style={[styles.sbHeaderCell, styles.sbBalCell]}>Pins</Text>
-            <Text style={[styles.sbHeaderCell, styles.sbWagerCell]}>Open</Text>
-            <Text style={[styles.sbHeaderCell, styles.sbDebtCell]}>Debt</Text>
-          </>
-        )}
+        <Text style={[styles.sbHeaderCell, styles.sbNameCell]}>Player</Text>
         {isSummary ? (
           <Text style={[styles.sbHeaderCell, styles.sbNetSummaryCell]}>Current Pin Worth</Text>
         ) : (
           <TouchableOpacity
-            style={[styles.sbNetCell, styles.sbNetToggle]}
+            style={styles.sbNetToggle}
             onPress={() => setExpanded(o => !o)}
             activeOpacity={0.7}
           >
-            <Text style={styles.sbHeaderCell}>Net</Text>
+            <Text style={styles.sbHeaderCell}>Net Worth</Text>
             <Text style={styles.sbNetChevron}>{expanded ? '▾' : '▸'}</Text>
           </TouchableOpacity>
         )}
@@ -79,16 +85,23 @@ export default function PinsinoLeaderboardTable({
               {p.movement === 'up' && <Text style={styles.moveUp}>▲</Text>}
               {p.movement === 'down' && <Text style={styles.moveDown}>▼</Text>}
             </View>
-            <Text style={[styles.sbName, isMe && styles.sbNameMe]} numberOfLines={1}>
-              {p.name}
-            </Text>
-            {showCols && (
-              <>
-                <Text style={styles.sbBalance}>{formatPins(p.balance)}</Text>
-                <Text style={styles.sbWager}>{p.openAction > 0 ? formatPins(p.openAction) : ''}</Text>
-                <Text style={styles.sbDebt}>{p.debt > 0 ? `−${formatPins(p.debt)}` : ''}</Text>
-              </>
-            )}
+            <View style={styles.sbNameCol}>
+              <Text style={[styles.sbName, isMe && styles.sbNameMe]} numberOfLines={1}>
+                {p.name}
+              </Text>
+              {showCols && (
+                <View style={styles.sbBreakRow}>
+                  <Metric label="Pincome" value={signed(p.pincome)} tone={p.pincome < 0 ? 'neg' : 'pos'} />
+                  <Metric label="Gaming" value={signed(p.gaming)} tone={p.gaming < 0 ? 'neg' : 'pos'} />
+                  {p.loanProceeds !== 0 && (
+                    <Metric label="Borrowed" value={signed(p.loanProceeds)} tone={p.loanProceeds < 0 ? 'neg' : 'pos'} />
+                  )}
+                  {p.debt > 0 && (
+                    <Metric label="Debt" value={`−${formatPins(p.debt)}`} tone="neg" />
+                  )}
+                </View>
+              )}
+            </View>
             <Text
               style={[
                 styles.sbNet,
@@ -96,7 +109,7 @@ export default function PinsinoLeaderboardTable({
                 p.netWorth < 0 && styles.sbNetNegative,
               ]}
             >
-              {formatPins(p.netWorth)}
+              {formatPins(p.netWorth)}<Text style={styles.sbUnit}> pins</Text>
             </Text>
           </TouchableOpacity>
         )
@@ -133,10 +146,6 @@ const styles = StyleSheet.create({
   sbRankCell: { width: 32 },
   sbMoveCell: { width: 16, marginRight: 6 },
   sbNameCell: { flex: 1 },
-  sbBalCell: { width: 56, textAlign: 'right' },
-  sbWagerCell: { width: 56, textAlign: 'right' },
-  sbDebtCell: { width: 56, textAlign: 'right' },
-  sbNetCell: { width: 56, textAlign: 'right' },
   sbNetToggle: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -170,36 +179,47 @@ const styles = StyleSheet.create({
   sbRankText: { fontFamily: fonts.barlowCondensed, fontSize: 12, color: colors.muted },
   sbRankTextTop: { color: colors.accent },
   sbMoveBox: { width: 16, marginRight: 6, alignItems: 'center', justifyContent: 'center' },
-  sbName: { flex: 1, fontFamily: fonts.barlow, fontSize: 15, color: colors.text },
+  sbNameCol: { flex: 1, marginRight: 10, gap: 2 },
+  sbName: { fontFamily: fonts.barlow, fontSize: 15, color: colors.text },
   sbNameMe: { color: colors.accent },
-  sbBalance: {
-    width: 56,
-    textAlign: 'right',
-    fontFamily: fonts.barlowCondensed,
-    fontSize: 15,
-    color: colors.text,
+  // Expanded breakdown — Pincome / Gaming / Loan Proceeds / Debt as label-over-value
+  // stat tiles in a wrapping row, so they reflow to a second line rather than
+  // overflowing the row. These reconcile to Net Worth (see usePinsinoData).
+  sbBreakRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    columnGap: 18,
+    rowGap: 6,
+    marginTop: 4,
   },
-  sbDebt: {
-    width: 56,
-    textAlign: 'right',
+  sbMetric: {},
+  sbMetricLabel: {
     fontFamily: fonts.barlowCondensed,
-    fontSize: 15,
-    color: colors.danger,
+    fontSize: 10,
+    letterSpacing: 0.5,
+    color: colors.muted,
+    textTransform: 'uppercase',
   },
+  sbMetricValue: {
+    fontFamily: fonts.barlowCondensed,
+    fontSize: 14,
+    marginTop: 1,
+  },
+  sbBreakPos: { color: colors.success },
+  sbBreakNeg: { color: colors.danger },
   sbNet: {
-    width: 56,
     textAlign: 'right',
     fontFamily: fonts.barlowCondensed,
     fontSize: 15,
     color: colors.text,
   },
   sbNetNegative: { color: colors.danger },
-  sbWager: {
-    width: 56,
-    textAlign: 'right',
+  // Trailing "pins" unit — muted + smaller, mirroring the balance card's PINS unit.
+  sbUnit: {
     fontFamily: fonts.barlowCondensed,
-    fontSize: 15,
-    color: colors.text,
+    fontSize: 11,
+    color: colors.muted,
+    letterSpacing: 0.5,
   },
   moveUp: { fontSize: 11, color: colors.success },
   moveDown: { fontSize: 11, color: colors.danger },

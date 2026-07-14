@@ -317,6 +317,11 @@ export interface LeaderboardEntry {
   debt: number          // outstanding active-loan debt (≥ 0)
   netWorth: number      // balance + openAction − debt
   movement: 'up' | 'down' | 'same' | null
+  // Balance partition mirroring PlayerPinsinoScreen's summary card, reconciled to
+  // the net-worth headline: pincome + gaming + loanProceeds − debt === netWorth.
+  pincome: number       // scores bowled + house bonuses (score_credit, bonus)
+  loanProceeds: number  // net cash the loan system moved through balance (loan_*)
+  gaming: number        // remainder incl. at-risk open action (bets, PvP, bounties, auctions, items)
 }
 
 // Summary of the caller's own active loan, surfaced for the Pinsino hub.
@@ -946,32 +951,28 @@ export function usePinsinoData(playerId: string | null, viewSeasonId?: string | 
 
       // Sum the season ledger per player (house rows already excluded), keep
       // active players, sort high → low.
-      const byPlayer: Record<string, { playerId: string; name: string; balance: number; priorBalance: number; isActive: boolean }> = {}
+      // Per-player accumulator. `pincome`/`loanProceeds` mirror PlayerPinsinoScreen's
+      // buckets; `gaming` is derived later as the balance remainder so the three
+      // always reconcile even for ledger types added later.
+      const byPlayer: Record<string, { playerId: string; name: string; balance: number; priorBalance: number; pincome: number; loanProceeds: number; isActive: boolean }> = {}
+      const seedRow = (playerId: string, name: string, isActive: boolean) => ({
+        playerId, name, balance: 0, priorBalance: 0, pincome: 0, loanProceeds: 0, isActive,
+      })
       // Seed every registered player at zero first, so the scoreboard includes
       // players who haven't touched the economy yet; ledger rows then add on top.
       for (const p of seasonPlayersData) {
         if (!p.id || byPlayer[p.id]) continue
-        byPlayer[p.id] = {
-          playerId: p.id,
-          name: p.name ?? '—',
-          balance: 0,
-          priorBalance: 0,
-          isActive: p.is_active ?? true,
-        }
+        byPlayer[p.id] = seedRow(p.id, p.name ?? '—', p.is_active ?? true)
       }
       for (const e of seasonLedger) {
         const pid = e.player_id
         if (!pid) continue
         if (!byPlayer[pid]) {
-          byPlayer[pid] = {
-            playerId: pid,
-            name: e.players?.name ?? '—',
-            balance: 0,
-            priorBalance: 0,
-            isActive: e.players?.is_active ?? true,
-          }
+          byPlayer[pid] = seedRow(pid, e.players?.name ?? '—', e.players?.is_active ?? true)
         }
         byPlayer[pid].balance += e.amount
+        if (e.type === 'score_credit' || e.type === 'bonus') byPlayer[pid].pincome += e.amount
+        else if (typeof e.type === 'string' && e.type.startsWith('loan_')) byPlayer[pid].loanProceeds += e.amount
         if (settleCutoff && e.created_at && e.created_at < settleCutoff) {
           byPlayer[pid].priorBalance += e.amount
         }
@@ -1025,7 +1026,7 @@ export function usePinsinoData(playerId: string | null, viewSeasonId?: string | 
       }
 
       const board = activePlayers
-        .map(({ playerId, name, balance }) => {
+        .map(({ playerId, name, balance, pincome, loanProceeds }) => {
           const openAction = openActionByPlayer[playerId] ?? 0
           const debt = debtByPlayer[playerId] ?? 0
           return {
@@ -1035,6 +1036,11 @@ export function usePinsinoData(playerId: string | null, viewSeasonId?: string | 
             openAction,
             debt,
             netWorth: balance + openAction - debt,
+            pincome,
+            loanProceeds,
+            // Fold at-risk open action into gaming so the buckets reconcile to
+            // netWorth: pincome + gaming + loanProceeds − debt === balance + openAction − debt.
+            gaming: balance + openAction - pincome - loanProceeds,
           }
         })
         .sort((a, b) => b.netWorth - a.netWorth)
