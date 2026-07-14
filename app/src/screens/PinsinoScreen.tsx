@@ -24,7 +24,7 @@ import { useAuthStore } from '../stores/authStore'
 import { useNotificationStore } from '../stores/notificationStore'
 import { useUiStore } from '../stores/uiStore'
 import { countForRoute } from '../utils/notifications'
-import { SHOW_AUCTION_HOUSE } from '../utils/featureFlags'
+import { SHOW_AUCTION_HOUSE, SHOW_PINSINO_ART } from '../utils/featureFlags'
 import { AUCTION_HOUSE_CLOSED_DEFAULT_MESSAGE } from '../utils/auction'
 import { PinsinoStackParamList } from '../navigation/types'
 import { formatPins } from '../utils/formatting'
@@ -87,7 +87,7 @@ export default function PinsinoScreen() {
   if (loading) {
     return (
       <SafeAreaView style={styles.safe} edges={['top']}>
-        <PinsinoNoirBackdrop />
+        {SHOW_PINSINO_ART && <PinsinoNoirBackdrop />}
         <LoadingView label="Loading…" transparent delayed />
       </SafeAreaView>
     )
@@ -95,9 +95,9 @@ export default function PinsinoScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
-      <PinsinoNoirBackdrop />
-      <AppHeader artworkToggle onHelp={() => navigation.navigate('PinsinoHelp')} />
-      {!artworkReveal && (
+      {SHOW_PINSINO_ART && <PinsinoNoirBackdrop />}
+      <AppHeader artworkToggle={SHOW_PINSINO_ART} onHelp={() => navigation.navigate('PinsinoHelp')} />
+      {(!SHOW_PINSINO_ART || !artworkReveal) && (
       <ScrollView
         contentContainerStyle={styles.content}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.muted} />}
