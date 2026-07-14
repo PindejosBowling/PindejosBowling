@@ -441,6 +441,17 @@ export const betMarkets = {
       .in('status', ['open', 'closed'])
       .order('game_number')
       .order('title'),
+  // Active (open + closed-for-betting) markets by id, with selections + subject —
+  // any market_type. Used by the "Copy this bet" flow to re-resolve a bet's legs
+  // against the CURRENT live markets/selections (odds/lines may have moved since
+  // placement). Excludes settled/void, so a copied bet whose market has since
+  // settled simply won't resolve.
+  getByIds: (ids: string[]) =>
+    supabase
+      .from('bet_markets')
+      .select(MARKET_GRAPH)
+      .in('id', ids)
+      .in('status', ['open', 'closed']),
   // Unsettled LaneTalk-clock markets across ALL weeks — the import screen groups
   // these by week to surface its "Confirm LaneTalk Data" button. These ride a
   // separate settlement clock from archive (data lands the next day). Covers

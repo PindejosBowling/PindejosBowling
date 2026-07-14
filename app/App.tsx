@@ -19,6 +19,7 @@ import RootNavigator from './src/navigation/RootNavigator'
 import { navigationRef, flushPendingBroadcastTarget } from './src/navigation/navigationRef'
 import LoginScreen from './src/screens/LoginScreen'
 import Toast from './src/components/ui/Toast'
+import { BetSlipProvider } from './src/components/betting/BetSlipProvider'
 import { useAuthStore } from './src/stores/authStore'
 import { useAvatarStore } from './src/stores/avatarStore'
 import { useNotificationStore } from './src/stores/notificationStore'
@@ -152,10 +153,12 @@ export default function App() {
         linking={linking as any}
         onReady={flushPendingBroadcastTarget}
       >
-        <View style={{ flex: 1 }}>
-          <RootNavigator />
-          <Toast />
-        </View>
+        <BetSlipProvider>
+          <View style={{ flex: 1 }}>
+            <RootNavigator />
+            <Toast />
+          </View>
+        </BetSlipProvider>
       </NavigationContainer>
     </SafeAreaProvider>
   )

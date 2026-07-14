@@ -5,8 +5,6 @@ import {
   ScrollView,
   StyleSheet,
   RefreshControl,
-  Modal,
-  TouchableOpacity,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useNavigation } from '@react-navigation/native'
@@ -16,7 +14,7 @@ import { MoreStackParamList } from '../navigation/types'
 import ScreenHeader from '../components/ui/ScreenHeader'
 import LoadingView from '../components/ui/LoadingView'
 import Button from '../components/ui/Button'
-import Toast from '../components/ui/Toast'
+import CenterModal from '../components/ui/CenterModal'
 import { useRefresh } from '../hooks/useRefresh'
 import { useUiStore } from '../stores/uiStore'
 import { useAuthStore } from '../stores/authStore'
@@ -159,41 +157,37 @@ export default function ArchivesScreen() {
         )}
       </ScrollView>
 
-      <Modal visible={!!pending} transparent animationType="fade" onRequestClose={closeConfirm}>
-        <TouchableOpacity style={styles.backdrop} activeOpacity={1} onPress={closeConfirm}>
-          <TouchableOpacity style={styles.sheet} activeOpacity={1} onPress={() => {}}>
-            {pending && (
-              <>
-                <Text style={styles.sheetTitle}>
-                  Unarchive Week {pending.week.week_number}?
-                </Text>
-                <Text style={styles.sheetBody}>{CONFIRM_BODY}</Text>
-                {warning && (
-                  <View style={styles.warnBox}>
-                    <Text style={styles.warnText}>{warning}</Text>
-                    <Text style={styles.warnSub}>
-                      Forcing will delete the next week and its activity (bets are refunded).
-                    </Text>
-                  </View>
-                )}
-                <View style={styles.btnRow}>
-                  <Button label="Cancel" variant="secondary" onPress={closeConfirm} fullWidth />
-                  <Button
-                    label={forceArmed ? 'Force Unarchive' : 'Unarchive'}
-                    variant={forceArmed ? 'danger' : 'primary'}
-                    onPress={runUnarchive}
-                    loading={busy}
-                    disabled={busy}
-                    fullWidth
-                  />
-                </View>
-              </>
-            )}
-          </TouchableOpacity>
-        </TouchableOpacity>
-        {/* Mounted inside the Modal so toasts aren't occluded by the native layer. */}
-        <Toast />
-      </Modal>
+      {pending && (
+        <CenterModal
+          title={`Unarchive Week ${pending.week.week_number}?`}
+          onClose={closeConfirm}
+          busy={busy}
+          showClose={false}
+          footer={
+            <View style={styles.btnRow}>
+              <Button label="Cancel" variant="secondary" onPress={closeConfirm} fullWidth />
+              <Button
+                label={forceArmed ? 'Force Unarchive' : 'Unarchive'}
+                variant={forceArmed ? 'danger' : 'primary'}
+                onPress={runUnarchive}
+                loading={busy}
+                disabled={busy}
+                fullWidth
+              />
+            </View>
+          }
+        >
+          <Text style={styles.sheetBody}>{CONFIRM_BODY}</Text>
+          {warning && (
+            <View style={styles.warnBox}>
+              <Text style={styles.warnText}>{warning}</Text>
+              <Text style={styles.warnSub}>
+                Forcing will delete the next week and its activity (bets are refunded).
+              </Text>
+            </View>
+          )}
+        </CenterModal>
+      )}
     </SafeAreaView>
   )
 }
@@ -290,26 +284,6 @@ const styles = StyleSheet.create({
   },
   btnRow: { flexDirection: 'row', gap: 10, marginTop: 6 },
 
-  backdrop: {
-    flex: 1,
-    backgroundColor: colors.overlay,
-    justifyContent: 'center',
-    paddingHorizontal: 24,
-  },
-  sheet: {
-    backgroundColor: colors.surface,
-    borderRadius: 20,
-    padding: 24,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  sheetTitle: {
-    fontFamily: fonts.barlowCondensed,
-    fontSize: 22,
-    color: colors.text,
-    fontWeight: '700',
-    marginBottom: 8,
-  },
   sheetBody: {
     fontFamily: fonts.barlow,
     fontSize: 13,

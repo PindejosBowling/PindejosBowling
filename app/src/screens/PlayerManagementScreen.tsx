@@ -4,11 +4,8 @@ import {
   Text,
   ScrollView,
   TouchableOpacity,
-  Modal,
   TextInput,
   StyleSheet,
-  KeyboardAvoidingView,
-  Platform,
   RefreshControl,
 } from 'react-native'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -18,8 +15,8 @@ import { colors, fonts, radius } from '../theme'
 import { MoreStackParamList } from '../navigation/types'
 import ScreenHeader from '../components/ui/ScreenHeader'
 import LoadingView from '../components/ui/LoadingView'
-import Toast from '../components/ui/Toast'
 import Button from '../components/ui/Button'
+import CenterModal from '../components/ui/CenterModal'
 import { usePlayerManagementData } from '../hooks/usePlayerManagementData'
 import { useRefresh } from '../hooks/useRefresh'
 import { useUiStore } from '../stores/uiStore'
@@ -173,93 +170,84 @@ export default function PlayerManagementScreen() {
       </View>
 
       {editModal !== null && (
-        <Modal visible transparent animationType="fade" onRequestClose={closeModal}>
-          <KeyboardAvoidingView
-            style={styles.modalWrap}
-            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          >
-            <TouchableOpacity style={styles.backdrop} activeOpacity={1} onPress={closeModal}>
-              <TouchableOpacity style={styles.sheet} activeOpacity={1} onPress={() => {}}>
-                <Text style={styles.sheetTitle}>
-                  {editModal.id ? 'Edit Player' : 'Add Player'}
-                </Text>
+        <CenterModal
+          title={editModal.id ? 'Edit Player' : 'Add Player'}
+          onClose={closeModal}
+          busy={saving}
+          keyboardAvoiding
+          footer={
+            <View style={styles.btnRow}>
+              <Button label="Cancel" variant="secondary" onPress={closeModal} fullWidth />
+              <Button
+                label="Save"
+                onPress={save}
+                loading={saving}
+                disabled={!editModal.firstName.trim() || !editModal.lastName.trim() || !(editModal.phone ?? '').trim() || saving}
+                fullWidth
+              />
+            </View>
+          }
+        >
+          <Text style={styles.fieldLabel}>FIRST NAME</Text>
+          <TextInput
+            style={styles.input}
+            placeholder="First name"
+            placeholderTextColor={colors.muted}
+            value={editModal.firstName}
+            onChangeText={v => setEditModal(prev => prev ? { ...prev, firstName: v } : null)}
+            autoFocus
+            returnKeyType="next"
+          />
 
-                <Text style={styles.fieldLabel}>FIRST NAME</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="First name"
-                  placeholderTextColor={colors.muted}
-                  value={editModal.firstName}
-                  onChangeText={v => setEditModal(prev => prev ? { ...prev, firstName: v } : null)}
-                  autoFocus
-                  returnKeyType="next"
-                />
+          <Text style={styles.fieldLabel}>LAST NAME</Text>
+          <TextInput
+            style={styles.input}
+            placeholder="Last name"
+            placeholderTextColor={colors.muted}
+            value={editModal.lastName}
+            onChangeText={v => setEditModal(prev => prev ? { ...prev, lastName: v } : null)}
+            returnKeyType="next"
+          />
 
-                <Text style={styles.fieldLabel}>LAST NAME</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="Last name"
-                  placeholderTextColor={colors.muted}
-                  value={editModal.lastName}
-                  onChangeText={v => setEditModal(prev => prev ? { ...prev, lastName: v } : null)}
-                  returnKeyType="next"
-                />
+          <Text style={styles.fieldLabel}>PHONE</Text>
+          <TextInput
+            style={styles.input}
+            placeholder="(555) 555-5555"
+            placeholderTextColor={colors.muted}
+            value={editModal.phone ?? ''}
+            onChangeText={v => setEditModal(prev => prev ? { ...prev, phone: formatUsPhone(v) } : null)}
+            keyboardType="phone-pad"
+            maxLength={14}
+            returnKeyType="done"
+            onSubmitEditing={save}
+          />
 
-                <Text style={styles.fieldLabel}>PHONE</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="(555) 555-5555"
-                  placeholderTextColor={colors.muted}
-                  value={editModal.phone ?? ''}
-                  onChangeText={v => setEditModal(prev => prev ? { ...prev, phone: formatUsPhone(v) } : null)}
-                  keyboardType="phone-pad"
-                  maxLength={14}
-                  returnKeyType="done"
-                  onSubmitEditing={save}
-                />
-
-                <View style={styles.toggleRow}>
-                  <Text style={styles.fieldLabel}>ACTIVE</Text>
-                  <TouchableOpacity
-                    style={[styles.togglePill, editModal.is_active && styles.togglePillOn]}
-                    onPress={() => setEditModal(prev => prev ? { ...prev, is_active: !prev.is_active } : null)}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={[styles.togglePillText, editModal.is_active && styles.togglePillTextOn]}>
-                      {editModal.is_active ? 'Yes' : 'No'}
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-
-                <View style={styles.toggleRow}>
-                  <Text style={styles.fieldLabel}>JERSEY PURCHASED</Text>
-                  <TouchableOpacity
-                    style={[styles.togglePill, editModal.jersey_purchased && styles.togglePillOn]}
-                    onPress={() => setEditModal(prev => prev ? { ...prev, jersey_purchased: !prev.jersey_purchased } : null)}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={[styles.togglePillText, editModal.jersey_purchased && styles.togglePillTextOn]}>
-                      {editModal.jersey_purchased ? 'Yes' : 'No'}
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-
-                <View style={styles.btnRow}>
-                  <Button label="Cancel" variant="secondary" onPress={closeModal} fullWidth />
-                  <Button
-                    label="Save"
-                    onPress={save}
-                    loading={saving}
-                    disabled={!editModal.firstName.trim() || !editModal.lastName.trim() || !(editModal.phone ?? '').trim() || saving}
-                    fullWidth
-                  />
-                </View>
-              </TouchableOpacity>
+          <View style={styles.toggleRow}>
+            <Text style={styles.fieldLabel}>ACTIVE</Text>
+            <TouchableOpacity
+              style={[styles.togglePill, editModal.is_active && styles.togglePillOn]}
+              onPress={() => setEditModal(prev => prev ? { ...prev, is_active: !prev.is_active } : null)}
+              activeOpacity={0.7}
+            >
+              <Text style={[styles.togglePillText, editModal.is_active && styles.togglePillTextOn]}>
+                {editModal.is_active ? 'Yes' : 'No'}
+              </Text>
             </TouchableOpacity>
-          </KeyboardAvoidingView>
-          {/* Rendered inside the Modal so toasts aren't occluded by the native modal layer. */}
-          <Toast />
-        </Modal>
+          </View>
+
+          <View style={styles.toggleRow}>
+            <Text style={styles.fieldLabel}>JERSEY PURCHASED</Text>
+            <TouchableOpacity
+              style={[styles.togglePill, editModal.jersey_purchased && styles.togglePillOn]}
+              onPress={() => setEditModal(prev => prev ? { ...prev, jersey_purchased: !prev.jersey_purchased } : null)}
+              activeOpacity={0.7}
+            >
+              <Text style={[styles.togglePillText, editModal.jersey_purchased && styles.togglePillTextOn]}>
+                {editModal.jersey_purchased ? 'Yes' : 'No'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </CenterModal>
       )}
     </SafeAreaView>
   )
@@ -398,27 +386,6 @@ const styles = StyleSheet.create({
   },
 
   // modal
-  modalWrap: { flex: 1 },
-  backdrop: {
-    flex: 1,
-    backgroundColor: colors.overlay,
-    justifyContent: 'center',
-    paddingHorizontal: 24,
-  },
-  sheet: {
-    backgroundColor: colors.surface,
-    borderRadius: 20,
-    padding: 24,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  sheetTitle: {
-    fontFamily: fonts.barlowCondensed,
-    fontSize: 22,
-    color: colors.text,
-    fontWeight: '700',
-    marginBottom: 20,
-  },
   fieldLabel: {
     fontFamily: fonts.barlowCondensed,
     fontSize: 11,

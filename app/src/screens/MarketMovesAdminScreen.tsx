@@ -4,9 +4,7 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  Modal,
   TextInput,
-  KeyboardAvoidingView,
   Platform,
 } from 'react-native'
 import { colors, fonts, radius } from '../theme'
@@ -15,6 +13,7 @@ import LoadingView from '../components/ui/LoadingView'
 import Toast from '../components/ui/Toast'
 import PillFilter from '../components/ui/PillFilter'
 import Button from '../components/ui/Button'
+import CenterModal from '../components/ui/CenterModal'
 import { useAuthStore } from '../stores/authStore'
 import { useUiStore } from '../stores/uiStore'
 import { seasons, activityFeed } from '../utils/supabase/db'
@@ -228,39 +227,36 @@ function ModerationModal({
   }
 
   return (
-    <Modal transparent animationType="fade" onRequestClose={onClose}>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={styles.modalOverlay}
-      >
-        <View style={styles.modalCard}>
-          <Text style={styles.modalTitle}>{suppressing ? 'Suppress event' : 'Restore event'}</Text>
-          <Text style={styles.modalLine}>{parts.icon} {parts.line}</Text>
-
-          {suppressing ? (
-            <>
-              <Text style={styles.modalHint}>Hides this card from the public feed. The source action is untouched.</Text>
-              <TextInput
-                style={styles.modalInput}
-                value={reason}
-                onChangeText={setReason}
-                placeholder="Reason"
-                placeholderTextColor={colors.muted2}
-                multiline
-              />
-            </>
-          ) : (
-            <Text style={styles.modalHint}>Returns this card to the public feed.</Text>
-          )}
-
-          <View style={styles.modalBtns}>
-            <Button variant="outline" label="Cancel" onPress={onClose} fullWidth style={styles.modalCancel} />
-            <Button label={suppressing ? 'Suppress' : 'Restore'} onPress={submit} disabled={busy} fullWidth />
-          </View>
+    <CenterModal
+      title={suppressing ? 'Suppress event' : 'Restore event'}
+      onClose={onClose}
+      busy={busy}
+      keyboardAvoiding
+      footer={
+        <View style={styles.modalBtns}>
+          <Button variant="outline" label="Cancel" onPress={onClose} fullWidth style={styles.modalCancel} />
+          <Button label={suppressing ? 'Suppress' : 'Restore'} onPress={submit} disabled={busy} fullWidth />
         </View>
-        <Toast />
-      </KeyboardAvoidingView>
-    </Modal>
+      }
+    >
+      <Text style={styles.modalLine}>{parts.icon} {parts.line}</Text>
+
+      {suppressing ? (
+        <>
+          <Text style={styles.modalHint}>Hides this card from the public feed. The source action is untouched.</Text>
+          <TextInput
+            style={styles.modalInput}
+            value={reason}
+            onChangeText={setReason}
+            placeholder="Reason"
+            placeholderTextColor={colors.muted2}
+            multiline
+          />
+        </>
+      ) : (
+        <Text style={styles.modalHint}>Returns this card to the public feed.</Text>
+      )}
+    </CenterModal>
   )
 }
 
@@ -292,21 +288,20 @@ function PostSystemEventModal({ onClose, onDone }: { onClose: () => void; onDone
   }
 
   return (
-    <Modal transparent animationType="fade" onRequestClose={onClose}>
-      <View style={styles.modalOverlay}>
-        <View style={styles.modalCard}>
-          <Text style={styles.modalTitle}>Post system event</Text>
-          <Text style={styles.modalLine}>🦈 The Loan Shark is offering dangerous terms this week.</Text>
-          <Text style={styles.modalHint}>Posts a public Loan Shark special-offer card to the feed.</Text>
-
-          <View style={styles.modalBtns}>
-            <Button variant="outline" label="Cancel" onPress={onClose} fullWidth style={styles.modalCancel} />
-            <Button label="Post" onPress={submit} disabled={busy} fullWidth />
-          </View>
+    <CenterModal
+      title="Post system event"
+      onClose={onClose}
+      busy={busy}
+      footer={
+        <View style={styles.modalBtns}>
+          <Button variant="outline" label="Cancel" onPress={onClose} fullWidth style={styles.modalCancel} />
+          <Button label="Post" onPress={submit} disabled={busy} fullWidth />
         </View>
-        <Toast />
-      </View>
-    </Modal>
+      }
+    >
+      <Text style={styles.modalLine}>🦈 The Loan Shark is offering dangerous terms this week.</Text>
+      <Text style={styles.modalHint}>Posts a public Loan Shark special-offer card to the feed.</Text>
+    </CenterModal>
   )
 }
 
@@ -344,16 +339,7 @@ const styles = StyleSheet.create({
   inspectorJson: { fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace', fontSize: 11, color: colors.text, marginTop: 2 },
 
   // Modals
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', paddingHorizontal: 24 },
-  modalCard: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.card,
-    borderWidth: 1,
-    borderColor: colors.border2,
-    padding: 20,
-  },
-  modalTitle: { fontFamily: fonts.barlowCondensed, fontSize: 20, color: colors.text, letterSpacing: 0.5 },
-  modalLine: { fontFamily: fonts.barlow, fontSize: 14, color: colors.text, lineHeight: 19, marginTop: 10 },
+  modalLine: { fontFamily: fonts.barlow, fontSize: 14, color: colors.text, lineHeight: 19 },
   modalHint: { fontFamily: fonts.barlow, fontSize: 13, color: colors.muted, lineHeight: 18, marginTop: 8 },
   modalInput: {
     backgroundColor: colors.surface2,
@@ -370,6 +356,6 @@ const styles = StyleSheet.create({
     textAlignVertical: 'top',
   },
   fieldLabel: { fontFamily: fonts.barlowCondensed, fontSize: 11, letterSpacing: 1.5, color: colors.muted, marginTop: 14 },
-  modalBtns: { flexDirection: 'row', gap: 10, marginTop: 18 },
+  modalBtns: { flexDirection: 'row', gap: 10 },
   modalCancel: { borderWidth: 0, paddingVertical: 12 },
 })

@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Modal, View, Text, ScrollView, TouchableOpacity, StyleSheet, RefreshControl, Alert } from 'react-native'
+import { View, Text, StyleSheet, RefreshControl, Alert } from 'react-native'
 import { useNavigation } from '@react-navigation/native'
 import { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { colors, fonts, radius } from '../../theme'
 import LoadingView from '../ui/LoadingView'
-import Toast from '../ui/Toast'
+import CenterModal from '../ui/CenterModal'
 import Button from '../ui/Button'
 import PvpAcceptModal from './PvpAcceptModal'
 import PvpCounterModal from './PvpCounterModal'
@@ -145,29 +145,20 @@ export default function PvpChallengeDetailModal({ challengeId, onClose, onChange
   const title = c ? ((isCustom && c.customTitle) || CONTRACT_TYPE_LABEL[c.contractType] || 'Challenge') : 'Challenge'
 
   return (
-    <Modal visible transparent animationType="fade" onRequestClose={onClose}>
-      <View style={styles.backdrop}>
-        {/* Tap anywhere outside the card to dismiss. */}
-        <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={onClose} />
-
-        <View style={styles.sheet}>
-          <View style={styles.header}>
-            <Text style={styles.headerTitle} numberOfLines={1}>{title}</Text>
-            <TouchableOpacity style={styles.closeBtn} onPress={onClose} activeOpacity={0.7} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-              <Text style={styles.closeText}>✕</Text>
-            </TouchableOpacity>
-          </View>
-
-          {loading ? (
-            <View style={styles.stateBox}><LoadingView label="Loading…" /></View>
-          ) : !c ? (
-            <EmptyCard text="Challenge not found" style={{ margin: 16 }} />
-          ) : (
-            <ScrollView
-              style={styles.scroll}
-              contentContainerStyle={styles.content}
-              refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.muted} />}
-            >
+    <>
+      <CenterModal
+        title={title}
+        onClose={onClose}
+        background="bg"
+        contentPadded={false}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.muted} />}
+      >
+        {loading ? (
+          <View style={styles.stateBox}><LoadingView label="Loading…" /></View>
+        ) : !c ? (
+          <EmptyCard text="Challenge not found" style={{ margin: 16 }} />
+        ) : (
+          <View style={styles.content}>
             {/* Status + participants */}
             <View style={styles.card}>
               <View style={styles.topRow}>
@@ -352,66 +343,21 @@ export default function PvpChallengeDetailModal({ challengeId, onClose, onChange
                 )}
               </View>
             )}
-            </ScrollView>
-          )}
-        </View>
+          </View>
+        )}
+      </CenterModal>
 
-        {acceptOpen && c && (
-          <PvpAcceptModal challenge={c} viewerId={playerId} onClose={() => setAcceptOpen(false)} onDone={afterMutation} />
-        )}
-        {counterOpen && c && (
-          <PvpCounterModal challenge={c} viewerId={playerId} balance={balance} onClose={() => setCounterOpen(false)} onDone={afterMutation} />
-        )}
-        <Toast />
-      </View>
-    </Modal>
+      {acceptOpen && c && (
+        <PvpAcceptModal challenge={c} viewerId={playerId} onClose={() => setAcceptOpen(false)} onDone={afterMutation} />
+      )}
+      {counterOpen && c && (
+        <PvpCounterModal challenge={c} viewerId={playerId} balance={balance} onClose={() => setCounterOpen(false)} onDone={afterMutation} />
+      )}
+    </>
   )
 }
 
 const styles = StyleSheet.create({
-  // Dimmed backdrop; tapping it (outside the card) dismisses. The card is centered
-  // and capped so there's always margin on every side to tap out of.
-  backdrop: {
-    flex: 1,
-    backgroundColor: colors.overlay,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 24,
-  },
-  sheet: {
-    width: '100%',
-    maxHeight: '85%',
-    backgroundColor: colors.bg,
-    borderRadius: radius.card,
-    borderWidth: 1,
-    borderColor: colors.border,
-    overflow: 'hidden',
-  },
-  scroll: { flexGrow: 0, flexShrink: 1 },
-
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  headerTitle: { fontFamily: fonts.barlowCondensedHeavy, fontSize: 22, color: colors.text, flex: 1, marginRight: 12 },
-  closeBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: colors.surface2,
-    borderWidth: 1,
-    borderColor: colors.border2,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  closeText: { fontFamily: fonts.barlowCondensed, fontSize: 18, color: colors.text, lineHeight: 20 },
-
   stateBox: { padding: 24, alignItems: 'center' },
   content: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 24 },
 

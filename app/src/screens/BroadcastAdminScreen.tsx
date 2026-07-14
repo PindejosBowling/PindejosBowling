@@ -5,10 +5,7 @@ import {
   StyleSheet,
   TextInput,
   TouchableOpacity,
-  Modal,
   Platform,
-  KeyboardAvoidingView,
-  ScrollView,
   Switch,
 } from 'react-native'
 import DateTimePicker from '@react-native-community/datetimepicker'
@@ -21,6 +18,7 @@ import ToggleGroup from '../components/ui/ToggleGroup'
 import EmptyCard from '../components/ui/EmptyCard'
 import PlayerPickerModal from '../components/ui/PlayerPickerModal'
 import SettingToggleRow from '../components/ui/SettingToggleRow'
+import CenterModal from '../components/ui/CenterModal'
 import { useAuthStore } from '../stores/authStore'
 import { useUiStore } from '../stores/uiStore'
 import { broadcasts, broadcastEventRules } from '../utils/supabase/db'
@@ -520,87 +518,80 @@ function RuleEditModal({
   }
 
   return (
-    <Modal transparent animationType="fade" onRequestClose={onClose}>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={styles.modalOverlay}
-      >
-        <View style={[styles.modalCard, styles.ruleModalCard]}>
-          <Text style={styles.modalTitle}>
-            {prettifyEventType(row.event_type, row.source_feature)}
-          </Text>
-          <Text style={styles.modalHint}>
-            Sends automatically whenever this Market Move is published. Placeholders:{' '}
-            {'{actor} {subject} {secondary} {payload.<key>}'} — unknown payload keys render
-            blank. High-volume events send one push each.
-          </Text>
-
-          <ScrollView keyboardShouldPersistTaps="handled">
-            <Text style={styles.fieldLabel}>TITLE TEMPLATE</Text>
-            <TextInput
-              style={styles.input}
-              value={titleTemplate}
-              onChangeText={setTitleTemplate}
-              placeholder="e.g. Big win at the Sportsbook"
-              placeholderTextColor={colors.muted2}
-              maxLength={120}
-            />
-
-            <Text style={styles.fieldLabel}>MESSAGE TEMPLATE</Text>
-            <TextInput
-              style={[styles.input, styles.inputMultiline]}
-              value={bodyTemplate}
-              onChangeText={setBodyTemplate}
-              placeholder="e.g. {actor} just cashed {payload.payout} pins"
-              placeholderTextColor={colors.muted2}
-              multiline
-              maxLength={1000}
-            />
-
-            <Text style={styles.fieldLabel}>CATEGORY (WHAT USERS CAN MUTE)</Text>
-            <ToggleGroup
-              scrollable
-              options={categories.map(c => ({ key: c.id, label: c.label }))}
-              value={categoryId}
-              onChange={setCategoryId}
-            />
-
-            <Text style={styles.fieldLabel}>TAP DESTINATION</Text>
-            <ToggleGroup
-              variant="pill"
-              scrollable
-              options={[
-                { key: 'none', label: 'None (opens app)' },
-                ...BROADCAST_TARGETS.map(t => ({ key: t.key, label: t.label })),
-              ]}
-              value={routeKey}
-              onChange={setRouteKey}
-            />
-
-            <View style={{ marginTop: 16 }}>
-              <SettingToggleRow
-                label="Enabled"
-                description="Send a push for every new event of this type"
-                value={enabled}
-                onChange={setEnabled}
-              />
-            </View>
-          </ScrollView>
-
-          <View style={styles.modalBtns}>
-            <Button variant="outline" label="Back" onPress={onClose} fullWidth style={styles.modalCancel} />
-            <Button
-              label="Save"
-              onPress={onSave}
-              disabled={!valid || saving}
-              loading={saving}
-              fullWidth
-            />
-          </View>
+    <CenterModal
+      title={prettifyEventType(row.event_type, row.source_feature)}
+      onClose={onClose}
+      busy={saving}
+      keyboardAvoiding
+      footer={
+        <View style={styles.modalBtns}>
+          <Button variant="outline" label="Back" onPress={onClose} fullWidth style={styles.modalCancel} />
+          <Button
+            label="Save"
+            onPress={onSave}
+            disabled={!valid || saving}
+            loading={saving}
+            fullWidth
+          />
         </View>
-        <Toast />
-      </KeyboardAvoidingView>
-    </Modal>
+      }
+    >
+      <Text style={styles.modalHint}>
+        Sends automatically whenever this Market Move is published. Placeholders:{' '}
+        {'{actor} {subject} {secondary} {payload.<key>}'} — unknown payload keys render
+        blank. High-volume events send one push each.
+      </Text>
+
+      <Text style={styles.fieldLabel}>TITLE TEMPLATE</Text>
+      <TextInput
+        style={styles.input}
+        value={titleTemplate}
+        onChangeText={setTitleTemplate}
+        placeholder="e.g. Big win at the Sportsbook"
+        placeholderTextColor={colors.muted2}
+        maxLength={120}
+      />
+
+      <Text style={styles.fieldLabel}>MESSAGE TEMPLATE</Text>
+      <TextInput
+        style={[styles.input, styles.inputMultiline]}
+        value={bodyTemplate}
+        onChangeText={setBodyTemplate}
+        placeholder="e.g. {actor} just cashed {payload.payout} pins"
+        placeholderTextColor={colors.muted2}
+        multiline
+        maxLength={1000}
+      />
+
+      <Text style={styles.fieldLabel}>CATEGORY (WHAT USERS CAN MUTE)</Text>
+      <ToggleGroup
+        scrollable
+        options={categories.map(c => ({ key: c.id, label: c.label }))}
+        value={categoryId}
+        onChange={setCategoryId}
+      />
+
+      <Text style={styles.fieldLabel}>TAP DESTINATION</Text>
+      <ToggleGroup
+        variant="pill"
+        scrollable
+        options={[
+          { key: 'none', label: 'None (opens app)' },
+          ...BROADCAST_TARGETS.map(t => ({ key: t.key, label: t.label })),
+        ]}
+        value={routeKey}
+        onChange={setRouteKey}
+      />
+
+      <View style={{ marginTop: 16 }}>
+        <SettingToggleRow
+          label="Enabled"
+          description="Send a push for every new event of this type"
+          value={enabled}
+          onChange={setEnabled}
+        />
+      </View>
+    </CenterModal>
   )
 }
 
@@ -618,53 +609,50 @@ function ScheduleModal({
   const inPast = picker.value.getTime() <= Date.now()
 
   return (
-    <Modal transparent animationType="fade" onRequestClose={onClose}>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={styles.modalOverlay}
-      >
-        <View style={styles.modalCard}>
-          <Text style={styles.modalTitle}>Schedule broadcast</Text>
-          <Text style={styles.modalHint}>
-            Sends automatically within a minute of the chosen time (device-local).
-          </Text>
-
-          {Platform.OS === 'android' && (
-            <Button
-              variant="outline"
-              selectable
-              value={picker.value.toLocaleString()}
-              onPress={() => picker.setOpen(true)}
-              style={{ marginTop: 12 }}
-            />
-          )}
-          {(Platform.OS === 'ios' || picker.open) && (
-            <DateTimePicker
-              value={picker.value}
-              mode="datetime"
-              display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-              onChange={picker.onChange}
-              minimumDate={new Date()}
-              themeVariant="dark"
-            />
-          )}
-
-          {inPast && <Text style={styles.modalWarn}>Pick a time in the future.</Text>}
-
-          <View style={styles.modalBtns}>
-            <Button variant="outline" label="Back" onPress={onClose} fullWidth style={styles.modalCancel} />
-            <Button
-              label="Schedule"
-              onPress={() => onConfirm(picker.value)}
-              disabled={busy || inPast}
-              loading={busy}
-              fullWidth
-            />
-          </View>
+    <CenterModal
+      title="Schedule broadcast"
+      onClose={onClose}
+      busy={busy}
+      keyboardAvoiding
+      footer={
+        <View style={styles.modalBtns}>
+          <Button variant="outline" label="Back" onPress={onClose} fullWidth style={styles.modalCancel} />
+          <Button
+            label="Schedule"
+            onPress={() => onConfirm(picker.value)}
+            disabled={busy || inPast}
+            loading={busy}
+            fullWidth
+          />
         </View>
-        <Toast />
-      </KeyboardAvoidingView>
-    </Modal>
+      }
+    >
+      <Text style={styles.modalHint}>
+        Sends automatically within a minute of the chosen time (device-local).
+      </Text>
+
+      {Platform.OS === 'android' && (
+        <Button
+          variant="outline"
+          selectable
+          value={picker.value.toLocaleString()}
+          onPress={() => picker.setOpen(true)}
+          style={{ marginTop: 12 }}
+        />
+      )}
+      {(Platform.OS === 'ios' || picker.open) && (
+        <DateTimePicker
+          value={picker.value}
+          mode="datetime"
+          display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+          onChange={picker.onChange}
+          minimumDate={new Date()}
+          themeVariant="dark"
+        />
+      )}
+
+      {inPast && <Text style={styles.modalWarn}>Pick a time in the future.</Text>}
+    </CenterModal>
   )
 }
 
@@ -679,22 +667,22 @@ function ConfirmCancelModal({
   onClose: () => void
 }) {
   return (
-    <Modal transparent animationType="fade" onRequestClose={onClose}>
-      <View style={styles.modalOverlay}>
-        <View style={styles.modalCard}>
-          <Text style={styles.modalTitle}>Cancel this broadcast?</Text>
-          <Text style={styles.modalHint}>
-            "{broadcast.title}" — scheduled for {new Date(broadcast.scheduled_for).toLocaleString()}.
-            It will never send.
-          </Text>
-          <View style={styles.modalBtns}>
-            <Button variant="outline" label="Keep it" onPress={onClose} fullWidth style={styles.modalCancel} />
-            <Button variant="danger" label="Cancel broadcast" onPress={onConfirm} fullWidth />
-          </View>
+    <CenterModal
+      title="Cancel this broadcast?"
+      onClose={onClose}
+      showClose={false}
+      footer={
+        <View style={styles.modalBtns}>
+          <Button variant="outline" label="Keep it" onPress={onClose} fullWidth style={styles.modalCancel} />
+          <Button variant="danger" label="Cancel broadcast" onPress={onConfirm} fullWidth />
         </View>
-        <Toast />
-      </View>
-    </Modal>
+      }
+    >
+      <Text style={styles.modalHint}>
+        "{broadcast.title}" — scheduled for {new Date(broadcast.scheduled_for).toLocaleString()}.
+        It will never send.
+      </Text>
+    </CenterModal>
   )
 }
 
@@ -799,7 +787,6 @@ const styles = StyleSheet.create({
     color: colors.muted,
     marginTop: 1,
   },
-  ruleModalCard: { maxHeight: '85%' },
   badgeAuto: { backgroundColor: 'rgba(255,255,255,0.08)' },
 
   histHead: { flexDirection: 'row', alignItems: 'center', gap: 8 },
@@ -811,17 +798,8 @@ const styles = StyleSheet.create({
   histError: { color: colors.danger },
   cancelLink: { fontFamily: fonts.barlowCondensed, fontSize: 13, color: colors.danger, letterSpacing: 0.5, marginTop: 10 },
 
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', paddingHorizontal: 24 },
-  modalCard: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.card,
-    borderWidth: 1,
-    borderColor: colors.border2,
-    padding: 20,
-  },
-  modalTitle: { fontFamily: fonts.barlowCondensed, fontSize: 20, color: colors.text, letterSpacing: 0.5 },
   modalHint: { fontFamily: fonts.barlow, fontSize: 13, color: colors.muted, lineHeight: 18, marginTop: 8 },
   modalWarn: { fontFamily: fonts.barlow, fontSize: 12, color: colors.danger, marginTop: 8 },
-  modalBtns: { flexDirection: 'row', gap: 10, marginTop: 18 },
+  modalBtns: { flexDirection: 'row', gap: 10 },
   modalCancel: { borderWidth: 0, paddingVertical: 12 },
 })

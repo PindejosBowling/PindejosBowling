@@ -51,6 +51,28 @@ export function selectionBetsAgainstSubject(marketType: string, selectionKey: st
   return false
 }
 
+// UI-only policy: the "under" side of player O/U, stat-prop, and team-prop
+// lines is hidden from the Sportsbook. Betting on leaguemates (or a whole
+// team) to do *poorly* has negative social dynamics in a small rec league, so
+// we don't surface it as a pick. This is a pure presentation filter — the
+// selection still exists in the DB and the place/settlement RPCs
+// (`place_house_bet`, etc.) handle `under` unchanged, so the mechanic can be
+// restored by removing this filter. See AGENTS.md. Lives here (not on the
+// screen) so both the board and the "Copy this bet" flow share one policy.
+export function isSelectionHiddenInUI(line: LineView, sel: SelectionView): boolean {
+  return (
+    (line.marketType === 'over_under' || line.marketType === 'prop' || line.marketType === 'team_prop') &&
+    sel.key === 'under'
+  )
+}
+
+// Drop UI-hidden selections from a line, returning the same object when nothing
+// changes (keeps referential stability for memoization downstream).
+export function withVisibleSelections(line: LineView): LineView {
+  const selections = line.selections.filter(s => !isSelectionHiddenInUI(line, s))
+  return selections.length === line.selections.length ? line : { ...line, selections }
+}
+
 // Display labels for the LaneTalk stat-prop kinds (bet_markets.params.stat).
 export const STAT_LABELS: Record<string, string> = {
   strikes: 'Strikes',
@@ -270,9 +292,19 @@ export interface BetView {
   customLineTitle: string | null
   customLineDescription: string | null
   customLineCategory: string | null
-  // The inventory item attached as an Energy Drink (odds_boost) at placement, if
-  // any. Non-null ⇒ a winning bet was paid a House-funded profit-doubling bonus
-  // (its own bet_odds_boost ledger row). Surfaced in the Bet Details overlay.
+  // The custom_lines row this bet is tagged with (place_house_bet's
+  // p_custom_line_id). Non-null ⇒ a Special. Used to re-place ("copy") the same
+  // special — place_house_bet only requires it to exist and be live, so the
+  // selections are re-resolved client-side like any parlay.
+  customLineId: string | null
+  // Attachable items spent on this bet at placement (win or lose). Non-null =
+  // attached; each pays out (or is simply spent) at settlement per its mechanic.
+  // All three are surfaced in the Bet Details overlay.
+  //   insurance — Golden Ticket (bet_insurance): refunds the stake if the bet loses.
+  //   crutch    — Winner's Crutch (parlay_crutch): cancels the lone losing leg of a parlay.
+  //   boost     — Energy Drink (odds_boost): House-funded profit doubler on a win.
+  insuranceItemId: string | null
+  crutchItemId: string | null
   boostItemId: string | null
 }
 
@@ -344,11 +376,14 @@ export function normalizeBet(b: any): BetView {
     customLineTitle: b.custom_line_title ?? null,
     customLineDescription: b.custom_line_description ?? null,
     customLineCategory: b.custom_line_category ?? null,
+    customLineId: b.custom_line_id ?? null,
+    insuranceItemId: b.insurance_item_id ?? null,
+    crutchItemId: b.crutch_item_id ?? null,
     boostItemId: b.boost_item_id ?? null,
   }
 }
 
-function normalizeMarket(m: any): LineView {
+export function normalizeMarket(m: any): LineView {
   const selections: SelectionView[] = (m.bet_selections ?? [])
     .slice()
     .sort((a: any, b: any) => (a.sort_order ?? 0) - (b.sort_order ?? 0))

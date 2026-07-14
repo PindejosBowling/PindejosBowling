@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react'
-import { Modal, View, Text, TouchableOpacity, StyleSheet } from 'react-native'
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native'
 import { colors, fonts, radius } from '../../theme'
+import CenterModal from '../ui/CenterModal'
 import { betLineSuffix, type BetView } from '../../hooks/usePinsinoData'
 import { resultBadge, betPayout, betReturn, betReturnDisplay } from '../../utils/bets'
 import { haunts } from '../../utils/supabase/db'
+import { useBetSlip } from './BetSlipProvider'
 
 interface BetDetailModalProps {
   bet: BetView | null
@@ -22,6 +24,7 @@ interface BetDetailModalProps {
 export default function BetDetailModal({ bet, onClose, canHaunt, alreadyHaunted, onRequestHaunt }: BetDetailModalProps) {
   // Reveal: once a bet has WON, RLS exposes any Ghost in the Slip haunts on it.
   // (Hooks run unconditionally — the early null-return lives below them.)
+  const { enabled: copyEnabled, copyBet } = useBetSlip()
   const [haunters, setHaunters] = useState<{ name: string; cut: number | null }[]>([])
   useEffect(() => {
     let active = true
@@ -38,27 +41,50 @@ export default function BetDetailModal({ bet, onClose, canHaunt, alreadyHaunted,
 
   if (!bet) return null
 
-  // A Winner's Crutch fired iff a leg lost but was cancelled ('crutched'). That's
-  // the reason a missed parlay still paid (or pushed) — surfaced explicitly below.
+  // Attachable items spent on this bet at placement (win or lose), each surfaced
+  // below regardless of whether it has fired yet — attached while pending, its
+  // outcome once settled. A Winner's Crutch "fired" iff a leg was cancelled
+  // ('crutched'): the reason a missed parlay still paid (or pushed).
+  const insured = bet.insuranceItemId != null
+  const hasCrutch = bet.crutchItemId != null
+  const boosted = bet.boostItemId != null
   const crutchSaved = bet.legs.some(leg => leg.result === 'crutched')
 
-  // An Energy Drink was attached at placement (odds_boost). On a win it paid a
-  // House-funded bonus doubling the profit (1:1 → 2:1); on a loss/push it was
-  // simply spent — surfaced explicitly below.
-  const boosted = bet.boostItemId != null
+  // Action buttons pin below the scrolling body (CenterModal footer).
+  const footer = (
+    <>
+      {/* Copy this bet — any active (pending) bet can be re-placed for
+          yourself, straights/parlays and Specials alike. Closes this modal
+          and raises the bet slip (owned by the app-level BetSlipProvider)
+          with the same selection(s) re-resolved against the current live
+          line; stake starts blank. */}
+      {copyEnabled && bet.status === 'pending' && (
+        <TouchableOpacity
+          style={styles.copyBtn}
+          onPress={() => { onClose(); copyBet(bet) }}
+        >
+          <Text style={styles.copyBtnText}>📋 Place this bet</Text>
+        </TouchableOpacity>
+      )}
+
+      {/* Ghost in the Slip CTA — only on someone else's pending bet when the
+          viewer holds a Ghost and hasn't haunted it yet. The confirm sheet is
+          opened by the parent at screen level (no nested modals). */}
+      {canHaunt && (
+        <TouchableOpacity style={styles.hauntBtn} onPress={onRequestHaunt}>
+          <Text style={styles.hauntBtnText}>👻 Haunt this bet</Text>
+        </TouchableOpacity>
+      )}
+      {alreadyHaunted && bet.status === 'pending' && (
+        <Text style={[styles.customDescription, styles.hauntingNote]}>
+          👻 You're haunting this bet
+        </Text>
+      )}
+    </>
+  )
 
   return (
-    <Modal visible transparent animationType="fade" onRequestClose={onClose}>
-      <TouchableOpacity style={styles.backdrop} activeOpacity={1} onPress={onClose} />
-      <View style={styles.container}>
-        <View style={styles.content}>
-          <View style={styles.header}>
-            <Text style={styles.title}>Bet Details</Text>
-            <TouchableOpacity onPress={onClose}>
-              <Text style={styles.close}>✕</Text>
-            </TouchableOpacity>
-          </View>
-
+    <CenterModal title="Bet Details" onClose={onClose} footer={footer}>
           <View style={styles.row}>
             <Text style={styles.label}>BETTOR</Text>
             <Text style={styles.value}>{bet.bettorName}</Text>
@@ -118,23 +144,6 @@ export default function BetDetailModal({ bet, onClose, canHaunt, alreadyHaunted,
             ))}
           </View>
 
-          {/* Why a missed parlay still paid: the Winner's Crutch cancelled the
-              losing leg and settled the rest at reduced odds. */}
-          {crutchSaved && (
-            <View style={styles.row}>
-              <Text style={styles.label}>WINNER'S CRUTCH 🩼</Text>
-              <Text style={[styles.value, { color: colors.gold }]}>
-                {bet.status === 'won' ? 'Salvaged this bet' : 'Cancelled the missed leg'}
-              </Text>
-              <Text style={styles.customDescription}>
-                A leg missed but was cancelled by your Winner's Crutch
-                {bet.status === 'won'
-                  ? ' — the rest of the parlay cashed at reduced odds.'
-                  : ' — with no surviving legs, your stake was refunded.'}
-              </Text>
-            </View>
-          )}
-
           {/* Ghost in the Slip reveal: once won, who slipped in and took the profit. */}
           {haunters.length > 0 && (
             <View style={styles.row}>
@@ -151,17 +160,64 @@ export default function BetDetailModal({ bet, onClose, canHaunt, alreadyHaunted,
             </View>
           )}
 
-          {/* Energy Drink: doubled the profit on a win; spent for nothing otherwise. */}
+          {/* Attached items (Golden Ticket / Winner's Crutch / Energy Drink),
+              spent at placement. Each shows "Attached" while the bet is pending
+              and its realized outcome once settled. */}
+          {insured && (
+            <View style={styles.row}>
+              <Text style={styles.label}>GOLDEN TICKET 🎟️</Text>
+              <Text style={[styles.value, { color: colors.gold }]}>
+                {bet.status === 'lost' ? 'Stake refunded'
+                  : bet.status === 'pending' ? 'Attached'
+                    : bet.status === 'won' ? 'Not needed' : 'Spent'}
+              </Text>
+              <Text style={styles.customDescription}>
+                {bet.status === 'lost'
+                  ? 'Your Golden Ticket refunded your stake when the bet lost.'
+                  : bet.status === 'pending'
+                    ? 'Refunds your stake if this bet loses — spent at placement either way.'
+                    : bet.status === 'won'
+                      ? 'The bet won, so the Golden Ticket went unused (it only pays on a loss).'
+                      : 'A Golden Ticket was attached; it only pays out on a loss.'}
+              </Text>
+            </View>
+          )}
+
+          {hasCrutch && (
+            <View style={styles.row}>
+              <Text style={styles.label}>WINNER'S CRUTCH 🩼</Text>
+              <Text style={[styles.value, { color: colors.gold }]}>
+                {crutchSaved
+                  ? (bet.status === 'won' ? 'Salvaged this bet' : 'Cancelled the missed leg')
+                  : bet.status === 'pending' ? 'Attached'
+                    : bet.status === 'won' ? 'Not needed' : 'Spent'}
+              </Text>
+              <Text style={styles.customDescription}>
+                {crutchSaved
+                  ? `A leg missed but was cancelled by your Winner's Crutch${bet.status === 'won'
+                      ? ' — the rest of the parlay cashed at reduced odds.'
+                      : ' — with no surviving legs, your stake was refunded.'}`
+                  : bet.status === 'pending'
+                    ? 'Cancels a single losing leg if your parlay misses by exactly one.'
+                    : bet.status === 'won'
+                      ? 'Your parlay won outright, so the Crutch went unused (spent at placement).'
+                      : 'A Winner’s Crutch was attached, but the parlay missed by more than one leg.'}
+              </Text>
+            </View>
+          )}
+
           {boosted && (
             <View style={styles.row}>
               <Text style={styles.label}>ENERGY DRINK ⚡️</Text>
               <Text style={[styles.value, { color: colors.gold }]}>
-                {bet.status === 'won' ? 'Profit doubled' : 'Spent'}
+                {bet.status === 'won' ? 'Profit doubled' : bet.status === 'pending' ? 'Attached' : 'Spent'}
               </Text>
               <Text style={styles.customDescription}>
                 {bet.status === 'won'
                   ? 'An Energy Drink doubled your profit — the House paid a bonus on top of the payout (1:1 became 2:1).'
-                  : 'An Energy Drink was attached but only pays on a win — it was spent at placement.'}
+                  : bet.status === 'pending'
+                    ? 'Doubles your profit if this bet wins — spent at placement either way.'
+                    : 'An Energy Drink was attached but only pays on a win — it was spent at placement.'}
               </Text>
             </View>
           )}
@@ -193,62 +249,11 @@ export default function BetDetailModal({ bet, onClose, canHaunt, alreadyHaunted,
               <Text style={styles.value}>{betReturnDisplay(bet)} pins</Text>
             )}
           </View>
-
-          {/* Ghost in the Slip CTA — only on someone else's pending bet when the
-              viewer holds a Ghost and hasn't haunted it yet. The confirm sheet is
-              opened by the parent at screen level (no nested modals). */}
-          {canHaunt && (
-            <TouchableOpacity style={styles.hauntBtn} onPress={onRequestHaunt}>
-              <Text style={styles.hauntBtnText}>👻 Haunt this bet</Text>
-            </TouchableOpacity>
-          )}
-          {alreadyHaunted && bet.status === 'pending' && (
-            <Text style={[styles.customDescription, styles.hauntingNote]}>
-              👻 You're haunting this bet
-            </Text>
-          )}
-        </View>
-      </View>
-    </Modal>
+    </CenterModal>
   )
 }
 
 const styles = StyleSheet.create({
-  backdrop: {
-    ...StyleSheet.absoluteFill,
-    backgroundColor: colors.overlay,
-  },
-  container: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-  },
-  content: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.card,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 24,
-    width: '100%',
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 24,
-  },
-  title: {
-    fontFamily: fonts.barlowCondensed,
-    fontSize: 20,
-    fontWeight: '700',
-    color: colors.text,
-  },
-  close: {
-    fontFamily: fonts.barlowCondensed,
-    fontSize: 20,
-    color: colors.muted,
-  },
   row: {
     marginBottom: 16,
   },
@@ -269,6 +274,19 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: colors.muted,
     marginTop: 4,
+  },
+  copyBtn: {
+    marginTop: 8,
+    backgroundColor: colors.accent,
+    borderRadius: radius.cardSm,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  copyBtnText: {
+    fontFamily: fonts.barlowCondensed,
+    fontSize: 16,
+    letterSpacing: 0.5,
+    color: colors.bg,
   },
   hauntBtn: {
     marginTop: 8,

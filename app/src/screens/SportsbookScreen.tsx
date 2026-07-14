@@ -19,7 +19,7 @@ import BalancePill from '../components/ui/BalancePill'
 import ActiveBetsView from '../components/betting/ActiveBetsView'
 import SettledBetsView from '../components/betting/SettledBetsView'
 import BetDetailModal from '../components/betting/BetDetailModal'
-import BetSlip, { type SlipPick, type SlipSpecial, type SlipSubmit } from '../components/betting/BetSlip'
+import { useBetSlip, useBetSlipReload } from '../components/betting/BetSlipProvider'
 import LineRow from '../components/betting/LineRow'
 import LineRowContainer from '../components/betting/LineRowContainer'
 import CustomLineRow from '../components/betting/CustomLineRow'
@@ -37,6 +37,7 @@ import {
   lineCategory,
   closedBettingNote,
   subjectRelation,
+  withVisibleSelections,
   type BetView,
   type LineView,
   type LineGroup,
@@ -47,7 +48,7 @@ import {
 import { useRefresh } from '../hooks/useRefresh'
 import { useAuthStore } from '../stores/authStore'
 import { useUiStore } from '../stores/uiStore'
-import { bets, haunts, inventoryItems, seasons } from '../utils/supabase/db'
+import { haunts } from '../utils/supabase/db'
 import { PinsinoStackParamList } from '../navigation/types'
 import EmptyCard from '../components/ui/EmptyCard'
 
@@ -60,27 +61,6 @@ const VIEW_OPTIONS: { key: View2; label: string }[] = [
   { key: 'action', label: 'Active' },
   { key: 'settled', label: 'Settled' },
 ]
-
-// UI-only policy: the "under" side of player O/U, stat-prop, and team-prop
-// lines is hidden from the Sportsbook. Betting on leaguemates (or a whole
-// team) to do *poorly* has negative social dynamics in a small rec league, so
-// we don't surface it as a pick. This is a pure presentation filter — the
-// selection still exists in the DB and the place/settlement RPCs
-// (`place_house_bet`, etc.) handle `under` unchanged, so the mechanic can be
-// restored by removing this filter. See AGENTS.md.
-function isSelectionHiddenInUI(line: LineView, sel: SelectionView): boolean {
-  return (
-    (line.marketType === 'over_under' || line.marketType === 'prop' || line.marketType === 'team_prop') &&
-    sel.key === 'under'
-  )
-}
-
-// Drop UI-hidden selections from a line, returning the same object when nothing
-// changes (keeps referential stability for memoization downstream).
-function withVisibleSelections(line: LineView): LineView {
-  const selections = line.selections.filter(s => !isSelectionHiddenInUI(line, s))
-  return selections.length === line.selections.length ? line : { ...line, selections }
-}
 
 export default function SportsbookScreen() {
   const playerId = useAuthStore(s => s.playerId)
@@ -100,49 +80,28 @@ export default function SportsbookScreen() {
   // Unified bet slip: tapping any line stages an individual pick; tapping a
   // special stages its bundle. The slip places picks as singles/parlay and each
   // special as its own tagged bet; BetSlip owns the stake + item-toggle inputs.
-  const [slipPicks, setSlipPicks] = useState<SlipPick[]>([])
-  const [slipSpecials, setSlipSpecials] = useState<SlipSpecial[]>([])
-  const [slipOpen, setSlipOpen] = useState(false)
-  const [placing, setPlacing] = useState(false)
   const [detailModal, setDetailModal] = useState<BetView | null>(null)
   const [helpOpen, setHelpOpen] = useState(false)
 
-  // Attachable items (auction-won), oldest first — the slip spends [0] of the
-  // chosen kind: Golden Tickets (bet insurance), Winner's Crutches (parlay save),
-  // Energy Drinks (profit doubler; boostPct is the oldest drink's multiplier).
-  const [tickets, setTickets] = useState<string[]>([])
-  const [crutches, setCrutches] = useState<string[]>([])
-  const [boosts, setBoosts] = useState<string[]>([])
-  const [boostPct, setBoostPct] = useState(1)
+  // The bet slip (staged picks/specials, placement, item inventory, balance) is
+  // owned by the app-level BetSlipProvider so it can also be raised from Bet
+  // Details on other screens. The board feeds it staged picks and reads its
+  // contents to highlight selected cells; a placement refreshes the board via
+  // useBetSlipReload. `ghosts` (haunt inventory) also lives there.
+  const {
+    slipPicks,
+    slipSpecials,
+    stagePick: stageSlipPick,
+    stageSpecial: stageSlipSpecial,
+    ghosts,
+    reloadInventory,
+  } = useBetSlip()
+  useBetSlipReload(reload)
 
-  // Ghosts in the Slip (auction-won adversarial item): unconsumed
-  // attach_to_foreign_bet items, oldest first — a haunt spends ghosts[0]. Unlike
-  // the others these attach to ANOTHER player's pending bet, from Bet Details.
-  const [ghosts, setGhosts] = useState<string[]>([])
   // Bets the viewer has already haunted (RLS returns only their own rows) — the
   // CTA disables on these. Plus the screen-level confirm sheet for a new haunt.
   const [hauntedBetIds, setHauntedBetIds] = useState<Set<string>>(new Set())
   const [hauntModal, setHauntModal] = useState<BetView | null>(null)
-
-  const reloadTickets = useCallback(async () => {
-    // Inventory items are live-season only — skip entirely in past-season review.
-    if (!playerId || readOnly) { setTickets([]); setCrutches([]); setBoosts([]); setGhosts([]); return }
-    const { data: season } = await seasons.getCurrent()
-    if (!season) { setTickets([]); setCrutches([]); setBoosts([]); setGhosts([]); return }
-    const { data } = await inventoryItems.listByPlayerSeason(playerId, season.id)
-    const unconsumed = (data ?? [])
-      .filter((i: any) => i.consumed_at == null)
-      .sort((a: any, b: any) => a.granted_at.localeCompare(b.granted_at))
-    const attachable = unconsumed.filter((i: any) => i.item_catalog?.activation_mode === 'attach_to_bet')
-    setTickets(attachable.filter((i: any) => i.item_catalog?.effect_type === 'bet_insurance').map((i: any) => i.id))
-    setCrutches(attachable.filter((i: any) => i.item_catalog?.effect_type === 'parlay_crutch').map((i: any) => i.id))
-    const boostRows = attachable.filter((i: any) => i.item_catalog?.effect_type === 'odds_boost')
-    setBoosts(boostRows.map((i: any) => i.id))
-    setBoostPct(boostRows.length ? Number((boostRows[0].item_catalog?.effect_params as any)?.boost_pct ?? 1) : 1)
-    setGhosts(unconsumed.filter((i: any) => i.item_catalog?.effect_type === 'haunt').map((i: any) => i.id))
-  }, [playerId, readOnly])
-
-  useEffect(() => { reloadTickets() }, [reloadTickets])
 
   const reloadHaunts = useCallback(async () => {
     if (!playerId || readOnly) { setHauntedBetIds(new Set()); return }
@@ -278,36 +237,25 @@ export default function SportsbookScreen() {
   }
 
   // Tapping any selection toggles it in/out of the unified slip. One selection
-  // per market; own-against side always toasts (anti-tank). Balance is validated
-  // at placement, so a low balance still stages (the cell is cosmetically dimmed).
+  // per market; own-against side always toasts (anti-tank). The provider owns the
+  // slip state + toggle; the screen builds the pick and enforces the anti-tank
+  // pre-check. Balance is validated at placement, so a low balance still stages.
   function stagePick(line: LineView, sel: SelectionView) {
     if (readOnly) return
     if (isSelfTank(line, sel)) { showToast('Believe in yourself man', 'error'); return }
-    setSlipPicks(prev => {
-      const existing = prev.find(p => p.marketId === line.marketId)
-      // Tapping the already-staged side removes it.
-      if (existing && existing.selectionId === sel.selectionId) {
-        return prev.filter(p => p.marketId !== line.marketId)
-      }
-      const without = prev.filter(p => p.marketId !== line.marketId)
-      return [...without, {
-        selectionId: sel.selectionId,
-        selectionKey: sel.key,
-        selectionLabel: sel.label,
-        marketId: line.marketId,
-        subjectName: line.subjectName,
-        subjectPlayerId: line.subjectPlayerId,
-        marketType: line.marketType,
-        gameNumber: line.gameNumber,
-        line: sel.line ?? line.line,
-        statKey: line.statKey,
-        odds: sel.odds ?? 2,
-      }]
+    stageSlipPick({
+      selectionId: sel.selectionId,
+      selectionKey: sel.key,
+      selectionLabel: sel.label,
+      marketId: line.marketId,
+      subjectName: line.subjectName,
+      subjectPlayerId: line.subjectPlayerId,
+      marketType: line.marketType,
+      gameNumber: line.gameNumber,
+      line: sel.line ?? line.line,
+      statKey: line.statKey,
+      odds: sel.odds ?? 2,
     })
-  }
-
-  function removeSlipPick(marketId: string) {
-    setSlipPicks(prev => prev.filter(p => p.marketId !== marketId))
   }
 
   // Tapping a special toggles its bundle in/out of the slip. Anti-tank toasts as
@@ -317,75 +265,16 @@ export default function SportsbookScreen() {
   function stageSpecial(line: CustomLineView) {
     if (readOnly) return
     if (customLineSelfTank(line, playerId)) { showToast('Believe in yourself man', 'error'); return }
-    setSlipSpecials(prev => {
-      if (prev.some(s => s.key === line.id)) return prev.filter(s => s.key !== line.id)
-      const summary = line.legs.map(customLegLabel).join('  ·  ')
-      return [...prev, {
-        key: line.id,
-        lineId: line.lineId,
-        title: line.title,
-        category: line.category,
-        summary,
-        selectionIds: line.selectionIds,
-        combinedOdds: line.combinedOdds,
-        multiLeg: line.legs.length > 1,
-      }]
+    stageSlipSpecial({
+      key: line.id,
+      lineId: line.lineId,
+      title: line.title,
+      category: line.category,
+      summary: line.legs.map(customLegLabel).join('  ·  '),
+      selectionIds: line.selectionIds,
+      combinedOdds: line.combinedOdds,
+      multiLeg: line.legs.length > 1,
     })
-  }
-
-  function removeSlipSpecial(key: string) {
-    setSlipSpecials(prev => prev.filter(s => s.key !== key))
-  }
-
-  function clearSlip() {
-    setSlipPicks([])
-    setSlipSpecials([])
-    setSlipOpen(false)
-  }
-
-  // Places the whole slip: at most one parlay (the combined picks) plus each
-  // standalone single bet (singles-mode picks and every special, which carries
-  // its lineId tag). All even money, so parlay odds = 2^N server-side. Items
-  // attach to the sole bet only (BetSlip gates the flags). Sequential; reports
-  // partial placement on failure.
-  async function placeSlip({ parlay, singles, insure, crutch, boost }: SlipSubmit) {
-    if (readOnly || !playerId) return
-    const total = (parlay?.stake ?? 0) + singles.reduce((s, e) => s + e.stake, 0)
-    if (parlay && parlay.stake < 10) { showToast('Minimum wager is 10 pins', 'error'); return }
-    if (singles.some(e => e.stake < 10)) { showToast('Minimum stake is 10 pins', 'error'); return }
-    if (total > balance) { showToast('Total stake exceeds your balance', 'error'); return }
-
-    setPlacing(true)
-    let placed = 0
-    const totalBets = (parlay ? 1 : 0) + singles.length
-    try {
-      if (parlay) {
-        const { error } = await bets.place(
-          parlay.selectionIds, parlay.stake, undefined,
-          insure ? tickets[0] : undefined, crutch ? crutches[0] : undefined, boost ? boosts[0] : undefined)
-        if (error) { showToast(error.message, 'error'); return }
-        placed += 1
-      }
-      for (const e of singles) {
-        // Items only attach when this is the sole bet (totalBets === 1); the flags
-        // are already false otherwise, so passing them here is safe.
-        const { error } = await bets.place(
-          e.selectionIds, e.stake, e.lineId,
-          insure ? tickets[0] : undefined, crutch ? crutches[0] : undefined, boost ? boosts[0] : undefined)
-        if (error) {
-          showToast(placed > 0 ? `Placed ${placed} — then: ${error.message}` : error.message, 'error')
-          return
-        }
-        placed += 1
-      }
-      showToast(totalBets > 1 ? `${placed} bets placed!` : (insure ? 'Bet placed — Golden Ticket attached!' : 'Bet placed!'), 'success')
-      clearSlip()
-    } catch {
-      showToast('Failed to place bets', 'error')
-    } finally {
-      setPlacing(false)
-      await Promise.all([reload(), reloadTickets()])
-    }
   }
 
   // One subject row (≥1 markets → one button set) — a player's lines or a
@@ -599,26 +488,9 @@ export default function SportsbookScreen() {
         </ScreenBackdrop>
       </ScrollView>
 
-      {/* Unified bet slip — persistent bar → placement sheet. Individual picks
-          combine (singles/parlay); each staged special places as its own bet. */}
-      {effectiveView === 'place' && !readOnly && (slipPicks.length > 0 || slipSpecials.length > 0) && (
-        <BetSlip
-          picks={slipPicks}
-          specials={slipSpecials}
-          open={slipOpen}
-          onOpenChange={setSlipOpen}
-          onRemovePick={removeSlipPick}
-          onRemoveSpecial={removeSlipSpecial}
-          onClear={clearSlip}
-          balance={balance}
-          placing={placing}
-          ticketCount={tickets.length}
-          crutchCount={crutches.length}
-          boostCount={boosts.length}
-          boostPct={boostPct}
-          onPlace={placeSlip}
-        />
-      )}
+      {/* The unified bet slip (persistent bar → placement sheet) is rendered by
+          the app-level BetSlipProvider, so it can be raised from Bet Details on
+          any screen. The board just feeds/reads it. */}
 
       {/* Bet details modal */}
       <BetDetailModal
@@ -647,7 +519,7 @@ export default function SportsbookScreen() {
           successMessage="👻 The slip is haunted — you'll cash if it wins"
           failureMessage="Couldn't haunt this bet"
           onClose={() => setHauntModal(null)}
-          onDone={() => { reloadTickets(); reloadHaunts() }}
+          onDone={() => { reloadInventory(); reloadHaunts() }}
         >
           <Text style={styles.hauntSheetCopy}>
             Spend 1 Ghost in the Slip to secretly attach it to this pending bet.
