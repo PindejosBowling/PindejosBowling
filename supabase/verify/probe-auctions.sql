@@ -455,6 +455,45 @@ BEGIN
     RAISE EXCEPTION 'PROBE_FAIL: multi-unit reverse left residue';
   END IF;
 
+  ------------------------------------------------------ revoke_inventory_item
+  -- Admin item removal (undo a grant). Caller is admin u1 here.
+  -- Grant a fresh unconsumed item to p1, then revoke it → row gone.
+  PERFORM public.grant_inventory_item(v_p1, 'golden_ticket', 1);
+  SELECT id INTO v_item2 FROM public.player_inventory_items
+   WHERE player_id = v_p1 AND source = 'admin_grant' AND consumed_at IS NULL
+   ORDER BY granted_at DESC LIMIT 1;
+  IF v_item2 IS NULL THEN RAISE EXCEPTION 'PROBE_FAIL: grant for revoke test missing'; END IF;
+
+  -- A consumed item cannot be revoked.
+  UPDATE public.player_inventory_items SET consumed_at = now() WHERE id = v_item2;
+  v_caught := false;
+  BEGIN
+    PERFORM public.revoke_inventory_item(v_item2);
+  EXCEPTION WHEN OTHERS THEN v_caught := true; END;
+  IF NOT v_caught THEN RAISE EXCEPTION 'PROBE_FAIL: revoke allowed on a consumed item'; END IF;
+
+  -- Un-consume and revoke → the row is gone.
+  UPDATE public.player_inventory_items SET consumed_at = NULL WHERE id = v_item2;
+  PERFORM public.revoke_inventory_item(v_item2);
+  IF EXISTS (SELECT 1 FROM public.player_inventory_items WHERE id = v_item2) THEN
+    RAISE EXCEPTION 'PROBE_FAIL: revoke did not delete the item';
+  END IF;
+
+  -- Non-admin cannot revoke.
+  PERFORM public.grant_inventory_item(v_p1, 'golden_ticket', 1);
+  SELECT id INTO v_item2 FROM public.player_inventory_items
+   WHERE player_id = v_p1 AND source = 'admin_grant' AND consumed_at IS NULL
+   ORDER BY granted_at DESC LIMIT 1;
+  PERFORM set_config('request.jwt.claims', json_build_object(
+    'sub', v_u2, 'role', 'authenticated')::text, true);
+  v_caught := false;
+  BEGIN
+    PERFORM public.revoke_inventory_item(v_item2);
+  EXCEPTION WHEN OTHERS THEN v_caught := true; END;
+  IF NOT v_caught THEN RAISE EXCEPTION 'PROBE_FAIL: non-admin revoked an item'; END IF;
+  PERFORM set_config('request.jwt.claims', json_build_object(
+    'sub', v_u1, 'role', 'authenticated', 'app_metadata', json_build_object('role', 'admin'))::text, true);
+
   ------------------------------------------------------------------ capture
   SELECT jsonb_build_object(
     'bounce_fee', 40, 'winning_price', 110, 'insurance_refund', 50,

@@ -11,9 +11,13 @@ import AuctionAdminActionModal from '../components/auction/AuctionAdminActionMod
 import CatalogItemModal from '../components/auction/CatalogItemModal'
 import GrantItemSheet from '../components/auction/GrantItemSheet'
 import AuctionHouseStatusSheet from '../components/auction/AuctionHouseStatusSheet'
+import AdminInventoryList from '../components/auction/AdminInventoryList'
+import ConfirmActionSheet from '../components/ui/ConfirmActionSheet'
 import { useAuctionAdminData } from '../hooks/useAuctionAdminData'
 import { useAuthStore } from '../stores/authStore'
-import { AuctionView, CatalogItemAdminView, auctionSections } from '../utils/auction'
+import { AdminInventoryItemView, AuctionView, CatalogItemAdminView, SOURCE_LABEL, auctionSections } from '../utils/auction'
+import { formatCloseTime } from '../utils/formatting'
+import { inventoryItems } from '../utils/supabase/db'
 
 // The single home of Auction House administration: every auction action
 // (create / edit / open now / settle now / cancel / reverse), item-catalog
@@ -21,13 +25,14 @@ import { AuctionView, CatalogItemAdminView, auctionSections } from '../utils/auc
 export default function AuctionHouseAdminScreen() {
   const isAdmin = useAuthStore(s => s.role) === 'admin'
 
-  const { loading, auctions, catalog, playerOptions, houseClosed, houseClosedMessage, reload } = useAuctionAdminData()
+  const { loading, auctions, catalog, inventory, playerOptions, houseClosed, houseClosedMessage, reload } = useAuctionAdminData()
 
   const [createOpen, setCreateOpen] = useState(false)
   const [manageAuction, setManageAuction] = useState<AuctionView | null>(null)
   const [editAuction, setEditAuction] = useState<AuctionView | null>(null)
   const [catalogModal, setCatalogModal] = useState<{ initial?: CatalogItemAdminView } | null>(null)
   const [grantOpen, setGrantOpen] = useState(false)
+  const [removeItem, setRemoveItem] = useState<AdminInventoryItemView | null>(null)
   const [statusOpen, setStatusOpen] = useState(false)
 
   useFocusEffect(useCallback(() => { reload() }, [reload]))
@@ -110,7 +115,11 @@ export default function AuctionHouseAdminScreen() {
         <Button label="+ New Catalog Item" variant="outline" onPress={() => setCatalogModal({})} style={styles.topBtn} />
 
         <Text style={styles.sectionLabel}>GRANTS</Text>
-        <Button label="Grant Item to Player" variant="outline" onPress={() => setGrantOpen(true)} />
+        <Button label="Grant Item to Player" variant="outline" onPress={() => setGrantOpen(true)} style={styles.topBtn} />
+
+        <Text style={styles.sectionLabel}>PLAYER INVENTORY</Text>
+        <Text style={styles.sectionHint}>Remove an item from a player’s inventory to undo a grant. Only unused items can be removed.</Text>
+        <AdminInventoryList groups={inventory} onRemove={setRemoveItem} />
 
       {/* Modal-based sheets: render in the native overlay layer, so mounting
           inside the ScrollView children is visually identical. */}
@@ -133,6 +142,24 @@ export default function AuctionHouseAdminScreen() {
       )}
       {grantOpen && (
         <GrantItemSheet playerOptions={playerOptions} catalog={catalog} onClose={() => setGrantOpen(false)} onDone={reload} />
+      )}
+      {removeItem && (
+        <ConfirmActionSheet
+          title="Remove item?"
+          subtitle={`${removeItem.icon} ${removeItem.name} — ${removeItem.playerName}`}
+          confirmLabel="Remove Item"
+          confirmVariant="danger"
+          action={() => inventoryItems.revoke(removeItem.id)}
+          successMessage="Item removed from inventory"
+          failureMessage="Couldn’t remove the item"
+          onClose={() => setRemoveItem(null)}
+          onDone={reload}
+        >
+          <Text style={styles.confirmBody}>
+            This permanently deletes {removeItem.playerName}’s “{removeItem.name}” ({SOURCE_LABEL[removeItem.source]},
+            granted {formatCloseTime(removeItem.grantedAt)}). It cannot be undone. Used items can’t be removed here.
+          </Text>
+        </ConfirmActionSheet>
       )}
       {statusOpen && (
         <AuctionHouseStatusSheet
@@ -175,6 +202,21 @@ const styles = StyleSheet.create({
     color: colors.muted,
     marginBottom: 10,
     marginTop: 6,
+  },
+  sectionHint: {
+    fontFamily: fonts.barlow,
+    fontSize: 12,
+    color: colors.muted,
+    lineHeight: 17,
+    marginTop: -4,
+    marginBottom: 12,
+  },
+  confirmBody: {
+    fontFamily: fonts.barlow,
+    fontSize: 14,
+    color: colors.text,
+    lineHeight: 20,
+    marginTop: 4,
   },
 
   catalogRow: {

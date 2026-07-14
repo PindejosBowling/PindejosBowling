@@ -1,8 +1,23 @@
-import { auctionHouseState, auctionLedger, auctions, itemCatalog, players, seasons } from '../utils/supabase/db'
-import { AuctionView, CatalogItemAdminView } from '../utils/auction'
+import { auctionHouseState, auctionLedger, auctions, inventoryItems, itemCatalog, players, seasons } from '../utils/supabase/db'
+import { AdminInventoryItemView, AdminInventoryPlayerGroup, AuctionView, CatalogItemAdminView, groupAdminInventory } from '../utils/auction'
 import { bouncesByAuction, normalizeAuction, purchasesByAuction } from './useAuctionHouseData'
 import { PlayerPickerItem } from '../components/ui/PlayerPickerModal'
 import { useAsyncData } from './useAsyncData'
+
+function normalizeAdminInventoryItem(row: any): AdminInventoryItemView {
+  return {
+    id: row.id,
+    playerId: row.player_id,
+    playerName: row.players?.name ?? 'Unknown player',
+    itemKey: row.item_catalog?.key ?? '',
+    icon: row.item_catalog?.icon ?? '🎟️',
+    name: row.item_catalog?.name ?? 'Item',
+    source: row.source,
+    grantedAt: row.granted_at,
+    consumedAt: row.consumed_at,
+    removable: row.consumed_at == null,
+  }
+}
 
 export function normalizeCatalogItem(row: any): CatalogItemAdminView {
   return {
@@ -23,6 +38,8 @@ export interface AuctionAdminData {
   loading: boolean
   auctions: AuctionView[]
   catalog: CatalogItemAdminView[]
+  // Every player's inventory for the season, grouped by player (remove-item view).
+  inventory: AdminInventoryPlayerGroup[]
   playerOptions: PlayerPickerItem[]
   // Current season's open/closed kill-switch (drives the status toggle + tile
   // overlay). closedMessage is the admin-authored copy (null = use default).
@@ -31,9 +48,9 @@ export interface AuctionAdminData {
   reload: () => Promise<void>
 }
 
-type AuctionAdminPayload = Pick<AuctionAdminData, 'auctions' | 'catalog' | 'playerOptions' | 'houseClosed' | 'houseClosedMessage'>
+type AuctionAdminPayload = Pick<AuctionAdminData, 'auctions' | 'catalog' | 'inventory' | 'playerOptions' | 'houseClosed' | 'houseClosedMessage'>
 
-const EMPTY: AuctionAdminPayload = { auctions: [], catalog: [], playerOptions: [], houseClosed: false, houseClosedMessage: null }
+const EMPTY: AuctionAdminPayload = { auctions: [], catalog: [], inventory: [], playerOptions: [], houseClosed: false, houseClosedMessage: null }
 
 // Data for AuctionHouseAdminScreen: every auction of the season (no bid/bounce
 // decoding — admin management doesn't need the viewer's sealed-bid view), the
@@ -48,6 +65,7 @@ export function useAuctionAdminData(): AuctionAdminData {
     let catalogData: any[] = []
     let playerData: any[] = []
     let auctionLedgerData: any[] = []
+    let inventoryData: any[] = []
     let stateData: any = null
     await Promise.all([
       seasonId
@@ -59,6 +77,9 @@ export function useAuctionAdminData(): AuctionAdminData {
       seasonId
         ? auctionHouseState.getBySeason(seasonId).then(({ data }) => { stateData = data })
         : Promise.resolve(),
+      seasonId
+        ? inventoryItems.listAllForSeason(seasonId).then(({ data }) => { inventoryData = data ?? [] })
+        : Promise.resolve(),
       itemCatalog.listAllWithCounts().then(({ data }) => { catalogData = data ?? [] }),
       players.listActive().then(({ data }) => { playerData = data ?? [] }),
     ])
@@ -69,6 +90,7 @@ export function useAuctionAdminData(): AuctionAdminData {
       auctions: auctionData.map(row =>
         normalizeAuction(row, null, bounceMap.get(row.id) ?? [], winnerMap.get(row.id) ?? [])),
       catalog: catalogData.map(normalizeCatalogItem),
+      inventory: groupAdminInventory(inventoryData.map(normalizeAdminInventoryItem)),
       playerOptions: playerData.map((p: any) => ({ id: p.id, name: p.name })),
       houseClosed: stateData?.is_closed ?? false,
       houseClosedMessage: stateData?.closed_message ?? null,
