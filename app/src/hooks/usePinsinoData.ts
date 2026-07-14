@@ -308,7 +308,7 @@ export interface BetView {
   boostItemId: string | null
 }
 
-// One row in the season pin-balance scoreboard (Titans of Pindustry).
+// One row in the season pin-balance scoreboard (High Rollers).
 export interface LeaderboardEntry {
   playerId: string
   name: string

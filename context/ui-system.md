@@ -67,7 +67,7 @@ Central signed-URL cache for player profile pictures. `load()` fetches `players.
 | Route | Screen |
 |---|---|
 | `PinsinoHome` | PinsinoScreen — hub: balance card + top-3 leaderboard preview + tile menu |
-| `PinsinoLeaderboard` | PinsinoLeaderboardScreen — full pin-balance leaderboard ("Titans of Pindustry"); uses `PinsinoLeaderboardTable` (no limit) |
+| `PinsinoLeaderboard` | PinsinoLeaderboardScreen — full pin-balance leaderboard ("High Rollers"); uses `PinsinoLeaderboardTable` (no limit) |
 | `Sportsbook` | SportsbookScreen — Place Bets / Active Bets / Settled Bets toggle; bet placement, parlay slip, `BetDetailModal` (public; read-only Active/Settled) |
 | `PlayerPinsino` | PlayerPinsinoScreen — one player's betting record; receives `{ playerId, name }` (opened by tapping a leaderboard row) |
 | `LoanShark` | LoanSharkScreen — borrower hub: active loan panel (debt, repayment form, payment history) or available products list (when no active loan) |
@@ -100,7 +100,7 @@ Central signed-URL cache for player profile pictures. `load()` fetches `players.
 | `AdminSportsbook` | AdminSportsbookScreen — **admin-only** Active Bets / Settled Bets toggle; admin settle (`SettleBetModal`) and cancel (`cancel_bet`) actions |
 | `LoanSharkAdmin` | LoanSharkAdminScreen — **admin-only** list of active loans (player, product, outstanding); cancel (✕) → confirm → `loans.cancel` + reload |
 
-**PinsinoHome** (hub) — PinsinoScreen renders a **balance card** (tap → your own `PlayerPinsino`) + optional **debt / net-worth lines** under the balance when the player has an active loan ("OWED −{debt}" in danger + "NET {netWorth}") + a **"TITANS OF PINDUSTRY" header row** (tap "VIEW ALL ›" → `PinsinoLeaderboard`) + a top-3 preview via `<PinsinoLeaderboardTable limit={3} />` + a **tile menu** (two tiles: **Sportsbook** 🏟️ → `Sportsbook`, **Loan Shark** 🦈 → `LoanShark`). Add future tiles to `MENU_TILES` in that screen.
+**PinsinoHome** (hub) — PinsinoScreen renders a **balance card** (tap → your own `PlayerPinsino`) + optional **debt / net-worth lines** under the balance when the player has an active loan ("OWED −{debt}" in danger + "NET {netWorth}") + a **"HIGH ROLLERS" header row** (tap "VIEW ALL ›" → `PinsinoLeaderboard`) + a top-3 preview via `<PinsinoLeaderboardTable limit={3} />` + a **tile menu** (two tiles: **Sportsbook** 🏟️ → `Sportsbook`, **Loan Shark** 🦈 → `LoanShark`). Add future tiles to `MENU_TILES` in that screen.
 
 **PinsinoLeaderboardScreen** — full leaderboard via `<PinsinoLeaderboardTable />` (no limit). Pin-balance scoreboard of active players, season balances summed from the ledger, Standings-style, with an "Upside" column = projected balance if all that player's still-pending bets win, sorted descending. Tap a row → `PlayerPinsino`.
 

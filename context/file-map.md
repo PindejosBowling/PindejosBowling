@@ -124,7 +124,7 @@ app/
 │       ├── ChemistryScreen.tsx      # Pair/trio win-rate analysis
 │       ├── PastSeasonsScreen.tsx    # Past seasons — season-by-season summary
 │       ├── PinsinoScreen.tsx        # Hub: balance card + top-3 leaderboard preview + tile menu (Sportsbook)
-│       ├── PinsinoLeaderboardScreen.tsx  # Full pin-balance leaderboard (Titans of Pindustry)
+│       ├── PinsinoLeaderboardScreen.tsx  # Full pin-balance leaderboard (High Rollers)
 │       ├── SportsbookScreen.tsx     # Public betting: Place Bets / Active Bets / Settled Bets toggle
 │       ├── PlayerPinsinoScreen.tsx  # One player's betting record: Activity / Open / Settled
 │       ├── PinsinoAdminScreen.tsx   # Admin hub: tile menu (Accounting + Sportsbook + Loan Shark)

@@ -32,7 +32,7 @@ export default function PinsinoLeaderboardScreen() {
         contentContainerStyle={styles.content}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.muted} />}
       >
-        <ScreenHeader title="Titans of Pindustry" onBack={() => navigation.goBack()} />
+        <ScreenHeader title="High Rollers" onBack={() => navigation.goBack()} />
 
         {/* Between seasons: this board is the frozen final standing until the
             next season starts. */}
@@ -56,7 +56,7 @@ export default function PinsinoLeaderboardScreen() {
           {rulesOpen && (
             <View style={styles.rulesBodyWrap}>
               <Text style={styles.rulesBody}>
-                Titans of Pindustry is the "game within the game" of the PBL — a season-long
+                High Rollers is the "game within the game" of the PBL — a season-long
                 race to amass the biggest pin fortune by any means necessary.
               </Text>
               <Text style={styles.rulesBody}>

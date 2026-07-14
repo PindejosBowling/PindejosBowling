@@ -219,8 +219,8 @@ export default function PinsinoScreen() {
           onPress={() => navigation.navigate('PinsinoLeaderboard')}
           activeOpacity={0.7}
         >
-          <Text style={styles.sectionLabel}>TITANS OF PINDUSTRY</Text>
-          <Text style={styles.sectionMore}>VIEW ALL ›</Text>
+          <Text style={styles.sectionLabel}>HIGH ROLLERS</Text>
+          <Text style={styles.sectionChevron}>›</Text>
         </TouchableOpacity>
         <PinsinoLeaderboardTable
           leaderboard={leaderboard}
@@ -366,19 +366,21 @@ const styles = StyleSheet.create({
   sectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 8,
+    justifyContent: 'center',
+    gap: 6,
+    marginBottom: 10,
   },
   sectionLabel: {
     fontFamily: fonts.barlowCondensed,
-    fontSize: 13,
+    fontSize: 22,
+    fontWeight: '700',
     letterSpacing: 2,
-    color: colors.muted,
+    color: colors.text,
   },
-  sectionMore: {
+  sectionChevron: {
     fontFamily: fonts.barlowCondensed,
-    fontSize: 12,
-    letterSpacing: 1,
+    fontSize: 24,
+    lineHeight: 24,
     color: colors.accent,
   },
 
