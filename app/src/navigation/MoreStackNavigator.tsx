@@ -36,6 +36,10 @@ export default function MoreStackNavigator() {
       screenOptions={{
         headerShown: false,
         contentStyle: { backgroundColor: colors.bg },
+        // Freeze screens beneath the focused one so the stack of never-unmounted
+        // screens stops re-rendering and re-running effects while off-view.
+        // Screens reload on focus, so this is transparent.
+        freezeOnBlur: true,
       }}
     >
       <Stack.Screen name="MoreHome" component={MoreHomeScreen} options={{ title: 'More' }} />

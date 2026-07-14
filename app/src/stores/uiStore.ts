@@ -29,12 +29,15 @@ interface UiStore {
   // shows in full. Toggled by the header Artwork button; reset on screen blur.
   artworkReveal: boolean
   toasts: Toast[]
-  // Bumped by useWeekClock (Realtime `weeks` events / app foreground) so
-  // week-derived UI (AppHeader) refetches the current week from the DB.
-  weekVersion: number
+  // Current season/week numbers, kept fresh by useWeekClock (Realtime `weeks`
+  // events / app foreground). Fetched once at the app root and read by every
+  // AppHeader, so the header's query load no longer scales with how many
+  // screens are mounted.
+  weekNumber: number | null
+  seasonNumber: number | null
   set: (partial: Partial<UiStore>) => void
   showToast: (msg: string, type?: string) => void
-  bumpWeekVersion: () => void
+  setWeekMeta: (weekNumber: number | null, seasonNumber: number | null) => void
 }
 
 export const useUiStore = create<UiStore>((set, get) => ({
@@ -54,9 +57,10 @@ export const useUiStore = create<UiStore>((set, get) => ({
   pinsinoViewSeasonId: null,
   artworkReveal: false,
   toasts: [],
-  weekVersion: 0,
+  weekNumber: null,
+  seasonNumber: null,
   set: (partial) => set(partial),
-  bumpWeekVersion: () => set((state) => ({ weekVersion: state.weekVersion + 1 })),
+  setWeekMeta: (weekNumber, seasonNumber) => set({ weekNumber, seasonNumber }),
   showToast: (msg, type = '') => {
     const id = Date.now() + Math.random()
     set((state) => ({ toasts: [...state.toasts, { id, msg, type }] }))

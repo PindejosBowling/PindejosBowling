@@ -29,25 +29,42 @@ export function useAsyncData<T>(
   const [data, setData] = useState<T | null>(null)
   const [error, setError] = useState<unknown>(null)
   const loadedOnce = useRef(false)
+  // Monotonic run id: each load() captures its own id and only commits results
+  // if it's still the latest run. Bumped on unmount / deps change so an in-flight
+  // fetch can't setState on an unmounted screen or overwrite fresher data — the
+  // churn that piled up during rapid navigation.
+  const runId = useRef(0)
 
   const load = useCallback(async () => {
+    const myRun = ++runId.current
+    const isCurrent = () => runId.current === myRun
     if (!loadedOnce.current) setLoading(true)
     try {
-      setData(await fetcher())
+      const result = await fetcher()
+      if (!isCurrent()) return
+      setData(result)
       setError(null)
     } catch (e) {
+      if (!isCurrent()) return
       console.error(`${label} error:`, e)
       setError(e)
     } finally {
-      loadedOnce.current = true
-      setLoading(false)
+      if (isCurrent()) {
+        loadedOnce.current = true
+        setLoading(false)
+      }
     }
     // The fetcher is intentionally keyed by the caller's deps, not its identity —
     // callers pass inline closures that would otherwise change every render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, deps)
 
-  useEffect(() => { load() }, [load])
+  useEffect(() => {
+    load()
+    // Invalidate the in-flight run on unmount or deps change so its late
+    // resolution is ignored (see runId above).
+    return () => { runId.current++ }
+  }, [load])
 
   return { loading, data, error, reload: load, mutate: setData }
 }
