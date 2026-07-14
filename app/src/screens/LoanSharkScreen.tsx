@@ -101,6 +101,15 @@ export default function LoanSharkScreen() {
     })
   }, [activeLoan, avgPerGame])
 
+  // Interest already charged on the active loan (SUM of weekly_interest ledger
+  // rows) — added to the projected interest for the loan's lifetime total.
+  const interestToDate = useMemo(() => {
+    if (!activeLoan) return 0
+    return activeLoan.paymentHistory
+      .filter(d => d.type === 'weekly_interest')
+      .reduce((sum, d) => sum + d.amount, 0)
+  }, [activeLoan])
+
   // Newest-first, but tie-break same-instant rows by mechanical sequence so a
   // week's GARNISHED row always sits below its INTEREST row (garnishment happens
   // first, so in a newest-first list it renders last).
@@ -216,6 +225,7 @@ export default function LoanSharkScreen() {
                       startingDebt={activeLoan.outstanding}
                       avgPerGame={avgPerGame}
                       usingLeagueAvg={usingLeagueAvg}
+                      interestToDate={interestToDate}
                       showTitle={false}
                     />
                   </View>

@@ -13,6 +13,11 @@ interface LoanPayoffScheduleProps {
   avgPerGame: number
   // True when the player has no bowled games and the league average was used.
   usingLeagueAvg?: boolean
+  // Interest already charged on this loan in prior weeks (SUM of weekly_interest
+  // ledger rows). Added to the projected interest so the paid_off headline shows
+  // the loan's lifetime interest, not just what's still to come. 0 for a new
+  // loan preview.
+  interestToDate?: number
   // Hide the internal "PROJECTED PAYOFF" label when the caller already renders
   // one (e.g. the active-loan card's collapsible toggle).
   showTitle?: boolean
@@ -26,9 +31,12 @@ export default function LoanPayoffSchedule({
   startingDebt,
   avgPerGame,
   usingLeagueAvg,
+  interestToDate = 0,
   showTitle = true,
 }: LoanPayoffScheduleProps) {
   const { weeks, status, weeksToPayoff, totalInterest } = schedule
+  // Interest already charged + interest still to come = the loan's lifetime cost.
+  const lifetimeInterest = totalInterest + interestToDate
 
   const avgLabel = usingLeagueAvg
     ? `league average (~${Math.round(avgPerGame)}/game)`
@@ -43,17 +51,17 @@ export default function LoanPayoffSchedule({
   let headlineDanger = false
   switch (status) {
     case 'paid_off':
-      headline = `At ${avgLabel}, paid off in ~${weeksToPayoff} week${weeksToPayoff === 1 ? '' : 's'} · ${formatPins(totalInterest)} pins total interest`
+      headline = `Paid off in ~${weeksToPayoff} week${weeksToPayoff === 1 ? '' : 's'} · ${formatPins(lifetimeInterest)} pins interest`
       break
     case 'truncated':
-      headline = `At ${avgLabel}, still owing ${formatPins(weeks[weeks.length - 1].debtAfter)} after ${MAX_SIMULATED_WEEKS} weeks — this one takes a while`
+      headline = `Still owing ${formatPins(weeks[weeks.length - 1].debtAfter)} after ${MAX_SIMULATED_WEEKS} weeks — slow going`
       break
     case 'spiral':
-      headline = `At ${avgLabel}, the weekly cut never outruns the interest — this debt does not shrink. The shark wins.`
+      headline = `The cut never outruns the interest — this debt won't shrink.`
       headlineDanger = true
       break
     case 'no_data':
-      headline = 'No games on record yet — no payoff projection available.'
+      headline = 'No games on record yet — nothing to project.'
       break
   }
 
@@ -66,8 +74,8 @@ export default function LoanPayoffSchedule({
           <View style={styles.tableHeader}>
             <Text style={[styles.colLabel, styles.colWeek]}>WK</Text>
             <Text style={[styles.colLabel, styles.colPincome]}>PINCOME</Text>
-            <Text style={[styles.colLabel, styles.colTakes]}>SHARK</Text>
-            <Text style={[styles.colLabel, styles.colInterest]}>INTEREST</Text>
+            <Text style={[styles.colLabel, styles.colTakes, styles.headSuccess]}>SHARK</Text>
+            <Text style={[styles.colLabel, styles.colInterest, styles.headDanger]}>INTEREST</Text>
             <Text style={[styles.colLabel, styles.colOwe]}>STILL OWED</Text>
           </View>
           {weeks.map(w => {
@@ -99,7 +107,7 @@ export default function LoanPayoffSchedule({
               </View>
             )
           })}
-          <Text style={styles.basis}>Projected from {basis}. Real weeks use your actual scores.</Text>
+          <Text style={styles.basis}>From {basis} — real weeks use your actual scores.</Text>
         </>
       )}
     </View>
@@ -136,6 +144,10 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
     color: colors.muted2,
   },
+  // Tint the two "money in motion" headers so each concept carries its own
+  // color: green pays the debt down, red is the interest added on top.
+  headSuccess: { color: colors.success },
+  headDanger: { color: colors.danger },
   colWeek: { width: 20, textAlign: 'center' },
   // Left-aligned, each just wide enough for its header/number, to hand the
   // freed horizontal space to the STILL OWED bar.
