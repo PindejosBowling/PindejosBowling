@@ -118,6 +118,7 @@ DB superuser can ultimately extract the key — accepted risk, by decision.
 |---|---|---|
 | `create_catalog_item` / `update_catalog_item` | auth | Admin; update carries the functional-immutability guard |
 | `grant_inventory_item(player, key, qty=1)` | auth | Admin; inserts N atomic rows (`admin_grant`, current season) |
+| `revoke_inventory_item(item_id)` | auth | Admin; undo a grant — hard-deletes ONE `player_inventory_items` row under `FOR UPDATE`. **Unconsumed only**: RAISEs if `consumed_at IS NOT NULL` or if any `bets.*_item_id` / `bet_haunts.inventory_item_id` still points at it (defensive; an unconsumed row never is). Cascade-safe by construction — a used item's reversal path is `cancel_bet` / `reverse_settled_auction`, not this. (`…214000_revoke_inventory_item`) |
 | `create_auction(key, desc, min_bid, opens, closes)` | auth | Admin; active catalog only; lands `scheduled` (or opens immediately via the internal path) |
 | `update_auction(id, …)` | auth | Admin; **scheduled only** — metadata frozen once open |
 | `open_auction_now(id)` | auth | Admin; stamps `opens_at = now()` + the one opening path (publishes `auction_opened`) |
@@ -155,6 +156,7 @@ cancel, and settle serialize on one lock.
 `run-all-probes.sh`): sweep-open, no-op/edit bids (+ cancel-RPC-absent assert), ciphertext-at-rest,
 bounce(40)→win(110) settlement, idempotent re-settle, foreign/consumed ticket
 rejections, insured-loss refund + double-refund guard, reverse blocked-while-
-consumed then zero-residue. The auction admin RPCs are in
+consumed then zero-residue, **`revoke_inventory_item`** (consumed-blocked →
+un-consume → deleted; non-admin rejected). The auction admin RPCs are in
 `probe-admin-guards.sql`. Requires the Vault secret + the live
 `golden_ticket` catalog row.

@@ -116,6 +116,52 @@ export interface CatalogItemAdminView {
   instanceCount: number
 }
 
+// One inventory row as the admin remove-item view sees it (across all players).
+// removable = unconsumed → the revoke_inventory_item RPC will accept it; a
+// consumed item is attached to a bet/haunt and is history, not removable here.
+export interface AdminInventoryItemView {
+  id: string
+  playerId: string
+  playerName: string
+  itemKey: string
+  icon: string
+  name: string
+  source: InventoryItemSource
+  grantedAt: string
+  consumedAt: string | null
+  removable: boolean
+}
+
+// The admin remove-item list, grouped by player (players with items only),
+// removable rows first (newest grant first), used rows greyed below.
+export interface AdminInventoryPlayerGroup {
+  playerId: string
+  playerName: string
+  removableCount: number
+  items: AdminInventoryItemView[]
+}
+
+export function groupAdminInventory(items: AdminInventoryItemView[]): AdminInventoryPlayerGroup[] {
+  const groups = new Map<string, AdminInventoryPlayerGroup>()
+  for (const item of items) {
+    let g = groups.get(item.playerId)
+    if (!g) {
+      g = { playerId: item.playerId, playerName: item.playerName, removableCount: 0, items: [] }
+      groups.set(item.playerId, g)
+    }
+    g.items.push(item)
+    if (item.removable) g.removableCount += 1
+  }
+  for (const g of groups.values()) {
+    // Removable (unconsumed) first, then newest grant first within each band.
+    g.items.sort((a, b) =>
+      Number(b.removable) - Number(a.removable) || b.grantedAt.localeCompare(a.grantedAt))
+  }
+  // Players with pending (removable) items first, then alphabetical.
+  return [...groups.values()].sort((a, b) =>
+    b.removableCount - a.removableCount || a.playerName.localeCompare(b.playerName))
+}
+
 // The DB check constraints on item_catalog, mirrored for the admin form chips.
 export const CATALOG_EFFECT_TYPES = ['bet_insurance', 'parlay_crutch', 'odds_boost', 'haunt', 'cosmetic', 'access_pass', 'custom'] as const
 export const CATALOG_ACTIVATION_MODES = ['attach_to_bet', 'attach_to_foreign_bet', 'passive', 'admin_honored'] as const

@@ -1260,6 +1260,18 @@ export const inventoryItems = {
     supabase.rpc('grant_inventory_item', {
       p_player_id: playerId, p_catalog_key: catalogKey, p_quantity: quantity,
     }),
+  // Admin: every inventory row for the season across all players (RLS "owner or
+  // admin can read inventory" lets admins see everyone). Powers the admin
+  // remove-item view; player names join for grouping.
+  listAllForSeason: (seasonId: string) =>
+    supabase.from('player_inventory_items')
+      .select('*, item_catalog(key, name, icon, effect_type), players!player_inventory_items_player_id_fkey(id, name)')
+      .eq('season_id', seasonId)
+      .order('granted_at', { ascending: false }),
+  // Admin: hard-delete a single unconsumed inventory row (undo a bad grant).
+  // The RPC refuses consumed/attached items; cascade-safe by construction.
+  revoke: (itemId: string) =>
+    supabase.rpc('revoke_inventory_item', { p_item_id: itemId }),
 }
 
 // ── Activity Feed ("Market Moves") — activity_feed_events ────────────────────
