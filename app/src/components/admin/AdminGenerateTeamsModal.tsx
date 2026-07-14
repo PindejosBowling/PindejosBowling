@@ -315,7 +315,6 @@ export default function AdminGenerateTeamsModal({ onClose }: Props) {
       title="Generate Teams"
       onClose={handleClose}
       busy={generating || confirming}
-      bodyMaxHeight={540}
       footer={
         <View style={styles.footer}>
           <Button label="Cancel" variant="ghost" onPress={handleClose} />

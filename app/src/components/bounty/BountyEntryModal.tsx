@@ -31,7 +31,6 @@ export default function BountyEntryModal({ bounty: b, onClose, onDone }: Props) 
       action={() => bountyPosts.enter(b.id)}
       successMessage="You joined the hunt"
       failureMessage="Failed to join"
-      bodyMaxHeight={320}
       onClose={onClose}
       onDone={onDone}
     >

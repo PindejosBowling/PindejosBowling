@@ -290,7 +290,7 @@ export default function LoanSharkScreen() {
                   {p.special_warning_text ? (
                     <Text style={styles.productWarn}>⚠ {p.special_warning_text}</Text>
                   ) : null}
-                  <Button label="Borrow" onPress={() => setConfirmProduct(p)} style={styles.borrowBtn} />
+                  <Button label="Details" onPress={() => setConfirmProduct(p)} style={styles.borrowBtn} />
                 </View>
               ))
             )}

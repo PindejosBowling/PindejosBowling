@@ -225,7 +225,6 @@ export default function CustomLineCreateModal({ currentWeekId, seasonId, initial
       onClose={onClose}
       busy={saving}
       keyboardAvoiding
-      bodyMaxHeight={460}
       footer={
         <>
           <Button

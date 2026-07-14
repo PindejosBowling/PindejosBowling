@@ -102,7 +102,6 @@ export default function AuctionCreateModal({ initial, onClose, onDone }: Props) 
       onClose={onClose}
       busy={saving}
       keyboardAvoiding
-      bodyMaxHeight={460}
       footer={
         <>
           <Button

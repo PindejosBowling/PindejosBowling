@@ -86,7 +86,6 @@ export default function CatalogItemModal({ initial, onClose, onDone }: Props) {
       onClose={onClose}
       busy={saving}
       keyboardAvoiding
-      bodyMaxHeight={460}
       footer={
         <>
           <Button

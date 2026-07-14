@@ -47,7 +47,6 @@ export default function BorrowConfirmModal({ product, avgPerGame, usingLeagueAvg
       action={() => loans.take(product.id)}
       successMessage={`Borrowed ${formatPins(product.borrow_amount)} pins`}
       failureMessage="Failed to take loan"
-      bodyMaxHeight={440}
       onClose={onClose}
       onDone={onBorrowed}
     >

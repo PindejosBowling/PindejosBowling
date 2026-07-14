@@ -216,7 +216,6 @@ export default function BetSlip({
           onClose={() => onOpenChange(false)}
           busy={placing}
           keyboardAvoiding
-          bodyMaxHeight={440}
           footer={
             <Button
               label={ctaLabel}

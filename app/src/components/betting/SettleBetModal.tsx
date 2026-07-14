@@ -112,7 +112,6 @@ export default function SettleBetModal({ bet, onClose, onSettled }: SettleBetMod
       onClose={onClose}
       busy={settling}
       keyboardAvoiding
-      bodyMaxHeight={360}
       footer={
         <Button
           label={isParlay ? 'Settle Parlay' : 'Settle Bet'}

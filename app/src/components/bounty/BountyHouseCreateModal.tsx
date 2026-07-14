@@ -95,7 +95,6 @@ export default function BountyHouseCreateModal({ weekId, onClose, onDone }: Prop
       onClose={onClose}
       busy={saving}
       keyboardAvoiding
-      bodyMaxHeight={440}
       footer={
         <>
           <Button

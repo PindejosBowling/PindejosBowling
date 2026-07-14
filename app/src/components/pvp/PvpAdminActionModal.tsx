@@ -38,7 +38,6 @@ export default function PvpAdminActionModal({ challenge: c, onClose, onDone }: P
       onClose={onClose}
       busy={saving}
       keyboardAvoiding
-      bodyMaxHeight={420}
       footer={
         <>
           {saving && <ActivityIndicator size="small" color={colors.accent} style={{ marginTop: 12 }} />}

@@ -17,7 +17,6 @@ interface ConfirmActionSheetProps {
   // Catch-all toast when the action throws (default 'Action failed');
   // `{ error }` results toast the server message instead.
   failureMessage?: string
-  bodyMaxHeight?: number
   onClose: () => void
   onDone: () => void
 }
@@ -36,7 +35,6 @@ export default function ConfirmActionSheet({
   action,
   successMessage,
   failureMessage,
-  bodyMaxHeight,
   onClose,
   onDone,
 }: ConfirmActionSheetProps) {
@@ -64,7 +62,6 @@ export default function ConfirmActionSheet({
       subtitle={subtitle}
       onClose={onClose}
       busy={saving}
-      bodyMaxHeight={bodyMaxHeight}
       footer={
         <>
           <Button

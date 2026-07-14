@@ -33,7 +33,6 @@ export default function PvpAcceptModal({ challenge: c, viewerId, onClose, onDone
       action={() => pvpChallenges.accept(c.id)}
       successMessage="Challenge accepted"
       failureMessage="Failed to accept"
-      bodyMaxHeight={320}
       onClose={onClose}
       onDone={onDone}
     >

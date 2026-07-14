@@ -61,7 +61,6 @@ export default function GrantItemSheet({ playerOptions, catalog, onClose, onDone
       onClose={onClose}
       busy={saving}
       keyboardAvoiding
-      bodyMaxHeight={420}
       footer={
         <>
           <Button

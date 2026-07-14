@@ -145,7 +145,6 @@ export default function PvpCounterModal({ challenge: c, viewerId, balance, onClo
       onClose={onClose}
       busy={saving}
       keyboardAvoiding
-      bodyMaxHeight={380}
       footer={
         <Button
           label="Send Counteroffer"

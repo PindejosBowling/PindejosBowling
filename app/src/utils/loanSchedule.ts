@@ -11,7 +11,7 @@
 // the real settlement uses actual game scores, so this is a projection, not a
 // promise.
 
-export const MAX_SIMULATED_WEEKS = 10
+export const MAX_SIMULATED_WEEKS = 8
 
 export interface LoanScheduleWeek {
   week: number // 1-based

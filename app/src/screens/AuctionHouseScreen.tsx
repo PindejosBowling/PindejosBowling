@@ -102,7 +102,11 @@ export default function AuctionHouseScreen() {
           <ItemInfoSheet group={infoGroup} onClose={() => setInfoGroup(null)} />
         )}
         {helpOpen && (
-          <FeatureExplainerSheet explainer={EXPLAINERS.auctionHouse} onClose={() => setHelpOpen(false)} />
+          <FeatureExplainerSheet
+            explainer={EXPLAINERS.auctionHouse}
+            subsection={EXPLAINERS.items}
+            onClose={() => setHelpOpen(false)}
+          />
         )}
     </ScreenContainer>
   )

@@ -62,7 +62,6 @@ export default function BountyAdminActionModal({ bounty: b, onClose, onDone }: P
       onClose={onClose}
       busy={saving}
       keyboardAvoiding
-      bodyMaxHeight={460}
       footer={
         // Cancel lives in the footer (outside the scrollable body) so the
         // destructive action is always on screen at load — an admin must be able

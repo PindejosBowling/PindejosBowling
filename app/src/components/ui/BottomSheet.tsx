@@ -1,9 +1,17 @@
 import { ReactNode } from 'react'
 import {
   Modal, View, Text, TouchableOpacity, StyleSheet, Platform, ScrollView, KeyboardAvoidingView,
+  useWindowDimensions,
 } from 'react-native'
 import { colors, fonts } from '../../theme'
 import Toast from './Toast'
+
+// Room reserved above the scrolling body for the sheet chrome (title, subtitle,
+// footer, padding) plus a small gap so the sheet never runs under the status
+// bar. The body fills the rest of the screen, then scrolls.
+const CHROME_RESERVE = 300
+// Floor so very short screens still get a usable body.
+const MIN_BODY_HEIGHT = 320
 
 interface BottomSheetProps {
   title: string
@@ -19,8 +27,6 @@ interface BottomSheetProps {
   footer?: ReactNode
   // Wrap in a KeyboardAvoidingView (iOS padding) — for sheets with text inputs.
   keyboardAvoiding?: boolean
-  // When set, the body is wrapped in a ScrollView capped at this height.
-  bodyMaxHeight?: number
 }
 
 // The canonical bottom-sheet scaffold: transparent slide Modal → overlay backdrop
@@ -38,8 +44,13 @@ export default function BottomSheet({
   children,
   footer,
   keyboardAvoiding,
-  bodyMaxHeight,
 }: BottomSheetProps) {
+  const { height } = useWindowDimensions()
+  // The body grows with its content up to nearly the full screen height, then
+  // scrolls. Applied universally so every sheet uses the available space before
+  // scrolling — no caller needs to guess a pixel cap.
+  const bodyMaxHeight = Math.max(MIN_BODY_HEIGHT, height - CHROME_RESERVE)
+
   function dismiss() {
     if (!busy) onClose()
   }
@@ -50,13 +61,9 @@ export default function BottomSheet({
       <View style={styles.sheet}>
         <Text style={[styles.title, titleColor != null && { color: titleColor }]}>{title}</Text>
         {subtitle != null && <Text style={styles.subtitle}>{subtitle}</Text>}
-        {bodyMaxHeight != null ? (
-          <ScrollView style={{ maxHeight: bodyMaxHeight }} keyboardShouldPersistTaps="handled">
-            {children}
-          </ScrollView>
-        ) : (
-          children
-        )}
+        <ScrollView style={{ maxHeight: bodyMaxHeight }} keyboardShouldPersistTaps="handled">
+          {children}
+        </ScrollView>
         {footer}
       </View>
     </>
