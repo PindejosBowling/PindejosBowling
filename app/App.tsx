@@ -24,6 +24,7 @@ import { useAuthStore } from './src/stores/authStore'
 import { useAvatarStore } from './src/stores/avatarStore'
 import { useNotificationStore } from './src/stores/notificationStore'
 import { useWeekClock } from './src/hooks/useWeekClock'
+import { useOtaUpdates } from './src/hooks/useOtaUpdates'
 import { syncPushToken } from './src/utils/pushTokens'
 
 const BASE = 'PindejosBowling'
@@ -116,6 +117,9 @@ export default function App() {
 
   // Live week clock: DB-driven refresh of week-derived UI on every device.
   useWeekClock(!!role)
+
+  // Silently pull + apply the latest OTA update whenever the app foregrounds.
+  useOtaUpdates()
 
   useEffect(() => {
     useAuthStore.getState().hydrate()
