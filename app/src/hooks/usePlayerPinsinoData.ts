@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect } from 'react'
-import { seasons, bets, pinLedger } from '../utils/supabase/db'
+import { seasons, bets, pinLedger, loanLedger } from '../utils/supabase/db'
 import { BetView, normalizeBet } from './usePinsinoData'
-import { computeBalance } from '../utils/ledger'
+import { computeBalance, computeDebt } from '../utils/ledger'
 
 export interface LedgerEntry {
   id: string
@@ -16,6 +16,7 @@ export interface LedgerEntry {
 export function usePlayerPinsinoData(playerId: string | null, viewSeasonId?: string | null) {
   const [loading, setLoading] = useState(true)
   const [balance, setBalance] = useState(0)
+  const [debt, setDebt] = useState(0)
   const [ledger, setLedger] = useState<LedgerEntry[]>([])
   const [openBets, setOpenBets] = useState<BetView[]>([])
   const [settledBets, setSettledBets] = useState<BetView[]>([])
@@ -27,6 +28,7 @@ export function usePlayerPinsinoData(playerId: string | null, viewSeasonId?: str
     try {
       if (!playerId) {
         setBalance(0)
+        setDebt(0)
         setLedger([])
         setOpenBets([])
         setSettledBets([])
@@ -60,6 +62,18 @@ export function usePlayerPinsinoData(playerId: string | null, viewSeasonId?: str
         fetches.push(
           pinLedger.listByPlayerSeason(playerId, seasonId).then(({ data }) => {
             ledgerData = data ?? []
+          })
+        )
+      }
+
+      // Outstanding loan debt this season. SUM(amount) over the player's
+      // loan_ledger rows = net owed across all their loans (paid-off/settled
+      // loans net to 0), matching the net-worth leaderboard's Debt column.
+      let debtData: any[] = []
+      if (seasonId) {
+        fetches.push(
+          loanLedger.listByPlayerSeason(playerId, seasonId).then(({ data }) => {
+            debtData = data ?? []
           })
         )
       }
@@ -106,10 +120,12 @@ export function usePlayerPinsinoData(playerId: string | null, viewSeasonId?: str
         bet: e.bets ? normalizeBet(e.bets) : null,
       }))
 
-      // Calculate balance
+      // Calculate spendable pin balance and outstanding loan debt (≥ 0).
       const playerBalance = computeBalance(ledgerData)
+      const playerDebt = computeDebt(debtData)
 
       setBalance(playerBalance)
+      setDebt(playerDebt)
       setLedger(ledgerEntries)
       setOpenBets(openBetViews)
       setSettledBets(settledBetViews)
@@ -124,5 +140,5 @@ export function usePlayerPinsinoData(playerId: string | null, viewSeasonId?: str
     load()
   }, [load])
 
-  return { loading, balance, ledger, openBets, settledBets, seasonNumber, seasonConcluded, reload: load }
+  return { loading, balance, debt, netWorth: balance - debt, ledger, openBets, settledBets, seasonNumber, seasonConcluded, reload: load }
 }

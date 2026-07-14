@@ -20,7 +20,7 @@ import ReadOnlySeasonBanner from '../components/betting/ReadOnlySeasonBanner'
 import { useUiStore } from '../stores/uiStore'
 import { BetView } from '../hooks/usePinsinoData'
 import EmptyCard from '../components/ui/EmptyCard'
-import { formatPins } from '../utils/formatting'
+import { formatPins, signed } from '../utils/formatting'
 
 type PlayerPinsinoRoute = RouteProp<
   { PlayerPinsino: { playerId: string; name: string } },
@@ -37,7 +37,7 @@ export default function PlayerPinsinoScreen() {
 
   const pinsinoViewSeasonId = useUiStore(s => s.pinsinoViewSeasonId)
   const { readOnly, viewSeasonNumber } = usePinsinoSeasonContext()
-  const { loading, balance, ledger, openBets, settledBets, reload } = usePlayerPinsinoData(playerId, pinsinoViewSeasonId)
+  const { loading, balance, debt, netWorth, ledger, openBets, settledBets, reload } = usePlayerPinsinoData(playerId, pinsinoViewSeasonId)
   const { refreshing, onRefresh } = useRefresh(reload)
 
   const [view, setView] = useState<DetailView>('activity')
@@ -60,18 +60,23 @@ export default function PlayerPinsinoScreen() {
   ]
 
   const summary = useMemo(() => {
+    // Three economic buckets that partition every pin_ledger type:
+    //   pincome — pins earned bowling + house bonuses (score_credit, bonus)
+    //   loans   — net cash the loan system moved through the balance
+    //             (loan_issued proceeds, less repayments/garnishments/settlement)
+    //   gaming  — net across everything else you wager on (bets, PvP, bounties,
+    //             auctions, item effects). Taken as the remainder so the rows
+    //             always reconcile to the spendable balance, even for ledger
+    //             types added later.
     let pincome = 0
-    let wagered = 0
-    let won = 0
-    let bonus = 0
+    let loans = 0
     for (const e of ledger) {
-      if (e.type === 'score_credit') pincome += e.amount
-      else if (e.type === 'bet_stake') wagered += e.amount
-      else if (e.type === 'bet_payout') won += e.amount
-      else if (e.type === 'bonus') bonus += e.amount
+      if (e.type === 'score_credit' || e.type === 'bonus') pincome += e.amount
+      else if (e.type.startsWith('loan_')) loans += e.amount
     }
-    return { pincome, wagered, won, bonus }
-  }, [ledger])
+    const gaming = balance - pincome - loans
+    return { pincome, gaming, loans }
+  }, [ledger, balance])
 
   const bonusEntries = useMemo(
     () => ledger.filter(e => e.type === 'bonus'),
@@ -150,37 +155,72 @@ export default function PlayerPinsinoScreen() {
         {/* Summary card */}
         <View style={styles.summaryCard}>
           <View style={[styles.summaryRow, styles.summaryRowBorder]}>
-            <Text style={styles.summaryLabel}>PINCOME</Text>
-            <Text style={[styles.summaryValue, { color: colors.success }]}>
-              +{formatPins(summary.pincome)}
+            <View style={styles.summaryLabelCol}>
+              <Text style={[styles.summaryLabel, styles.summaryLabelTotal]}>PINCOME</Text>
+              <Text style={styles.summarySub}>Scores bowled & house bonuses</Text>
+            </View>
+            <Text style={[styles.summaryValue, { color: summary.pincome >= 0 ? colors.success : colors.danger }]}>
+              {signed(summary.pincome)}
             </Text>
           </View>
           <View style={[styles.summaryRow, styles.summaryRowBorder]}>
-            <Text style={styles.summaryLabel}>PINS WAGERED</Text>
-            <Text style={[styles.summaryValue, { color: colors.danger }]}>
-              {formatPins(summary.wagered)}
+            <View style={styles.summaryLabelCol}>
+              <Text style={styles.summaryLabel}>GAMING</Text>
+              <Text style={styles.summarySub}>Net from bets, PvP, bounties & auctions</Text>
+            </View>
+            <Text style={[styles.summaryValue, { color: summary.gaming >= 0 ? colors.success : colors.danger }]}>
+              {signed(summary.gaming)}
             </Text>
           </View>
-          <View style={[styles.summaryRow, styles.summaryRowBorder]}>
-            <Text style={styles.summaryLabel}>PINS WON</Text>
-            <Text style={[styles.summaryValue, { color: colors.success }]}>
-              +{formatPins(summary.won)}
-            </Text>
-          </View>
-          {summary.bonus !== 0 && (
+          {summary.loans !== 0 && (
             <View style={[styles.summaryRow, styles.summaryRowBorder]}>
-              <Text style={styles.summaryLabel}>BONUSES</Text>
-              <Text style={[styles.summaryValue, { color: colors.gold }]}>
-                +{formatPins(summary.bonus)}
+              <View style={styles.summaryLabelCol}>
+                <Text style={styles.summaryLabel}>LOAN PROCEEDS</Text>
+                <Text style={styles.summarySub}>Pins borrowed, net of repayments</Text>
+              </View>
+              <Text style={[styles.summaryValue, { color: summary.loans >= 0 ? colors.success : colors.danger }]}>
+                {signed(summary.loans)}
               </Text>
             </View>
           )}
-          <View style={styles.summaryRow}>
-            <Text style={[styles.summaryLabel, styles.summaryLabelTotal]}>PIN BALANCE</Text>
-            <Text style={[styles.summaryValue, styles.summaryValueTotal]}>
-              {formatPins(balance)}
-            </Text>
-          </View>
+          {/* When the player carries loan debt, PIN BALANCE is only a subtotal;
+              the reconciling headline is NET WORTH = balance − outstanding debt. */}
+          {debt !== 0 ? (
+            <>
+              <View style={[styles.summaryRow, styles.summaryRowBorder]}>
+                <View style={styles.summaryLabelCol}>
+                  <Text style={[styles.summaryLabel, styles.summaryLabelTotal]}>PIN BALANCE</Text>
+                  <Text style={styles.summarySub}>Pins available to spend</Text>
+                </View>
+                <Text style={styles.summaryValue}>{formatPins(balance)}</Text>
+              </View>
+              <View style={[styles.summaryRow, styles.summaryRowBorder]}>
+                <View style={styles.summaryLabelCol}>
+                  <Text style={styles.summaryLabel}>LOANS OUTSTANDING</Text>
+                  <Text style={styles.summarySub}>Debt still owed to the Loan Shark</Text>
+                </View>
+                <Text style={[styles.summaryValue, { color: colors.danger }]}>
+                  −{formatPins(debt)}
+                </Text>
+              </View>
+              <View style={styles.summaryRow}>
+                <View style={styles.summaryLabelCol}>
+                  <Text style={[styles.summaryLabel, styles.summaryLabelTotal]}>NET WORTH</Text>
+                  <Text style={styles.summarySub}>Balance minus what you owe</Text>
+                </View>
+                <Text style={[styles.summaryValue, styles.summaryValueTotal]}>
+                  {formatPins(netWorth)}
+                </Text>
+              </View>
+            </>
+          ) : (
+            <View style={styles.summaryRow}>
+              <Text style={[styles.summaryLabel, styles.summaryLabelTotal]}>PIN BALANCE</Text>
+              <Text style={[styles.summaryValue, styles.summaryValueTotal]}>
+                {formatPins(balance)}
+              </Text>
+            </View>
+          )}
         </View>
 
         {/* View toggle */}
@@ -334,11 +374,23 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
   },
+  summaryLabelCol: {
+    flex: 1,
+    paddingRight: 12,
+  },
   summaryLabel: {
     fontFamily: fonts.barlowCondensed,
     fontSize: 13,
     letterSpacing: 1.5,
     color: colors.muted,
+  },
+  summarySub: {
+    fontFamily: fonts.barlowCondensed,
+    fontSize: 11,
+    letterSpacing: 0.3,
+    color: colors.muted,
+    opacity: 0.7,
+    marginTop: 2,
   },
   summaryLabelTotal: {
     color: colors.text,
