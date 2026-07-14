@@ -45,8 +45,9 @@ gh pr merge <number> --squash
 
 **Always squash — never a merge commit, never rebase.** The point is rollback: a squash collapses the whole PR into a single commit on main, so the entire PR can later be undone with one `git revert`. A merge commit needs `-m` parent selection to revert, and a rebase scatters the PR across several commits that must be hunted down individually — both break the one-commit-one-revert guarantee this repo relies on. This rule holds even if the PR has only one commit anyway: consistency keeps the rollback recipe uniform.
 
-- **No cleanup.** Don't pass `--delete-branch`, don't delete the local branch, don't switch to main, don't pull. Leave the checkout exactly where it is; the local branch and local main being stale after the merge is expected. Only update them if the user asks.
-- If the merge fails (branch protection, required checks, conflicts), report `gh`'s error verbatim and stop — don't retry with a different merge strategy.
+- **After a successful merge, return to main and sync:** `git checkout main && git pull` — the checkout should always end up on an up-to-date main so the next piece of work branches from the merged state.
+- **No branch deletion.** Don't pass `--delete-branch` and don't delete the local feature branch — it stays around as the re-landing handle for a future rollback-then-redo.
+- If the merge fails (branch protection, required checks, conflicts), report `gh`'s error verbatim and stop — don't retry with a different merge strategy, don't switch branches.
 - Report the merge result, including the squash commit SHA on main (`gh pr view <number> --json mergeCommit`), since that's the handle for any future rollback.
 
 ### After the merge: does this need a TestFlight build?
@@ -66,7 +67,7 @@ When the user asks to undo / revert / roll back a merged PR:
 1. **Find the squash commit.**
    - If they gave a PR number: `gh pr view <number> --json mergeCommit,title,state`.
    - If they described it ("the bounty fix from yesterday"): locate it via `gh pr list --state merged --limit 10` or `git log origin/main --oneline` — squash commits carry the PR number as a `(#N)` suffix. Confirm with the user which PR you found before reverting.
-2. **Get current main locally:** `git fetch origin`, then `git checkout main && git pull` (note which branch you were on so you can tell the user; per the no-cleanup rule they may still be on a feature branch).
+2. **Get current main locally:** `git fetch origin`, then `git checkout main && git pull` (usually already there — the merge flow ends on a synced main — but note which branch you were on so you can tell the user).
 3. **Revert:** `git revert --no-edit <sha>`. Because the squash merge guaranteed a single ordinary commit, no `-m` parent selection is needed — this is exactly the payoff of the always-squash rule. Amend the message to append the repo's standard `Co-Authored-By` trailer.
 4. **Push directly to main:** `git push origin main`. No revert PR — rollback is the one case where speed beats ceremony.
 5. **Report** the revert commit SHA and what was undone.
@@ -75,7 +76,7 @@ Edge cases:
 
 - **Rolling back several PRs:** revert newest-first (reverse merge order) so each revert applies cleanly.
 - **Revert conflicts** (a later commit touched the same lines): stop and show the conflict; let the user decide rather than resolving silently.
-- **Re-landing later:** the original branch still exists (no cleanup), so the work can come back via a fresh PR; reverting the revert also works.
+- **Re-landing later:** the original branch still exists (branches are never deleted), so the work can come back via a fresh PR; reverting the revert also works.
 
 ## Notes
 
