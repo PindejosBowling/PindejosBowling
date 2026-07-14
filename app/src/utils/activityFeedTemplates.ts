@@ -242,7 +242,7 @@ export function renderFeedEvent(row: FeedEventView): FeedRenderParts {
         houseNet > 0
           ? `The House cleaned up this week: +${houseNet.toLocaleString()} pins.`
           : houseNet < 0
-            ? `The players beat the House this week: ${houseNet.toLocaleString()} for the Sportsbook.`
+            ? `The players beat the House this week: ${houseNet.toLocaleString()} pins.`
             : 'The House and the players broke even this week.'
       return { icon: '🏛️', sourceLabel: 'The House', line }
     }

@@ -1,8 +1,7 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { View, Text, StyleSheet } from 'react-native'
 import { useUiStore } from '../../stores/uiStore'
-import { betMarkets, lanetalkImports, scores } from '../../utils/supabase/db'
-import { gameStats } from '../../data/lanetalk/stats'
+import { archives } from '../../utils/supabase/db'
 import { colors, fonts, radius } from '../../theme'
 import BottomSheet from '../ui/BottomSheet'
 import Button from '../ui/Button'
@@ -10,93 +9,70 @@ import Button from '../ui/Button'
 interface Props {
   weekId: string
   weekTitle: string
-  // The week's unsettled LaneTalk prop markets (id, title, subject_player_id,
-  // game_number, params) — drives the informational coverage preview only; the
-  // RPC recomputes data coverage authoritatively inside its transaction.
-  markets: any[]
   onClose: () => void
   // Reload after a successful settle (run before onClose).
   onDone: () => void
 }
 
-// "Confirm LaneTalk Data" — settles the week's stat props off the imported
-// official games via ONE atomic, idempotent RPC (settle_lanetalk_props_for_week,
-// pattern: AdminArchiveModal — summary, warning box, armed second action).
-// Built on BottomSheet directly (not ConfirmActionSheet): two settle actions
-// plus the armed void two-step don't fit the single-action contract.
+interface WouldVoid {
+  market_id: string
+  market_type: string
+  title: string
+  reason: string
+}
+interface Preview {
+  settleable: number
+  missing_count: number
+  would_void: WouldVoid[]
+}
+
+// "Settle Week" — the next-day clock. Settles ALL money for an advanced (locked)
+// week: pincome, bets, LaneTalk props, loans, PvP, unified House P/L. Mounted
+// while the week is advanced-but-unsettled (is_archived && settled_at == null).
 //
-//  • Settle Available: settles every market whose data landed; the rest stay
-//    pending, so the flow is safely re-runnable after late imports.
-//  • Settle + Void Missing (armed): also DELETEs markets with no data — the
-//    delete-refund rail returns every touched bet's stake whole. Refunded bets
-//    are removed rather than kept as `void` records.
-export default function LanetalkConfirmModal({ weekId, weekTitle, markets, onClose, onDone }: Props) {
+// The would-void warning is authoritative: preview_settle_week runs the exact
+// coverage predicates settle_week uses, server-side (no client mirror).
+//
+//  • Settle Available: settles every market whose data landed; LaneTalk props
+//    still lacking imports stay pending, so it is safely re-runnable after late
+//    imports. Fails loudly if a score-derived market has no gradable outcome.
+//  • Settle + Void Missing (armed): also delete-refunds every would-void market
+//    and force-voids any bet that would otherwise remain pending.
+export default function AdminSettleModal({ weekId, weekTitle, onClose, onDone }: Props) {
   const { showToast } = useUiStore()
   const [saving, setSaving] = useState(false)
   const [voidArmed, setVoidArmed] = useState(false)
-
-  // Coverage preview inputs: the week's official imports + scored-game counts.
   const [previewLoading, setPreviewLoading] = useState(true)
-  const [officialImports, setOfficialImports] = useState<any[]>([])
-  const [scoreRows, setScoreRows] = useState<any[]>([])
+  const [preview, setPreview] = useState<Preview | null>(null)
 
   useEffect(() => {
     let cancelled = false
-    Promise.all([
-      lanetalkImports.listOfficialByWeek(weekId),
-      scores.listByWeekWithGames(weekId),
-    ]).then(([importsRes, scoresRes]) => {
+    archives.previewSettleWeek(weekId).then(({ data, error }) => {
       if (cancelled) return
-      setOfficialImports(importsRes.data ?? [])
-      setScoreRows(scoresRes.data ?? [])
+      if (!error && data) setPreview(data as unknown as Preview)
       setPreviewLoading(false)
     })
     return () => { cancelled = true }
   }, [weekId])
 
-  // Client-side mirror of the RPC's coverage rules (informational only):
-  // game scope → an official import for (player, game) with frames; night
-  // scope → official-game count ≥ scored-game count (never half a night).
-  const { ready, missing } = useMemo(() => {
-    const importsWithFrames = officialImports.filter(
-      r => gameStats({ frames: r.payload?.frames ?? [] }) != null,
-    )
-    const gameKeys = new Set(importsWithFrames.map(r => `${r.player_id}|${r.game_number}`))
-    const officialCount = new Map<string, number>()
-    for (const r of importsWithFrames) {
-      officialCount.set(r.player_id, (officialCount.get(r.player_id) ?? 0) + 1)
-    }
-    const scoredCount = new Map<string, number>()
-    for (const s of scoreRows) {
-      const pid = s.team_slots?.player_id
-      if (pid) scoredCount.set(pid, (scoredCount.get(pid) ?? 0) + 1)
-    }
-    const ready: any[] = []
-    const missing: any[] = []
-    for (const m of markets) {
-      const hasData = m.game_number != null
-        ? gameKeys.has(`${m.subject_player_id}|${m.game_number}`)
-        : (officialCount.get(m.subject_player_id) ?? 0) > 0 &&
-          (officialCount.get(m.subject_player_id) ?? 0) >= (scoredCount.get(m.subject_player_id) ?? 0)
-      ;(hasData ? ready : missing).push(m)
-    }
-    return { ready, missing }
-  }, [markets, officialImports, scoreRows])
+  const missing = preview?.would_void ?? []
 
   async function settle(voidMissing: boolean) {
     setSaving(true)
     try {
-      const { data, error } = await betMarkets.settleLanetalkProps(weekId, voidMissing)
+      const { data, error } = await archives.settleWeek(weekId, voidMissing, voidMissing)
       if (error) { showToast(error.message, 'error'); return }
-      const row: any = Array.isArray(data) ? data[0] : data
+      const row: any = data
+      const net = row?.house_net ?? 0
       showToast(
-        `Stat props: ${row?.settled ?? 0} settled · ${row?.voided ?? 0} refunded · ${row?.left_pending ?? 0} left pending`,
+        `${weekTitle} settled · ${row?.settled ?? 0} props · ${row?.voided ?? 0} voided · ` +
+        `${row?.left_pending ?? 0} pending · House ${net >= 0 ? '+' : ''}${Number(net).toLocaleString()}`,
         'success',
       )
       onDone()
       onClose()
     } catch {
-      showToast('Failed to settle stat props', 'error')
+      showToast('Failed to settle the week', 'error')
     } finally {
       setSaving(false)
     }
@@ -110,7 +86,7 @@ export default function LanetalkConfirmModal({ weekId, weekTitle, markets, onClo
 
   return (
     <BottomSheet
-      title="Confirm LaneTalk Data?"
+      title="Settle Week?"
       onClose={onClose}
       busy={saving}
       footer={
@@ -119,7 +95,7 @@ export default function LanetalkConfirmModal({ weekId, weekTitle, markets, onClo
             label="Settle Available"
             onPress={() => settle(false)}
             loading={saving && !voidArmed}
-            disabled={saving}
+            disabled={saving || previewLoading}
             fullWidth
           />
           {missing.length > 0 && !previewLoading && (
@@ -137,8 +113,8 @@ export default function LanetalkConfirmModal({ weekId, weekTitle, markets, onClo
       }
     >
       <Text style={styles.body}>
-        Settles {weekTitle}'s stat props from the imported official games. Values are
-        derived server-side; this preview is informational.
+        Settles {weekTitle}'s money — pincome, bets, LaneTalk props, loans, PvP and the
+        House's weekly result. Values are derived server-side.
       </Text>
 
       {previewLoading ? (
@@ -146,11 +122,11 @@ export default function LanetalkConfirmModal({ weekId, weekTitle, markets, onClo
       ) : (
         <View style={styles.previewBox}>
           <Text style={styles.previewLine}>
-            {ready.length} market{ready.length === 1 ? '' : 's'} with data ·{' '}
+            {preview?.settleable ?? 0} market{(preview?.settleable ?? 0) === 1 ? '' : 's'} ready ·{' '}
             {missing.length} missing data
           </Text>
           {missing.slice(0, 6).map(m => (
-            <Text key={m.id} style={styles.previewMissing}>· {m.title}</Text>
+            <Text key={m.market_id} style={styles.previewMissing}>· {m.title} — {m.reason}</Text>
           ))}
           {missing.length > 6 && (
             <Text style={styles.previewMissing}>· …and {missing.length - 6} more</Text>
@@ -161,8 +137,8 @@ export default function LanetalkConfirmModal({ weekId, weekTitle, markets, onClo
       {voidArmed && (
         <View style={styles.warnBox}>
           <Text style={styles.warnText}>
-            Voiding deletes the {missing.length} missing-data market{missing.length === 1 ? '' : 's'} and
-            refunds every bet touching them in full.
+            Voiding delete-refunds the {missing.length} missing-data market{missing.length === 1 ? '' : 's'} and
+            force-voids any bet that would otherwise stay pending.
           </Text>
           <Text style={styles.warnSub}>
             Prefer Settle Available if more imports are still coming — it leaves them

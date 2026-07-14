@@ -1301,6 +1301,10 @@ export const activityFeed = {
 export const weeks = {
   list: () =>
     supabase.from('weeks').select('*').order('week_number'),
+  // Archived weeks + their settle state (settled_at NULL = advanced-but-unsettled).
+  // Powers the LaneTalk import screen's "Settle Week" gate.
+  listArchivedSettleState: () =>
+    supabase.from('weeks').select('id, settled_at').eq('is_archived', true),
   listBySeason: (seasonId: string) =>
     supabase
       .from('weeks')
@@ -1358,12 +1362,31 @@ export const weeks = {
 // unarchive_week restores the economy to the archive-time checkpoint, always
 // destroys week N+1, and (mode 'hard') unlocks the score lock. See ARCHIVE.md.
 export const archives = {
-  // force: void+refund any bet settlement would otherwise leave pending (the
-  // RPC raises and lists the unsettleable markets when force is off).
-  // fillScores: the unscored fill participation rows valued at the on-screen
-  // league-average estimate ([{team_slot_id, game_id, score}]) — archive_week
-  // stamps them (pre-settlement, snapshot-reversed by unarchive) so archived
-  // records and settlement match the live matchup totals.
+  // Bowl-night clock: lock the week, snapshot the fill scores, create N+1. NO
+  // money — settlement is the next-day settleWeek step. fillScores: the unscored
+  // fill participation rows valued at the on-screen league-average estimate
+  // ([{team_slot_id, game_id, score}]) — advance_week stamps them (snapshot-
+  // reversed by unarchive) so archived records match the live matchup totals.
+  advanceWeek: (weekId: string, force = false, fillScores: { team_slot_id: string; game_id: string; score: number }[] = []) =>
+    supabase.rpc('advance_week', { p_week_id: weekId, p_force: force, p_fill_scores: fillScores }),
+  // Next-day clock: settle ALL money for an advanced (locked) week — pincome,
+  // bets, LaneTalk props, loans, PvP, unified House P/L. voidMissing delete-
+  // refunds prop markets still lacking data; force voids any non-LaneTalk bet
+  // that would otherwise remain pending. Additive + idempotent: safe to re-run
+  // after a late import. Returns { settled, voided, left_pending, house_net }.
+  settleWeek: (weekId: string, voidMissing = false, force = false) =>
+    supabase.rpc('settle_week', { p_week_id: weekId, p_void_missing: voidMissing, p_force: force }),
+  // Read-only dry run: classify every non-settled market settleable vs would_void
+  // (with reason). Powers the pre-settle warning. Mutates nothing.
+  previewSettleWeek: (weekId: string) =>
+    supabase.rpc('preview_settle_week', { p_week_id: weekId }),
+  // Reverse a week's settlement money only, keeping it advanced (locked) — the
+  // "settlement was wrong / re-derive from newer imports" path. A following
+  // settleWeek re-derives. Does NOT reopen the week or touch scores.
+  unsettleWeek: (weekId: string) =>
+    supabase.rpc('unsettle_week', { p_week_id: weekId }),
+  // DEPRECATED shim (kept until callers migrate): advance_week + settle_week in
+  // one atomic call, preserving the old one-tap archive semantics.
   archiveWeek: (weekId: string, force = false, fillScores: { team_slot_id: string; game_id: string; score: number }[] = []) =>
     supabase.rpc('archive_week', { p_week_id: weekId, p_force: force, p_fill_scores: fillScores }),
   // Reverses the week's settlement, destroys week N+1, and reopens the week

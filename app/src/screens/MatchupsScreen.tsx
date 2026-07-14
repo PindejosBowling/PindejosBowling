@@ -614,14 +614,14 @@ export default function MatchupsScreen() {
                 <Text style={styles.archiveBarIcon}>📦</Text>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.archiveBarTitle}>SCORES SAVED</Text>
-                  <Text style={styles.archiveBarSubtext}>Ready to archive this week?</Text>
+                  <Text style={styles.archiveBarSubtext}>Ready to advance this week?</Text>
                 </View>
                 <TouchableOpacity
                   style={styles.archiveBarBtn}
                   onPress={() => setShowArchive(true)}
                   activeOpacity={0.7}
                 >
-                  <Text style={styles.archiveBarBtnText}>Archive &amp; Advance</Text>
+                  <Text style={styles.archiveBarBtnText}>Advance Week</Text>
                 </TouchableOpacity>
               </View>
             )}

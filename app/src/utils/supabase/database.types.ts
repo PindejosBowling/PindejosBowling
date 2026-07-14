@@ -12,6 +12,31 @@ export type Database = {
   __InternalSupabase: {
     PostgrestVersion: "14.5"
   }
+  graphql_public: {
+    Tables: {
+      [_ in never]: never
+    }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      graphql: {
+        Args: {
+          extensions?: Json
+          operationName?: string
+          query?: string
+          variables?: Json
+        }
+        Returns: Json
+      }
+    }
+    Enums: {
+      [_ in never]: never
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
+  }
   public: {
     Tables: {
       activity_event_catalog: {
@@ -2864,6 +2889,7 @@ export type Database = {
           id: string
           kind: string
           payload: Json | null
+          phase: string
           pk: string
           run_id: string
           table_name: string
@@ -2874,6 +2900,7 @@ export type Database = {
           id?: string
           kind: string
           payload?: Json | null
+          phase?: string
           pk: string
           run_id: string
           table_name: string
@@ -2884,6 +2911,7 @@ export type Database = {
           id?: string
           kind?: string
           payload?: Json | null
+          phase?: string
           pk?: string
           run_id?: string
           table_name?: string
@@ -2908,6 +2936,7 @@ export type Database = {
           is_confirmed: boolean
           is_playoff: boolean
           season_id: string
+          settled_at: string | null
           updated_at: string
           week_number: number
         }
@@ -2919,6 +2948,7 @@ export type Database = {
           is_confirmed?: boolean
           is_playoff?: boolean
           season_id: string
+          settled_at?: string | null
           updated_at?: string
           week_number: number
         }
@@ -2930,6 +2960,7 @@ export type Database = {
           is_confirmed?: boolean
           is_playoff?: boolean
           season_id?: string
+          settled_at?: string | null
           updated_at?: string
           week_number?: number
         }
@@ -2951,6 +2982,10 @@ export type Database = {
       accept_pvp_challenge: {
         Args: { p_challenge_id: string }
         Returns: undefined
+      }
+      advance_week: {
+        Args: { p_fill_scores?: Json; p_force?: boolean; p_week_id: string }
+        Returns: string
       }
       archive_week: {
         Args: { p_fill_scores?: Json; p_force?: boolean; p_week_id: string }
@@ -3197,6 +3232,7 @@ export type Database = {
       }
       playoff_reset_draft: { Args: { p_draft_id: string }; Returns: undefined }
       playoff_undo_pick: { Args: { p_draft_id: string }; Returns: undefined }
+      preview_settle_week: { Args: { p_week_id: string }; Returns: Json }
       process_weekly_loans: { Args: { p_week_id: string }; Returns: undefined }
       publish_activity_event: {
         Args: {
@@ -3314,6 +3350,10 @@ export type Database = {
         Returns: undefined
       }
       settle_pvp_for_week: { Args: { p_week_id: string }; Returns: undefined }
+      settle_week: {
+        Args: { p_force?: boolean; p_void_missing?: boolean; p_week_id: string }
+        Returns: Json
+      }
       suppress_activity_event: {
         Args: { p_event_id: string; p_reason: string }
         Returns: undefined
@@ -3350,6 +3390,7 @@ export type Database = {
         Returns: undefined
       }
       unregister_push_token: { Args: { p_token: string }; Returns: undefined }
+      unsettle_week: { Args: { p_week_id: string }; Returns: undefined }
       update_auction: {
         Args: {
           p_auction_id: string
@@ -3507,6 +3548,9 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
+  graphql_public: {
+    Enums: {},
+  },
   public: {
     Enums: {},
   },

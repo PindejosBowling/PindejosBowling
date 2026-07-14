@@ -127,11 +127,17 @@ export function useHousePinsinoData() {
       else if (e.type === 'bonus') nextSummary.bonuses += e.amount
     }
 
-    // Per-week house net (skip week-less rows like season-open bonuses)
+    // Per-week house net. Mirrors the feed card's unified House P/L
+    // (settle_week §7): week-anchored clocks only, EXCLUDING auction/bounty rows
+    // (those carry their own feed cards + settlement clocks), so the accounting
+    // "Week N net" matches the "sportsbook_weekly_house_result" card. Skips
+    // week-less rows (e.g. season-open bonuses).
     const byWeek: Record<number, number> = {}
-    for (const e of ledgerEntries) {
-      if (e.weekNumber == null) continue
-      byWeek[e.weekNumber] = (byWeek[e.weekNumber] ?? 0) + e.amount
+    for (const e of houseData) {
+      const wn = (e.weeks as any)?.week_number ?? null
+      if (wn == null) continue
+      if (e.auction_id != null || e.bounty_post_id != null) continue
+      byWeek[wn] = (byWeek[wn] ?? 0) + e.amount
     }
     const pnl: WeekPnl[] = Object.keys(byWeek)
       .map(Number)

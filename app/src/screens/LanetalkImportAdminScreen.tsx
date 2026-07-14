@@ -11,7 +11,7 @@ import { useUiStore } from '../stores/uiStore'
 import { useLanetalkImportAdmin } from '../hooks/useLanetalkImportAdmin'
 import { lanetalkImports, type LanetalkImportSummary } from '../utils/supabase/db'
 import EmptyCard from '../components/ui/EmptyCard'
-import LanetalkConfirmModal from '../components/admin/LanetalkConfirmModal'
+import AdminSettleModal from '../components/admin/AdminSettleModal'
 
 const monoFont = Platform.select({ ios: 'Menlo', android: 'monospace', default: 'monospace' })
 
@@ -64,7 +64,7 @@ function formatDate(bowledAt: string | null): string {
 export default function LanetalkImportAdminScreen() {
   const isAdmin = useAuthStore(s => s.role) === 'admin'
   const showToast = useUiStore(s => s.showToast)
-  const { loading, rawImports, unsettledProps, settledPropWeeks, currentSeasonId, reload } = useLanetalkImportAdmin()
+  const { loading, rawImports, unsettledProps, settledPropWeeks, archivedSettleState, currentSeasonId, reload } = useLanetalkImportAdmin()
 
   // Unsettled LaneTalk stat props, grouped by week — each week group with any
   // pending props gets a "Confirm LaneTalk Data" action. The button hides once
@@ -410,6 +410,15 @@ export default function LanetalkImportAdminScreen() {
             // never generated props gets no badge (nothing to confirm).
             const propsPending = propsByWeek.has(wg.weekKey)
             const propsConfirmed = !propsPending && settledPropWeeks.has(wg.weekKey)
+            // Settle gate: settle_week only runs on an advanced (locked) week.
+            // Show the action while advanced-but-unsettled (first settle) OR when
+            // already settled but late-imported props are still pending (re-settle
+            // is additive). A week absent from archivedSettleState isn't advanced.
+            const settleAt = archivedSettleState.has(wg.weekKey)
+              ? archivedSettleState.get(wg.weekKey) ?? null
+              : undefined
+            const isAdvanced = settleAt !== undefined
+            const canSettle = isAdvanced && (settleAt === null || propsPending)
             return (
               <View key={wg.weekKey} style={styles.weekCard}>
                 <TouchableOpacity
@@ -428,10 +437,11 @@ export default function LanetalkImportAdminScreen() {
                   <Text style={[styles.chevron, expanded && styles.chevronUp]}>›</Text>
                 </TouchableOpacity>
 
-                {/* Stat-prop settlement: shown while this week has unsettled
-                    LaneTalk props (they settle on this Confirm clock, not at
-                    archive — the data usually lands the next day). */}
-                {expanded && propsByWeek.has(wg.weekKey) && (
+                {/* Settle Week: the next-day money clock for an advanced week —
+                    pincome, bets, LaneTalk props, loans, PvP, House P/L. Shown
+                    while advanced-unsettled, or to re-settle late-imported props.
+                    The data usually lands the day after the bowl night. */}
+                {expanded && canSettle && (
                   <View style={styles.confirmRow}>
                     <TouchableOpacity
                       style={styles.confirmBtn}
@@ -439,7 +449,9 @@ export default function LanetalkImportAdminScreen() {
                       activeOpacity={0.7}
                     >
                       <Text style={styles.confirmBtnText}>
-                        Confirm LaneTalk Data ({propsByWeek.get(wg.weekKey)!.length} props pending)
+                        {settleAt === null
+                          ? 'Settle Week'
+                          : `Re-settle Week (${propsByWeek.get(wg.weekKey)!.length} props pending)`}
                       </Text>
                     </TouchableOpacity>
                   </View>
@@ -497,10 +509,9 @@ export default function LanetalkImportAdminScreen() {
         {/* Stat-prop settlement modal (mounted conditionally so state resets;
             Modal-based, so it renders in the native overlay layer). */}
         {confirmWeek && (
-          <LanetalkConfirmModal
+          <AdminSettleModal
             weekId={confirmWeek.weekId}
             weekTitle={confirmWeek.title}
-            markets={propsByWeek.get(confirmWeek.weekId) ?? []}
             onClose={() => setConfirmWeek(null)}
             onDone={reload}
           />

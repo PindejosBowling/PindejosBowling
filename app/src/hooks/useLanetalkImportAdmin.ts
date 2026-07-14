@@ -1,4 +1,4 @@
-import { lanetalkImports, betMarkets, seasons } from '../utils/supabase/db'
+import { lanetalkImports, betMarkets, seasons, weeks } from '../utils/supabase/db'
 import { useAsyncData } from './useAsyncData'
 
 interface LanetalkImportPayload {
@@ -7,6 +7,10 @@ interface LanetalkImportPayload {
   // Weeks with settled LaneTalk props — lets the screen badge a week as
   // Confirmed (vs Unconfirmed when it still appears in unsettledProps).
   settledPropWeeks: Set<string>
+  // Archived weeks → their settled_at (null = advanced-but-unsettled). Gates the
+  // per-week "Settle Week" action: settle_week only runs on an advanced week,
+  // and re-settle picks up late imports.
+  archivedSettleState: Map<string, string | null>
   // The current season's id — the Recent Imports list groups by season and
   // starts every season collapsed except this one.
   currentSeasonId: string | null
@@ -16,6 +20,7 @@ const EMPTY: LanetalkImportPayload = {
   rawImports: [],
   unsettledProps: [],
   settledPropWeeks: new Set(),
+  archivedSettleState: new Map(),
   currentSeasonId: null,
 }
 
@@ -25,16 +30,18 @@ const EMPTY: LanetalkImportPayload = {
  *  "Confirm LaneTalk Data" action wherever any are still pending. */
 export function useLanetalkImportAdmin() {
   const { loading, data, reload } = useAsyncData<LanetalkImportPayload>(async () => {
-    const [importsRes, propsRes, settledRes, currentSeasonRes] = await Promise.all([
+    const [importsRes, propsRes, settledRes, archivedRes, currentSeasonRes] = await Promise.all([
       lanetalkImports.listRecent(),
       betMarkets.listUnsettledLanetalkProps(),
       betMarkets.listSettledLanetalkPropWeeks(),
+      weeks.listArchivedSettleState(),
       seasons.getCurrent(),
     ])
     return {
       rawImports: importsRes.data ?? [],
       unsettledProps: propsRes.data ?? [],
       settledPropWeeks: new Set((settledRes.data ?? []).map(r => r.week_id).filter((id): id is string => !!id)),
+      archivedSettleState: new Map((archivedRes.data ?? []).map(r => [r.id as string, (r.settled_at ?? null) as string | null])),
       currentSeasonId: currentSeasonRes.data?.id ?? null,
     }
   }, [], 'useLanetalkImportAdmin')
