@@ -22,13 +22,25 @@ import { seasons, archives } from '../utils/supabase/db'
 import EmptyCard from '../components/ui/EmptyCard'
 
 type Nav = NativeStackNavigationProp<MoreStackParamList>
-type ArchivedWeek = { id: string; week_number: number; bowled_at: string | null }
+type ArchivedWeek = { id: string; week_number: number; bowled_at: string | null; settled_at: string | null }
+// The two reversals mirror the two forward steps (Advance → Settle):
+//   Unsettle  = inverse of Settle  (money reversed, week stays advanced/locked)
+//   Unadvance = inverse of Advance (delete N+1, reopen the week for score edits)
+// A settled week is fully reopened by Unsettle then Unadvance — two taps that
+// mirror the two forward taps. Unadvance uses unarchive_week (with a settled week
+// it would reverse both, but we only ever offer it once already unsettled).
+type Mode = 'unadvance' | 'unsettle'
 
-const CONFIRM_BODY =
-  'Reverses every Pinsino effect this week derived (pins, bet/PvP settlements, loan ' +
-  'garnishment, feed events), deletes the next week, and reopens this week — scores ' +
-  'become editable and the week is in play again. Fix whatever needs fixing (or ' +
-  'nothing), then re-run Archive & Advance from Matchups to settle it again.'
+const UNSETTLE_BODY =
+  "Reverses only this week's money settlement (pins, bet/PvP settlements, loan " +
+  'garnishment, the House P/L feed card) but keeps the week advanced and its scores ' +
+  'locked. Use it to re-derive money — then run Settle Week again from the LaneTalk ' +
+  'import screen to settle it fresh (e.g. after a correction or a late import).'
+
+const UNADVANCE_BODY =
+  'Undoes the advance: deletes the next week and reopens this one — scores become ' +
+  'editable and it is back in play. Re-run Advance Week from Matchups when ready. ' +
+  '(To reverse a settled week, Unsettle it first.)'
 
 export default function ArchivesScreen() {
   const navigation = useNavigation<Nav>()
@@ -38,9 +50,11 @@ export default function ArchivesScreen() {
   const [loading, setLoading] = useState(true)
   const [weeks, setWeeks] = useState<ArchivedWeek[]>([])
 
-  // Confirmation flow state. `forceArmed` is set after the server rejects an
-  // unforced unarchive because week N+1 holds downstream activity.
-  const [pending, setPending] = useState<{ week: ArchivedWeek } | null>(null)
+  // Confirmation flow state. `mode` picks the RPC: unsettle (money only) or
+  // unadvance (delete N+1 + reopen). `forceArmed` is set after the server rejects
+  // an unforced unadvance because week N+1 holds downstream activity (unsettle has
+  // no force flow).
+  const [pending, setPending] = useState<{ week: ArchivedWeek; mode: Mode } | null>(null)
   const [busy, setBusy] = useState(false)
   const [forceArmed, setForceArmed] = useState(false)
   const [warning, setWarning] = useState<string | null>(null)
@@ -63,8 +77,8 @@ export default function ArchivesScreen() {
 
   const { refreshing, onRefresh } = useRefresh(load)
 
-  function openConfirm(week: ArchivedWeek) {
-    setPending({ week })
+  function openConfirm(week: ArchivedWeek, mode: Mode) {
+    setPending({ week, mode })
     setForceArmed(false)
     setWarning(null)
   }
@@ -76,26 +90,35 @@ export default function ArchivesScreen() {
     setWarning(null)
   }
 
-  async function runUnarchive() {
+  async function runAction() {
     if (!pending) return
     setBusy(true)
-    const { week } = pending
-    const { error } = await archives.unarchiveWeek(week.id, forceArmed)
+    const { week, mode } = pending
+    const { error } = mode === 'unsettle'
+      ? await archives.unsettleWeek(week.id)
+      : await archives.unarchiveWeek(week.id, forceArmed)
     setBusy(false)
 
+    const verb = mode === 'unsettle' ? 'Unsettle' : 'Unadvance'
+
     if (error) {
-      // The RPC raises (before mutating) when week N+1 holds activity — surface it
-      // and arm a forced retry rather than failing outright.
-      if (!forceArmed && /downstream activity/i.test(error.message)) {
+      // Unadvance raises (before mutating) when week N+1 holds activity — surface
+      // it and arm a forced retry. Unsettle has no downstream/force flow.
+      if (mode === 'unadvance' && !forceArmed && /downstream activity/i.test(error.message)) {
         setWarning(error.message)
         setForceArmed(true)
         return
       }
-      showToast(`Unarchive failed: ${error.message}`, 'error')
+      showToast(`${verb} failed: ${error.message}`, 'error')
       return
     }
 
-    showToast(`Week ${week.week_number} unarchived — back in play`, 'success')
+    showToast(
+      mode === 'unsettle'
+        ? `Week ${week.week_number} unsettled — re-settle from the LaneTalk screen`
+        : `Week ${week.week_number} unadvanced — back in play`,
+      'success',
+    )
     setPending(null)
     setForceArmed(false)
     setWarning(null)
@@ -122,11 +145,15 @@ export default function ArchivesScreen() {
         <ScreenHeader title="Archives" onBack={() => navigation.goBack()} />
 
         <Text style={styles.intro}>
-          Unarchiving a week reverses its Pinsino settlement (pins, bet/PvP
-          settlements, loan garnishment, feed events), deletes the next week, and
-          puts the week back in play with its teams and scores intact. Re-archive
-          it from Matchups with Archive & Advance. Only the most recently archived
-          week can be unarchived.
+          Undo the weekly clock in the reverse of how it ran.{'\n\n'}
+          <Text style={styles.introStrong}>Unsettle</Text> (a settled week) reverses
+          its money — pins, bet/PvP settlements, loan garnishment, House P/L — but
+          keeps it advanced and locked. Re-run Settle Week from the LaneTalk screen
+          to re-derive.{'\n\n'}
+          <Text style={styles.introStrong}>Unadvance</Text> (an advanced, unsettled
+          week) deletes the next week and reopens this one for score edits. Only the
+          most recent week can be unadvanced. To fully reopen a settled week,
+          Unsettle it first, then Unadvance.
         </Text>
 
         <Text style={styles.sectionHeader}>ARCHIVED WEEKS</Text>
@@ -141,25 +168,40 @@ export default function ArchivesScreen() {
                 {i === 0 && <Text style={styles.latestBadge}>MOST RECENT</Text>}
               </View>
               {w.bowled_at && <Text style={styles.bowledAt}>Bowled {w.bowled_at}</Text>}
-              {/* LIFO: only the most-recent archived week is reversible. */}
+              {/* Mirror of the forward flow: a SETTLED week shows Unsettle (money
+                  only, any week — no LIFO); an ADVANCED-but-unsettled week shows
+                  Unadvance (deletes N+1, LIFO — most-recent only). Never both. */}
               <View style={styles.btnRow}>
-                <Button
-                  label="Unarchive"
-                  variant="outline"
-                  tone="danger"
-                  onPress={() => openConfirm(w)}
-                  disabled={i !== 0}
-                  fullWidth
-                />
+                {w.settled_at != null ? (
+                  <Button
+                    label="Unsettle"
+                    variant="outline"
+                    tone="danger"
+                    onPress={() => openConfirm(w, 'unsettle')}
+                    fullWidth
+                  />
+                ) : (
+                  <Button
+                    label="Unadvance"
+                    variant="outline"
+                    tone="danger"
+                    onPress={() => openConfirm(w, 'unadvance')}
+                    disabled={i !== 0}
+                    fullWidth
+                  />
+                )}
               </View>
             </View>
           ))
         )}
       </ScrollView>
 
-      {pending && (
+      {pending && (() => {
+        const verb = pending.mode === 'unsettle' ? 'Unsettle' : 'Unadvance'
+        const body = pending.mode === 'unsettle' ? UNSETTLE_BODY : UNADVANCE_BODY
+        return (
         <CenterModal
-          title={`Unarchive Week ${pending.week.week_number}?`}
+          title={`${verb} Week ${pending.week.week_number}?`}
           onClose={closeConfirm}
           busy={busy}
           showClose={false}
@@ -167,9 +209,9 @@ export default function ArchivesScreen() {
             <View style={styles.btnRow}>
               <Button label="Cancel" variant="secondary" onPress={closeConfirm} fullWidth />
               <Button
-                label={forceArmed ? 'Force Unarchive' : 'Unarchive'}
+                label={forceArmed ? `Force ${verb}` : verb}
                 variant={forceArmed ? 'danger' : 'primary'}
-                onPress={runUnarchive}
+                onPress={runAction}
                 loading={busy}
                 disabled={busy}
                 fullWidth
@@ -177,7 +219,7 @@ export default function ArchivesScreen() {
             </View>
           }
         >
-          <Text style={styles.sheetBody}>{CONFIRM_BODY}</Text>
+          <Text style={styles.sheetBody}>{body}</Text>
           {warning && (
             <View style={styles.warnBox}>
               <Text style={styles.warnText}>{warning}</Text>
@@ -187,7 +229,8 @@ export default function ArchivesScreen() {
             </View>
           )}
         </CenterModal>
-      )}
+        )
+      })()}
     </SafeAreaView>
   )
 }
@@ -202,6 +245,11 @@ const styles = StyleSheet.create({
     color: colors.muted,
     lineHeight: 19,
     marginBottom: 20,
+  },
+  introStrong: {
+    fontFamily: fonts.barlowCondensed,
+    color: colors.text,
+    fontWeight: '700',
   },
   sectionHeader: {
     fontFamily: fonts.barlowCondensed,
