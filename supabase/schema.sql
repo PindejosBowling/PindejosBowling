@@ -2187,7 +2187,7 @@ END;
 $function$
 ;
 
-CREATE OR REPLACE FUNCTION public.archive_week(p_week_id uuid, p_force boolean DEFAULT false)
+CREATE OR REPLACE FUNCTION public.archive_week(p_week_id uuid, p_force boolean DEFAULT false, p_fill_scores jsonb DEFAULT NULL::jsonb)
  RETURNS uuid
  LANGUAGE plpgsql
  SECURITY DEFINER
@@ -2198,6 +2198,8 @@ DECLARE
   v_week_number  integer;
   v_actor_id     uuid;
   v_run_id       uuid;
+  v_n_fill       integer := 0;
+  v_n_bad        integer := 0;
 BEGIN
   PERFORM public.assert_admin();
 
@@ -2290,6 +2292,54 @@ BEGIN
          jsonb_build_object('status', ln.status, 'paid_off_at', ln.paid_off_at)
     FROM public.loans ln
    WHERE ln.season_id = v_season_id AND ln.status = 'active';
+
+  -- --------------------------------------------------------------------------
+  -- 2b'. Materialize unscored fill scores (the values the live screen showed).
+  --      The app passes [{team_slot_id, game_id, score}, ...] for every fill
+  --      participation row that is still NULL — an unscored fill contributes
+  --      its league-average estimate to the on-screen totals, and the archived
+  --      record + settlement must grade on those same totals. Stored scores
+  --      (admin-typed fill values included) are the source of truth: a payload
+  --      row targeting a non-NULL score means the screen was stale → abort.
+  --      Runs BEFORE the lock/settlement so moneyline + team total_pins see
+  --      the values; pre-images (always NULL) are snapshotted so unarchive
+  --      reverts them exactly.
+  -- --------------------------------------------------------------------------
+  IF p_fill_scores IS NOT NULL AND jsonb_typeof(p_fill_scores) = 'array'
+     AND jsonb_array_length(p_fill_scores) > 0 THEN
+
+    SELECT count(*) INTO v_n_bad
+      FROM jsonb_to_recordset(p_fill_scores)
+             AS f(team_slot_id uuid, game_id uuid, score integer)
+      LEFT JOIN public.scores s      ON s.team_slot_id = f.team_slot_id AND s.game_id = f.game_id
+      LEFT JOIN public.team_slots ts ON ts.id = f.team_slot_id
+      LEFT JOIN public.teams t       ON t.id = ts.team_id
+     WHERE s.id IS NULL
+        OR t.week_id IS DISTINCT FROM p_week_id
+        OR ts.is_fill IS DISTINCT FROM true
+        OR s.score IS NOT NULL
+        OR f.score IS NULL OR f.score < 1;
+    IF v_n_bad > 0 THEN
+      RAISE EXCEPTION 'Invalid or stale fill-score payload (% row(s)) — scores changed since the screen loaded; close and retry', v_n_bad;
+    END IF;
+
+    SELECT count(*) INTO v_n_fill
+      FROM (SELECT DISTINCT team_slot_id, game_id
+              FROM jsonb_to_recordset(p_fill_scores)
+                     AS f(team_slot_id uuid, game_id uuid, score integer)) d;
+    IF v_n_fill <> jsonb_array_length(p_fill_scores) THEN
+      RAISE EXCEPTION 'Duplicate rows in fill-score payload';
+    END IF;
+
+    INSERT INTO public.week_archive_snapshot (run_id, kind, table_name, pk, payload)
+    SELECT v_run_id, 'preimage_row', 'scores', s.id, jsonb_build_object('score', s.score)
+      FROM jsonb_to_recordset(p_fill_scores) AS f(team_slot_id uuid, game_id uuid, score integer)
+      JOIN public.scores s ON s.team_slot_id = f.team_slot_id AND s.game_id = f.game_id;
+
+    UPDATE public.scores s SET score = f.score
+      FROM jsonb_to_recordset(p_fill_scores) AS f(team_slot_id uuid, game_id uuid, score integer)
+     WHERE s.team_slot_id = f.team_slot_id AND s.game_id = f.game_id;
+  END IF;
 
   -- --------------------------------------------------------------------------
   -- 2c. Lock the week, run settlement, create the next week — all-or-nothing.
@@ -8020,6 +8070,14 @@ BEGIN
     FROM public.week_archive_snapshot sn
    WHERE sn.run_id = v_run_id AND sn.kind = 'preimage_row'
      AND sn.table_name = 'loans' AND sn.pk = ln.id;
+
+  -- Fill scores archive_week materialized revert to their pre-image (NULL) —
+  -- the unscored fill goes back to being a live league-average estimate.
+  UPDATE public.scores s SET
+      score = (sn.payload ->> 'score')::integer
+    FROM public.week_archive_snapshot sn
+   WHERE sn.run_id = v_run_id AND sn.kind = 'preimage_row'
+     AND sn.table_name = 'scores' AND sn.pk = s.id;
 
   -- --------------------------------------------------------------------------
   -- 3c. Destroy week N+1. rsvp.week_id has no cascade → delete first.
