@@ -8,7 +8,7 @@
 
 | Layer | Files |
 |---|---|
-| db.ts objects | `auctions`, `auctionLedger`, `itemCatalog`, `inventoryItems`; `bets.place` gained the 4th `insuranceItemId` arg |
+| db.ts objects | `auctions`, `auctionLedger`, `itemCatalog`, `inventoryItems` (`listAllForSeason` + `revoke` for the admin remove-item view); `bets.place` gained the 4th `insuranceItemId` arg |
 | View types + pure helpers | `utils/auction.ts` — `AuctionView` / `InventoryItemView` / `InventoryGroupView` / `CatalogItemView`; `auctionSections`, `groupInventory`, `formatTimeRemaining`/`formatCountdown`, `isLargeBid` (≥50% of balance), `itemHowToUse`, `defaultAuctionCloseAt` (= bounties' next-Mon-7PM-ET) |
 | Hooks | `useAuctionHouseData` (list + My Items + balance), `useAuctionDetailData` (one auction + decoded own bid); normalizers exported from the house hook |
 | Screens | `AuctionHouseScreen` (OPEN → SCHEDULED → MY ITEMS → RECENTLY SETTLED), `AuctionDetailScreen` (ticking countdown + bidder count, owner tap-to-reveal, place/edit bid CTA — **no cancel; bids are commitments**, settlement reveal), `AuctionHouseAdminScreen` (More stack — all admin: auctions, catalog, grants) |
@@ -72,8 +72,14 @@ read-only); action modal by status (Edit / Open Now → Settle Now → Reverse) 
 **All admin functionality lives on `AuctionHouseAdminScreen`** (`More` stack,
 Pinsino Admin 🔨 tile): auction create/manage (the modals above mount there),
 item-catalog curation (`CatalogItemModal` — functional columns shown frozen
-once instances exist, mirroring the DB guard), and item grants
-(`GrantItemSheet` → `inventoryItems.grant`). The player-facing
+once instances exist, mirroring the DB guard), item grants
+(`GrantItemSheet` → `inventoryItems.grant`), and a **PLAYER INVENTORY**
+remove-item view (`AdminInventoryList`, grouped by player via
+`groupAdminInventory`; every player's season inventory from
+`inventoryItems.listAllForSeason`). Only **unconsumed** rows carry a Remove
+action → a `ConfirmActionSheet` fires `inventoryItems.revoke` (undo a grant);
+used rows show greyed **USED** and are non-removable (the RPC refuses them).
+The player-facing
 `AuctionHouseScreen` / `AuctionDetailScreen` carry **no admin controls**; data
 comes from `useAuctionAdminData` (auctions without bid decoding, catalog with
 instance counts, active players).

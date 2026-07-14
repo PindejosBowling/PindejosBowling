@@ -3343,6 +3343,7 @@ export type Database = {
         Args: { p_auction_id: string }
         Returns: undefined
       }
+      revoke_inventory_item: { Args: { p_item_id: string }; Returns: undefined }
       set_auction_house_closed: {
         Args: { p_closed_message?: string; p_is_closed: boolean }
         Returns: undefined
