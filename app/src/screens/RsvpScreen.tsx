@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react'
+import React, { useState, useEffect, useCallback, useMemo } from 'react'
 import {
   View,
   Text,
@@ -97,6 +97,15 @@ export default function RsvpScreen() {
     return pendingRSVP[playerId] !== undefined
   }
 
+  // Pin the current user's own row to the top so they can respond immediately;
+  // everyone else keeps the alphabetical order from the DB query.
+  const orderedPlayers = useMemo(() => {
+    if (!myPlayerId) return playerList
+    const mine = playerList.filter(p => p.id === myPlayerId)
+    if (mine.length === 0) return playerList
+    return [...mine, ...playerList.filter(p => p.id !== myPlayerId)]
+  }, [playerList, myPlayerId])
+
   const inCount = playerList.filter(p => currentStatus(p.id) === 'in').length
   const outCount = playerList.filter(p => currentStatus(p.id) === 'out').length
   const noReply = playerList.filter(p => !currentStatus(p.id)).length
@@ -177,7 +186,7 @@ export default function RsvpScreen() {
       <AppHeader />
       <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
         <FlatList
-          data={playerList}
+          data={orderedPlayers}
           keyExtractor={(item) => item.id}
           keyboardShouldPersistTaps="handled"
           contentContainerStyle={[styles.listContent, hasPending && { paddingBottom: 80 }]}
