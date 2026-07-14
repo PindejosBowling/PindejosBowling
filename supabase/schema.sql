@@ -658,7 +658,8 @@ CREATE TABLE week_archive_snapshot (
   pk uuid NOT NULL,
   payload jsonb,
   created_at timestamp with time zone NOT NULL DEFAULT now(),
-  updated_at timestamp with time zone NOT NULL DEFAULT now()
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  phase text NOT NULL DEFAULT 'advance'::text
 );
 
 CREATE TABLE weeks (
@@ -670,7 +671,8 @@ CREATE TABLE weeks (
   created_at timestamp with time zone NOT NULL DEFAULT now(),
   updated_at timestamp with time zone NOT NULL DEFAULT now(),
   season_id uuid NOT NULL,
-  is_playoff boolean NOT NULL DEFAULT false
+  is_playoff boolean NOT NULL DEFAULT false,
+  settled_at timestamp with time zone
 );
 
 
@@ -1246,6 +1248,8 @@ ALTER TABLE week_archive_runs ADD CONSTRAINT week_archive_runs_week_id_fkey FORE
 
 ALTER TABLE week_archive_snapshot ADD CONSTRAINT week_archive_snapshot_kind_check CHECK ((kind = ANY (ARRAY['preexisting_id'::text, 'preimage_row'::text])));
 
+ALTER TABLE week_archive_snapshot ADD CONSTRAINT week_archive_snapshot_phase_check CHECK ((phase = ANY (ARRAY['advance'::text, 'settle'::text])));
+
 ALTER TABLE week_archive_snapshot ADD CONSTRAINT week_archive_snapshot_pkey PRIMARY KEY (id);
 
 ALTER TABLE week_archive_snapshot ADD CONSTRAINT week_archive_snapshot_run_id_fkey FOREIGN KEY (run_id) REFERENCES week_archive_runs(id) ON DELETE CASCADE;
@@ -1484,6 +1488,8 @@ CREATE INDEX team_slots_team_id_idx ON public.team_slots USING btree (team_id);
 CREATE INDEX week_archive_runs_week_id_idx ON public.week_archive_runs USING btree (week_id, status);
 
 CREATE INDEX week_archive_snapshot_run_idx ON public.week_archive_snapshot USING btree (run_id, table_name, kind);
+
+CREATE INDEX weeks_advanced_unsettled_idx ON public.weeks USING btree (season_id) WHERE ((is_archived = true) AND (settled_at IS NULL));
 
 
 -- =====================================================
@@ -4443,11 +4449,19 @@ BEGIN
       RAISE EXCEPTION 'A selected market is not open';
     END IF;
 
-    DECLARE v_mseason uuid;
+    DECLARE
+      v_mseason   uuid;
+      v_marchived boolean;
     BEGIN
-      SELECT season_id INTO v_mseason FROM public.weeks WHERE id = v_sel.week_id;
+      SELECT season_id, is_archived INTO v_mseason, v_marchived
+        FROM public.weeks WHERE id = v_sel.week_id;
       IF v_mseason IS NULL THEN
         RAISE EXCEPTION 'Selected market has no season';
+      END IF;
+      -- A locked week (advanced or fully archived) takes no new stakes even if a
+      -- prop market is still 'open' pending its next-day settlement clock.
+      IF v_marchived THEN
+        RAISE EXCEPTION 'This week is locked — no new bets can be placed';
       END IF;
       IF v_season_id IS NULL THEN
         v_season_id := v_mseason;
