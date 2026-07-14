@@ -9,7 +9,9 @@
 --   A advance_week            → N locked, N+1 created, settled_at NULL,
 --                               bowled_at UNCHANGED, ledger == pre-advance.
 --   B settle_week(force)      → team_prop won, scoreless voided, House P/L event
---                               present (house_net = -50), settled_at set.
+--                               present, settled_at set, and this probe's own
+--                               fixtures move the house by exactly -50 (scoped to
+--                               its bets so live week money can't skew it).
 --   C settle_week again       → idempotent: ledger + House P/L unchanged.
 --   D unsettle_week           → money reversed (ledger == pre-advance), week
 --                               STILL locked (is_archived, settled_at NULL),
@@ -138,9 +140,19 @@ BEGIN
   IF (SELECT status FROM public.bets WHERE id = v_bet) <> 'void' THEN
     RAISE EXCEPTION 'PROBE_FAIL: scoreless bet not voided by settle';
   END IF;
-  v_house := (v_res ->> 'house_net')::int;
+  -- settle_week's house_net is a whole-week aggregate over EVERY is_house row on
+  -- the week, so on the live current week it legitimately folds in house money
+  -- this probe didn't create — RSVP self-submit bonuses, loan garnishment, PvP,
+  -- or another player's bet settling. Assert the delta attributable to THIS
+  -- probe's own fixture bets instead (immune to that live noise): two 50-stake
+  -- bets — the team_prop win (house −100 payout, +50 stake) and the void (net 0)
+  -- ⇒ −50. The published aggregate is still exercised via the House P/L event
+  -- assertion below.
+  SELECT COALESCE(SUM(amount), 0) INTO v_house
+    FROM public.pin_ledger
+   WHERE is_house = true AND bet_id IN (v_bet, v_bet_tp);
   IF v_house <> -50 THEN
-    RAISE EXCEPTION 'PROBE_FAIL: house_net = % (expected -50)', v_house;
+    RAISE EXCEPTION 'PROBE_FAIL: fixture house delta = % (expected -50)', v_house;
   END IF;
   IF (SELECT count(*) FROM public.activity_feed_events
         WHERE week_id = v_week AND event_type = 'sportsbook_weekly_house_result') <> 1 THEN
@@ -245,7 +257,7 @@ BEGIN
   RAISE EXCEPTION 'PROBE_RESULT %', jsonb_build_object(
     'lifecycle', 'ok',
     'pre_sum', v_pre_sum, 'settled_sum', v_set_sum,
-    'house_net', -50,
+    'fixture_house_delta', v_house,
     'advance_no_money', true, 'settle_idempotent', true,
     'unsettle_reversed', true, 're_derive_identical', true,
     'unarchive_settled_clean', true, 'unarchive_advanced_zero_delta', true);

@@ -674,8 +674,8 @@ export const bets = {
   // lose; if the bet loses the stake refunds at settlement). crutchItemId
   // attaches a Winner's Crutch (parlays only; cancels the lone losing leg and
   // pays the survivors at reduced odds). boostItemId attaches an Energy Drink
-  // (any bet; on a win the House pays a bonus = profit × boost_pct, doubling the
-  // profit 1:1 → 2:1). All three are spent at placement and stack.
+  // (any bet; on a win the House pays a bonus = payout × boost_pct, doubling the
+  // total payout). All three are spent at placement and stack.
   place: (selectionIds: string[], stake: number, customLineId?: string, insuranceItemId?: string, crutchItemId?: string, boostItemId?: string) =>
     // undefined is dropped from the RPC payload → the param's NULL default applies.
     supabase.rpc('place_house_bet', { p_selection_ids: selectionIds, p_stake: stake, p_custom_line_id: customLineId, p_insurance_item_id: insuranceItemId, p_crutch_item_id: crutchItemId, p_boost_item_id: boostItemId }),

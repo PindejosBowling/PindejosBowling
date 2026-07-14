@@ -5,11 +5,11 @@
 -- markets (odds 2.000, line 100.5), 3 granted Energy Drinks. Live anchors:
 -- active season + open week.
 --
--- Three branches of the profit-doubling mechanic, each a single bet on its own
+-- Three branches of the payout-doubling mechanic, each a single bet on its own
 -- market (a boost helps any winning bet — no parlay floor):
 --   A) single over + boost, settle WON → bet_payout 100 (50 × 2.0) PLUS a
---      House-funded bet_odds_boost bonus of 50 (profit 50 × boost_pct 1.0 ⇒
---      1:1 becomes 2:1); a sportsbook_boost_hit feed row is published.
+--      House-funded bet_odds_boost bonus of 100 (payout 100 × boost_pct 1.0 ⇒
+--      the total payout doubles); a sportsbook_boost_hit feed row is published.
 --   B) single over + boost, settle LOST → no bonus, no feed event, boost still
 --      consumed at placement.
 --   C) single over + boost, settle PUSH (exact line) → stake refunded, no bonus,
@@ -110,10 +110,10 @@ BEGIN
     RAISE EXCEPTION 'PROBE_FAIL: A payout % <> 100 (50 × 2.0)',
       (SELECT potential_payout FROM public.bets WHERE id = v_betA);
   END IF;
-  -- The House-funded boost bonus = floor(profit × boost_pct) = (100 − 50) × 1.0 = 50.
+  -- The House-funded boost bonus = floor(payout × boost_pct) = 100 × 1.0 = 100.
   IF (SELECT COALESCE(SUM(amount), 0) FROM public.pin_ledger
-      WHERE bet_id = v_betA AND type = 'bet_odds_boost' AND player_id = v_p1) <> 50 THEN
-    RAISE EXCEPTION 'PROBE_FAIL: A boost bonus % <> 50',
+      WHERE bet_id = v_betA AND type = 'bet_odds_boost' AND player_id = v_p1) <> 100 THEN
+    RAISE EXCEPTION 'PROBE_FAIL: A boost bonus % <> 100',
       (SELECT COALESCE(SUM(amount), 0) FROM public.pin_ledger
        WHERE bet_id = v_betA AND type = 'bet_odds_boost' AND player_id = v_p1);
   END IF;
@@ -149,12 +149,12 @@ BEGIN
   END IF;
 
   ------------------------------------------------------------------ net pin flow
-  -- Player net (excl. the seed mint): A (−50 stake +100 payout +50 bonus = +100),
-  -- B loses 50, C pushes (−50 stake +50 refund = 0) → +50.
+  -- Player net (excl. the seed mint): A (−50 stake +100 payout +100 bonus = +150),
+  -- B loses 50, C pushes (−50 stake +50 refund = 0) → +100.
   SELECT COALESCE(SUM(amount), 0) - c_seed INTO v_got
     FROM public.pin_ledger WHERE player_id = v_p1 AND created_at = now();
-  IF v_got <> 50 THEN
-    RAISE EXCEPTION 'PROBE_FAIL: player net % (expected +50 = +100 A − 50 B + 0 C)', v_got;
+  IF v_got <> 100 THEN
+    RAISE EXCEPTION 'PROBE_FAIL: player net % (expected +100 = +150 A − 50 B + 0 C)', v_got;
   END IF;
   -- Double-entry: every movement this tx (excl. the seed mint) nets to zero.
   SELECT COALESCE(SUM(amount), 0) INTO v_got
@@ -173,7 +173,7 @@ BEGIN
     'C_status',     (SELECT status FROM public.bets WHERE id = v_betC),
     'boost_events', (SELECT count(*) FROM public.activity_feed_events
                      WHERE event_type = 'sportsbook_boost_hit' AND created_at = now()),
-    'player_net',   50
+    'player_net',   100
   ) INTO v_result;
 
   RAISE EXCEPTION 'PROBE_RESULT %', v_result;

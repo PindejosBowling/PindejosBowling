@@ -11,9 +11,9 @@ interface WagerFieldProps {
   // Decimal odds driving the live "To win" preview (floor(wager × odds)) — the
   // server's payout math.
   odds: number
-  // When an Energy Drink (odds_boost) is attached, the multiplier applied to
-  // profit (payout − wager). Undefined = no boost. Drives a highlighted, boosted
-  // "To win" preview mirroring the server's settlement.
+  // When an Energy Drink (odds_boost) is attached, the multiplier applied to the
+  // total payout (floor(payout × boostPct), paid on top). Undefined = no boost.
+  // Drives a highlighted, boosted "To win" preview mirroring the server's settlement.
   boostPct?: number
   // Optional label override (defaults to "WAGER (pins)"). Compact hides the
   // balance/min hint (used in dense per-pick rows).
@@ -35,7 +35,7 @@ export default function WagerField({
 }: WagerFieldProps) {
   const wagerNum = parseInt(wager, 10)
   const payout = !isNaN(wagerNum) ? Math.floor(wagerNum * odds) : 0
-  const boostBonus = boostPct != null && !isNaN(wagerNum) ? Math.floor((payout - wagerNum) * boostPct) : 0
+  const boostBonus = boostPct != null && !isNaN(wagerNum) ? Math.floor(payout * boostPct) : 0
   const boosted = boostBonus > 0
   const toWin = payout + boostBonus
 
@@ -61,7 +61,7 @@ export default function WagerField({
       </Text>
       {boosted && !compact && (
         <Text style={styles.boostNote}>
-          Energy Drink ⚡️ doubles your profit — {formatPins(payout)} payout + {formatPins(boostBonus)} bonus.
+          Energy Drink ⚡️ doubles your total payout — {formatPins(payout)} payout + {formatPins(boostBonus)} bonus.
         </Text>
       )}
     </>

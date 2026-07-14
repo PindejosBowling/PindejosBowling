@@ -205,10 +205,10 @@ export function renderFeedEvent(row: FeedEventView): FeedRenderParts {
       }
 
     case 'sportsbook.boost_hit':
-      // An Energy Drink doubled the profit on a winning bet (House-funded bonus).
+      // An Energy Drink doubled the total payout on a winning bet (House-funded bonus).
       return {
         ...meta,
-        line: `${actorOf(row)} cracked an Energy Drink ⚡️ and doubled their winnings — a ${num(p.bonus).toLocaleString()}-pin bonus on top.`,
+        line: `${actorOf(row)} cracked an Energy Drink ⚡️ and doubled their total payout — a ${num(p.bonus).toLocaleString()}-pin bonus on top.`,
         amount: { value: num(p.bonus), tone: 'positive', label: 'BONUS' },
       }
 

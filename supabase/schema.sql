@@ -159,7 +159,8 @@ CREATE TABLE bets (
   week_id uuid,
   insurance_item_id uuid,
   crutch_item_id uuid,
-  boost_item_id uuid
+  boost_item_id uuid,
+  boost_pct numeric
 );
 
 CREATE TABLE board_posts (
@@ -3659,7 +3660,7 @@ BEGIN
   SELECT week_id INTO v_week_id FROM public.bet_markets WHERE id = p_market_id;
 
   FOR v_bet IN
-    SELECT DISTINCT b.id, b.player_id, b.season_id, b.stake, b.insurance_item_id, b.crutch_item_id, b.boost_item_id
+    SELECT DISTINCT b.id, b.player_id, b.season_id, b.stake, b.insurance_item_id, b.crutch_item_id, b.boost_item_id, b.boost_pct
     FROM public.bets b
     JOIN public.bet_legs       l ON l.bet_id = b.id
     JOIN public.bet_selections s ON s.id = l.selection_id
@@ -3813,17 +3814,15 @@ BEGIN
           v_payout, 'bet_payout', 'Bet won', NULL, v_bet.id);
       END IF;
 
-      -- Energy Drink: House-funded bonus on the win = floor(profit × boost_pct),
-      -- where profit = payout - stake (boost_pct = 1.0 ⇒ profit doubled, 1:1 → 2:1).
+      -- Energy Drink: House-funded bonus on the win = floor(payout × boost_pct),
+      -- applied to the TOTAL payout (stake + winnings), so boost_pct = 1.0 doubles
+      -- the whole payout. Reads the pct snapshotted onto the bet at placement (its
+      -- flavor's value, locked in) so the paid bonus equals what the slip showed.
       -- ALWAYS credits the OWNER — their own item, their reward — even when ghosts
       -- ate the base profit. Bet-linked + week-stamped; NOT-EXISTS guard idempotent.
       IF v_bet.boost_item_id IS NOT NULL THEN
-        SELECT COALESCE((c.effect_params ->> 'boost_pct')::numeric, 1.0) INTO v_boost_pct
-          FROM public.player_inventory_items i
-          JOIN public.item_catalog c ON c.id = i.catalog_item_id
-         WHERE i.id = v_bet.boost_item_id;
-
-        v_bonus := FLOOR((v_payout - v_bet.stake) * COALESCE(v_boost_pct, 1.0));
+        v_boost_pct := COALESCE(v_bet.boost_pct, 1.0);
+        v_bonus := FLOOR(v_payout * v_boost_pct);
 
         IF v_bonus > 0 AND NOT EXISTS (
           SELECT 1 FROM public.pin_ledger
@@ -4368,6 +4367,7 @@ DECLARE
   v_sel       record;
   v_n         integer;
   v_line      public.custom_lines%ROWTYPE;
+  v_boost_pct numeric := NULL;
 BEGIN
   v_player_id := public.current_player_id();
 
@@ -4510,7 +4510,8 @@ BEGIN
 
   -- Energy Drink: same consume posture; its own effect_type, no leg floor (a
   -- boost helps any winning bet, single or parlay). Spent at placement, win or
-  -- lose; the bonus is paid at settlement on a win.
+  -- lose; the bonus is paid at settlement on a win. Its boost_pct is snapshotted
+  -- onto the bet below so display + settlement share one locked-at-placement value.
   IF p_boost_item_id IS NOT NULL THEN
     IF NOT EXISTS (
       SELECT 1
@@ -4532,14 +4533,21 @@ BEGIN
     IF NOT FOUND THEN
       RAISE EXCEPTION 'Energy Drink is not usable (already spent, wrong season, or not yours)';
     END IF;
+
+    -- Lock the flavor's boost magnitude onto the bet (defaults to 1.0 if a row
+    -- somehow omits it).
+    SELECT COALESCE((c.effect_params ->> 'boost_pct')::numeric, 1.0) INTO v_boost_pct
+      FROM public.player_inventory_items i
+      JOIN public.item_catalog c ON c.id = i.catalog_item_id
+     WHERE i.id = p_boost_item_id;
   END IF;
 
   INSERT INTO public.bets (player_id, season_id, week_id, stake, potential_payout, status,
                            custom_line_id, custom_line_title, custom_line_description, custom_line_category,
-                           insurance_item_id, crutch_item_id, boost_item_id)
+                           insurance_item_id, crutch_item_id, boost_item_id, boost_pct)
     VALUES (v_player_id, v_season_id, v_week_id, p_stake, v_payout, 'pending',
             v_line.id, v_line.title, v_line.description, v_line.category,
-            p_insurance_item_id, p_crutch_item_id, p_boost_item_id)
+            p_insurance_item_id, p_crutch_item_id, p_boost_item_id, v_boost_pct)
     RETURNING id INTO v_bet_id;
 
   INSERT INTO public.bet_legs (bet_id, selection_id, side, odds_at_placement, line_at_placement)
