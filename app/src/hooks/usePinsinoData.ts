@@ -302,10 +302,14 @@ export interface BetView {
   // All three are surfaced in the Bet Details overlay.
   //   insurance — Golden Ticket (bet_insurance): refunds the stake if the bet loses.
   //   crutch    — Winner's Crutch (parlay_crutch): cancels the lone losing leg of a parlay.
-  //   boost     — Energy Drink (odds_boost): House-funded profit doubler on a win.
+  //   boost     — Energy Drink (odds_boost): House-funded total-payout doubler on a win.
   insuranceItemId: string | null
   crutchItemId: string | null
   boostItemId: string | null
+  // The attached Energy Drink's boost multiplier, snapshotted from its catalog
+  // effect_params at placement (null = no boost). Bonus on a win =
+  // floor(potentialPayout × boostPct); see betBoostBonus in utils/bets.
+  boostPct: number | null
 }
 
 // One row in the season pin-balance scoreboard (High Rollers).
@@ -385,6 +389,7 @@ export function normalizeBet(b: any): BetView {
     insuranceItemId: b.insurance_item_id ?? null,
     crutchItemId: b.crutch_item_id ?? null,
     boostItemId: b.boost_item_id ?? null,
+    boostPct: b.boost_pct != null ? Number(b.boost_pct) : null,
   }
 }
 

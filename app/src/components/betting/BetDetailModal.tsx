@@ -3,7 +3,7 @@ import { View, Text, TouchableOpacity, StyleSheet } from 'react-native'
 import { colors, fonts, radius } from '../../theme'
 import CenterModal from '../ui/CenterModal'
 import { betLineSuffix, type BetView } from '../../hooks/usePinsinoData'
-import { resultBadge, betPayout, betReturn, betReturnDisplay } from '../../utils/bets'
+import { resultBadge, betPayout, betBoostBonus, betReturn, betReturnDisplay } from '../../utils/bets'
 import { haunts } from '../../utils/supabase/db'
 import { useBetSlip } from './BetSlipProvider'
 
@@ -210,13 +210,13 @@ export default function BetDetailModal({ bet, onClose, canHaunt, alreadyHaunted,
             <View style={styles.row}>
               <Text style={styles.label}>ENERGY DRINK ⚡️</Text>
               <Text style={[styles.value, { color: colors.gold }]}>
-                {bet.status === 'won' ? 'Profit doubled' : bet.status === 'pending' ? 'Attached' : 'Spent'}
+                {bet.status === 'won' ? 'Payout doubled' : bet.status === 'pending' ? 'Attached' : 'Spent'}
               </Text>
               <Text style={styles.customDescription}>
                 {bet.status === 'won'
-                  ? 'An Energy Drink doubled your profit — the House paid a bonus on top of the payout (1:1 became 2:1).'
+                  ? 'An Energy Drink doubled your total payout — the House paid a bonus equal to your payout on top (stake and winnings both).'
                   : bet.status === 'pending'
-                    ? 'Doubles your profit if this bet wins — spent at placement either way.'
+                    ? 'Doubles your total payout if this bet wins — spent at placement either way.'
                     : 'An Energy Drink was attached but only pays on a win — it was spent at placement.'}
               </Text>
             </View>
@@ -227,11 +227,17 @@ export default function BetDetailModal({ bet, onClose, canHaunt, alreadyHaunted,
             <Text style={styles.value}>{bet.stake} pins</Text>
           </View>
 
-          {/* PAYOUT is the static "to win" figure; RETURN is the realized flow
-              once settled (Pending until then). Both are player-perspective. */}
+          {/* PAYOUT is the static "to win" figure (incl. any Energy Drink bonus);
+              RETURN is the realized flow once settled (Pending until then). Both
+              are player-perspective. */}
           <View style={styles.row}>
             <Text style={styles.label}>PAYOUT</Text>
             <Text style={styles.value}>{betPayout(bet)} pins</Text>
+            {boosted && betBoostBonus(bet) > 0 && (
+              <Text style={styles.customDescription}>
+                {bet.potentialPayout} base + {betBoostBonus(bet)} Energy Drink ⚡️ bonus
+              </Text>
+            )}
           </View>
 
           <View style={styles.row}>

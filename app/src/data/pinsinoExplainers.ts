@@ -140,7 +140,7 @@ export const EXPLAINERS: Record<PinsinoFeatureKey, FeatureExplainer> = {
       'Items are single-use. Win one at auction and it sits in your inventory until you spend it — and using it spends it, win or lose.',
       'You can stack more than one item on the same Sportsbook bet — say a Golden Ticket and an Energy Drink together — as long as the bet qualifies for each.',
       '🎫 Golden Ticket — attach it to a bet: if the bet loses, your stake comes back. Insurance.',
-      '⚡️ Energy Drink — attach it to a bet: if the bet wins, your profit is doubled.',
+      '⚡️ Energy Drink — attach it to a bet: if the bet wins, your total payout is doubled.',
       "🩼 Winner's Crutch — attach it to a parlay: miss by exactly one leg and that leg is forgiven; you cash the rest at reduced odds.",
       "👻 Ghost in the Slip — secretly attach it to another player's pending bet. If that bet wins, the ghosts take the profit and the bettor keeps only their stake.",
     ],

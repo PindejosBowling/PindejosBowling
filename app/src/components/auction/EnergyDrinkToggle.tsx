@@ -31,7 +31,7 @@ export default function EnergyDrinkToggle({ boostCount, enabled, onToggle, disab
       </View>
       {enabled && (
         <Text style={styles.copy}>
-          Win and your profit doubles - lose and you get nothing
+          Win and your total payout doubles - lose and you get nothing
         </Text>
       )}
     </View>

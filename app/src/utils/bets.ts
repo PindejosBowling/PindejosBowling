@@ -19,11 +19,24 @@ export function resultBadge(status: string) {
   return null
 }
 
-// The bet's potential payout — the total returned on a win, incl. the stake.
-// Snapshotted at placement (BetView.potentialPayout) and static for the bet's
-// lifetime; this is the "to win" figure, independent of the outcome.
+// The House-funded Energy Drink bonus paid on a win = floor(payout × boost_pct),
+// on top of the base payout — the exact 'bet_odds_boost' ledger amount. Reads the
+// bet's own boostPct, snapshotted from its flavor's item_catalog.effect_params at
+// placement (so varying-boost variants each display their true bonus, and it works
+// on the shared board where the owner-RLS'd inventory item is invisible). 0 when no
+// Energy Drink is attached. (Boost only pays on a win, so this rides the win/
+// pending "to win" figure; it's never added on a push or loss.)
+export function betBoostBonus(bet: BetView): number {
+  if (bet.boostPct == null) return 0
+  return Math.floor(bet.potentialPayout * bet.boostPct)
+}
+
+// The bet's potential payout — the total returned on a win, incl. the stake and
+// any Energy Drink bonus. The base is snapshotted at placement
+// (BetView.potentialPayout) and static for the bet's lifetime; this is the "to
+// win" figure, independent of the outcome.
 export function betPayout(bet: BetView): number {
-  return bet.potentialPayout
+  return bet.potentialPayout + betBoostBonus(bet)
 }
 
 // The realized return to the *player* — the actual pins that flow back once the
@@ -33,7 +46,7 @@ export function betPayout(bet: BetView): number {
 //   lost → 0 (nothing returns)
 // While the bet is still pending nothing has flowed yet → null.
 export function betReturn(bet: BetView): number | null {
-  if (bet.status === 'won') return bet.potentialPayout
+  if (bet.status === 'won') return betPayout(bet)
   if (bet.status === 'push' || bet.status === 'void') return bet.stake
   if (bet.status === 'lost') return 0
   return null // pending
