@@ -1301,10 +1301,14 @@ export const activityFeed = {
 export const weeks = {
   list: () =>
     supabase.from('weeks').select('*').order('week_number'),
-  // Archived weeks + their settle state (settled_at NULL = advanced-but-unsettled).
-  // Powers the LaneTalk import screen's "Settle Week" gate.
+  // Archived weeks + their settle state (settled_at NULL = advanced-but-unsettled)
+  // and enough metadata to synthesize an import-screen row for a week that has no
+  // LaneTalk imports yet. Powers the "Settle Week" gate + injection.
   listArchivedSettleState: () =>
-    supabase.from('weeks').select('id, settled_at').eq('is_archived', true),
+    supabase
+      .from('weeks')
+      .select('id, week_number, bowled_at, settled_at, season_id, seasons(number)')
+      .eq('is_archived', true),
   listBySeason: (seasonId: string) =>
     supabase
       .from('weeks')

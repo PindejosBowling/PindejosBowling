@@ -1,15 +1,27 @@
 # Archive & Settlement Engine
 
-The weekly **Archive & Advance** is the economy's clock tick — the single most
-critical process in the pin economy. One admin tap runs one atomic transaction
-that locks the week's scores, derives **every** economic consequence of the week
-(pincome, bet settlement, loan garnishment, PvP resolution, the public P&L
-event), and opens the next week. Its mirror, **unarchive**, restores the economy
-to the exact instant before that transaction ran, making settlement repeatable
-and testable.
+The weekly clock tick is split into **two** admin actions (the advance/settle
+split — migrations `…190000_advance_settle_split` + `…200000_reversal_redesign`):
+
+- **Advance** (`advance_week`, bowl-night): locks the week's scores into the
+  standings, snapshots the fill preimages, and opens the next week. **Moves no
+  money.** Introduces the **LOCKED-BUT-UNSETTLED** week state.
+- **Settle** (`settle_week`, next-day): one atomic/idempotent/snapshot-reversible
+  transaction that derives **every** economic consequence (pincome, bet
+  settlement incl. LaneTalk props, loan garnishment, PvP resolution, the unified
+  public House P/L), then stamps `settled_at`.
+
+The split exists so the LaneTalk frame import — which lands the day *after* the
+bowl night — settles on the same clock as everything else, instead of the old
+"second clock." Two reversal mirrors: **`unsettle_week`** re-derives money on a
+still-locked week (settlement was wrong / newer imports), and **`unarchive_week`**
+fully reverses both phases and reopens the week for score edits.
+
+`archive_week` still exists as a **deprecated one-tap shim** = `advance_week` +
+`settle_week`, kept for the probe suite and any un-migrated caller.
 
 This file is the as-built reference: read it before changing any part of the
-engine, adding a new feature that settles at archive time, or debugging a
+engine, adding a new feature that settles at settle time, or debugging a
 settlement discrepancy. Companion docs:
 
 | Doc | Role |
@@ -21,216 +33,243 @@ settlement discrepancy. Companion docs:
 | `supabase/schema.sql` | Generated current-state DDL — the function bodies themselves |
 
 Key migrations (history only — never read migrations for current state):
-`20260611000000_archive_unarchive_week` (atomic archive + snapshot + unarchive),
-`20260611120000_settlement_integrity` (sync rework, coupling triggers, backstop,
-P&L fix), `20260611130000_per_game_participation` (eager lineup rows,
-participation-keyed lines).
+`20260611000000_archive_unarchive_week` (original atomic archive + snapshot),
+`20260611120000_settlement_integrity` (sync rework, coupling triggers, backstop),
+`20260611130000_per_game_participation` (eager lineup rows), and the split:
+`…170000_weeks_derive_bowled_at` (scheduled `bowled_at`),
+`…180000_settlement_scaffolding` (`settled_at`, snapshot `phase`, placement
+guard), `…190000_advance_settle_split` (`advance_week` / `settle_week` /
+`preview_settle_week` + shims), `…200000_reversal_redesign` (`unsettle_week` +
+phase-branched `unarchive_week`).
 
 ---
 
 ## 1. The mental model
 
 ```
-                         ┌─────────────────────────────────────────────┐
-  pre-archive            │  archive_week(week_id, force)   [atomic]    │   post-archive
-  (integrity layer §5)   │                                             │
-                         │  1. guard: admin, week exists,              │
-  roster/market coupling │     no active run for this week             │
-  triggers keep every    │  2. snapshot pre-image  ──► week_archive_*  │   unarchive_week
-  market settleable:     │  3. lock week (is_archived = true)          │   (force)
-  bets can only exist on │  4. settle_betting_for_week(week, force)    │   restores the
-  (player, game) pairs   │       a. score-credit mint                  │   §2 snapshot +
-  that will really bowl  │       b. O/U markets settle                 │   destroys week
-                         │       c. moneyline markets settle           │   N+1  (§4)
-                         │       d. loans: garnish → interest          │
-                         │       e. PvP: close opens, settle locked    │
-                         │       f. BACKSTOP: no pending bets survive  │
-                         │       g. house weekly P&L feed event        │
-                         │  5. create week N+1 (idempotent)            │
-                         └─────────────────────────────────────────────┘
+  pre-advance          ┌──────────── advance_week(week, fill_scores) ─────────────┐  ADVANCED
+  (integrity §5)       │  1. guard: admin, week exists, no active run             │  (locked,
+                       │  2. snapshot fill preimages  ──► week_archive_* phase=adv │   unsettled)
+  coupling triggers    │  3. materialize fills + coverage guard                   │
+  keep every market    │  4. lock week (is_archived = true)   [NO bowled_at write]│
+  settleable           │  5. create week N+1 (bowled_at from creation trigger)    │
+                       └──────────────────────────────────────────────────────────┘
+                                              │  (next day: LaneTalk import lands)
+  ADVANCED             ┌──────────── settle_week(week, void_missing, force) ───────┐  SETTLED
+  (locked, unsettled)  │  1. guard: admin, is_archived, active run                 │  (settled_at
+                       │  2. money snapshot ──► week_archive_* phase=settle (once) │   set)
+                       │  3. a score-credit mint   b O/U   c moneyline             │
+                       │     c′ team_prop total_pins   c″ LaneTalk player+team     │
+                       │     d loans   e PvP   f BACKSTOP (narrowed)               │
+                       │     g UNIFIED House weekly P/L (UPSERT)                   │
+                       │  4. settled_at = now()                                    │
+                       └──────────────────────────────────────────────────────────┘
+
+  Reversal:  unsettle_week → back to ADVANCED (money reversed, scores stay frozen)
+             unarchive_week → back to pre-advance (both phases reversed, N+1 gone,
+                              week reopened, bowled_at PRESERVED)                  (§4)
 ```
 
-Three load-bearing properties:
+Load-bearing properties:
 
-1. **Atomicity.** Everything between the guard and week-N+1 creation is one
-   transaction. Any RAISE anywhere (including the backstop) rolls the entire
-   archive back — week unlocked, nothing settled, no run row.
-2. **Idempotent derivation.** Every settlement step has its own re-run guard
-   (§3 table), so `archive → unarchive → archive` (untouched scores) re-derives the identical
-   economy from the same scores.
-3. **Snapshot reversibility.** Settlement only ever **INSERTs append rows** or
-   **UPDATEs a known column set** — both captured in the pre-image snapshot, so
-   unarchive can reverse them exactly. *Any new settlement effect must keep this
+1. **Two clocks, each atomic.** Advance and settle are each one transaction; a
+   RAISE anywhere (incl. the settle backstop) rolls that whole step back.
+2. **Money snapshot at SETTLE, not advance.** `settle_week` captures the money
+   preimages/preexisting-ids (`phase='settle'`) the moment it runs — so a bet or
+   import landing between advance and settle can't corrupt reversal. New stakes
+   on a locked week are blocked at placement (`place_house_bet` `is_archived`
+   guard).
+3. **Idempotent derivation.** Every settle step has its own re-run guard (§3), so
+   re-settle (late imports) and `advance → settle → unsettle → settle` re-derive
+   the identical economy. The money snapshot is captured **once per run** (skipped
+   on re-settle) so it always pins the pre-first-settle state.
+4. **Snapshot reversibility.** Settlement only **INSERTs append rows** or
+   **UPDATEs a captured column set**; `phase` tags which reversal (unsettle /
+   unarchive) owns each snapshot row. *Any new settlement effect must keep this
    property* (§6 recipe).
 
 ---
 
-## 2. `archive_week(p_week_id uuid, p_force boolean default false, p_fill_scores jsonb default null)` → run id
+## 2. `advance_week(p_week_id uuid, p_force boolean default false, p_fill_scores jsonb default null)` → run id
 
 Admin-only `SECURITY DEFINER` RPC. Called from `AdminArchiveModal`
-(MatchupsScreen's "Archive & Advance" floating bar) via
-`archives.archiveWeek(weekId, force, fillScores)` in `db.ts`.
+(MatchupsScreen's "Advance Week" floating bar) via
+`archives.advanceWeek(weekId, force, fillScores)` in `db.ts`. **Bowl-night: locks
+the week, moves no money.**
 
-**Guards** (before any mutation):
-- JWT `app_metadata.role = 'admin'`.
-- Week exists.
-- **One active run per week**: a `week_archive_runs` row with
-  `status='active'` blocks re-archive ("unarchive it first"). Unarchive marks
-  the run `reversed`, which re-allows archiving.
+**Guards:** JWT `app_metadata.role = 'admin'`; week exists; **one active run per
+week** (a `week_archive_runs` row with `status='active'` blocks re-advance;
+unarchive marks it `reversed`, re-allowing advance).
 
-**Snapshot capture** — two kinds of rows in `week_archive_snapshot`, anchored to
-the new `week_archive_runs` row:
+**Fill snapshot only** — `advance_week` captures a **single** kind of snapshot row
+(`phase='advance'`): the `p_fill_scores`-listed unscored fill rows' `score`
+preimage (always NULL at capture). The money preimages/preexisting-ids are
+**not** captured here — they move to `settle_week` (the correctness point, §3).
 
-| Kind | Table | Predicate (what's captured) |
-|---|---|---|
-| `preexisting_id` | `pin_ledger` | `week_id = N` **OR** `bet_id ∈ week-N bets` (payout/refund rows are bet-linked **and**, since migration `…191008_week_stamp_bet_settlement_ledger`, also week-stamped; the OR keeps the predicate belt-and-braces) |
-| `preexisting_id` | `loan_ledger`, `pvp_ledger`, `activity_feed_events` | `week_id = N` |
-| `preimage_row` | `bet_markets` | week-N markets: `status, result_value, settled_at` |
-| `preimage_row` | `bet_selections`, `bet_legs` | week-N markets' rows: `result` |
-| `preimage_row` | `bets` | bets with a leg in week N: `status, potential_payout, settled_at` |
-| `preimage_row` | `pvp_challenges` | week-N: `status, winner_player_id, result_detail, settled_at, admin_note` |
-| `preimage_row` | `pvp_challenge_offers` | week-N challenges' offers: `superseded_at, accepted_at, declined_at` |
-| `preimage_row` | `loans` | season's **active** loans: `status, paid_off_at` |
-| `preimage_row` | `scores` | the `p_fill_scores`-listed unscored fill rows: `score` (always NULL at capture) |
-
-The `preexisting_id` set defines "what existed before settlement" — unarchive
-deletes everything matching the predicate that is **not** in the set (i.e.,
-exactly what settlement inserted). The `preimage_row` payloads are restored
-verbatim. Reversal is snapshot-driven, **not** rule-based, so it cannot
-resurrect pre-archive actions (a challenge cancelled by Start Game stays
-cancelled — its pre-image was already in that state).
-
-**Then — fill materialization**: `p_fill_scores`
-(`[{team_slot_id, game_id, score}, ...]`) carries the value each **unscored
-fill** slot displayed on the live matchup screen (`Math.round(effectiveAvg)` —
-computed client-side by `computeUnscoredFillScores` in `useMatchupsData.ts` and
-threaded through `AdminArchiveModal`). The RPC validates every row (belongs to
-week N through `team_slots → teams`, `is_fill = true`, `score` currently NULL,
-positive integer, no duplicate pairs — any violation RAISEs, i.e. a stale
-screen aborts the whole archive), snapshots the pre-images (the `scores` row
-above), and UPDATEs the scores **before the lock and settlement**, so archived
-standings/history AND bet settlement (moneyline, team `total_pins`) grade on
-the same totals the screen showed. Stored scores — admin-typed fill values
-included — are the source of truth and are never touched. Fills still mint no
-pincome and never feed player markets/averages (step a's and b's `is_fill`
-filters are unaffected).
+**Fill materialization**: `p_fill_scores` (`[{team_slot_id, game_id, score}, ...]`)
+carries the value each **unscored fill** slot displayed on the live matchup
+screen (`Math.round(effectiveAvg)`, computed by `computeUnscoredFillScores` in
+`useMatchupsData.ts`). The RPC validates every row (belongs to week N via
+`team_slots → teams`, `is_fill = true`, `score` currently NULL, positive integer,
+no duplicate pairs — any violation RAISEs, aborting the advance), snapshots the
+preimages, and UPDATEs the scores **before the lock**, so archived standings and
+settlement grade on the same totals the screen showed. Stored scores (admin-typed
+fill values included) are the source of truth and never touched; fills mint no
+pincome and never feed player markets/averages.
 
 **Coverage guard** (migration `…160000_archive_fill_coverage_guard`): after
-materialization, the RPC RAISEs if any unscored fill row remains — so an
-outdated client (or any caller omitting `p_fill_scores`) cannot silently
-archive without the fill's contribution. Exemptions: a never-bowled week (no
-stored scores — nothing to grade), and a league with zero archived counted
-scores (the server proxy for "league average = 0", when the client
-legitimately omits the rows).
+materialization, RAISEs if any unscored fill row remains, so an outdated client
+(or any caller omitting `p_fill_scores`) cannot silently advance without the
+fill's contribution. Exemptions: a never-bowled week, and a league with zero
+archived counted scores (league-average proxy = 0).
 
-**Then**: lock (`is_archived = true`, `bowled_at = current_date`) → settle (§3)
-→ `INSERT weeks (season, N+1) ON CONFLICT DO NOTHING`.
+**Then**: lock (`is_archived = true` — **no `bowled_at` write**; `bowled_at` is
+the immutable scheduled bowl-Monday, set at week creation by the
+`weeks_derive_bowled_at` trigger) → `INSERT weeks (season, N+1) ON CONFLICT DO
+NOTHING` (the trigger derives N+1's `bowled_at`).
 
-`p_force` is threaded straight into settlement's backstop (§3f).
+`p_force` is accepted for shim compatibility but advance has no backstop, so it
+is inert here.
 
 ---
 
-## 3. `settle_betting_for_week(p_week_id uuid, p_force boolean default false)`
+## 3. `settle_week(p_week_id uuid, p_void_missing boolean default false, p_force boolean default false)` → jsonb
 
-Admin-only. The consolidated settlement engine — every step in order, with its
-idempotency guard:
+Admin-only. **Next-day: derives ALL money for an advanced (locked) week**, in one
+atomic transaction. Called from `AdminSettleModal` (LaneTalk import screen) via
+`archives.settleWeek(...)`. Returns `{settled, voided, left_pending, house_net}`
+for the toast.
+
+**Guards:** admin; week exists; `is_archived=true` (must be advanced first); an
+`active` run exists.
+
+**Money snapshot capture** (`phase='settle'`, **once per run** — skipped if the
+run already has `phase='settle'` rows). Capturing at settle, not advance, is the
+central correctness point: a bet/import landing between advance and settle can't
+corrupt reversal. Two kinds, anchored to the run:
+
+| Kind | Table | Predicate |
+|---|---|---|
+| `preexisting_id` | `pin_ledger` | `week_id = N` **OR** `bet_id ∈ week-N bets` |
+| `preexisting_id` | `loan_ledger`, `pvp_ledger`, `activity_feed_events` | `week_id = N` |
+| `preimage_row` | `bet_markets` | `status, result_value, settled_at` |
+| `preimage_row` | `bet_selections`, `bet_legs` | `result` |
+| `preimage_row` | `bets` | `status, potential_payout, settled_at` |
+| `preimage_row` | `pvp_challenges` | `status, winner_player_id, result_detail, settled_at, admin_note` |
+| `preimage_row` | `pvp_challenge_offers` | `superseded_at, accepted_at, declined_at` |
+| `preimage_row` | `loans` | season's **active** loans: `status, paid_off_at` |
+
+**Ordered settlement steps** (each with its idempotency guard):
 
 | # | Step | What it does | Ledger writes | Re-run guard |
 |---|---|---|---|---|
-| a | **Score-credit mint** | One `score_credit` per real (non-fill) player per scored game — the economy's **only faucet** (no house counterpart) | `pin_ledger +score` (week-stamped) | `NOT EXISTS score_credit LIKE 'Week N %'` for the season |
-| b | **O/U settlement** | Each non-`settled` O/U market: subject's actual score → `settle_market_internal` (selection results → leg back/lay results → `finalize_bets_for_market`). **Night O/U markets** (`game_number` null — the player night total-pins line, since `…160000_player_night_pins_line`) grade on Σ the subject's non-fill scores across the week. **No score → market `closed`, no result** (its bets fall to step f) | win: `bet_payout` pair; push: `bet_refund` pair; loss: none (stake kept from placement) | markets reach `settled`; `settle_market_internal` returns early on `settled` |
-| c | **Moneyline settlement** | Each non-`settled` moneyline whose game has ≥1 score → `settle_moneyline_market_internal` (higher combined team total wins; tie = push; a side with zero scores totals 0). **Zero scores in the game → `closed`** | same as (b) | same as (b) |
-| c′ | **Team-prop `total_pins` settlement** | Each non-`settled` `team_prop` market with `params.stat='total_pins'` (`clock='archive'`): **game markets** (`subject_game_id` set) whose game has ≥1 score → team pinfall = Σ `scores` of the anchored team (`params.team_id`) for the game (the moneyline aggregation); **night markets** (`subject_game_id` null, since `…153000_standardize_betting_lines_settlement`) → Σ the team's non-NULL scores across ALL the week's games (fills INCLUDED — score-sheet semantics; frame-stat team props count non-fill roster imports instead) → `settle_market_internal` (shared over/under grading). **Zero scores → `closed`**. Frame-stat team_props (`clock='lanetalk'`) are skipped — they ride the LaneTalk clock (step f exemption) and settle via `settle_lanetalk_props_for_week`'s team branch on Confirm | same as (b) | same as (b) |
-| d | **Loans** (`process_weekly_loans`) | Per active loan: **garnish** = min(week pincome × rate, outstanding) → then **interest** = ceil(remaining × rate) on still-active loans; outstanding ≤ 0 → `status='paid_off'` | garnish: `pin_ledger` pair (`loan_weekly_garnishment`) + `loan_ledger weekly_garnishment`; interest: `loan_ledger weekly_interest` **only** (debt grows, no pin movement) | per-(loan, week) guard on `loan_ledger` types |
-| e | **PvP** (`settle_pvp_for_week`) | Close still-open offers/challenges (pending/countered → `cancelled`, nothing was escrowed) then auto-settle every `locked` contract: decisive → winner takes pot; tie → push (refund); missing data (incl. a deleted prop market — FK is SET NULL) → **void** (refund). Publishes `pvp_challenge_settled` feed events | win: `pvp_payout` pair; push/void: `pvp_refund` pairs | challenge `status` checks; settled/pushed/voided return early |
-| f | **BACKSTOP** | Count bets with a leg in this week still `pending`. **>0 and not force → RAISE** (whole archive rolls back) naming the unsettleable markets. **Force →** each such bet: legs `result='void'`, bet `status='void'`, stake refunded. **Exemption: bets with ≥1 leg on an unsettled next-day-clock market — `market_type='prop'` (LaneTalk stat bets) OR `market_type='team_prop' AND params.clock='lanetalk'` (frame-stat team props) — are excluded from the count, the listing, AND the force-void** — they settle later via `settle_lanetalk_props_for_week` ([lanetalk-stat-bets.md](lanetalk-stat-bets.md)). `total_pins` team_props (`clock='archive'`) are **NOT** exempt — step c′ settles them in this transaction, so a pending one is a real unsettleable | force: `bet_refund` pair ("Voided at archive — market never settled") | n/a (state-driven) |
-| g | **House weekly P&L feed event** | `sportsbook_weekly_house_result` with `house_net` = SUM of house `bet_stake/bet_payout/bet_refund` **via `bet_id` through the week's markets** (`bet_id` is the authoritative link for bet money; payout/refund rows are also week-stamped since `…191008_week_stamp_bet_settlement_ledger`) | none (feed row) | `(season, week, event_type)` existence check |
+| a | **Score-credit mint** | One `score_credit` per real (non-fill) player per scored game — the economy's **only faucet** | `pin_ledger +score` (week-stamped) | `NOT EXISTS score_credit` for the week |
+| b | **O/U settlement** | Subject's game score (night markets: Σ week's non-fill scores) → `settle_market_internal`. **No score → `closed`** (bets fall to step f) | win `bet_payout`; push `bet_refund`; loss none | market reaches `settled` |
+| c | **Moneyline** | game with ≥1 score → `settle_moneyline_market_internal`; **zero → `closed`** | same as (b) | same |
+| c′ | **team_prop `total_pins`** (`clock='archive'`) | game/night team pinfall → `settle_market_internal`; **zero → `closed`** | same as (b) | same |
+| c″ | **LaneTalk player + team props** (FOLDED IN) | Settles `market_type='prop'`/`team_prop clock='lanetalk'` off official `lanetalk_game_imports`. Gradable value → settle; else `p_void_missing` → delete-refund (§5c rail); else left pending. Increments the returned `settled`/`voided`/`left_pending` | same as (b) | market `settled` |
+| d | **Loans** (`process_weekly_loans`) | garnish = min(week pincome × rate, outstanding) → interest on still-active loans | garnish pair + `loan_ledger`; interest `loan_ledger` only | per-(loan, week) guard |
+| e | **PvP** (`settle_pvp_for_week`) | close open offers, auto-settle `locked` contracts (decisive/push/void) | `pvp_payout`/`pvp_refund` pairs | challenge status |
+| f | **BACKSTOP (narrowed)** | Count still-`pending` bets. **>0 and not force → RAISE**; force → void+refund. **Exemption gated on `NOT p_void_missing`**: a bet is exempt only if it has a leg on a still-unsettled LaneTalk market (genuinely lacking data). With `p_void_missing=true`, c″ already delete-refunded those, so nothing is exempt | force: `bet_refund` pair | state-driven |
+| g | **UNIFIED House weekly P/L** | `sportsbook_weekly_house_result`, `house_net` = `SUM(pin_ledger.amount) WHERE is_house AND week_id=N AND auction_id IS NULL AND bounty_post_id IS NULL` — bets + PvP + loan garnishment, **excluding** bounty/auction (own feed cards + own clocks). **UPSERT** (re-settle refreshes the value) | none (feed row) | UPSERT, not skip |
 
-**Backstop reversibility:** the force-void is an UPDATE on `bets`/`bet_legs`
-(pre-images captured in §2) plus bet-linked `bet_refund` INSERTs (caught by
-unarchive's `bet_id` branch) — a forced archive unarchives back to the
-exact pre-archive state, voided bets returning to `pending`.
+**Then**: `UPDATE weeks SET settled_at = now() WHERE settled_at IS NULL` (preserves
+the first-settle time across re-settles).
 
-**App force flow:** `AdminArchiveModal` arms a red **Force Archive** retry when
-the RPC error matches `/remain pending/i`, mirroring the unarchive force flow.
+**Re-settle for late imports = call `settle_week` again** (`p_void_missing=false`):
+additive via the per-step guards + the House P/L UPSERT; the money snapshot is
+NOT re-captured (guard), so reversal still targets the pre-first-settle state. No
+unsettle needed for the "more data arrived" case.
 
-**Post-archive prop settlement composes.** LaneTalk stat props ride a second
-settlement clock: their bets stay `pending` through archive (the backstop
-exemption above) and settle when the admin runs
-`settle_lanetalk_props_for_week` from the import screen — which only UPDATEs
-columns the §2 preimage already captured (markets/selections/bets/legs) and
-INSERTs bet-linked, week-stamped `pin_ledger` rows, exactly what
-`unarchive_week` reverses. Confirm-before-archive composes too. Missing-data
-markets are either left pending or (admin choice) DELETEd via the
-refund-on-market-death rail (§5c). Full doc:
-[lanetalk-stat-bets.md](lanetalk-stat-bets.md).
+**What never settles here:** bounties (admin-manual only), bet/PvP **stakes**
+(debited at placement/acceptance), season-close loan settlement (season end), and
+the manual admin tools (`cancel_bet`, PvP settle/void, `cancel_loan`).
 
-**What never settles here:** bounties (admin-manual `settle_bounty`/`close_bounty`
-only), bet/PvP **stakes** (debited at placement/acceptance), season-close loan
-settlement (`settle_loans_for_season_close`, season end), and the manual admin
-tools (`cancel_bet`, PvP settle/void, `cancel_loan`, feed suppress).
+**Deprecated shims** (kept for the probe suite / un-migrated callers):
+`archive_week` = `advance_week` + `settle_week(week, false, force)`;
+`settle_lanetalk_props_for_week(week, void)` = `settle_week(week, void, false)`
+returning the old `{settled, voided, left_pending}` TABLE. `settle_betting_for_week`
+is left **unchanged** (still called directly by `probe-bets-bounty`); its logic is
+inlined into `settle_week`, not called from it.
 
 ---
 
-## 4. `unarchive_week(p_week_id uuid, p_force boolean default false)`
+## 4. Reversal — two distinct repair paths
 
-Admin-only. Exposed on **ArchivesScreen** (More → Archives) via
-`archives.unarchiveWeek(weekId, force)`.
+The `phase` column on `week_archive_snapshot` (`'advance'` = fill preimages,
+`'settle'` = money preimages/preexisting-ids) is what lets each path reverse the
+right slice. **Choose by intent:**
 
-There is deliberately **one mode** (migration `…193032_single_mode_unarchive`,
-replacing the original soft/hard split): unarchive reverses the settlement
-**and reopens the week**, so afterwards week N is simply *in play again* —
-MatchupsScreen shows it, scores are editable, and its **Archive & Advance bar
-is the re-archive path**. The removed "soft" mode (settlement reversed but week
-still locked) created the only state in the lifecycle with no current week,
-which every screen had to special-case and no UI path could re-archive.
-Re-deriving identical settlement from untouched scores is guaranteed by the §3
-idempotency guards, not by a score lock.
+- **`unsettle_week`** = "re-derive money from the *same* frozen scores / newer
+  imports" — the week stays LOCKED, scores untouched.
+- **`unarchive_week`** = "reopen to edit scores" — full reversal, week back in
+  play. LaneTalk imports can change between unsettle/re-settle *without*
+  unarchiving (imports write `lanetalk_game_imports`, not the frozen `scores`).
 
-**Guards:** admin; **LIFO** (a later archived week blocks — only the most
-recent is reversible); an `active` run must exist; and the **downstream
-guard**: unless forced, RAISE if week N+1 holds any scores, bets, PvP, RSVPs,
-or ledger rows (the app surfaces the message and arms **Force Unarchive**).
+### 4a. `unsettle_week(p_week_id uuid)` → reverse money only
+
+Admin-only. Guards: `is_archived=true` **and** `settled_at IS NOT NULL`; an
+`active` run. Operates on **`phase='settle'` rows only**:
+1. **Delete what settlement inserted** — `activity_feed_events`, `pin_ledger`
+   (week-stamped OR bet-linked), `pvp_ledger`, `loan_ledger` whose id is *not* in
+   the run's `phase='settle'` `preexisting_id` set. Both feed + pin deletes
+   **exclude `auction_id`** (auction activity reverses only via
+   `reverse_settled_auction`; see
+   [economy/SILENT_AUCTIONS_DB.md](economy/SILENT_AUCTIONS_DB.md) §5).
+2. **Restore** the `phase='settle'` `preimage_row` payloads (markets/selections/
+   bets/legs/pvp/loans). **NOT the fill `scores`** — those are `phase='advance'`
+   and the week stays locked, so the frozen scores remain for re-settle to grade.
+3. `settled_at = NULL` (back to ADVANCED); the run stays `active`.
+4. Delete the run's `phase='settle'` snapshot rows so the next `settle_week`
+   re-captures a clean pre-settle image.
+
+A following `settle_week` re-derives. The primary "late import arrived" path,
+though, is just `settle_week` again (§3, additive) — `unsettle_week` is for
+"settlement was wrong."
+
+### 4b. `unarchive_week(p_week_id uuid, p_force boolean default false)` → full reversal
+
+Admin-only. Exposed on **ArchivesScreen** (More → Archives). Guards: admin;
+**LIFO** (a later archived week blocks); `active` run; **downstream guard** (unless
+forced, RAISE if week N+1 holds scores/bets/PvP/RSVPs/ledger — app arms **Force
+Unarchive**).
 
 **Reversal, in order:**
-1. **Delete what settlement inserted** — `activity_feed_events` and
-   `pin_ledger` (week-stamped OR bet-linked branch), `pvp_ledger`,
-   `loan_ledger` rows whose id is *not* in the run's `preexisting_id` set.
-   **Both the feed and pin deletes exclude `auction_id` rows** — auction
-   activity settles on its own pg_cron clock, is week-stamped only so
-   accounting/feed group it under the right week, and reverses exclusively
-   via `reverse_settled_auction`; see
-   [economy/SILENT_AUCTIONS_DB.md](economy/SILENT_AUCTIONS_DB.md) §5.
-2. **Restore what settlement updated** — `bet_markets`, `bet_selections`,
-   `bets`, `bet_legs`, `pvp_challenges`, `pvp_challenge_offers`, `loans`, and
-   the materialized fill `scores` (§2 — back to NULL, i.e. unscored again) from
-   the `preimage_row` payloads.
-3. **Destroy week N+1**: delete its `rsvp` rows (no cascade FK), then the week
-   — teams/games/markets cascade and the market-delete refund trigger refunds
-   any N+1 bets.
-4. **Reopen week N** — `is_archived = false, bowled_at = NULL`.
-5. Mark the run `reversed` (re-archive allowed).
+1. **Money reversal** — only if `settled_at IS NOT NULL`, run the §4a delete +
+   restore on the `phase='settle'` rows. **Gated on `settled_at`**: on an
+   advanced-but-unsettled week there are no `phase='settle'` preexisting rows, so
+   an ungated `NOT IN (empty set)` delete would wipe every pre-existing ledger row.
+2. **Advance reversal** (both states) — restore the `phase='advance'` fill
+   `scores` preimages (back to NULL, unscored again).
+3. **Destroy week N+1**: delete its `rsvp` rows (no cascade FK), then the week —
+   teams/games/markets cascade and the market-delete refund trigger refunds N+1
+   bets.
+4. **Reopen week N** — `is_archived = false, settled_at = NULL`. **`bowled_at` is
+   PRESERVED** (immutable scheduled date — dropping the old `bowled_at=NULL` reset
+   is what keeps re-import binding after an unarchive).
+5. Mark the run `reversed` (re-advance allowed).
 
 Step 1's deletion of settlement-era ledger rows is the **single sanctioned
-exception** to the ledger reversal rule (delete-refund only for unsettled
-escrow, always by root ref; post-settlement money reverses by appending
-offsetting rows) — see the "Reversal rule" subsection in
-[supabase/PIN_ECONOMY_SCHEMA.md](../supabase/PIN_ECONOMY_SCHEMA.md) §4. It is
-safe here only because the snapshot guarantees exact restoration.
+exception** to the ledger reversal rule — see the "Reversal rule" subsection in
+[supabase/PIN_ECONOMY_SCHEMA.md](../supabase/PIN_ECONOMY_SCHEMA.md) §4. Safe only
+because the snapshot guarantees exact restoration.
+
+**Legacy weeks:** pre-split monolithic runs work because
+`…180000_settlement_scaffolding` labelled their money rows `phase='settle'` and
+their fill `scores` `phase='advance'`, and backfilled `settled_at` for every
+already-archived week — so `unarchive_week` takes the settled branch and reverses
+them exactly as the old single-mode unarchive did.
 
 **Insured bets (Golden Ticket):** the lost branch of `finalize_bets_for_market`
 writes a NOT-EXISTS-guarded `bet_insurance_refund` pair (bet-linked +
-week-stamped), so it is captured, reversed, and re-derived by the engine
-exactly like other bet money. The consumed item does NOT revert on unarchive
-(placement consumed it pre-archive); force-voids pay only `bet_refund`.
+week-stamped), captured/reversed/re-derived like other bet money.
 
-**Known sharp edges (by design, verify in acceptance vectors U6/I13):**
-- Unarchive cannot resurrect anything **erased before** the archive (bets
-  cancelled by roster pruning are gone for good — they're not in the snapshot).
-- **Post-archive manual writes into week N** (e.g., settling a bounty that pays
-  week-N-stamped ledger rows) are *deleted* by the snapshot diff, but
-  non-snapshotted parent tables (e.g., `bounty_post.status`) do **not** revert.
-  Avoid manual week-N economic actions between archive and a planned unarchive.
+**Known sharp edges (by design):**
+- Reversal cannot resurrect anything **erased before** advance (bets cancelled by
+  roster pruning are gone — not in the snapshot).
+- **Manual writes into week N between settle and a planned unarchive** (e.g.,
+  settling a bounty that pays week-N-stamped rows) are *deleted* by the snapshot
+  diff, but non-snapshotted parent tables (`bounty_post.status`) do **not** revert.
 
 ---
 
@@ -333,42 +372,45 @@ is admin `cancel_bet`.)
 
 ## 6. Recipes
 
-### Adding a new feature that settles at archive time
+### Adding a new feature that settles at settle time
 
-1. Write the settlement step as a function called from
-   `settle_betting_for_week` (order matters — e.g., loans need the pincome mint
-   first; prop-derived things need markets settled first).
+1. Write the settlement step as a block in `settle_week` (order matters — loans
+   need the pincome mint first; prop-derived things need markets settled first).
 2. Give it an **idempotency guard** (existence check or status early-return) so
-   re-archive after unarchive cannot double-apply.
-3. Keep it **snapshot-compatible**: only append-rows INSERTs into a table the
-   snapshot captures, and/or UPDATEs to columns the pre-image stores. If you
-   touch a *new* table or *new* columns, extend **both** `archive_week`'s
-   capture **and** `unarchive_week`'s delete/restore — they are a matched pair.
-   Week-stamp (or bet-link) every inserted row so the reversal predicates find it.
-4. Feed events: publish via `publish_activity_event` **with `week_id`** so
-   unarchive's feed deletion catches them; idempotency-guard the publish.
-5. Decide its relationship to the **backstop**: can your feature leave a bet (or
-   bet-like obligation) pending past settlement? If yes, either resolve it in
-   your step or extend the backstop's predicate.
+   re-settle (late imports) and settle-after-unsettle cannot double-apply.
+3. Keep it **snapshot-compatible**: only append-rows INSERTs into a table
+   `settle_week`'s money snapshot captures, and/or UPDATEs to columns a
+   `phase='settle'` pre-image stores. New table / new columns → extend **all
+   three**: `settle_week`'s capture, and the `phase='settle'` delete/restore in
+   **both** `unsettle_week` and `unarchive_week`. Week-stamp (or bet-link) every
+   inserted row so the reversal predicates find it.
+4. Feed events: publish via `publish_activity_event` **with `week_id`** so the
+   reversal feed deletion catches them; idempotency-guard the publish.
+5. Decide its relationship to the **backstop** (§3f): can your feature leave a
+   bet-like obligation pending past settlement? If yes, resolve it in your step or
+   extend the backstop's exemption predicate.
 6. Update: this file, `PIN_ECONOMY_SCHEMA.md` (RPC table + migration history),
-   and add vectors to `SETTLEMENT_ACCEPTANCE.md`.
+   `SETTLEMENT_ACCEPTANCE.md`, and add a `probe-settle-lifecycle` vector.
 
 ### Debugging a settlement discrepancy
 
-1. Reproduce via the Archives screen: **unarchive** the week (economy
-   reversed, week back in play), inspect — and if the input scores were wrong,
-   fix them — then re-run Archive & Advance from MatchupsScreen.
+1. Reproduce: **`unsettle_week`** (money reversed, week stays locked, scores
+   frozen) then re-run **Settle Week** — for a *money* discrepancy off the same
+   scores. For a *score* problem, **`unarchive_week`** (reopen), fix scores, then
+   Advance + Settle.
 2. Read state, never migrations: function bodies in `supabase/schema.sql`; the
-   run + snapshot via `week_archive_runs` / `week_archive_snapshot`
+   run + snapshot (incl. `phase`) via `week_archive_runs` / `week_archive_snapshot`
    (`supabase db query`, read-only).
 3. Useful checks: per-player balance = `SUM(pin_ledger.amount)`; conservation =
    every non-mint type sums to zero per `bet_id`/feature link; the only
-   non-conservative type is `score_credit`.
-4. A bet "missing" after a roster change is usually 5c **erasure** (working as
-   designed), not a settlement bug — check the placement feed card is gone too.
-5. If archive RAISEs on the backstop: that's the engine telling you a market
-   has no gradable outcome. Fix the lineup/scores (unarchive first if already
-   archived), or force-void deliberately.
+   non-conservative type is `score_credit`. Feed-card `house_net` = the §3g
+   predicate (`is_house AND week_id=N AND auction_id IS NULL AND bounty_post_id IS
+   NULL`) — matches the admin Accounting per-week net (`useHousePinsinoData`, same
+   exclusion).
+4. A bet "missing" after a roster change is usually §5c **erasure** (by design),
+   not a bug — check the placement feed card is gone too.
+5. If `settle_week` RAISEs on the backstop: a market has no gradable outcome. Fix
+   the lineup/scores (`unarchive_week` first), or Settle + Void Missing.
 
 ---
 
@@ -376,7 +418,7 @@ is admin `cancel_bet`.)
 
 | Layer | Things |
 |---|---|
-| DB engine | `archive_week`, `unarchive_week`, `settle_betting_for_week`, `settle_market_internal`, `settle_moneyline_market_internal`, `finalize_bets_for_market`, `process_weekly_loans`, `settle_pvp_for_week`, `settle_pvp_challenge`, `void_pvp_challenge`, `close_open_pvp_challenges`, `publish_activity_event` |
-| DB integrity | `sync_over_under_markets_for_week`, `sync_moneyline_markets_for_week`, `sync_team_prop_markets_for_week` (+ `team_prop_seed_line`, `player_raw_avg_score`), `resync_week_markets`, `remove_over_under_markets_for_game`, `refund_bets_before_market_delete`, `prevent_self_tank` (player + team branches), `trg_resync_markets_{rsvp,team_slots,games,scores}`, `trg_seed_participation_games` |
-| DB state | `weeks.is_archived/bowled_at`, `week_archive_runs`, `week_archive_snapshot`, `scores` (participation rows) |
-| App | `db.ts → archives` (archiveWeek/unarchiveWeek/listArchivedWeeks), `AdminArchiveModal` (archive + force flow), `ArchivesScreen` (unarchive + force flow), `MatchupsScreen` (archive bar, flushScores null-clear, game add/remove), `AdminGenerateTeamsModal`, `useWeekEditor` (per-game lineup edits) |
+| DB engine | `advance_week`, `settle_week`, `preview_settle_week`, `unsettle_week`, `unarchive_week`, `archive_week`/`settle_lanetalk_props_for_week` (deprecated shims), `settle_betting_for_week` (legacy, probe-only), `settle_market_internal`, `settle_moneyline_market_internal`, `finalize_bets_for_market`, `process_weekly_loans`, `settle_pvp_for_week`, `settle_pvp_challenge`, `void_pvp_challenge`, `close_open_pvp_challenges`, `publish_activity_event` |
+| DB integrity | `weeks_derive_bowled_at`, `sync_over_under_markets_for_week`, `sync_moneyline_markets_for_week`, `sync_team_prop_markets_for_week` (+ `team_prop_seed_line`, `player_raw_avg_score`), `resync_week_markets`, `remove_over_under_markets_for_game`, `refund_bets_before_market_delete`, `prevent_self_tank`, `trg_resync_markets_{rsvp,team_slots,games,scores}`, `trg_seed_participation_games`, `place_house_bet` (is_archived placement guard) |
+| DB state | `weeks.is_archived/settled_at/bowled_at`, `week_archive_runs`, `week_archive_snapshot` (`phase`), `scores` (participation rows) |
+| App | `db.ts → archives` (advanceWeek/settleWeek/previewSettleWeek/unsettleWeek/unarchiveWeek/listArchivedWeeks; archiveWeek deprecated shim), `AdminArchiveModal` ("Advance Week"), `AdminSettleModal` (preview + Settle Available / Settle + Void Missing), `LanetalkImportAdminScreen` (Settle gate), `ArchivesScreen` (unarchive + force), `MatchupsScreen` (advance bar, flushScores null-clear, game add/remove), `useHousePinsinoData` (unified P/L), `useLanetalkImportAdmin` (archivedSettleState) |

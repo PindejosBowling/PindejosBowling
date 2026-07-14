@@ -64,7 +64,7 @@ function formatDate(bowledAt: string | null): string {
 export default function LanetalkImportAdminScreen() {
   const isAdmin = useAuthStore(s => s.role) === 'admin'
   const showToast = useUiStore(s => s.showToast)
-  const { loading, rawImports, unsettledProps, settledPropWeeks, archivedSettleState, currentSeasonId, reload } = useLanetalkImportAdmin()
+  const { loading, rawImports, unsettledProps, settledPropWeeks, archivedSettleState, archivedWeeks, currentSeasonId, reload } = useLanetalkImportAdmin()
 
   // Unsettled LaneTalk stat props, grouped by week — each week group with any
   // pending props gets a "Confirm LaneTalk Data" action. The button hides once
@@ -144,6 +144,24 @@ export default function LanetalkImportAdminScreen() {
     for (const g of playerMap.values()) {
       g.games.sort((a, b) => a.gameNumber - b.gameNumber)
     }
+    // Inject a row for any advanced week that has NO imports yet but still needs
+    // settling (advanced-unsettled, or settled-with-pending-props for re-settle) —
+    // otherwise it would never surface a Settle button. Empty player list.
+    for (const w of archivedWeeks) {
+      const weekKey = w.id as string
+      if (weeks.has(weekKey)) continue
+      const needsSettle = w.settled_at == null || propsByWeek.has(weekKey)
+      if (!needsSettle) continue
+      const wg: WeekGroup = { weekKey, weekNumber: w.week_number ?? null, bowledAt: w.bowled_at ?? null, players: [] }
+      weeks.set(weekKey, wg)
+      const seasonKey = w.season_id ?? 'unassigned'
+      let sg = seasonMap.get(seasonKey)
+      if (!sg) {
+        sg = { seasonKey, seasonNumber: w.seasons?.number ?? null, weeks: [] }
+        seasonMap.set(seasonKey, sg)
+      }
+      sg.weeks.push(wg)
+    }
     // Within each season, newest week first; the "no week" bucket sinks to the
     // bottom. Then newest season first; the "no season" bucket sinks last.
     for (const sg of seasonMap.values()) {
@@ -160,7 +178,7 @@ export default function LanetalkImportAdminScreen() {
       return b.seasonNumber - a.seasonNumber
     })
     return out
-  }, [rawImports])
+  }, [rawImports, archivedWeeks, propsByWeek])
 
   // Seasons start collapsed except the current one (falling back to the newest
   // season group when there's no active season). `toggledSeasons` holds only the
@@ -461,7 +479,7 @@ export default function LanetalkImportAdminScreen() {
                     and renumber across links. Hidden once props are confirmed
                     (re-matching after settlement would desync the official set)
                     and on the "no week" bucket (no real week to reprocess). */}
-                {expanded && wg.weekKey !== 'unassigned' && !propsConfirmed && (
+                {expanded && wg.weekKey !== 'unassigned' && !propsConfirmed && wg.players.length > 0 && (
                   <View style={styles.confirmRow}>
                     <TouchableOpacity
                       style={[styles.reprocessBtn, reprocessingWeek === wg.weekKey && styles.buttonDisabled]}

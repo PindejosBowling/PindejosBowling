@@ -81,12 +81,13 @@ All on `BottomSheet` (Toast built in), **mounted conditionally**, following conf
 
 | Component | Props | Purpose |
 |---|---|---|
-| `AdminArchiveModal` | `{ onClose }` | Archives the active week via the atomic `archive_week` RPC (snapshot → lock → settle → next week). If the no-pending-bets backstop rejects, shows the warning and arms a **force** retry (voids + refunds). See [archive-and-settlement.md](archive-and-settlement.md). |
+| `AdminArchiveModal` | `{ onClose, fillScores }` | **"Advance Week"** — the bowl-night clock. Locks the active week + opens the next via `advance_week` (moves no money; settlement is the next-day Settle step). See [archive-and-settlement.md](archive-and-settlement.md). |
+| `AdminSettleModal` | `{ weekId, weekTitle, onClose, onDone }` | **"Settle Week"** — the next-day money clock for an advanced week. Runs the server dry-run `preview_settle_week` (authoritative would-void warning), then `settle_week`: **Settle Available** (additive, re-runnable for late imports) and an armed **Settle + Void Missing** (delete-refunds no-data markets, force-voids stuck bets). See [archive-and-settlement.md](archive-and-settlement.md). |
 | `AdminEndSeasonModal` | `{ onClose }` | Ends the current season: settles active loans first (`seasons.settleLoansForClose`, aborts on error), records selected champions, sets `is_active = false`. |
 | `AdminOpenRegistrationModal` | `{ onClose, onCreated? }` | Creates season N+1 with `registration_open = true` (number from `seasons.getLatest()`), `useDatePicker` start/end dates, +100 pin champion bonus to prior champs. |
 | `AdminEditSeasonModal` | `{ season: SeasonOption, onClose, onSaved? }` | Edits a season's bowling night + `useDatePicker` start/end dates (local-date-safe ISO handling). |
 | `AdminGenerateTeamsModal` | `{ onClose }` | Generates balanced teams from RSVPs (state in `usePendingStore.gen*`), writes teams/slots/schedule, then idempotently syncs O/U markets via `sync_over_under_markets_for_week`. |
-| `LanetalkConfirmModal` | `{ weekId, weekTitle, markets, onClose, onDone }` | "Confirm LaneTalk Data" — settles a week's stat props via the atomic `settle_lanetalk_props_for_week` RPC: coverage preview (informational; the RPC recomputes), **Settle Available** (re-runnable), and an armed **Settle + Void Missing** (deletes no-data markets, delete-refund rail). See [lanetalk-stat-bets.md](lanetalk-stat-bets.md). |
+| _(removed)_ `LanetalkConfirmModal` | — | Superseded by `AdminSettleModal` (whole-week settlement now folds LaneTalk props in; the client coverage mirror is replaced by the server-side `preview_settle_week`). |
 | `ProfileMenuModal` | `{ visible, onClose }` | *(lives in `components/league/`)* Bottom sheet from the AppHeader avatar: identity (`PlayerAvatar`, 64px) + My Profile (cross-tab nav to PlayerDetail) + Log Out. |
 
 ## Betting / Sportsbook & ledger (`components/betting/`)

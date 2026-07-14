@@ -59,16 +59,19 @@ JSONB per resync anymore.
 
 ## The two-clock settlement model
 
-1. **Archive (night-of).** `settle_betting_for_week` settles score O/U +
-   moneylines as always, but its no-pending-bets **backstop now exempts any
-   pending bet with ≥1 leg on an unsettled `prop` market** — from the RAISE
-   count, the abort listing, and the force-void loop. So archive succeeds
-   without force while stat bets stay pending. Mixed parlays still die at
-   archive when a score leg loses (`finalize_bets_for_market` skips bets with
-   unresolved legs; a lost leg fails the bet regardless).
-2. **Confirm (next day, after import).**
-   `settle_lanetalk_props_for_week(p_week_id, p_void_missing default false)` —
-   admin-gated, one transaction, idempotent / re-runnable:
+**As of the advance/settle split** (migrations `…190000`/`…200000`), both clocks
+are the SAME RPC on different days — LaneTalk prop settlement is **folded into
+`settle_week`** (step c″), not a separate function. `settle_lanetalk_props_for_week`
+survives only as a deprecated shim → `settle_week`. See
+[archive-and-settlement.md](archive-and-settlement.md) §3.
+
+1. **Advance (bowl-night).** `advance_week` locks the week and moves no money —
+   nothing settles yet, so stat bets (and everything else) simply stay pending.
+   The old archive-time backstop no longer runs here.
+2. **Settle (next day, after import).** `settle_week(week, void_missing, force)`
+   settles score O/U + moneylines + team `total_pins`, **and** in step c″ the
+   LaneTalk player + team props — one transaction, idempotent / re-runnable for
+   late imports:
    - **Game markets**: actual from the subject's `official` import row matching
      (week, player, game_number) via `lanetalk_game_stats`.
    - **Night markets**: frame-weighted aggregate across the player's official
@@ -88,14 +91,21 @@ JSONB per resync anymore.
    - Missing → left pending when `NOT p_void_missing`; else the market is
      **DELETEd** (the `refund_bets_before_market_delete` trigger refunds bets
      whole — see void semantics below).
-   - Returns `(settled, voided, left_pending)` for the confirm toast.
+   - `settle_week`'s **narrowed backstop** then exempts a still-pending bet from
+     the void only if it has a leg on a still-unsettled LaneTalk market AND
+     `NOT p_void_missing` — i.e. a market genuinely still awaiting data. With
+     `p_void_missing=true` those markets were already delete-refunded, so nothing
+     is exempt.
+   - Returns `{settled, voided, left_pending, house_net}` (the shim returns the
+     old `(settled, voided, left_pending)` TABLE).
 
-**App flow:** `LanetalkImportAdminScreen` shows a **Confirm LaneTalk Data**
-button on any week group with unsettled props →
-[`LanetalkConfirmModal`](../app/src/components/admin/LanetalkConfirmModal.tsx)
-(client-side coverage preview via `stats.ts` — informational only; the RPC
-recomputes server-side) → **Settle Available** or the armed
-**Settle + Void Missing**.
+**App flow:** `LanetalkImportAdminScreen` shows a **Settle Week** button on any
+advanced-but-unsettled week group (or **Re-settle Week** when a settled week has
+late-imported props pending) →
+[`AdminSettleModal`](../app/src/components/admin/AdminSettleModal.tsx), whose
+warning is driven by the **server-side** `preview_settle_week` (the old
+client-side `stats.ts` coverage mirror is gone) → **Settle Available** or the
+armed **Settle + Void Missing**.
 
 **Void semantics = delete-refund.** Refunded bets are *removed* rather than
 kept as `void` records — the existing delete-refund rail. Keeping void records
