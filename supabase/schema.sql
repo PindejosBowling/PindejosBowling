@@ -8302,6 +8302,48 @@ END;
 $function$
 ;
 
+CREATE OR REPLACE FUNCTION public.weeks_derive_bowled_at()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+DECLARE
+  v_start_date    date;
+  v_bowling_night text;
+BEGIN
+  IF NEW.bowled_at IS NOT NULL THEN
+    RETURN NEW;
+  END IF;
+
+  SELECT start_date, bowling_night
+    INTO v_start_date, v_bowling_night
+    FROM public.seasons
+   WHERE id = NEW.season_id;
+
+  -- No season row yet (shouldn't happen — season_id is NOT NULL FK) → leave NULL.
+  IF v_start_date IS NULL THEN
+    RETURN NEW;
+  END IF;
+
+  -- Scheduled bowl day = the season's start Monday plus one week per week_number.
+  NEW.bowled_at := v_start_date + ((NEW.week_number - 1) * 7);
+
+  -- The formula (and parseLanetalk.toMonday) assume a Monday cadence. Flag any
+  -- season whose start weekday disagrees with its declared bowling_night as a
+  -- latent mismatch the LaneTalk parser would need generalized for — a warning,
+  -- not a block, so week creation always succeeds.
+  IF v_bowling_night IS NOT NULL
+     AND lower(trim(to_char(v_start_date, 'FMDay'))) IS DISTINCT FROM lower(trim(v_bowling_night)) THEN
+    RAISE WARNING 'Season start_date weekday (%) != bowling_night (%) — bowled_at derivation and LaneTalk toMonday assume Monday; the import parser needs generalizing for this season',
+      to_char(v_start_date, 'FMDay'), v_bowling_night;
+  END IF;
+
+  RETURN NEW;
+END;
+$function$
+;
+
 
 -- =====================================================
 -- TRIGGERS
@@ -8442,3 +8484,5 @@ CREATE TRIGGER set_updated_at BEFORE UPDATE ON public.week_archive_runs FOR EACH
 CREATE TRIGGER set_updated_at BEFORE UPDATE ON public.week_archive_snapshot FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
 CREATE TRIGGER set_updated_at BEFORE UPDATE ON public.weeks FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+CREATE TRIGGER weeks_derive_bowled_at BEFORE INSERT ON public.weeks FOR EACH ROW EXECUTE FUNCTION weeks_derive_bowled_at();

@@ -1509,8 +1509,11 @@ async function invokeLanetalk(body: Record<string, unknown>): Promise<LanetalkIm
 }
 
 export const lanetalkImports = {
-  // Fetch, parse, match and write a single link's games.
-  run: (url: string): Promise<LanetalkImportSummary> => invokeLanetalk({ url }),
+  // Fetch, parse, match and write a single link's games. An optional weekId
+  // pins the import to an explicit week (skips date-based resolution) — the
+  // safety valve for an unparseable date or a lane-split night.
+  run: (url: string, weekId?: string): Promise<LanetalkImportSummary> =>
+    invokeLanetalk(weekId ? { url, weekId } : { url }),
   // Re-derive an already-imported week from its stored payloads (no link fetch):
   // re-matches games to official scores and renumbers across links. The fix for
   // a lane-split night the admin can't clear and re-import cleanly.

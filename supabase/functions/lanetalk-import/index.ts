@@ -268,6 +268,11 @@ Deno.serve(async (req) => {
     // Reprocess mode: re-derive an already-imported week from its stored payloads
     // (no link fetch). Re-matches a lane-split night the admin can't clear.
     const reprocessWeekId = body?.reprocessWeekId ? String(body.reprocessWeekId).trim() : ''
+    // Optional admin-pinned target week for a normal import. Safety valve for a
+    // night whose date can't be parsed (parse_no_date) or that spans a lane
+    // split: bind directly to this week and skip date-based resolution, mirroring
+    // how reprocessWeekId is threaded end-to-end.
+    const explicitWeekId = body?.weekId ? String(body.weekId).trim() : ''
     if (reprocessWeekId) {
       log('reprocess_start', { weekId: reprocessWeekId })
       const result = await reprocessWeek(admin, reprocessWeekId, log)
@@ -338,27 +343,47 @@ Deno.serve(async (req) => {
         htmlBytes: html.length, player: session.player, title: session.title, datetimeText: session.datetime_text,
       })
     }
-    if (!session.date) {
-      return fail('parse_no_date', 'Could not read a date from that session', 200, {
-        datetimeText: session.datetime_text, player: session.player,
-      })
+    // ── Resolve the league week ───────────────────────────────────────────────
+    // Explicit admin-pinned week wins: bind directly and skip date resolution
+    // (works even when the date couldn't be parsed). Otherwise resolve from the
+    // Monday-normalized session date against weeks.bowled_at.
+    let weekId: string | null = null
+    if (explicitWeekId) {
+      const { data: wk, error: wkErr } = await admin
+        .from('weeks')
+        .select('id')
+        .eq('id', explicitWeekId)
+        .limit(1)
+        .maybeSingle()
+      if (wkErr) return fail('week_lookup', `Week lookup failed: ${wkErr.message}`, 500, { weekId: explicitWeekId, error: wkErr.message })
+      weekId = wk?.id ?? null
+      if (!weekId) {
+        return fail('week_not_found', `No league week found for id ${explicitWeekId}`, 200, {
+          weekResolved: false, weekId: explicitWeekId, player: session.player,
+        })
+      }
+      log('week_resolved', { weekId, source: 'explicit' })
+    } else {
+      if (!session.date) {
+        return fail('parse_no_date', 'Could not read a date from that session', 200, {
+          datetimeText: session.datetime_text, player: session.player,
+        })
+      }
+      const { data: weekRows, error: weekErr } = await admin
+        .from('weeks')
+        .select('id')
+        .eq('bowled_at', session.date)
+        .order('week_number', { ascending: false })
+        .limit(1)
+      if (weekErr) return fail('week_lookup', `Week lookup failed: ${weekErr.message}`, 500, { date: session.date, error: weekErr.message })
+      weekId = weekRows?.[0]?.id ?? null
+      if (!weekId) {
+        return fail('week_not_found', `No league week found for ${session.date}`, 200, {
+          weekResolved: false, date: session.date, datetimeText: session.datetime_text, player: session.player,
+        })
+      }
+      log('week_resolved', { weekId, date: session.date, source: 'date' })
     }
-
-    // ── Resolve the league week from the (Monday-normalized) session date ──────
-    const { data: weekRows, error: weekErr } = await admin
-      .from('weeks')
-      .select('id')
-      .eq('bowled_at', session.date)
-      .order('week_number', { ascending: false })
-      .limit(1)
-    if (weekErr) return fail('week_lookup', `Week lookup failed: ${weekErr.message}`, 500, { date: session.date, error: weekErr.message })
-    const weekId: string | null = weekRows?.[0]?.id ?? null
-    if (!weekId) {
-      return fail('week_not_found', `No league week found for ${session.date}`, 200, {
-        weekResolved: false, date: session.date, datetimeText: session.datetime_text, player: session.player,
-      })
-    }
-    log('week_resolved', { weekId, date: session.date })
 
     // ── Candidate set: non-fill team_slots in that week ───────────────────────
     const { data: slotRows, error: slotErr } = await admin
