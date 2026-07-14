@@ -117,11 +117,10 @@ export default function PinsinoScreen() {
     return {
       content: { paddingBottom: s(16) },
       finalBanner: { paddingVertical: s(10), marginBottom: s(12) },
-      balanceCard: { paddingVertical: s(16), marginBottom: s(16) },
-      balanceLabel: { fontSize: s(11) },
-      balanceValue: { fontSize: s(48), lineHeight: s(52) },
-      balanceUnit: { fontSize: s(13) },
-      netRow: { marginTop: s(10) },
+      balanceCard: { paddingVertical: s(14), marginBottom: s(16) },
+      balanceLabel: { fontSize: s(12) },
+      balanceValue: { fontSize: s(36), lineHeight: s(38) },
+      balanceUnit: { fontSize: s(12) },
       grid: { rowGap: s(TILE_GAP) },
       tile: { height: s(TILE_WIDTH) },
       tileIcon: { fontSize: s(34), marginBottom: s(6) },
@@ -189,28 +188,26 @@ export default function PinsinoScreen() {
           activeOpacity={0.7}
           disabled={!playerId}
         >
-          <Text style={[styles.balanceLabel, sc.balanceLabel]}>{readOnly ? `SEASON ${seasonNumber} FINAL BALANCE` : 'YOUR BALANCE'}</Text>
-          <Text style={[styles.balanceValue, sc.balanceValue]}>{formatPins(balance)}</Text>
-          <Text style={[styles.balanceUnit, sc.balanceUnit]}>PINS</Text>
-          {(debt > 0 || openAction > 0) && (
-            <View style={[styles.netRow, sc.netRow]}>
-              {openAction > 0 && (
-                <>
+          <View style={styles.balanceLeft}>
+            <Text style={[styles.balanceLabel, sc.balanceLabel]}>{readOnly ? `SEASON ${seasonNumber} FINAL BALANCE` : 'YOUR BALANCE'}</Text>
+            {(debt > 0 || openAction > 0) && (
+              <View style={styles.netRow}>
+                {openAction > 0 && (
                   <Text style={styles.openActionText}>OPEN {formatPins(openAction)}</Text>
-                  <Text style={styles.netDivider}>·</Text>
-                </>
-              )}
-              {debt > 0 && (
-                <>
+                )}
+                {debt > 0 && (
                   <Text style={styles.owedText}>OWED −{formatPins(debt)}</Text>
-                  <Text style={styles.netDivider}>·</Text>
-                </>
-              )}
-              <Text style={[styles.netText, netWorth < 0 && styles.netTextNeg]}>
-                NET {formatPins(netWorth)}
-              </Text>
-            </View>
-          )}
+                )}
+                <Text style={[styles.netText, netWorth < 0 && styles.netTextNeg]}>
+                  NET {formatPins(netWorth)}
+                </Text>
+              </View>
+            )}
+          </View>
+          <View style={styles.balanceValueWrap}>
+            <Text style={[styles.balanceValue, sc.balanceValue]}>{formatPins(balance)}</Text>
+            <Text style={[styles.balanceUnit, sc.balanceUnit]}>PINS</Text>
+          </View>
         </TouchableOpacity>
 
         {/* Top 3 leaderboard — always visible on the landing page */}
@@ -311,36 +308,47 @@ const styles = StyleSheet.create({
     borderRadius: radius.card,
     borderWidth: 1,
     borderColor: colors.border,
+    flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 16,
+    justifyContent: 'space-between',
+    paddingVertical: 14,
+    paddingHorizontal: 18,
     marginTop: 4,
     marginBottom: 16,
   },
+  balanceLeft: {
+    flexShrink: 1,
+    gap: 6,
+  },
   balanceLabel: {
     fontFamily: fonts.barlowCondensed,
-    fontSize: 11,
+    fontSize: 12,
     letterSpacing: 2,
     color: colors.muted,
-    marginBottom: 4,
+  },
+  balanceValueWrap: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: 5,
+    flexShrink: 0,
   },
   balanceValue: {
     fontFamily: fonts.barlowCondensedHeavy,
-    fontSize: 48,
+    fontSize: 36,
     color: colors.accent,
-    lineHeight: 52,
+    lineHeight: 38,
   },
   balanceUnit: {
     fontFamily: fonts.barlowCondensed,
-    fontSize: 13,
+    fontSize: 12,
     letterSpacing: 2,
     color: colors.muted,
-    marginTop: 2,
   },
   netRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    marginTop: 10,
+    flexWrap: 'wrap',
+    gap: 10,
   },
   openActionText: {
     fontFamily: fonts.barlowCondensed,
@@ -354,7 +362,6 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
     color: colors.danger,
   },
-  netDivider: { color: colors.muted2, fontSize: 13 },
   netText: {
     fontFamily: fonts.barlowCondensed,
     fontSize: 13,
