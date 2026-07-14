@@ -7,6 +7,12 @@ export const SHOW_PINSINO = true
 // Pinsino can re-ship without leaking a half-wired Auction House.
 export const SHOW_AUCTION_HOUSE = true
 
+// Pixel-art backdrop + header Artwork reveal button on the Pinsino landing
+// page. When false the landing page renders on a plain background and the
+// reveal toggle is hidden; subpage backdrops (Sportsbook, Loan Shark, …) are
+// unaffected. Flip to true to restore the art.
+export const SHOW_PINSINO_ART = false
+
 // Screenshot/demo switch. When true, every player name returned from Supabase
 // is replaced with a deterministic fictitious name before it reaches the UI,
 // so App Store / marketing screenshots contain no real PII. The same real
