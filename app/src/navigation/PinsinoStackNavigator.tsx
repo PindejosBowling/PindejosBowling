@@ -27,6 +27,10 @@ export default function PinsinoStackNavigator() {
       screenOptions={{
         headerShown: false,
         contentStyle: { backgroundColor: colors.bg },
+        // Freeze screens beneath/behind the focused one so the stack of
+        // never-unmounted screens stops re-rendering and re-running effects
+        // while off-view. Screens reload on focus, so this is transparent.
+        freezeOnBlur: true,
         // Tiles open their screens instantly — no slide-in. The swipe-back
         // gesture stays enabled (it pops without animating).
         animation: 'none',

@@ -1,7 +1,6 @@
-import React, { useEffect, useState } from 'react'
+import React, { useState } from 'react'
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native'
 import { colors, fonts } from '../../theme'
-import { weeks, seasons } from '../../utils/supabase/db'
 import { useAuthStore } from '../../stores/authStore'
 import { useUiStore } from '../../stores/uiStore'
 import ProfileMenuModal from './ProfileMenuModal'
@@ -20,19 +19,12 @@ export default function AppHeader({
   artworkToggle?: boolean
   onHelp?: () => void
 }) {
-  const [weekNumber, setWeekNumber] = useState<number | null>(null)
-  const [seasonNumber, setSeasonNumber] = useState<number | null>(null)
   const [showProfile, setShowProfile] = useState(false)
   const playerName = useAuthStore(s => s.playerName)
   const playerId = useAuthStore(s => s.playerId)
-  const weekVersion = useUiStore(s => s.weekVersion)
-
-  useEffect(() => {
-    Promise.all([weeks.getLatestOfCurrentSeason(), seasons.getCurrent()]).then(([weekRes, seasonRes]) => {
-      setWeekNumber(weekRes.data?.week_number ?? null)
-      setSeasonNumber(seasonRes.data?.number ?? null)
-    })
-  }, [weekVersion])
+  // Fetched once at the app root by useWeekClock; every header just reads it.
+  const weekNumber = useUiStore(s => s.weekNumber)
+  const seasonNumber = useUiStore(s => s.seasonNumber)
 
   const weekLabel = weekNumber != null ? `Week ${weekNumber}` : ''
   const seasonLabel = seasonNumber != null ? `Season ${seasonNumber}` : ''

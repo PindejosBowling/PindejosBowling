@@ -28,6 +28,10 @@ export default function RootNavigator() {
     <Tab.Navigator
       screenOptions={{
         headerShown: false,
+        // Freeze blurred tabs so their (never-unmounted) screen trees stop
+        // re-rendering and re-running effects on shared-store changes while
+        // off-view. Screens reload on focus, so this is transparent.
+        freezeOnBlur: true,
         tabBarShowLabel: true,
         tabBarActiveTintColor: colors.accent,
         tabBarInactiveTintColor: colors.muted,
