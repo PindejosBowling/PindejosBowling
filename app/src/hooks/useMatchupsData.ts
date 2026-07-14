@@ -29,6 +29,43 @@ export interface MatchupsDerived {
   rounds: { num: number; pairings: { a: MatchupsTeam; b: MatchupsTeam | null }[] }[]
 }
 
+/** One unscored fill participation row → the score archive_week should stamp. */
+export interface FillScoreRow {
+  team_slot_id: string
+  game_id: string
+  score: number
+}
+
+/**
+ * The archive payload for `archive_week(p_fill_scores)`: every fill slot's
+ * unscored participation row, valued at the same league-average estimate the
+ * matchup screen displays (MatchupsScreen getTotal's fill branch). Stored
+ * scores — admin-typed fill values included — stay untouched and win; rows
+ * with a zero estimate are omitted (the live screen contributed 0, and a NULL
+ * archived row also contributes 0).
+ *
+ * Pure and uncached — wrap in `useMemo` at the screen.
+ */
+export function computeUnscoredFillScores(
+  teams: Record<string, MatchupsTeam>,
+  gameIdByNumber: Record<number, string>,
+): FillScoreRow[] {
+  const rows: FillScoreRow[] = []
+  for (const team of Object.values(teams)) {
+    for (const p of team.players) {
+      if (!p.isFill) continue
+      for (const [num, value] of Object.entries(p.scores)) {
+        // '' = participation row exists, score NULL (unscored).
+        if (value !== '') continue
+        const gameId = gameIdByNumber[Number(num)]
+        const score = Math.round(p.effectiveAvg)
+        if (gameId && score > 0) rows.push({ team_slot_id: p.teamSlotId, game_id: gameId, score })
+      }
+    }
+  }
+  return rows
+}
+
 export function useMatchupsData() {
   const [loading, setLoading] = useState(true)
   const [weekId, setWeekId] = useState<string | null>(null)

@@ -2953,7 +2953,7 @@ export type Database = {
         Returns: undefined
       }
       archive_week: {
-        Args: { p_force?: boolean; p_week_id: string }
+        Args: { p_fill_scores?: Json; p_force?: boolean; p_week_id: string }
         Returns: string
       }
       assert_admin: { Args: never; Returns: undefined }

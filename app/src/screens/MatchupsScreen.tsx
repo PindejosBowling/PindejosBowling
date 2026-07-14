@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import {
   View,
   Text,
@@ -22,7 +22,7 @@ import AdminArchiveModal from '../components/admin/AdminArchiveModal'
 import AdminGenerateTeamsModal, { buildRotation } from '../components/admin/AdminGenerateTeamsModal'
 import ToggleGroup from '../components/ui/ToggleGroup'
 import Button from '../components/ui/Button'
-import { useMatchupsData } from '../hooks/useMatchupsData'
+import { useMatchupsData, computeUnscoredFillScores } from '../hooks/useMatchupsData'
 import { useWeekEditor } from '../hooks/useWeekEditor'
 import { usePendingStore } from '../stores/pendingStore'
 import { useUiStore } from '../stores/uiStore'
@@ -90,6 +90,13 @@ export default function MatchupsScreen() {
     team.players.some((p: any) =>
       !p.isFill && Object.values(p.scores).some((v: any) => v !== '' && v > 0)
     )
+  )
+
+  // Unscored fill rows valued at the on-screen estimate — passed to the archive
+  // so archived records/settlement grade on the totals getTotal displays below.
+  const fillScores = useMemo(
+    () => (derived ? computeUnscoredFillScores(derived.teams, gameIdByNumber) : []),
+    [derived, gameIdByNumber]
   )
 
   // A team's roster can differ per game (a player may be swapped for a single
@@ -648,7 +655,7 @@ export default function MatchupsScreen() {
       </KeyboardAvoidingView>
 
       {showArchive && (
-        <AdminArchiveModal onClose={() => { setShowArchive(false); reload() }} />
+        <AdminArchiveModal fillScores={fillScores} onClose={() => { setShowArchive(false); reload() }} />
       )}
       {isAdmin && showGenerateTeams && (
         <AdminGenerateTeamsModal onClose={() => { setShowGenerateTeams(false); reload() }} />

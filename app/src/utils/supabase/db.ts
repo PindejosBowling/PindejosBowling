@@ -1349,8 +1349,12 @@ export const weeks = {
 export const archives = {
   // force: void+refund any bet settlement would otherwise leave pending (the
   // RPC raises and lists the unsettleable markets when force is off).
-  archiveWeek: (weekId: string, force = false) =>
-    supabase.rpc('archive_week', { p_week_id: weekId, p_force: force }),
+  // fillScores: the unscored fill participation rows valued at the on-screen
+  // league-average estimate ([{team_slot_id, game_id, score}]) — archive_week
+  // stamps them (pre-settlement, snapshot-reversed by unarchive) so archived
+  // records and settlement match the live matchup totals.
+  archiveWeek: (weekId: string, force = false, fillScores: { team_slot_id: string; game_id: string; score: number }[] = []) =>
+    supabase.rpc('archive_week', { p_week_id: weekId, p_force: force, p_fill_scores: fillScores }),
   // Reverses the week's settlement, destroys week N+1, and reopens the week
   // (is_archived → false) so it is simply in play again; re-archive via
   // MatchupsScreen's Archive & Advance. force: override the week-N+1

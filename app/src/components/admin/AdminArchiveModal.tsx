@@ -5,17 +5,21 @@ import { weeks, archives } from '../../utils/supabase/db'
 import { colors, fonts, radius } from '../../theme'
 import BottomSheet from '../ui/BottomSheet'
 import Button from '../ui/Button'
+import type { FillScoreRow } from '../../hooks/useMatchupsData'
 
 interface Props {
   // Mount conditionally so the force-arm state resets between opens.
   onClose: () => void
+  // The unscored fill rows valued at the on-screen league-average estimate —
+  // archive_week stamps these so archived records match the live totals.
+  fillScores: FillScoreRow[]
 }
 
 // Built on BottomSheet directly (not ConfirmActionSheet): the no-pending-bets
 // backstop turns the confirm into an armed two-step — the first failure surfaces
 // the server warning and rearms the button as a forced retry — which doesn't fit
 // the single-action contract.
-export default function AdminArchiveModal({ onClose }: Props) {
+export default function AdminArchiveModal({ onClose, fillScores }: Props) {
   const [saving, setSaving] = useState(false)
   // Armed after the server's settlement backstop rejects the archive because
   // bets would remain pending (unsettleable markets). Forcing voids + refunds them.
@@ -35,7 +39,7 @@ export default function AdminArchiveModal({ onClose }: Props) {
 
       // One atomic, audited transaction: snapshot → lock → settle (pins, bets,
       // loans, PvP, feed) → create next week (archive_week RPC, admin-gated).
-      const { error: archiveErr } = await archives.archiveWeek(activeWeek.id, forceArmed)
+      const { error: archiveErr } = await archives.archiveWeek(activeWeek.id, forceArmed, fillScores)
       if (archiveErr) {
         // The backstop raises (rolling the whole archive back) when settlement
         // would leave pending bets — surface it and arm a forced retry.
