@@ -3330,6 +3330,7 @@ export type Database = {
         Args: { p_amount: number; p_loan_id: string }
         Returns: undefined
       }
+      reset_rsvp_for_week: { Args: { p_week_id: string }; Returns: undefined }
       restore_activity_event: {
         Args: { p_event_id: string }
         Returns: undefined

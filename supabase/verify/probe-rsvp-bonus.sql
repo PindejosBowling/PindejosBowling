@@ -159,6 +159,21 @@ BEGIN
     RAISE EXCEPTION 'PROBE_FAIL: missing the house mirror row';
   END IF;
 
+  ---------------------------------------------------------- reset revokes bonus
+  -- Admin reset clears the week's RSVPs AND both sides of every rsvp_bonus.
+  PERFORM set_config('request.jwt.claims', json_build_object(
+    'sub', v_u1, 'role', 'authenticated', 'app_metadata', json_build_object('role', 'admin'))::text, true);
+  PERFORM public.reset_rsvp_for_week(v_week);
+
+  IF EXISTS (SELECT 1 FROM public.rsvp WHERE week_id = v_week
+             AND player_id IN (v_p1, v_p2, v_p3)) THEN
+    RAISE EXCEPTION 'PROBE_FAIL: reset left RSVP rows behind';
+  END IF;
+  IF EXISTS (SELECT 1 FROM public.pin_ledger
+             WHERE week_id = v_week AND type = 'rsvp_bonus') THEN
+    RAISE EXCEPTION 'PROBE_FAIL: reset left rsvp_bonus rows behind';
+  END IF;
+
   ------------------------------------------------------------------ capture
   SELECT jsonb_build_object(
     'bonus_amount', v_amount,
@@ -166,9 +181,10 @@ BEGIN
     'p1_dedup_reason', 'already_claimed',
     'p2_reason', 'past_deadline',
     'p3_reason', 'disabled',
-    'rsvp_bonus_net', v_got,
-    'rsvp_bonus_rows', (SELECT count(*) FROM public.pin_ledger
-                        WHERE created_at = now() AND type = 'rsvp_bonus')
+    'pre_reset_bonus_net', v_got,        -- was 0 (double-entry) before reset
+    'reset_cleared_bonus', true,         -- reset revoked both sides
+    'post_reset_bonus_rows', (SELECT count(*) FROM public.pin_ledger
+                              WHERE week_id = v_week AND type = 'rsvp_bonus')
   ) INTO v_result;
 
   RAISE EXCEPTION 'PROBE_RESULT %', v_result;

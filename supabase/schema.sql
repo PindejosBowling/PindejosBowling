@@ -5597,6 +5597,26 @@ END;
 $function$
 ;
 
+CREATE OR REPLACE FUNCTION public.reset_rsvp_for_week(p_week_id uuid)
+ RETURNS void
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+BEGIN
+  PERFORM public.assert_admin();
+
+  IF p_week_id IS NULL THEN
+    RAISE EXCEPTION 'week id is required';
+  END IF;
+
+  -- Revoke the week's RSVP bonuses (player + house mirror), then clear RSVPs.
+  DELETE FROM public.pin_ledger WHERE week_id = p_week_id AND type = 'rsvp_bonus';
+  DELETE FROM public.rsvp       WHERE week_id = p_week_id;
+END;
+$function$
+;
+
 CREATE OR REPLACE FUNCTION public.restore_activity_event(p_event_id uuid)
  RETURNS void
  LANGUAGE plpgsql

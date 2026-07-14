@@ -15,7 +15,6 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import AppHeader from '../components/league/AppHeader'
 import ConfirmBar from '../components/ui/ConfirmBar'
 import LoadingView from '../components/ui/LoadingView'
-import Toast from '../components/ui/Toast'
 import { usePendingStore } from '../stores/pendingStore'
 import { useAuthStore } from '../stores/authStore'
 import { useUiStore } from '../stores/uiStore'
@@ -132,9 +131,10 @@ export default function RsvpScreen() {
     // deadline_time is 'HH:MM:SS'; treat bowled_at + time as local wall-clock.
     const deadline = new Date(`${bowledAt}T${bonusConfig.deadline_time}`)
     if (isNaN(deadline.getTime()) || Date.now() > deadline.getTime()) return null
-    const day = deadline.toLocaleDateString(undefined, { weekday: 'long' })
+    // Fully-defined "DAY_OF_WEEK, MONTH DAY" (e.g. "Monday, July 20").
+    const dateLabel = deadline.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })
     const time = deadline.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
-    return { amount: bonusConfig.bonus_amount, day, time }
+    return { amount: bonusConfig.bonus_amount, dateLabel, time }
   }, [bonusConfig, bonusClaimed, bowledAt])
 
   const inCount = playerList.filter(p => currentStatus(p.id) === 'in').length
@@ -213,15 +213,19 @@ export default function RsvpScreen() {
   function resetRSVP() {
     const doReset = async () => {
       if (!weekId) return
-      await dbRsvp.removeByWeek(weekId)
+      // Clears the week's RSVPs AND revokes any 50-pin bonuses they earned.
+      const { error } = await dbRsvp.resetForWeek(weekId)
+      if (error) { showToast(error.message, 'error'); return }
       setRsvpRows([])
       set({ pendingRSVP: {} })
+      setBonusClaimed(false)
       await syncBetLines(weekId)
     }
+    const msg = 'This clears all RSVPs for the week and takes back any RSVP bonuses they earned.'
     if (Platform.OS === 'web') {
-      if (window.confirm('Reset RSVPs? This will clear all RSVPs for the upcoming week.')) doReset()
+      if (window.confirm(`Reset RSVPs? ${msg}`)) doReset()
     } else {
-      Alert.alert('Reset RSVPs?', 'This will clear all RSVPs for the upcoming week.', [
+      Alert.alert('Reset RSVPs?', msg, [
         { text: 'Cancel', style: 'cancel' },
         { text: 'Reset', style: 'destructive', onPress: doReset },
       ])
@@ -253,7 +257,8 @@ export default function RsvpScreen() {
                 <View style={styles.bonusBanner}>
                   <Text style={styles.bonusBannerEmoji}>🎳</Text>
                   <Text style={styles.bonusBannerText}>
-                    RSVP yourself by {bonusBanner.day} {bonusBanner.time} to earn{' '}
+                    RSVP yourself by <Text style={styles.bonusBannerDate}>{bonusBanner.dateLabel}</Text> at{' '}
+                    {bonusBanner.time} to earn{' '}
                     <Text style={styles.bonusBannerAmount}>+{bonusBanner.amount} pins</Text> from the House.
                   </Text>
                 </View>
@@ -325,7 +330,6 @@ export default function RsvpScreen() {
           />
         )}
       </KeyboardAvoidingView>
-      <Toast />
     </SafeAreaView>
   )
 }
@@ -353,6 +357,10 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: colors.text,
     lineHeight: 18,
+  },
+  bonusBannerDate: {
+    fontFamily: fonts.barlowSemiBold,
+    color: colors.text,
   },
   bonusBannerAmount: {
     fontFamily: fonts.barlowCondensed,

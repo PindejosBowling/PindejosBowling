@@ -35,6 +35,18 @@ so the client can toast on award. The bonus is a house-funded **double-entry**
 credit via `pin_ledger_double_entry` with `type='rsvp_bonus'`, `week_id` = the
 RSVP'd week (the dedup key). See [supabase/PIN_ECONOMY_SCHEMA.md](../supabase/PIN_ECONOMY_SCHEMA.md).
 
+## Reset revokes bonuses
+
+The admin **Reset** on the RSVP screen goes through `reset_rsvp_for_week(week_id)`
+(`SECURITY DEFINER`, admin-guarded) — it deletes the week's `rsvp_bonus`
+double-entry rows (both player + and house − sides carry `week_id`) **and** the
+`rsvp` rows in one transaction. Destructive rollback by deletion, same posture as
+`cancel_loan`; removing both sides keeps conservation/net-zero intact. It is
+**not** a trigger on `rsvp` DELETE on purpose — the archive/unarchive engine also
+deletes `rsvp` rows (N+1 teardown), so bonus reversal is scoped to the explicit
+reset action, not coupled into that machinery. `rsvp.resetForWeek` in `db.ts`;
+the raw `rsvp.removeByWeek` is kept but no longer used by the button.
+
 ## Config
 
 `rsvp_bonus_config` (feature-owned config table, `season_id NULL = global default`,

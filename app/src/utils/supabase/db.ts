@@ -114,6 +114,11 @@ export const rsvp = {
     supabase.from('rsvp').delete().eq('id', id),
   removeByWeek: (weekId: string) =>
     supabase.from('rsvp').delete().eq('week_id', weekId),
+  // Admin reset: clears a week's RSVPs AND revokes any rsvp_bonus credits it
+  // paid (both double-entry sides), in one transaction. SECURITY DEFINER +
+  // admin-guarded — use this for the Reset button, not the raw removeByWeek.
+  resetForWeek: (weekId: string) =>
+    supabase.rpc('reset_rsvp_for_week', { p_week_id: weekId }),
 }
 
 // Admin-editable config for the RSVP self-submit bonus (enable, amount, weekly
