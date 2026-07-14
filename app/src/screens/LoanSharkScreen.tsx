@@ -20,7 +20,6 @@ import LoanPayoffSchedule from '../components/economy/LoanPayoffSchedule'
 import FeatureExplainerSheet from '../components/pinsino/FeatureExplainerSheet'
 import { EXPLAINERS } from '../data/pinsinoExplainers'
 import Button from '../components/ui/Button'
-import BalancePill from '../components/ui/BalancePill'
 import PinAmountInput from '../components/ui/PinAmountInput'
 import { useLoanSharkData, LoanProductView, DebtLedgerEntry } from '../hooks/useLoanSharkData'
 import { usePinsinoSeasonContext } from '../hooks/usePinsinoSeasonContext'
@@ -169,8 +168,6 @@ export default function LoanSharkScreen() {
         >
         {readOnly && <ReadOnlySeasonBanner seasonNumber={viewSeasonNumber} />}
 
-        <BalancePill balance={balance} style={styles.balanceMargin} />
-
         {activeLoan ? (
           <View style={styles.loanCard}>
             <Text style={styles.loanCardTitle}>{activeLoan.product.display_name}</Text>
@@ -269,29 +266,24 @@ export default function LoanSharkScreen() {
               <EmptyCard text={readOnly ? 'No loan activity to review for this season' : 'The Shark has nothing for you right now'} />
             ) : (
               availableProducts.map(p => (
-                <View key={p.id} style={styles.productCard}>
+                <TouchableOpacity
+                  key={p.id}
+                  style={styles.productCard}
+                  onPress={() => setConfirmProduct(p)}
+                  activeOpacity={0.7}
+                >
                   <View style={styles.productHeader}>
-                    <Text style={styles.productName}>{p.display_name}</Text>
-                    <Text style={[styles.riskBadge, { color: RISK_COLOR[p.risk_level] ?? colors.muted }]}>
-                      {p.risk_level.toUpperCase()}
-                    </Text>
-                  </View>
-                  <Text style={styles.productAmount}>{formatPins(p.borrow_amount)} pins</Text>
-                  <View style={styles.productRates}>
-                    <Text style={styles.productRate}>
-                      {Math.round(p.weekly_interest_rate * 100)}% weekly interest
-                    </Text>
-                    <Text style={styles.rateDivider}>·</Text>
-                    <Text style={styles.productRate}>
-                      {Math.round(p.garnishment_rate * 100)}% of your weekly pinfall
-                    </Text>
+                    <View style={styles.productTitleGroup}>
+                      <Text style={styles.productName}>{p.display_name}</Text>
+                      <Text style={[styles.riskBadge, { color: RISK_COLOR[p.risk_level] ?? colors.muted }]}>
+                        {p.risk_level.charAt(0).toUpperCase() + p.risk_level.slice(1)} Risk
+                      </Text>
+                    </View>
+                    <Text style={styles.productAmount}>{formatPins(p.borrow_amount)} pins</Text>
                   </View>
                   <Text style={styles.productDesc}>{p.description}</Text>
-                  {p.special_warning_text ? (
-                    <Text style={styles.productWarn}>⚠ {p.special_warning_text}</Text>
-                  ) : null}
-                  <Button label="Details" onPress={() => setConfirmProduct(p)} style={styles.borrowBtn} />
-                </View>
+                  <Text style={styles.productFooter}>Tap for terms &amp; payoff details ›</Text>
+                </TouchableOpacity>
               ))
             )}
           </>
@@ -324,8 +316,6 @@ const styles = StyleSheet.create({
   // flexGrow keeps the scroll content (and the depth field measured from it)
   // at least viewport-height when the loan list is short.
   content: { paddingHorizontal: 16, paddingBottom: 40, flexGrow: 1 },
-
-  balanceMargin: { marginBottom: 20 },
 
   // Active loan card
   loanCard: {
@@ -416,7 +406,8 @@ const styles = StyleSheet.create({
     padding: 18,
     marginBottom: 12,
   },
-  productHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  productHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
+  productTitleGroup: { flexDirection: 'row', alignItems: 'center', gap: 8, flexShrink: 1 },
   productName: {
     fontFamily: fonts.barlowCondensed,
     fontSize: 19,
@@ -430,19 +421,15 @@ const styles = StyleSheet.create({
   },
   productAmount: {
     fontFamily: fonts.barlowCondensedHeavy,
-    fontSize: 28,
+    fontSize: 20,
     color: colors.accent,
-    marginTop: 2,
   },
-  productRates: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4, marginBottom: 10 },
-  productRate: { fontFamily: fonts.barlow, fontSize: 13, color: colors.muted },
-  productDesc: { fontFamily: fonts.barlow, fontSize: 14, color: colors.text, lineHeight: 20 },
-  productWarn: {
-    fontFamily: fonts.barlow,
-    fontSize: 13,
-    color: colors.danger,
-    lineHeight: 18,
+  productDesc: { fontFamily: fonts.barlow, fontSize: 14, color: colors.text, lineHeight: 20, marginTop: 4 },
+  productFooter: {
+    fontFamily: fonts.barlowCondensed,
+    fontSize: 12,
+    letterSpacing: 0.5,
+    color: colors.accent,
     marginTop: 8,
   },
-  borrowBtn: { marginTop: 14 },
 })

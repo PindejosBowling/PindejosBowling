@@ -2,7 +2,6 @@ import { useMemo } from 'react'
 import { View, Text, StyleSheet } from 'react-native'
 import { colors, fonts, radius } from '../../theme'
 import ConfirmActionSheet from '../ui/ConfirmActionSheet'
-import StatRow from '../ui/StatRow'
 import TermsBlock from '../ui/TermsBlock'
 import LoanPayoffSchedule from './LoanPayoffSchedule'
 import { TERMS } from '../../data/pinsinoExplainers'
@@ -50,10 +49,13 @@ export default function BorrowConfirmModal({ product, avgPerGame, usingLeagueAvg
       onClose={onClose}
       onDone={onBorrowed}
     >
-      <StatRow label="BORROW" value={`${formatPins(product.borrow_amount)} pins`} variant="big" />
       <View style={styles.statGrid}>
         <View style={styles.statCell}>
-          <Text style={styles.statLabel}>SHARK'S WEEKLY CUT</Text>
+          <Text style={styles.statLabel}>BORROW</Text>
+          <Text style={styles.statValue}>{formatPins(product.borrow_amount)}</Text>
+        </View>
+        <View style={styles.statCell}>
+          <Text style={styles.statLabel}>WEEKLY CUT</Text>
           <Text style={styles.statValue}>{garnishPct}%</Text>
         </View>
         <View style={styles.statCell}>
@@ -82,22 +84,23 @@ export default function BorrowConfirmModal({ product, avgPerGame, usingLeagueAvg
 }
 
 const styles = StyleSheet.create({
-  statGrid: { flexDirection: 'row', gap: 12, marginBottom: 18 },
+  statGrid: { flexDirection: 'row', gap: 8, marginBottom: 18 },
   statCell: {
     flex: 1,
     backgroundColor: colors.surface2,
     borderRadius: radius.cardSm,
-    padding: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 10,
   },
   statLabel: {
     fontFamily: fonts.barlowCondensed,
-    fontSize: 11,
+    fontSize: 10,
     color: colors.muted,
-    letterSpacing: 1.5,
+    letterSpacing: 1,
   },
   statValue: {
     fontFamily: fonts.barlowCondensedHeavy,
-    fontSize: 24,
+    fontSize: 20,
     color: colors.text,
     marginTop: 2,
   },
