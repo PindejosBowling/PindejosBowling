@@ -8,7 +8,7 @@ import {
   Dimensions,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import { useCallback } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigation, useFocusEffect } from '@react-navigation/native'
 import { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { colors, fonts, radius } from '../theme'
@@ -33,6 +33,10 @@ type PinsinoNav = NativeStackNavigationProp<PinsinoStackParamList>
 
 const TILE_GAP = 12
 const TILE_WIDTH = (Dimensions.get('window').width - 32 - TILE_GAP * 2) / 3
+
+// Fit-to-one-screen floor: below this the landing page becomes unreadable, so
+// scrolling is the graceful fallback on pathologically short viewports.
+const MIN_FIT_SCALE = 0.6
 
 // Subpage menu tiles (groundwork for more Pinsino subpages — add one line each)
 const MENU_TILES: { icon: string; label: string; route: 'PinsinoLeaderboard' | 'Sportsbook' | 'LoanShark' | 'PvP' | 'MarketMoves' | 'BountyBoard' | 'AuctionHouse' }[] = [
@@ -82,6 +86,46 @@ export default function PinsinoScreen() {
     }, []),
   )
 
+  // Fit-to-one-screen: measure the scroll viewport and the natural content
+  // height, then ratchet a single scale factor down until the content fits.
+  // The multiplicative update converges even though some children (the shared
+  // leaderboard table, PillFilter) don't scale — each pass re-measures the
+  // real rendered height. Scale only ever decreases, so it's reset whenever
+  // the set of stacked sections changes (banner/selector appearing).
+  const [fitScale, setFitScale] = useState(1)
+  const viewportH = useRef(0)
+  const contentH = useRef(0)
+  const maybeShrink = useCallback(() => {
+    const vh = viewportH.current
+    const ch = contentH.current
+    if (vh > 0 && ch > vh + 2) {
+      setFitScale(prev =>
+        prev <= MIN_FIT_SCALE ? prev : Math.max(MIN_FIT_SCALE, prev * (vh / ch) * 0.98),
+      )
+    }
+  }, [])
+  const hasSelector = concludedSeasons.length > 0
+  useEffect(() => {
+    setFitScale(1)
+  }, [seasonConcluded, hasSelector])
+
+  const sc = useMemo(() => {
+    const s = (n: number) => Math.round(n * fitScale)
+    return {
+      content: { paddingBottom: s(16) },
+      finalBanner: { paddingVertical: s(10), marginBottom: s(12) },
+      balanceCard: { paddingVertical: s(16), marginBottom: s(16) },
+      balanceLabel: { fontSize: s(11) },
+      balanceValue: { fontSize: s(48), lineHeight: s(52) },
+      balanceUnit: { fontSize: s(13) },
+      netRow: { marginTop: s(10) },
+      grid: { rowGap: s(TILE_GAP) },
+      tile: { height: s(TILE_WIDTH) },
+      tileIcon: { fontSize: s(40), marginBottom: s(10) },
+      tileLabel: { fontSize: s(13) },
+    }
+  }, [fitScale])
+
   // Transitions stay art-only: the backdrop paints immediately and the
   // spinner appears only if loading drags past 5s.
   if (loading) {
@@ -99,7 +143,9 @@ export default function PinsinoScreen() {
       <AppHeader artworkToggle={SHOW_PINSINO_ART} onHelp={() => navigation.navigate('PinsinoHelp')} />
       {(!SHOW_PINSINO_ART || !artworkReveal) && (
       <ScrollView
-        contentContainerStyle={styles.content}
+        contentContainerStyle={[styles.content, sc.content]}
+        onLayout={e => { viewportH.current = e.nativeEvent.layout.height; maybeShrink() }}
+        onContentSizeChange={(_w, h) => { contentH.current = h; maybeShrink() }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.muted} />}
       >
         {/* Season selector — governs the entire tab. 'Live' (default) shows the
@@ -118,7 +164,7 @@ export default function PinsinoScreen() {
         {/* Between seasons: the most-recently-ended season is frozen here as a
             final outcome until the next season starts. */}
         {seasonConcluded && (
-          <View style={styles.finalBanner}>
+          <View style={[styles.finalBanner, sc.finalBanner]}>
             <Text style={styles.finalBannerText}>
               SEASON {seasonNumber} · FINAL RESULTS
             </Text>
@@ -130,7 +176,7 @@ export default function PinsinoScreen() {
 
         {/* Balance card — tap to view your own betting record */}
         <TouchableOpacity
-          style={styles.balanceCard}
+          style={[styles.balanceCard, sc.balanceCard]}
           onPress={() => {
             // The player detail respects the selected season too, so this drills
             // into the viewer's record for whichever season is being viewed.
@@ -139,11 +185,11 @@ export default function PinsinoScreen() {
           activeOpacity={0.7}
           disabled={!playerId}
         >
-          <Text style={styles.balanceLabel}>{readOnly ? `SEASON ${seasonNumber} FINAL BALANCE` : 'YOUR BALANCE'}</Text>
-          <Text style={styles.balanceValue}>{formatPins(balance)}</Text>
-          <Text style={styles.balanceUnit}>PINS</Text>
+          <Text style={[styles.balanceLabel, sc.balanceLabel]}>{readOnly ? `SEASON ${seasonNumber} FINAL BALANCE` : 'YOUR BALANCE'}</Text>
+          <Text style={[styles.balanceValue, sc.balanceValue]}>{formatPins(balance)}</Text>
+          <Text style={[styles.balanceUnit, sc.balanceUnit]}>PINS</Text>
           {(debt > 0 || openAction > 0) && (
-            <View style={styles.netRow}>
+            <View style={[styles.netRow, sc.netRow]}>
               {openAction > 0 && (
                 <>
                   <Text style={styles.openActionText}>OPEN {formatPins(openAction)}</Text>
@@ -181,7 +227,7 @@ export default function PinsinoScreen() {
         />
 
         {/* Subpage menu */}
-        <View style={styles.grid}>
+        <View style={[styles.grid, sc.grid]}>
           {MENU_TILES.map(tile => {
             // Pending-action badge for this tile (0 when nothing needs attention).
             // Suppressed entirely in read-only past-season mode — live pending
@@ -193,12 +239,12 @@ export default function PinsinoScreen() {
             return (
               <TouchableOpacity
                 key={tile.route}
-                style={styles.tile}
+                style={[styles.tile, sc.tile]}
                 onPress={() => { if (!closed) navigation.navigate(tile.route) }}
                 activeOpacity={closed ? 1 : 0.7}
               >
-                <Text style={[styles.tileIcon, closed && styles.tileIconClosed]}>{tile.icon}</Text>
-                <Text style={[styles.tileLabel, closed && styles.tileLabelClosed]}>{tile.label}</Text>
+                <Text style={[styles.tileIcon, sc.tileIcon, closed && styles.tileIconClosed]}>{tile.icon}</Text>
+                <Text style={[styles.tileLabel, sc.tileLabel, closed && styles.tileLabelClosed]}>{tile.label}</Text>
                 {badge > 0 && !closed && (
                   <View style={styles.badge}>
                     <Text style={styles.badgeText}>{badge > 99 ? '99+' : badge}</Text>
