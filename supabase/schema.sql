@@ -2342,6 +2342,36 @@ BEGIN
   END IF;
 
   -- --------------------------------------------------------------------------
+  -- 2b''. Coverage guard: no unscored fill row may survive into settlement.
+  --       A caller that omits (or under-covers with) p_fill_scores would
+  --       silently archive records/settle bets without the fill's on-screen
+  --       contribution — the exact bug materialization fixes. Exemptions:
+  --       a never-bowled week (nothing to grade), and a league with no
+  --       archived history (the client's estimate is 0 → rows legitimately
+  --       omitted; a NULL row contributes the same 0).
+  -- --------------------------------------------------------------------------
+  IF EXISTS (SELECT 1
+               FROM public.scores s
+               JOIN public.team_slots ts ON ts.id = s.team_slot_id
+               JOIN public.teams t       ON t.id = ts.team_id
+              WHERE t.week_id = p_week_id AND ts.is_fill AND s.score IS NULL)
+     AND EXISTS (SELECT 1
+               FROM public.scores s
+               JOIN public.team_slots ts ON ts.id = s.team_slot_id
+               JOIN public.teams t       ON t.id = ts.team_id
+              WHERE t.week_id = p_week_id AND s.score IS NOT NULL)
+     AND EXISTS (SELECT 1
+               FROM public.scores s
+               JOIN public.team_slots ts ON ts.id = s.team_slot_id
+               JOIN public.teams t       ON t.id = ts.team_id
+               JOIN public.weeks w       ON w.id = t.week_id
+              WHERE w.is_archived AND ts.is_fill = false
+                AND ts.player_id IS NOT NULL AND s.score > 0)
+  THEN
+    RAISE EXCEPTION 'Unscored fill slots remain — the archive did not receive their on-screen values (p_fill_scores). Update the app and retry, or enter the fill scores manually.';
+  END IF;
+
+  -- --------------------------------------------------------------------------
   -- 2c. Lock the week, run settlement, create the next week — all-or-nothing.
   --     p_force: void+refund any bet settlement would otherwise leave pending
   --     (see settle_betting_for_week's backstop).

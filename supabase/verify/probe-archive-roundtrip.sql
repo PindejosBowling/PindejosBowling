@@ -19,7 +19,8 @@
 -- the over WINS ONLY IF the fill is included (150+130=280 > 260.5; 150 alone
 -- loses) — proving settlement grades on the materialized score. Also asserts:
 -- the fill mints no score_credit, the pre-image lands in the snapshot, the
--- fill reverts to NULL on unarchive, and invalid/stale payloads RAISE.
+-- fill reverts to NULL on unarchive, invalid/stale payloads RAISE, and an
+-- archive with NO payload trips the coverage guard (outdated-client vector).
 DO $$
 DECLARE
   v_u1 uuid := gen_random_uuid();
@@ -73,8 +74,16 @@ BEGIN
   -- The fill's row stays NULL: its value arrives via p_fill_scores at archive.
   UPDATE public.scores SET score = 150 WHERE team_slot_id = v_slot1 AND game_id = v_game;
   UPDATE public.scores SET score = 120 WHERE team_slot_id = v_slot2 AND game_id = v_game;
-  v_fill_payload := jsonb_build_array(jsonb_build_object(
-    'team_slot_id', v_slot_fill, 'game_id', v_game, 'score', 130));
+  -- Cover EVERY unscored fill row of the week (the live week may carry real
+  -- fill slots beyond the fixture's) — the coverage guard rejects an archive
+  -- that leaves any uncovered. All valued 130 for deterministic grading.
+  SELECT COALESCE(jsonb_agg(jsonb_build_object(
+           'team_slot_id', s.team_slot_id, 'game_id', s.game_id, 'score', 130)), '[]'::jsonb)
+    INTO v_fill_payload
+    FROM public.scores s
+    JOIN public.team_slots ts ON ts.id = s.team_slot_id
+    JOIN public.teams t       ON t.id = ts.team_id
+   WHERE t.week_id = v_week AND ts.is_fill AND s.score IS NULL;
 
   SELECT id INTO v_mkt_tp FROM public.bet_markets
     WHERE market_type = 'team_prop' AND subject_game_id = v_game
@@ -121,13 +130,21 @@ BEGIN
   EXCEPTION WHEN others THEN
     IF SQLERRM NOT LIKE '%fill-score payload%' THEN RAISE; END IF;
   END;
-  -- ...as must a payload for a fill whose score is already stored (stale screen).
+  -- ...as must a payload for a fill whose score is already stored (stale screen)...
   BEGIN
     UPDATE public.scores SET score = 99 WHERE team_slot_id = v_slot_fill AND game_id = v_game;
     PERFORM public.archive_week(v_week, true, v_fill_payload);
     RAISE EXCEPTION 'PROBE_FAIL: already-scored fill payload did not raise';
   EXCEPTION WHEN others THEN
     IF SQLERRM NOT LIKE '%fill-score payload%' THEN RAISE; END IF;
+  END;
+  -- ...and an archive that omits the payload entirely (outdated client) must
+  -- trip the coverage guard while unscored fill rows exist in a bowled week.
+  BEGIN
+    PERFORM public.archive_week(v_week, true, NULL);
+    RAISE EXCEPTION 'PROBE_FAIL: uncovered unscored fill did not trip the coverage guard';
+  EXCEPTION WHEN others THEN
+    IF SQLERRM NOT LIKE '%Unscored fill slots remain%' THEN RAISE; END IF;
   END;
 
   SELECT public.archive_week(v_week, true, v_fill_payload) INTO v_run;

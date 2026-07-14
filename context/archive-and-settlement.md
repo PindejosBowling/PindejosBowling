@@ -115,6 +115,14 @@ included — are the source of truth and are never touched. Fills still mint no
 pincome and never feed player markets/averages (step a's and b's `is_fill`
 filters are unaffected).
 
+**Coverage guard** (migration `…160000_archive_fill_coverage_guard`): after
+materialization, the RPC RAISEs if any unscored fill row remains — so an
+outdated client (or any caller omitting `p_fill_scores`) cannot silently
+archive without the fill's contribution. Exemptions: a never-bowled week (no
+stored scores — nothing to grade), and a league with zero archived counted
+scores (the server proxy for "league average = 0", when the client
+legitimately omits the rows).
+
 **Then**: lock (`is_archived = true`, `bowled_at = current_date`) → settle (§3)
 → `INSERT weeks (season, N+1) ON CONFLICT DO NOTHING`.
 
