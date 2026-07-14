@@ -44,6 +44,11 @@ interface WeekGroup {
   bowledAt: string | null
   players: ImportGroup[]
 }
+interface SeasonGroup {
+  seasonKey: string
+  seasonNumber: number | null
+  weeks: WeekGroup[]
+}
 interface LinkResult {
   url: string
   summary: LanetalkImportSummary
@@ -59,7 +64,7 @@ function formatDate(bowledAt: string | null): string {
 export default function LanetalkImportAdminScreen() {
   const isAdmin = useAuthStore(s => s.role) === 'admin'
   const showToast = useUiStore(s => s.showToast)
-  const { loading, rawImports, unsettledProps, settledPropWeeks, reload } = useLanetalkImportAdmin()
+  const { loading, rawImports, unsettledProps, settledPropWeeks, currentSeasonId, reload } = useLanetalkImportAdmin()
 
   // Unsettled LaneTalk stat props, grouped by week — each week group with any
   // pending props gets a "Confirm LaneTalk Data" action. The button hides once
@@ -91,20 +96,31 @@ export default function LanetalkImportAdminScreen() {
   // Week currently being reprocessed (re-matched from stored data), if any.
   const [reprocessingWeek, setReprocessingWeek] = useState<string | null>(null)
 
-  const weekGroups = useMemo<WeekGroup[]>(() => {
-    // Two-level grouping: by the league week each import resolved to, then within
-    // a week by player. Rows that share week_id AND player_id collapse into one
-    // player set; rows without a matched player (player_id null) fall back to
-    // grouping by source_url. Imports whose week was deleted (week_id null) bucket
-    // under a single "no week" group.
+  const seasonGroups = useMemo<SeasonGroup[]>(() => {
+    // Three-level grouping: by season, then by the league week each import
+    // resolved to, then within a week by player. Rows that share week_id AND
+    // player_id collapse into one player set; rows without a matched player
+    // (player_id null) fall back to grouping by source_url. Imports whose week
+    // was deleted (week_id null) bucket under a single "no week" group, which in
+    // turn sits under a single "no season" group.
     const playerMap = new Map<string, ImportGroup>()
     const weeks = new Map<string, WeekGroup>()
+    const seasonMap = new Map<string, SeasonGroup>()
     for (const r of rawImports) {
       const weekKey = r.week_id ?? 'unassigned'
       let wg = weeks.get(weekKey)
       if (!wg) {
         wg = { weekKey, weekNumber: r.weeks?.week_number ?? null, bowledAt: r.weeks?.bowled_at ?? null, players: [] }
         weeks.set(weekKey, wg)
+        // A week is created once; attach it to its season group (all rows of a
+        // week share the same season). Null season_id buckets under "unassigned".
+        const seasonKey = r.weeks?.season_id ?? 'unassigned'
+        let sg = seasonMap.get(seasonKey)
+        if (!sg) {
+          sg = { seasonKey, seasonNumber: r.weeks?.seasons?.number ?? null, weeks: [] }
+          seasonMap.set(seasonKey, sg)
+        }
+        sg.weeks.push(wg)
       }
       const key = r.player_id && r.week_id
         ? `${r.week_id}::${r.player_id}`
@@ -128,21 +144,46 @@ export default function LanetalkImportAdminScreen() {
     for (const g of playerMap.values()) {
       g.games.sort((a, b) => a.gameNumber - b.gameNumber)
     }
-    // Newest week first; the "no week" bucket sinks to the bottom.
-    const out = [...weeks.values()]
+    // Within each season, newest week first; the "no week" bucket sinks to the
+    // bottom. Then newest season first; the "no season" bucket sinks last.
+    for (const sg of seasonMap.values()) {
+      sg.weeks.sort((a, b) => {
+        if (a.weekNumber == null) return 1
+        if (b.weekNumber == null) return -1
+        return b.weekNumber - a.weekNumber
+      })
+    }
+    const out = [...seasonMap.values()]
     out.sort((a, b) => {
-      if (a.weekNumber == null) return 1
-      if (b.weekNumber == null) return -1
-      return b.weekNumber - a.weekNumber
+      if (a.seasonNumber == null) return 1
+      if (b.seasonNumber == null) return -1
+      return b.seasonNumber - a.seasonNumber
     })
     return out
   }, [rawImports])
+
+  // Seasons start collapsed except the current one (falling back to the newest
+  // season group when there's no active season). `toggledSeasons` holds only the
+  // seasons the admin has flipped away from that default.
+  const defaultSeasonKey = currentSeasonId ?? seasonGroups[0]?.seasonKey ?? null
+  const [toggledSeasons, setToggledSeasons] = useState<Set<string>>(new Set())
+  const isSeasonExpanded = useCallback((seasonKey: string) => {
+    const defaultExpanded = seasonKey === defaultSeasonKey
+    return toggledSeasons.has(seasonKey) ? !defaultExpanded : defaultExpanded
+  }, [toggledSeasons, defaultSeasonKey])
+  const toggleSeason = useCallback((seasonKey: string) => {
+    setToggledSeasons(prev => {
+      const next = new Set(prev)
+      next.has(seasonKey) ? next.delete(seasonKey) : next.add(seasonKey)
+      return next
+    })
+  }, [])
 
   // The most-recent week (the one we're importing into) defaults to expanded so
   // it's ready to review on load; older weeks default collapsed. `toggledWeeks`
   // holds only the weeks the admin has flipped away from that default.
   const [toggledWeeks, setToggledWeeks] = useState<Set<string>>(new Set())
-  const mostRecentWeekKey = weekGroups[0]?.weekKey ?? null
+  const mostRecentWeekKey = seasonGroups[0]?.weeks[0]?.weekKey ?? null
   const isWeekExpanded = useCallback((weekKey: string) => {
     const defaultExpanded = weekKey === mostRecentWeekKey
     return toggledWeeks.has(weekKey) ? !defaultExpanded : defaultExpanded
@@ -342,10 +383,24 @@ export default function LanetalkImportAdminScreen() {
         })}
 
         <Text style={styles.sectionHeader}>RECENT IMPORTS</Text>
-        {weekGroups.length === 0 ? (
+        {seasonGroups.length === 0 ? (
           <EmptyCard text="No imports yet." style={{ marginTop: 12 }} />
         ) : (
-          weekGroups.map(wg => {
+          seasonGroups.map(sg => {
+            const seasonExpanded = isSeasonExpanded(sg.seasonKey)
+            const seasonTitle = sg.seasonNumber != null ? `Season ${sg.seasonNumber}` : 'No season match'
+            return (
+              <View key={sg.seasonKey} style={styles.seasonGroup}>
+                <TouchableOpacity
+                  style={styles.seasonHeader}
+                  onPress={() => toggleSeason(sg.seasonKey)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.seasonTitle}>{seasonTitle}</Text>
+                  <Text style={styles.seasonWeekCount}>{sg.weeks.length} week{sg.weeks.length === 1 ? '' : 's'}</Text>
+                  <Text style={[styles.chevron, seasonExpanded && styles.chevronUp]}>›</Text>
+                </TouchableOpacity>
+                {seasonExpanded && sg.weeks.map(wg => {
             const expanded = isWeekExpanded(wg.weekKey)
             const title = wg.weekNumber != null
               ? `Week ${wg.weekNumber}${wg.bowledAt ? ` - ${formatDate(wg.bowledAt)}` : ''}`
@@ -431,6 +486,9 @@ export default function LanetalkImportAdminScreen() {
                     ))}
                   </View>
                 ))}
+              </View>
+            )
+                })}
               </View>
             )
           })
@@ -533,6 +591,28 @@ const styles = StyleSheet.create({
     marginTop: 24,
     marginBottom: 8,
     marginLeft: 4,
+  },
+  seasonGroup: { marginBottom: 8 },
+  seasonHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 4,
+    paddingVertical: 10,
+  },
+  seasonTitle: {
+    fontFamily: fonts.barlowCondensed,
+    fontSize: 20,
+    color: colors.text,
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+  },
+  seasonWeekCount: {
+    flex: 1,
+    fontFamily: fonts.barlowCondensed,
+    fontSize: 13,
+    color: colors.muted,
+    letterSpacing: 0.4,
+    marginLeft: 10,
   },
   weekCard: {
     backgroundColor: colors.surface,
