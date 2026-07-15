@@ -52,14 +52,14 @@ surfaces.
 - Hub screen + tiles: `app/src/screens/PinsinoScreen.tsx`, `PinsinoAdminScreen.tsx`.
 - Admin list + cancel UX: `app/src/screens/AdminSportsbookScreen.tsx`.
 - Opponent picker: `app/src/components/ui/PlayerPickerModal.tsx`.
-- db.ts query objects + RPC wrappers: `app/src/utils/supabase/db.ts`.
+- db query objects + RPC wrappers: `app/src/utils/supabase/db/economy.ts` (behind the `db/` barrel).
 - Ledger row rendering: `app/src/components/betting/LedgerRow.tsx`.
 
 ---
 
 ## 1. `db.ts` — query objects + RPC wrappers
 
-In `app/src/utils/supabase/db.ts`, add two query objects following the existing shape
+In `app/src/utils/supabase/db/economy.ts`, add two query objects following the existing shape
 (each method returns the supabase query/`rpc` builder; RPC params use the `p_` prefix as
 in `bets.place` / `loans.take`).
 

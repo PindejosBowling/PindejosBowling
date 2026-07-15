@@ -109,7 +109,7 @@ Never hand-edit `supabase/schema.sql` — it is overwritten on every run.
 
 ## 2. Data Access Layer (`db.ts`)
 
-All queries go through the typed query objects in `src/utils/supabase/db.ts`. Never make raw `supabase.from(...)` calls in a screen or hook — add a method to `db.ts` instead.
+All queries go through the typed query objects in `src/utils/supabase/db/`. Never make raw `supabase.from(...)` calls in a screen or hook — add a method to the right domain file under `db/` (`league`/`economy`/`infra`/`playoffs`, re-exported through the barrel) instead.
 
 ### Adding a method for a new table
 

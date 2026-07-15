@@ -64,7 +64,7 @@ enter, or partial refunds (design §6).
 - Admin list + cancel/settle UX: `app/src/screens/PvPAdminScreen.tsx`,
   `AdminSportsbookScreen.tsx`.
 - Ledger row rendering: `app/src/components/betting/LedgerRow.tsx`.
-- db.ts query objects + RPC wrappers: `app/src/utils/supabase/db.ts`.
+- db query objects + RPC wrappers: `app/src/utils/supabase/db/economy.ts` (behind the `db/` barrel).
 - Feed render + feature meta: `app/src/utils/activityFeedTemplates.ts`,
   `app/src/hooks/useMarketMovesData.ts`, `app/src/screens/MarketMovesScreen.tsx`.
 
@@ -72,7 +72,7 @@ enter, or partial refunds (design §6).
 
 ## 1. `db.ts` — query objects + RPC wrappers
 
-In `app/src/utils/supabase/db.ts`, add two query objects following the existing shape
+In `app/src/utils/supabase/db/economy.ts`, add two query objects following the existing shape
 (`pvpChallenges` / `loans` are the templates; RPC params use the `p_` prefix).
 
 ```ts

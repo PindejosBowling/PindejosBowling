@@ -19,13 +19,13 @@ every `<Modal>`, RPC-then-`reload`, admin gate via `useAuthStore(s => s.role) ==
 - Action modal: `app/src/components/betting/SettleBetModal.tsx` (bottom sheet, `<Toast/>` inside, RPC→toast→`onSettled`→`onClose`); `app/src/components/admin/AdminEndSeasonModal.tsx` (centered confirm card, disabled-while-saving).
 - Hub screen + tiles: `app/src/screens/PinsinoScreen.tsx`, `PinsinoAdminScreen.tsx`.
 - Admin list + cancel: `app/src/screens/AdminSportsbookScreen.tsx`.
-- db.ts query objects + RPC wrappers: `app/src/utils/supabase/db.ts`.
+- db query objects + RPC wrappers: `app/src/utils/supabase/db/economy.ts` (behind the `db/` barrel).
 
 ---
 
 ## 1. `db.ts` — query objects + RPC wrappers
 
-In `app/src/utils/supabase/db.ts`, add three query objects following the existing
+In `app/src/utils/supabase/db/economy.ts`, add three query objects following the existing
 shape (each method returns the supabase query/`rpc` builder; RPC params use the
 `p_` prefix as in `bets.place` / `betMarkets.settle`).
 

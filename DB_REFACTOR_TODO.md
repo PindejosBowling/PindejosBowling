@@ -247,7 +247,7 @@ call site migrated and both flows verified in Expo (b).
 
 | Phase | Scope | PR | Status |
 |---|---|---|---|
-| 1 | Split into `db/{league,economy,infra,playoffs}.ts` + barrel; docs | — | ☐ not started |
+| 1 | Split into `db/{league,economy,infra,playoffs}.ts` + barrel; docs | — | ☑ done (pure move; tsc green; 84 consumers unchanged; docs updated) |
 | 2 | Collapse 3 market-status methods (moneyline excluded) | — | ☐ optional |
 | 3 | Document/normalize 3 throw-based edge-fn wrappers | — | ☐ optional |
 

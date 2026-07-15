@@ -78,7 +78,7 @@ and PvP):
   `settle_betting_for_week`, `accept_pvp_challenge`, `settle_pvp_challenge`.
 
 **App side**:
-- [db.ts](../app/src/utils/supabase/db.ts) `activityFeed` object — keyset-paginated
+- [db/infra.ts](../app/src/utils/supabase/db/infra.ts) `activityFeed` object — keyset-paginated
   (`published_at DESC, id DESC`) public/feature/highlights lists, an admin list, and the
   three admin RPC wrappers (`suppress`, `restore`, `createSystemEvent`). The
   `FEED_GRAPH` select uses **explicit `!fkey` hints** for the three `players` FKs (actor

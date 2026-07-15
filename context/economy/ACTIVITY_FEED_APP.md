@@ -39,13 +39,13 @@ recap cards, notification badge, or `sportsbook_bad_beat` (design §17, §21).
   `app/src/components/betting/SettleBetModal.tsx`.
 - Reusable display: `app/src/components/ui/PlayerAvatar.tsx`, `ui/ScreenHeader.tsx`,
   `betting/LedgerRow.tsx`; relative time via `timeAgo` in `app/src/utils/helpers.ts`.
-- db.ts query objects + RPC wrappers: `app/src/utils/supabase/db.ts`.
+- db query objects + RPC wrappers: `app/src/utils/supabase/db/infra.ts` (behind the `db/` barrel).
 
 ---
 
 ## 1. `db.ts` — query objects + RPC wrappers
 
-In `app/src/utils/supabase/db.ts`, add an `activityFeed` query object following the
+In `app/src/utils/supabase/db/infra.ts`, add an `activityFeed` query object following the
 existing shape (each method returns the supabase query/`rpc` builder; RPC params use the
 `p_` prefix). Player display names are joined via explicit `!fkey` hints (three FKs to
 `players`, so the hints are **required**), rendered from the live `players` table — names

@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-React Native / Expo app for a recreational bowling league called "Pindejos." Players track weekly matchups, scores, standings, RSVPs, and historical stats. The sole backend is a Supabase Postgres database accessed via typed query objects in `src/utils/supabase/db.ts`.
+React Native / Expo app for a recreational bowling league called "Pindejos." Players track weekly matchups, scores, standings, RSVPs, and historical stats. The sole backend is a Supabase Postgres database accessed via typed query objects in `src/utils/supabase/db/` (per-domain modules behind a barrel).
 
 ---
 
@@ -39,7 +39,7 @@ Three delivery channels, each with its own trigger:
 
 ## Backend / Data Layer
 
-All data reads and writes go through Supabase via the typed query objects in `src/utils/supabase/db.ts`.
+All data reads and writes go through Supabase via the typed query objects in `src/utils/supabase/db/`.
 
 **Files:**
 
@@ -47,6 +47,6 @@ All data reads and writes go through Supabase via the typed query objects in `sr
 |---|---|
 | [src/utils/supabase/client.ts](src/utils/supabase/client.ts) | `createClient<Database>()` — import `supabase` from here for raw queries |
 | [src/utils/supabase/database.types.ts](src/utils/supabase/database.types.ts) | Auto-generated Postgres types: `Database`, `Tables<T>`, `TablesInsert<T>`, `TablesUpdate<T>` |
-| [src/utils/supabase/db.ts](src/utils/supabase/db.ts) | Typed query objects, one per table — **always use these over raw client calls** |
+| [src/utils/supabase/db/](src/utils/supabase/db/) | Typed query objects, one per table (four domain modules behind a barrel) — **always use these over raw client calls** |
 
 The client is configured via Expo environment variables that are set in `.env.local` (`EXPO_PUBLIC_SUPABASE_URL`, `EXPO_PUBLIC_SUPABASE_API_KEY`) and uses AsyncStorage for session persistence.

@@ -7,7 +7,7 @@ Every agent working in this codebase MUST follow these rules. They override any 
 1. **Migrations only.** ALL database changes go through `.sql` files in `supabase/migrations/` applied via `supabase db push`. NEVER execute `INSERT`/`UPDATE`/`DELETE`/DDL directly against the live database. The Supabase CLI is for exactly two things: reading (`db query`) and pushing migrations (`db push`).
 2. **Never read migrations to learn the current schema.** Migration files are append-only *history* full of since-superseded DDL. Current-state DDL lives in [supabase/schema.sql](supabase/schema.sql) (generated snapshot — never hand-edit; regenerate with `./supabase/refresh-schema-snapshot.sh` as the last step of every push). Schema prose/invariants: [context/database-schema.md](context/database-schema.md) and [supabase/PIN_ECONOMY_SCHEMA.md](supabase/PIN_ECONOMY_SCHEMA.md). Only open a migration to understand history or to author a new one.
 3. **Supabase CLI setup.** Every `supabase` command needs `SUPABASE_ACCESS_TOKEN` loaded from `app/.env.local` plus `--linked --workdir $(pwd)` — otherwise it fails with 401. No MCP server is configured.
-4. **All data comes from Supabase; all queries live in `db.ts`.** Never build ad-hoc joins from raw `supabase` client calls — add a method to `src/utils/supabase/db.ts`.
+4. **All data comes from Supabase; all queries live in the `db/` module.** Never build ad-hoc joins from raw `supabase` client calls — add a method to the right domain file under `src/utils/supabase/db/` (`league`/`economy`/`infra`/`playoffs`), re-exported through the `db/index.ts` barrel that every consumer imports from as `'…/utils/supabase/db'`.
 5. **"Current season" ≠ highest number.** It is `is_active = true` AND `registration_open = false` — always `seasons.getCurrent()`, never `getLatest()`.
 6. **Compute functions are pure and uncached.** Always wrap them in `useMemo` at the screen level; no memoization inside hooks or compute functions.
 7. **All ids are `uuid` / TypeScript `string`.** No integer keys anywhere.
@@ -16,7 +16,7 @@ Every agent working in this codebase MUST follow these rules. They override any 
 
 ## Project overview
 
-React Native / Expo app for a recreational bowling league called "Pindejos." Players track weekly matchups, scores, standings, RSVPs, and historical stats. The sole backend is a Supabase Postgres database accessed via typed query objects in `src/utils/supabase/db.ts`.
+React Native / Expo app for a recreational bowling league called "Pindejos." Players track weekly matchups, scores, standings, RSVPs, and historical stats. The sole backend is a Supabase Postgres database accessed via typed query objects in `src/utils/supabase/db/` (per-domain modules behind a barrel).
 
 This file is an **index**. The detailed reference is split across [context/](context/) — read the file relevant to your task rather than loading everything. Each file is self-contained.
 
@@ -26,7 +26,7 @@ This file is an **index**. The detailed reference is split across [context/](con
 |---|---|
 | [context/tech-stack.md](context/tech-stack.md) | Project overview, tech stack / versions, how to run, the Supabase client + data-layer file locations |
 | [context/database-schema.md](context/database-schema.md) | The 35-table schema, column lists, and the key invariants/distinctions (teams/weeks ownership, season lifecycle, cascades, betting + loan tables) |
-| [context/db-queries.md](context/db-queries.md) | The `db.ts` typed query objects — every method per table (always query through these, never raw client joins) |
+| [context/db-queries.md](context/db-queries.md) | The `db/` typed query objects (four domain modules — `league`/`economy`/`infra`/`playoffs` — behind a barrel) — every method per table (always query through these, never raw client joins) |
 | [context/data-architecture.md](context/data-architecture.md) | The hook + compute-function pattern, archived-vs-live data, standings computation, the full hooks table, and pure utilities (`helpers.ts`) |
 | [context/ui-system.md](context/ui-system.md) | Player badges, the four Zustand stores, navigation architecture (tabs + stacks + routes), and the component inventory (incl. betting display components) |
 | [context/COMPONENTS_INDEX.md](context/COMPONENTS_INDEX.md) | The full index of `src/components/` — props, purpose, mount pattern, and shared conventions for every reusable component, grouped by domain. **Check before building any new UI for a screen** |
@@ -35,7 +35,7 @@ This file is an **index**. The detailed reference is split across [context/](con
 | [context/patterns.md](context/patterns.md) | Key patterns (useMemo, pull-to-refresh, toasts-in-modals, optimistic edits, admin flows) and the theme system (colors / fonts / radius) |
 | [context/file-map.md](context/file-map.md) | The full `app/` source tree with a one-line note per file |
 | [context/agent-rules.md](context/agent-rules.md) | The full text of the hard constraints above (incl. CLI commands, migration workflow) + additional agent notes (auth layer, `useRefresh`, hook exports) |
-| [context/page-creation.md](context/page-creation.md) | The page-creation blueprint — the four-layer stack (migration → `db.ts` → hook → screen → navigation), type/schema-snapshot regeneration commands, screen skeleton + theme tokens, and the end-to-end checklist. Always reference when adding/editing a screen or making schema changes. |
+| [context/page-creation.md](context/page-creation.md) | The page-creation blueprint — the four-layer stack (migration → `db/` → hook → screen → navigation), type/schema-snapshot regeneration commands, screen skeleton + theme tokens, and the end-to-end checklist. Always reference when adding/editing a screen or making schema changes. |
 
 ## Cross-cutting systems ([context/](context/))
 

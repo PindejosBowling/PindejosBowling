@@ -1,6 +1,14 @@
-# db.ts Query Objects
+# db Query Objects
 
-All database queries MUST be implemented in `db.ts`. Queries like `scores.listForStandings()` join the right tables in one round-trip. Avoid building ad-hoc joins from raw `supabase` client calls; add a new method to `db.ts` if needed.
+All database queries MUST be implemented in the `db/` module. Queries like `scores.listForStandings()` join the right tables in one round-trip. Avoid building ad-hoc joins from raw `supabase` client calls; add a new method to the right domain file under `db/` if needed.
+
+**Layout.** `src/utils/supabase/db/` is four per-domain modules behind a barrel:
+- `league.ts` — `games`, `players`, `avatars`, `registrations`, `rsvp`, `rsvpBonusConfig`, `scores`, `seasonChampions`, `seasons`, `teams`, `teamSlots`, `weeks`, `archives`
+- `economy.ts` — `betMarkets`, `bets`, `haunts`, `customLines`, `loanProducts`, `loans`, `loanLedger`, `pinLedger`, `bonuses`, `pvpChallenges`, `pvpLedger`, `bountyPosts`, `bountyLedger`, `auctions`, `auctionHouseState`, `auctionLedger`, `itemCatalog`, `inventoryItems`
+- `infra.ts` — `boardPosts`, `activityFeed`, `lanetalkImports`, `push`, `broadcasts`, `broadcastEventRules`
+- `playoffs.ts` — `playoffDrafts`
+
+`db/index.ts` re-exports all four (`export * from './league'`, etc.), so every consumer imports from the barrel — `import { seasons, bets } from '…/utils/supabase/db'` — unchanged. Domain-private select-graph constants live in the same file as their only consumer and are exported nowhere.
 
 ### `boardPosts`
 | Method | Description |
