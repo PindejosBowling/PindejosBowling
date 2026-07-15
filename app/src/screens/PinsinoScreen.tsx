@@ -44,11 +44,11 @@ const MIN_FIT_SCALE = 0.6
 // the landing page doubles as a menu of what each game actually is.
 const MENU_TILES: { key: PinsinoFeatureKey; icon: string; label: string; route: 'PinsinoLeaderboard' | 'Sportsbook' | 'LoanShark' | 'PvP' | 'MarketMoves' | 'BountyBoard' | 'AuctionHouse' }[] = [
   { key: 'sportsbook', icon: '🏟️', label: 'Sportsbook', route: 'Sportsbook' },
-  { key: 'pvp', icon: '⚔️', label: 'PvP', route: 'PvP' },
-  { key: 'bounties', icon: '🎯', label: 'Bounties', route: 'BountyBoard' },
   // Mock-backed while the auction DB layer is built — flag-gated independently.
   ...(SHOW_AUCTION_HOUSE ? [{ key: 'auctionHouse' as const, icon: '📣', label: 'Auction House', route: 'AuctionHouse' as const }] : []),
   { key: 'loanShark', icon: '🦈', label: 'Loan Shark', route: 'LoanShark' },
+  { key: 'pvp', icon: '⚔️', label: 'PvP', route: 'PvP' },
+  { key: 'bounties', icon: '🎯', label: 'Bounties', route: 'BountyBoard' },
   { key: 'marketMoves', icon: '👀', label: 'Market Moves', route: 'MarketMoves' },
 ]
 
