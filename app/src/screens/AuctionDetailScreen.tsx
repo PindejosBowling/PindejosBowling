@@ -6,6 +6,8 @@ import ScreenContainer from '../components/ui/ScreenContainer'
 import LoadingView from '../components/ui/LoadingView'
 import Button from '../components/ui/Button'
 import AuctionBidSheet from '../components/auction/AuctionBidSheet'
+import FeatureExplainerSheet from '../components/pinsino/FeatureExplainerSheet'
+import { EXPLAINERS } from '../data/pinsinoExplainers'
 import { useAuctionDetailData } from '../hooks/useAuctionDetailData'
 import { usePinsinoSeasonContext } from '../hooks/usePinsinoSeasonContext'
 import { useEconomyRefresh } from '../hooks/useEconomyRefresh'
@@ -27,6 +29,7 @@ export default function AuctionDetailScreen() {
 
   const [bidOpen, setBidOpen] = useState(false)
   const [bidRevealed, setBidRevealed] = useState(false)
+  const [helpOpen, setHelpOpen] = useState(false)
   // Ticking clock for the live countdown (detail screen only; cards are static).
   const [now, setNow] = useState(() => new Date())
 
@@ -61,7 +64,7 @@ export default function AuctionDetailScreen() {
   const hammerFalling = open && countdown == null
 
   return (
-    <ScreenContainer title="Auction" subtitle={a.itemName} onRefresh={reloadAll}>
+    <ScreenContainer title="Auction" subtitle={a.itemName} onRefresh={reloadAll} onHelp={() => setHelpOpen(true)}>
         {/* Item header */}
         <View style={styles.card}>
           <View style={styles.headerRow}>
@@ -79,7 +82,8 @@ export default function AuctionDetailScreen() {
         </View>
 
         {/* Live countdown / hammer — open auctions pair the clock with the
-            bidder count at equal prominence. */}
+            bidder count at equal prominence; the hard facts ride along below.
+            The prose rules live behind the screen's ? explainer. */}
         {(open || scheduled) && (
           <View style={styles.countdownCard}>
             {hammerFalling ? (
@@ -92,44 +96,30 @@ export default function AuctionDetailScreen() {
                 </Text>
               </>
             ) : (
-              <View style={styles.countdownRow}>
-                <View style={styles.countdownCell}>
-                  <Text style={styles.countdownLabel}>{open ? 'CLOSES IN' : 'OPENS IN'}</Text>
-                  <Text style={styles.countdownValue}>{countdown}</Text>
-                </View>
-                {open && (
+              <>
+                <View style={styles.countdownRow}>
                   <View style={styles.countdownCell}>
-                    <Text style={styles.countdownLabel}>{a.bidderCount === 1 ? 'BIDDER' : 'BIDDERS'}</Text>
-                    <Text style={styles.countdownValue}>{a.bidderCount}</Text>
+                    <Text style={styles.countdownLabel}>{open ? 'CLOSES IN' : 'OPENS IN'}</Text>
+                    <Text style={styles.countdownValue}>{countdown}</Text>
                   </View>
-                )}
-              </View>
+                  {open && (
+                    <View style={styles.countdownCell}>
+                      <Text style={styles.countdownLabel}>{a.bidderCount === 1 ? 'BIDDER' : 'BIDDERS'}</Text>
+                      <Text style={styles.countdownValue}>{a.bidderCount}</Text>
+                    </View>
+                  )}
+                </View>
+                <View style={styles.factsDivider} />
+                <Text style={styles.factsLine}>
+                  Min bid {formatPins(a.minimumBid)} pins
+                  {a.quantity > 1 ? ` · ${a.quantity} up for grabs` : ''}
+                  {' · '}
+                  {open ? `Closes ${formatCloseTime(a.closesAt)}` : `Opens ${formatCloseTime(a.opensAt)}`}
+                </Text>
+              </>
             )}
           </View>
         )}
-
-        {/* Terms — plain language; the numbers live in the kv rows below. */}
-        <Text style={styles.sectionLabel}>HOW IT WORKS</Text>
-        <View style={styles.card}>
-          {[
-            a.quantity > 1
-              ? `${a.quantity} up for grabs — the top ${a.quantity} bids each take one. You can only win one.`
-              : 'One winner — the highest bid takes it.',
-            'Bids are secret. Nobody sees your number — only how many bids are in.',
-            `Once you're in, you're in. Change your bid any time before the hammer falls — but you can't take it back.`,
-            `Win but can't cover your bid? Your check bounces and you're fined up to ${a.bounceFee} pins.`,
-          ].map((line, i) => (
-            // Hanging indent: wrapped lines align with the text, not the bullet.
-            <View key={i} style={styles.ruleRow}>
-              <Text style={styles.ruleBullet}>🎳</Text>
-              <Text style={styles.ruleLine}>{line}</Text>
-            </View>
-          ))}
-          <View style={styles.ruleDivider} />
-          <View style={styles.kv}><Text style={styles.muted}>Minimum bid</Text><Text style={styles.kvValue}>{formatPins(a.minimumBid)} pins</Text></View>
-          <View style={styles.kv}><Text style={styles.muted}>Opens</Text><Text style={styles.kvValue}>{formatCloseTime(a.opensAt)}</Text></View>
-          <View style={styles.kv}><Text style={styles.muted}>Closes</Text><Text style={styles.kvValue}>{formatCloseTime(a.closesAt)}</Text></View>
-        </View>
 
         {/* My bid (owner-only; RLS means others never receive this row). */}
         {open && a.myBidAmount != null && (
@@ -200,6 +190,12 @@ export default function AuctionDetailScreen() {
         {bidOpen && (
           <AuctionBidSheet auction={a} balance={balance} onClose={() => setBidOpen(false)} onDone={reloadAll} />
         )}
+        {helpOpen && (
+          <FeatureExplainerSheet
+            explainer={EXPLAINERS.auctionHouse}
+            onClose={() => setHelpOpen(false)}
+          />
+        )}
     </ScreenContainer>
   )
 }
@@ -236,6 +232,8 @@ const styles = StyleSheet.create({
   countdownValue: { fontFamily: fonts.barlowCondensedHeavy, fontSize: 34, color: colors.accent, marginTop: 2 },
   hammer: { fontFamily: fonts.barlowCondensedHeavy, fontSize: 22, color: colors.gold, letterSpacing: 1 },
   bidderLine: { fontFamily: fonts.barlow, fontSize: 12, color: colors.muted, marginTop: 6 },
+  factsDivider: { alignSelf: 'stretch', height: 1, backgroundColor: colors.border, marginTop: 12, marginBottom: 10, marginHorizontal: 14 },
+  factsLine: { fontFamily: fonts.barlow, fontSize: 12, color: colors.muted, textAlign: 'center', paddingHorizontal: 14 },
 
   sectionLabel: {
     fontFamily: fonts.barlowCondensed,
@@ -246,10 +244,6 @@ const styles = StyleSheet.create({
     marginTop: 6,
   },
 
-  ruleRow: { flexDirection: 'row', alignItems: 'flex-start', paddingVertical: 4 },
-  ruleBullet: { fontSize: 13, lineHeight: 19, marginRight: 10 },
-  ruleLine: { flex: 1, fontFamily: fonts.barlow, fontSize: 13, color: colors.text, lineHeight: 19 },
-  ruleDivider: { height: 1, backgroundColor: colors.border, marginVertical: 8 },
   kv: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 6 },
   kvValue: { fontFamily: fonts.barlowCondensed, fontSize: 15, color: colors.text },
   muted: { fontFamily: fonts.barlow, fontSize: 13, color: colors.muted, flex: 1, marginRight: 8 },

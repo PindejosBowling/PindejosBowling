@@ -112,8 +112,9 @@ export const EXPLAINERS: Record<PinsinoFeatureKey, FeatureExplainer> = {
     hook: 'Sealed-bid auctions for scarce goods.',
     tileHook: 'Sealed bids on rare goods',
     bullets: [
-      'The house lists something rare. You submit a single hidden bid — nobody sees what anyone else pledged.',
-      'When it closes, the highest bidder who can still cover their bid wins and pays it.',
+      'The house lists something rare. You submit a single hidden bid — nobody sees what anyone else pledged, only how many bids are in.',
+      'When it closes, the highest bidder who can still cover their bid wins and pays it. Multiple units up for grabs? The top bids each take one — one win per player.',
+      "Change your bid any time before the hammer falls — but once you're in, you're in. No taking it back.",
     ],
     caveat:
       'Bids are pledges, not held pins. Be able to cover yours at settlement, or take a small bounce penalty.',

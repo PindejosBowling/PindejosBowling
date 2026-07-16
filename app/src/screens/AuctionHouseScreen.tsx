@@ -1,14 +1,17 @@
 import { useCallback, useMemo, useState } from 'react'
-import { View, Text, StyleSheet } from 'react-native'
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native'
 import { useNavigation, useFocusEffect } from '@react-navigation/native'
 import { NativeStackNavigationProp } from '@react-navigation/native-stack'
-import { colors, fonts, radius } from '../theme'
+import { colors, fonts } from '../theme'
 import ScreenContainer from '../components/ui/ScreenContainer'
 import AuctionBankBackdrop from '../components/pixelart/AuctionBankBackdrop'
 import AuctionCard from '../components/auction/AuctionCard'
+import AuctionBidSheet from '../components/auction/AuctionBidSheet'
 import MyItemRow from '../components/auction/MyItemRow'
 import ItemInfoSheet from '../components/auction/ItemInfoSheet'
 import BalancePill from '../components/ui/BalancePill'
+import EmptyCard from '../components/ui/EmptyCard'
+import ToggleGroup from '../components/ui/ToggleGroup'
 import ReadOnlySeasonBanner from '../components/betting/ReadOnlySeasonBanner'
 import FeatureExplainerSheet from '../components/pinsino/FeatureExplainerSheet'
 import { EXPLAINERS } from '../data/pinsinoExplainers'
@@ -21,6 +24,7 @@ import { AuctionView, InventoryGroupView, auctionSections, groupInventory } from
 import { PinsinoStackParamList } from '../navigation/types'
 
 type Nav = NativeStackNavigationProp<PinsinoStackParamList>
+type Segment = 'floor' | 'items'
 
 export default function AuctionHouseScreen() {
   const navigation = useNavigation<Nav>()
@@ -32,6 +36,12 @@ export default function AuctionHouseScreen() {
   const { readOnly, viewSeasonNumber } = usePinsinoSeasonContext()
   const { loading, balance, auctions, myItems, reload } = useAuctionHouseData(playerId, pinsinoViewSeasonId)
 
+  // The marketplace and the locker are different jobs — split into segments
+  // instead of one long interleaved scroll.
+  const [segment, setSegment] = useState<Segment>('floor')
+  const [scheduledOpen, setScheduledOpen] = useState(false)
+  const [settledOpen, setSettledOpen] = useState(false)
+  const [bidAuction, setBidAuction] = useState<AuctionView | null>(null)
   const [infoGroup, setInfoGroup] = useState<InventoryGroupView | null>(null)
   const [helpOpen, setHelpOpen] = useState(false)
 
@@ -43,11 +53,27 @@ export default function AuctionHouseScreen() {
   const sections = useMemo(() => auctionSections(auctions), [auctions])
   const itemGroups = useMemo(() => groupInventory(myItems), [myItems])
 
-  const auctionSection = (title: string, rows: AuctionView[]) =>
+  const readyCount = useMemo(
+    () => myItems.filter(i => i.consumedAt == null).length,
+    [myItems],
+  )
+
+  // Demoted sections stay one tap away; Scheduled auto-expands when nothing is
+  // open so the Floor never looks dead while auctions are queued up.
+  const scheduledExpanded = scheduledOpen || sections.open.length === 0
+  const collapsedSection = (
+    title: string,
+    rows: AuctionView[],
+    expanded: boolean,
+    onToggle: () => void,
+  ) =>
     rows.length > 0 ? (
       <>
-        <Text style={styles.sectionLabel}>{title} ({rows.length})</Text>
-        {rows.map(a => (
+        <TouchableOpacity style={styles.accordionHeader} onPress={onToggle} activeOpacity={0.7}>
+          <Text style={styles.accordionChevron}>{expanded ? '▾' : '▸'}</Text>
+          <Text style={styles.sectionLabel}>{title} ({rows.length})</Text>
+        </TouchableOpacity>
+        {expanded && rows.map(a => (
           <AuctionCard
             key={a.id}
             auction={a}
@@ -57,7 +83,7 @@ export default function AuctionHouseScreen() {
       </>
     ) : null
 
-  const noAuctions = sections.open.length === 0 && sections.scheduled.length === 0 && sections.settled.length === 0
+  const floorEmpty = sections.open.length === 0 && sections.scheduled.length === 0 && sections.settled.length === 0
 
   return (
     <ScreenContainer
@@ -72,34 +98,79 @@ export default function AuctionHouseScreen() {
 
         <BalancePill balance={balance} />
 
-        {noAuctions ? (
-          <View style={styles.emptyCard}>
-            <Text style={styles.emptyText}>
-              {readOnly ? 'No auctions to review for this season.' : 'Nothing on the block — check back when the House lists something worth fighting over.'}
-            </Text>
-          </View>
-        ) : (
-          <>
-            {auctionSection('OPEN AUCTIONS', sections.open)}
-            {auctionSection('SCHEDULED', sections.scheduled)}
-          </>
+        <ToggleGroup<Segment>
+          variant="bar"
+          options={[
+            { key: 'floor', label: 'THE FLOOR' },
+            { key: 'items', label: `MY ITEMS${readyCount > 0 ? ` (${readyCount})` : ''}` },
+          ]}
+          value={segment}
+          onChange={setSegment}
+          style={styles.segments}
+        />
+
+        {segment === 'floor' && (
+          floorEmpty ? (
+            <EmptyCard
+              text={readOnly
+                ? 'No auctions to review for this season.'
+                : 'Nothing on the block — check back when the House lists something worth fighting over.'}
+            />
+          ) : (
+            <>
+              {sections.open.length > 0 && (
+                <>
+                  <Text style={styles.sectionLabel}>OPEN AUCTIONS ({sections.open.length})</Text>
+                  {sections.open.map(a => (
+                    <AuctionCard
+                      key={a.id}
+                      auction={a}
+                      onPress={() => navigation.navigate('AuctionDetail', { auctionId: a.id })}
+                      onBid={readOnly ? undefined : () => setBidAuction(a)}
+                    />
+                  ))}
+                </>
+              )}
+              {collapsedSection('SCHEDULED', sections.scheduled, scheduledExpanded, () => setScheduledOpen(o => !o))}
+              {collapsedSection('RECENTLY SETTLED', sections.settled, settledOpen, () => setSettledOpen(o => !o))}
+            </>
+          )
         )}
 
-        {itemGroups.length > 0 && (
-          <>
-            <Text style={styles.sectionLabel}>MY ITEMS ({myItems.length})</Text>
-            {itemGroups.map(g => (
-              <MyItemRow key={`${g.itemKey}:${g.expired}`} group={g} onPress={() => setInfoGroup(g)} />
-            ))}
-          </>
+        {segment === 'items' && (
+          itemGroups.length === 0 ? (
+            <EmptyCard text="No items yet — win one at auction and it lands here." />
+          ) : (
+            <>
+              {itemGroups.map(g => (
+                <MyItemRow key={`${g.itemKey}:${g.expired}`} group={g} onPress={() => setInfoGroup(g)} />
+              ))}
+              <Text style={styles.itemsFootnote}>
+                Items are spent at the Sportsbook — tap one to see where.
+              </Text>
+            </>
+          )
         )}
 
-        {auctionSection('RECENTLY SETTLED', sections.settled)}
-
-        {/* Modal-based sheet: renders in the native overlay layer, so mounting
-            inside the ScrollView children is visually identical. */}
+        {/* Modal-based sheets: they render in the native overlay layer, so
+            mounting inside the ScrollView children is visually identical. */}
+        {bidAuction && (
+          <AuctionBidSheet
+            auction={bidAuction}
+            balance={balance}
+            onClose={() => setBidAuction(null)}
+            onDone={reloadAll}
+          />
+        )}
         {infoGroup && (
-          <ItemInfoSheet group={infoGroup} onClose={() => setInfoGroup(null)} />
+          <ItemInfoSheet
+            group={infoGroup}
+            onClose={() => setInfoGroup(null)}
+            onUseAtSportsbook={readOnly || infoGroup.expired ? undefined : () => {
+              setInfoGroup(null)
+              navigation.navigate('Sportsbook')
+            }}
+          />
         )}
         {helpOpen && (
           <FeatureExplainerSheet
@@ -113,6 +184,8 @@ export default function AuctionHouseScreen() {
 }
 
 const styles = StyleSheet.create({
+  segments: { marginBottom: 14 },
+
   sectionLabel: {
     fontFamily: fonts.barlowCondensed,
     fontSize: 13,
@@ -122,14 +195,21 @@ const styles = StyleSheet.create({
     marginTop: 6,
   },
 
-  emptyCard: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.cardMd,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 20,
-    alignItems: 'center',
+  accordionHeader: { flexDirection: 'row', alignItems: 'center', paddingVertical: 2 },
+  accordionChevron: {
+    fontFamily: fonts.barlowCondensed,
+    fontSize: 13,
+    color: colors.muted,
+    marginRight: 8,
+    marginBottom: 4,
+  },
+
+  itemsFootnote: {
+    fontFamily: fonts.barlow,
+    fontSize: 12,
+    color: colors.muted,
+    textAlign: 'center',
+    marginTop: 4,
     marginBottom: 12,
   },
-  emptyText: { fontFamily: fonts.barlow, fontSize: 14, color: colors.muted, textAlign: 'center', lineHeight: 20 },
 })

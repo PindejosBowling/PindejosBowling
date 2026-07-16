@@ -9,9 +9,9 @@
 | Layer | Files |
 |---|---|
 | db.ts objects | `auctions`, `auctionLedger`, `itemCatalog`, `inventoryItems` (`listAllForSeason` + `revoke` for the admin remove-item view); `bets.place` gained the 4th `insuranceItemId` arg |
-| View types + pure helpers | `utils/auction.ts` — `AuctionView` / `InventoryItemView` / `InventoryGroupView` / `CatalogItemView`; `auctionSections`, `groupInventory`, `formatTimeRemaining`/`formatCountdown`, `isLargeBid` (≥50% of balance), `itemHowToUse`, `defaultAuctionCloseAt` (= bounties' next-Mon-7PM-ET) |
+| View types + pure helpers | `utils/auction.ts` — `AuctionView` / `InventoryItemView` / `InventoryGroupView` / `CatalogItemView`; `auctionSections`, `groupInventory`, `formatTimeRemaining`/`formatCountdown`, `isLargeBid` (≥50% of balance), `itemHowToUse`, `itemUsageTag` (compact where-you-spend-it row tag), `defaultAuctionCloseAt` (= bounties' next-Mon-7PM-ET) |
 | Hooks | `useAuctionHouseData` (list + My Items + balance), `useAuctionDetailData` (one auction + decoded own bid); normalizers exported from the house hook |
-| Screens | `AuctionHouseScreen` (OPEN → SCHEDULED → MY ITEMS → RECENTLY SETTLED), `AuctionDetailScreen` (ticking countdown + bidder count, owner tap-to-reveal, place/edit bid CTA — **no cancel; bids are commitments**, settlement reveal), `AuctionHouseAdminScreen` (More stack — all admin: auctions, catalog, grants) |
+| Screens | `AuctionHouseScreen` (segmented **THE FLOOR / MY ITEMS** — Floor: OPEN cards with bid-from-card, SCHEDULED + RECENTLY SETTLED as collapsed accordions; My Items: the locker, segment label carries the ready count), `AuctionDetailScreen` (ticking countdown + bidder count + inline facts row, owner tap-to-reveal, place/edit bid CTA — **no cancel; bids are commitments**, settlement reveal; prose rules live behind the `?` explainer), `AuctionHouseAdminScreen` (More stack — all admin: auctions, catalog, grants) |
 | Components | `components/auction/` — see [COMPONENTS_INDEX.md](../COMPONENTS_INDEX.md) |
 | Cross-cutting | `GoldenTicketToggle` in all three Sportsbook wager flows; `auction` notification source; `auction_house` feed templates + filter pill + tap-through |
 | Flags | `SHOW_AUCTION_HOUSE` gates the Pinsino tile independently of `SHOW_PINSINO` |
@@ -40,13 +40,27 @@
   editing resets the tie-break clock. §18.3 pledge copy always (incl. the
   can't-take-it-back line); stronger warning at ≥50% of balance
   (`isLargeBid` — a warning, never a gate).
+- **Bid-from-card** (2026-07 redesign): open-auction cards on the Floor carry a
+  Place Sealed Bid / Edit Bid button that opens `AuctionBidSheet` directly on
+  the hub (`onBid` prop; hidden in read-only seasons and once past `closes_at`).
+  The detail screen remains for the ticking countdown, the tap-to-reveal, and
+  settlement results. This supersedes the original fixed section order
+  (OPEN → SCHEDULED → MY ITEMS → RECENTLY SETTLED, one scroll).
 - **Countdown**: per-second tick on detail only; static minute-granularity on
   cards; past 0:00 while still open → `🔨 HAMMER FALLING…` (cron lag as
-  theater) with the bid CTAs hidden.
+  theater) with the bid CTAs hidden (hub card + detail both).
+- **Detail facts**: min bid / quantity / opens-closes render as a compact row
+  inside the countdown card; the four prose rules (win rule, secrecy,
+  no-takebacks, bounce) live in `EXPLAINERS.auctionHouse` behind the screen's
+  `?` — the dynamic bounce-fee and top-N lines still ride the bid sheet's
+  `TermsBlock`.
 - **My Items**: atomic items grouped ×N by `groupInventory` (active first,
-  consumed greyed **EXPIRED** below — history preserved); row tap → info-only
-  `ItemInfoSheet` with per-item provenance. Activation lives only at the point
-  of use.
+  consumed greyed **EXPIRED** below — history preserved); rows carry an
+  `itemUsageTag` (`ATTACH WHEN BETTING` / `HAUNT A BET` / …) bridging to the
+  Sportsbook; row tap → `ItemInfoSheet` (WHAT IT DOES / WHERE TO USE IT /
+  PROVENANCE + a **Use at the Sportsbook →** navigation button, hidden for
+  expired groups and read-only seasons). Activation still lives only at the
+  point of use — the button navigates, never consumes.
 - **Golden Ticket toggle** (`GoldenTicketToggle`, all three Sportsbook flows):
   default OFF, reset per sheet open, hidden at 0 tickets, consumes the oldest
   unconsumed `bet_insurance`+`attach_to_bet` item (`tickets[0]`), copy states
