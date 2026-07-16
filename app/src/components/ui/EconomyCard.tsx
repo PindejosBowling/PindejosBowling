@@ -14,6 +14,10 @@ interface Props {
   title?: string
   badge?: { text: string; color?: string }
   subtitle?: string
+  // Line clamp for the subtitle (default 1; 0 = no clamp, wrap fully). Loosen
+  // when the subtitle carries meaning that must survive wrapping (e.g. an
+  // item's effect line).
+  subtitleLines?: number
   stats?: StatCell[]
   // Dim the whole card (e.g. a scheduled auction).
   dim?: boolean
@@ -27,7 +31,7 @@ interface Props {
 // The economy list-card primitive: the surface/border/padding shell + the
 // header / subtitle / stat-row skeleton previously re-declared by BountyCard,
 // AuctionCard, PvpChallengeRow, and MarketMoveCard.
-export default function EconomyCard({ title, badge, subtitle, stats, dim, onPress, children }: Props) {
+export default function EconomyCard({ title, badge, subtitle, subtitleLines = 1, stats, dim, onPress, children }: Props) {
   const body = (
     <>
       {(title != null || badge != null) && (
@@ -38,7 +42,11 @@ export default function EconomyCard({ title, badge, subtitle, stats, dim, onPres
           )}
         </View>
       )}
-      {subtitle != null && <Text style={styles.subtitle} numberOfLines={1}>{subtitle}</Text>}
+      {subtitle != null && (
+        <Text style={styles.subtitle} numberOfLines={subtitleLines === 0 ? undefined : subtitleLines}>
+          {subtitle}
+        </Text>
+      )}
       {stats != null && stats.length > 0 && (
         <View style={styles.statRow}>
           {stats.map((s, i) => (

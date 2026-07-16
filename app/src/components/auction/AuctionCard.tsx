@@ -43,7 +43,11 @@ export default function AuctionCard({ auction: a, onPress, onBid }: Props) {
     <EconomyCard
       title={`${a.itemIcon} ${a.itemName}${a.quantity > 1 ? ` ×${a.quantity}` : ''}`}
       badge={{ text: STATUS_LABEL[a.status], color: open ? colors.success : undefined }}
-      subtitle={a.description}
+      // Lead with the item's direct impact (catalog effect line) so the card
+      // answers "what does this do" at a glance; the auction's own pitch copy
+      // (legacy hand-written descriptions) stays on the detail screen.
+      subtitle={a.itemEffectLine || a.description}
+      subtitleLines={0}
       stats={stats}
       dim={scheduled}
       onPress={onPress}
