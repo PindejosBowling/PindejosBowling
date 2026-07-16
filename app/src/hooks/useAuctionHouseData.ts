@@ -1,7 +1,7 @@
 import { auctions, auctionLedger, inventoryItems, pinLedger, seasons } from '../utils/supabase/db'
 import { computeBalance } from '../utils/ledger'
 import {
-  AuctionBounceView, AuctionView, AuctionWinnerView, InventoryItemView, itemHowToUse,
+  AuctionBounceView, AuctionView, AuctionWinnerView, InventoryItemView, itemHowToUse, itemUsageTag,
 } from '../utils/auction'
 import { useAsyncData } from './useAsyncData'
 
@@ -48,6 +48,7 @@ export function normalizeInventoryItem(row: any): InventoryItemView {
     name: cat.name ?? 'Mystery Item',
     effectLine: cat.description ?? '',
     howToUse: itemHowToUse(cat.activation_mode ?? ''),
+    usageTag: itemUsageTag(cat.activation_mode ?? ''),
     source: row.source,
     grantedAt: row.granted_at,
     consumedAt: row.consumed_at ?? null,

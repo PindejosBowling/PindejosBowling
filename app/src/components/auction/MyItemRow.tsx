@@ -23,6 +23,7 @@ export default function MyItemRow({ group: g, onPress }: Props) {
           {g.name}{g.count > 1 ? ` ×${g.count}` : ''}
         </Text>
         <Text style={[styles.effect, g.expired && styles.textExpired]} numberOfLines={1}>{g.effectLine}</Text>
+        {!g.expired && <Text style={styles.usageTag}>{g.usageTag}</Text>}
       </View>
       {g.expired ? (
         <Text style={styles.expiredTag}>EXPIRED</Text>
@@ -50,6 +51,7 @@ const styles = StyleSheet.create({
   body: { flex: 1, marginRight: 10 },
   name: { fontFamily: fonts.barlowCondensed, fontSize: 16, color: colors.text, letterSpacing: 0.3 },
   effect: { fontFamily: fonts.barlow, fontSize: 12, color: colors.muted, marginTop: 1 },
+  usageTag: { fontFamily: fonts.barlowCondensed, fontSize: 11, letterSpacing: 1, color: colors.gold, marginTop: 3 },
   countTag: { fontFamily: fonts.barlowCondensed, fontSize: 12, letterSpacing: 1, color: colors.accent },
   expiredTag: { fontFamily: fonts.barlowCondensed, fontSize: 12, letterSpacing: 1, color: colors.muted },
   textExpired: { color: colors.muted },

@@ -83,6 +83,7 @@ export interface InventoryItemView {
   name: string
   effectLine: string
   howToUse: string
+  usageTag: string
   source: InventoryItemSource
   grantedAt: string
   consumedAt: string | null
@@ -95,6 +96,7 @@ export interface InventoryGroupView {
   name: string
   effectLine: string
   howToUse: string
+  usageTag: string
   expired: boolean
   count: number
   items: InventoryItemView[]
@@ -186,6 +188,21 @@ export function itemHowToUse(activationMode: string): string {
   }
 }
 
+// Compact where-you-spend-it tag for inventory rows — the at-a-glance bridge
+// between the Auction House locker and the Sportsbook consumption points.
+export function itemUsageTag(activationMode: string): string {
+  switch (activationMode) {
+    case 'attach_to_bet':
+      return 'ATTACH WHEN BETTING'
+    case 'attach_to_foreign_bet':
+      return 'HAUNT A BET'
+    case 'passive':
+      return 'ALWAYS ON'
+    default:
+      return 'SEE THE HOUSE'
+  }
+}
+
 // The House's bounce penalty (DB: auctions.bounce_fee DEFAULT 50 — frozen per
 // row at create; no admin knob in v1). Display constant only.
 export const DEFAULT_BOUNCE_FEE = 50
@@ -251,6 +268,7 @@ export function groupInventory(items: InventoryItemView[]): InventoryGroupView[]
         name: item.name,
         effectLine: item.effectLine,
         howToUse: item.howToUse,
+        usageTag: item.usageTag,
         expired,
         count: 1,
         items: [item],
