@@ -57,7 +57,7 @@ export default function PinsinoLeaderboardTable({
         <View style={styles.sbMoveCell} />
         <Text style={[styles.sbHeaderCell, styles.sbNameCell]}>Player</Text>
         {isSummary ? (
-          <Text style={[styles.sbHeaderCell, styles.sbNetSummaryCell]}>Current Pin Worth</Text>
+          <Text style={[styles.sbHeaderCell, styles.sbNetSummaryCell]}>Net Worth</Text>
         ) : (
           <TouchableOpacity
             style={styles.sbNetToggle}

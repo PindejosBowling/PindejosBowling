@@ -140,14 +140,14 @@ export default function PinsinoScreen() {
     return {
       content: { paddingBottom: s(16) },
       finalBanner: { paddingVertical: s(10), marginBottom: s(12) },
-      balanceCard: { paddingVertical: s(14), marginBottom: s(16) },
+      balanceCard: { paddingVertical: s(8), marginBottom: s(16) },
       balanceValue: { fontSize: s(36) },
       balanceUnit: { fontSize: s(12) },
       grid: { rowGap: s(TILE_GAP), marginBottom: s(12) },
-      feedBox: { height: s(62) },
+      feedBox: { height: s(80) },
       tile: { height: s(TILE_WIDTH) },
       tileIcon: { fontSize: s(34), marginBottom: s(6) },
-      tileLabel: { fontSize: s(13) },
+      tileLabel: { fontSize: s(16) },
       tileHook: { fontSize: s(10), marginTop: s(2) },
     }
   }, [fitScale])
@@ -332,7 +332,7 @@ export default function PinsinoScreen() {
               >
                 {feedEvents.map(e => (
                   <View key={e.id} style={styles.feedPage}>
-                    <MarketMovePreviewRow event={e} onPress={onPressFor(e)} />
+                    <MarketMovePreviewRow event={e} onPress={onPressFor(e)} fontScale={fitScale} />
                   </View>
                 ))}
               </ScrollView>
@@ -386,7 +386,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.card,
     borderWidth: 1,
     borderColor: colors.border,
-    paddingVertical: 14,
+    paddingVertical: 8,
     paddingHorizontal: 18,
     marginTop: 4,
     marginBottom: 16,
@@ -477,7 +477,7 @@ const styles = StyleSheet.create({
   // Market Moves mini-feed — a one-event-tall paged carousel box under its
   // labeled section header, last on the page below the tile grid.
   feedBox: {
-    height: 62,
+    height: 80,
     backgroundColor: colors.surface,
     borderRadius: radius.card,
     borderWidth: 1,
@@ -559,7 +559,7 @@ const styles = StyleSheet.create({
   tileIconClosed: { opacity: 0.25 },
   tileLabel: {
     fontFamily: fonts.barlowCondensed,
-    fontSize: 13,
+    fontSize: 16,
     color: colors.text,
     letterSpacing: 0.3,
     textAlign: 'center',

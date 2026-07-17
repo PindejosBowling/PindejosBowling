@@ -4,17 +4,23 @@ import PinsinoNoirBackdrop from '../components/pixelart/PinsinoNoirBackdrop'
 import ScreenContainer from '../components/ui/ScreenContainer'
 import FeatureAccordion from '../components/pinsino/FeatureAccordion'
 import { EXPLAINERS, PinsinoFeatureKey } from '../data/pinsinoExplainers'
-import { SHOW_AUCTION_HOUSE } from '../utils/featureFlags'
+import { SHOW_AUCTION_HOUSE, SHOW_BOUNTIES, SHOW_MARKET_MOVES, SHOW_PVP } from '../utils/featureFlags'
 
 // Player-facing explainer for the Pinsino. All copy lives in
 // data/pinsinoExplainers.ts (shared with the per-screen "?" sheets and hub
-// tiles) — this screen just orders the sections. The Auction House and Items
-// sections are gated on the same flag as the Auction House tile: items enter
-// play via the auction block.
-const GAMES: PinsinoFeatureKey[] = ['sportsbook', 'statProps', 'pvp', 'bounties']
-const MONEY: PinsinoFeatureKey[] = SHOW_AUCTION_HOUSE
-  ? ['loanShark', 'auctionHouse', 'items', 'marketMoves']
-  : ['loanShark', 'marketMoves']
+// tiles) — this screen just orders the sections. Each flag-gated feature's
+// section follows its hub tile's flag (Auction House also drags the Items
+// section with it: items enter play via the auction block).
+const GAMES: PinsinoFeatureKey[] = [
+  'sportsbook',
+  ...(SHOW_PVP ? ['pvp' as const] : []),
+  ...(SHOW_BOUNTIES ? ['bounties' as const] : []),
+]
+const MONEY: PinsinoFeatureKey[] = [
+  'loanShark',
+  ...(SHOW_AUCTION_HOUSE ? ['auctionHouse' as const, 'items' as const] : []),
+  ...(SHOW_MARKET_MOVES ? ['marketMoves' as const] : []),
+]
 
 export default function PinsinoHelpScreen() {
   return (

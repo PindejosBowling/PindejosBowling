@@ -50,6 +50,7 @@ export default function AuctionCard({ auction: a, onPress, onBid }: Props) {
       // is a fallback for legacy rows with no catalog copy.
       subtitle={a.itemEffectLine || a.description}
       subtitleLines={0}
+      subtitleColor={colors.text}
       stats={stats}
       statLabelsAbove
       dim={scheduled}

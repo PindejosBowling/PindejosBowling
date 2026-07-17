@@ -4323,7 +4323,8 @@ BEGIN
     NULL, NULL,
     'auction_house.opened',
     jsonb_build_object('item_name', v_item_name, 'item_icon', v_item_icon,
-                       'minimum_bid', v_auction.minimum_bid, 'closes_at', v_auction.closes_at),
+                       'minimum_bid', v_auction.minimum_bid, 'closes_at', v_auction.closes_at,
+                       'quantity', v_auction.quantity),
     jsonb_build_object('auction_id', p_auction_id),
     NULL, now(),
     NULL, NULL, p_auction_id);
@@ -4478,6 +4479,7 @@ DECLARE
   v_n         integer;
   v_line      public.custom_lines%ROWTYPE;
   v_boost_pct numeric := NULL;
+  v_total_payout integer;
 BEGIN
   v_player_id := public.current_player_id();
 
@@ -4670,6 +4672,11 @@ BEGIN
     v_player_id, v_season_id, v_week_id,
     -p_stake, 'bet_stake', 'Bet placed', NULL, v_bet_id);
 
+  -- Max possible payout INCLUSIVE of an attached boost — mirrors the settlement
+  -- bonus formula (floor(payout × boost_pct) on top of the total payout).
+  v_total_payout := v_payout
+    + CASE WHEN v_boost_pct IS NOT NULL THEN FLOOR(v_payout * v_boost_pct)::integer ELSE 0 END;
+
   -- Activity Feed: post at most ONE placement event by priority (§3, §10.3).
   -- v_balance here is the pre-bet balance; v_n is the leg count; v_payout is the
   -- total potential payout (the "to win" figure surfaced on the feed card).
@@ -4680,7 +4687,8 @@ BEGIN
       v_season_id, v_week_id, v_player_id, NULL, NULL,
       v_bet_id, NULL,
       'sportsbook.big_ticket_placed',
-      jsonb_build_object('stake', p_stake, 'payout', v_payout, 'legs', v_n),
+      jsonb_build_object('stake', p_stake, 'payout', v_payout, 'legs', v_n,
+                         'total_payout', v_total_payout),
       jsonb_build_object('bet_id', v_bet_id),
       NULL, now());
   ELSIF v_n > 1 THEN
@@ -4690,7 +4698,8 @@ BEGIN
       v_season_id, v_week_id, v_player_id, NULL, NULL,
       v_bet_id, NULL,
       'sportsbook.parlay_placed',
-      jsonb_build_object('stake', p_stake, 'payout', v_payout, 'legs', v_n),
+      jsonb_build_object('stake', p_stake, 'payout', v_payout, 'legs', v_n,
+                         'total_payout', v_total_payout),
       jsonb_build_object('bet_id', v_bet_id),
       NULL, now());
   -- else: normal single — normal_bet_placement_enabled = false in v1, so nothing posts (§10.4).

@@ -10,7 +10,6 @@
 
 export type PinsinoFeatureKey =
   | 'sportsbook'
-  | 'statProps'
   | 'pvp'
   | 'bounties'
   | 'loanShark'
@@ -38,27 +37,14 @@ export const EXPLAINERS: Record<PinsinoFeatureKey, FeatureExplainer> = {
     icon: '🏟️',
     title: 'Sportsbook',
     hook: 'Bet on the bowling.',
-    tileHook: 'Bet the weekly lines',
+    tileHook: 'Bet your pins on the weekly lines',
     bullets: [
       'Back a player to beat their projected line for the week, or back your own team to win its matchup.',
       'Stack multiple picks into a parlay — every leg has to hit, but the payout multiplies.',
-      'Pins leave your balance when you place a bet. Tickets settle automatically when the week is finalized.',
+      'Pins leave your balance when you place a bet. Tickets settle automatically when the week is finalized — stat props once an admin confirms the lane data, sometimes a beat later.',
     ],
     caveat:
-      'You back the over, or back your own team — those are the sides the house puts on the board.',
-  },
-
-  statProps: {
-    key: 'statProps',
-    icon: '📊',
-    title: 'Night Stat Props',
-    hook: 'Prop bets on the lane data.',
-    bullets: [
-      'Once the lane data is in for the night, extra lines open in the Sportsbook: strikes and spares per game, clean frames, and team totals.',
-      'They work like any other bet — beat the posted number and the ticket cashes.',
-    ],
-    caveat:
-      'Stat props settle once an admin confirms the lane data — sometimes a beat later than the rest of the week.',
+      'Scared money don\'t make no money - go big or go home!',
   },
 
   pvp: {
@@ -110,7 +96,7 @@ export const EXPLAINERS: Record<PinsinoFeatureKey, FeatureExplainer> = {
     icon: '📣',
     title: 'Auction House',
     hook: 'Sealed-bid auctions for scarce goods.',
-    tileHook: 'Bid for powerful items',
+    tileHook: 'Spend your pins on powerful items',
     bullets: [
       'The house lists something rare. You submit a single hidden bid — nobody sees what anyone else pledged, only how many bids are in.',
       'When it closes, the highest bidder who can still cover their bid wins and pays it. Multiple units up for grabs? The top bids each take one — one win per player.',

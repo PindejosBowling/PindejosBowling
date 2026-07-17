@@ -120,10 +120,24 @@ const secondaryOf = (row: FeedEventView): string => row.secondaryName ?? 'their 
 const num = (v: unknown): number => (typeof v === 'number' ? v : Number(v) || 0)
 
 // Placement badge = the bet's total potential payout (the "to win" figure),
-// labeled so it's never mistaken for the stake. Rows published before the payout
-// was added to public_payload fall back to the stake.
+// labeled so it's never mistaken for the stake. total_payout (max payout
+// inclusive of an attached boost item) supersedes the boost-exclusive payout;
+// rows published before either key existed fall back to the stake.
 function placementPayout(p: Record<string, any>): FeedRenderParts['amount'] {
-  return { value: num(p.payout) || num(p.stake), tone: 'neutral', label: 'TO WIN' }
+  return { value: placementTotal(p) || num(p.stake), tone: 'neutral', label: 'TO WIN' }
+}
+const placementTotal = (p: Record<string, any>): number => num(p.total_payout) || num(p.payout)
+
+// "— 500 pins to win 1,200." tail for placement lines, closing the sentence.
+// Degrades to just the stake (or a bare period) on rows whose payload predates
+// the payout/stake keys.
+function wagerTail(p: Record<string, any>): string {
+  const stake = num(p.stake)
+  const total = placementTotal(p)
+  if (!stake) return '.'
+  return total
+    ? ` — ${stake.toLocaleString()} pins to win ${total.toLocaleString()}.`
+    : ` — ${stake.toLocaleString()} pins riding.`
 }
 
 // Loan copy varies by the product's risk tier (low | medium | high | extreme) to
@@ -164,21 +178,22 @@ export function renderFeedEvent(row: FeedEventView): FeedRenderParts {
       // Placement badge = the total potential payout (the "to win" figure).
       return {
         ...meta,
-        line: `${actorOf(row)} placed a Sportsbook ticket.`,
+        line: `${actorOf(row)} placed a Sportsbook ticket${wagerTail(p)}`,
         amount: placementPayout(p),
       }
 
     case 'sportsbook.parlay_placed':
       return {
         ...meta,
-        line: `${actorOf(row)} built a ${num(p.legs)}-leg parlay.`,
+        line: `${actorOf(row)} built a ${num(p.legs)}-leg parlay${wagerTail(p)}`,
         amount: placementPayout(p),
       }
 
     case 'sportsbook.big_ticket_placed':
       return {
         ...meta,
-        line: `${actorOf(row)} put ${num(p.stake).toLocaleString()} pins on the board.`,
+        // Stake is already in the line — append only the boost-inclusive to-win.
+        line: `${actorOf(row)} put ${num(p.stake).toLocaleString()} pins on the board${placementTotal(p) ? ` to win ${placementTotal(p).toLocaleString()}` : ''}.`,
         amount: placementPayout(p),
       }
 
@@ -321,9 +336,13 @@ export function renderFeedEvent(row: FeedEventView): FeedRenderParts {
 
     case 'auction_house.opened': {
       const item = p.item_name ? `${p.item_icon ?? ''} ${p.item_name}`.trim() : 'something rare'
+      // Events published before the quantity payload key existed default to 1.
+      // "2× <item>" instead of a trailing "s" — item names ("Ghost in the
+      // Slip") don't pluralize naively; a lone unit shows no count at all.
+      const qty = num(p.quantity) || 1
       return {
         ...meta,
-        line: `The House put ${item} on the block. Sealed bids only.`,
+        line: `The Auction House has listed ${qty > 1 ? `${qty}× ` : ''}${item} for sale! Place your bids now.`,
         amount: num(p.minimum_bid) ? { value: num(p.minimum_bid), tone: 'neutral', label: 'MIN BID' } : undefined,
       }
     }

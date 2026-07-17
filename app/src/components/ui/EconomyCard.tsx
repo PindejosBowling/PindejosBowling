@@ -23,6 +23,9 @@ interface Props {
   // when the subtitle carries meaning that must survive wrapping (e.g. an
   // item's effect line).
   subtitleLines?: number
+  // Override the default muted subtitle color — for subtitles that carry
+  // primary content (e.g. an auction item's effect line) rather than metadata.
+  subtitleColor?: string
   stats?: StatCell[]
   // Render stat labels as column headers above the values (default: value
   // over label, the original economy-card order).
@@ -39,7 +42,7 @@ interface Props {
 // The economy list-card primitive: the surface/border/padding shell + the
 // header / subtitle / stat-row skeleton previously re-declared by BountyCard,
 // AuctionCard, PvpChallengeRow, and MarketMoveCard.
-export default function EconomyCard({ title, badge, subtitle, subtitleLines = 1, stats, statLabelsAbove, dim, onPress, children }: Props) {
+export default function EconomyCard({ title, badge, subtitle, subtitleLines = 1, subtitleColor, stats, statLabelsAbove, dim, onPress, children }: Props) {
   const body = (
     <>
       {(title != null || badge != null) && (
@@ -51,7 +54,10 @@ export default function EconomyCard({ title, badge, subtitle, subtitleLines = 1,
         </View>
       )}
       {subtitle != null && (
-        <Text style={styles.subtitle} numberOfLines={subtitleLines === 0 ? undefined : subtitleLines}>
+        <Text
+          style={[styles.subtitle, subtitleColor != null && { color: subtitleColor }]}
+          numberOfLines={subtitleLines === 0 ? undefined : subtitleLines}
+        >
           {subtitle}
         </Text>
       )}
