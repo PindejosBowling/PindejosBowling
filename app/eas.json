@@ -17,7 +17,7 @@
       "autoIncrement": true,
       "channel": "production",
       "env": {
-        "EAS_SKIP_AUTO_FINGERPRINT": "1"
+        "EXPO_USE_PRECOMPILED_MODULES": "0"
       }
     }
   },
