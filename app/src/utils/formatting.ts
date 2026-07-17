@@ -50,15 +50,21 @@ export function formatCloseTime(iso: string): string {
   }) + ' ET'
 }
 
-// Long-form absolute close time in ET (e.g. "Monday, July 20, 7:00 PM ET").
-// The auction "closes at" contract: full weekday + month so the day reads at a
-// glance; formatCloseTime above stays the compact bounty/inventory format.
+// Long-form absolute close time in ET, two lines: "Monday, July 20" over
+// "7:00 PM ET". The auction "closes at" contract — full weekday + month so the
+// day reads at a glance; formatCloseTime above stays the compact
+// bounty/inventory format.
 export function formatCloseDateLong(iso: string): string {
-  return new Date(iso).toLocaleString('en-US', {
+  const d = new Date(iso)
+  const date = d.toLocaleDateString('en-US', {
     timeZone: ET_TZ,
     weekday: 'long', month: 'long', day: 'numeric',
+  })
+  const time = d.toLocaleTimeString('en-US', {
+    timeZone: ET_TZ,
     hour: 'numeric', minute: '2-digit',
-  }) + ' ET'
+  })
+  return `${date}\n${time} ET`
 }
 
 // Ticking countdown for the detail screen: "01:23:45" (h:mm:ss), with a day
