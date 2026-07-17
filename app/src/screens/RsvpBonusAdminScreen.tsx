@@ -5,16 +5,22 @@ import { colors, fonts, radius } from '../theme'
 import ScreenContainer from '../components/ui/ScreenContainer'
 import Toast from '../components/ui/Toast'
 import EmptyCard from '../components/ui/EmptyCard'
+import ConfirmActionSheet from '../components/ui/ConfirmActionSheet'
 import { useAuthStore } from '../stores/authStore'
 import { useUiStore } from '../stores/uiStore'
 import {
   rsvpBonusConfig as dbRsvpBonusConfig,
   weeks as dbWeeks,
+  rsvp as dbRsvp,
+  pinLedger as dbPinLedger,
 } from '../utils/supabase/db'
 import { toISO, fromISO, formatDateLong, comingMonday } from '../utils/helpers'
 import type { Tables } from '../utils/supabase/database.types'
 
 type RsvpBonusConfig = Tables<'rsvp_bonus_config'>
+
+// A player who RSVP'd the active week but has no rsvp_bonus credit.
+type MissedBonusRow = { playerId: string; name: string; status: string }
 
 // Admin editor for the RSVP feature: the active week's official game night
 // (weeks.bowled_at) and the global self-submit bonus config (season_id NULL).
@@ -35,6 +41,10 @@ export default function RsvpBonusAdminScreen() {
   const [bowledAt, setBowledAt] = useState<string | null>(null)
   const [origBowledAt, setOrigBowledAt] = useState<string | null>(null)
   const [showDatePicker, setShowDatePicker] = useState(false)
+
+  // Missed bonuses: active-week RSVPs with no rsvp_bonus credit.
+  const [missed, setMissed] = useState<MissedBonusRow[]>([])
+  const [grantTarget, setGrantTarget] = useState<MissedBonusRow | null>(null)
 
   // Bonus config fields (strings for the text inputs).
   const [enabled, setEnabled] = useState(true)
@@ -61,6 +71,26 @@ export default function RsvpBonusAdminScreen() {
         setWeekNumber(weekRes.data.week_number)
         setBowledAt(weekRes.data.bowled_at)
         setOrigBowledAt(weekRes.data.bowled_at)
+
+        // Missed bonuses = the week's RSVPs minus the players already paid.
+        // The rsvp table records no actor, so this list can't distinguish a
+        // genuine self-RSVP on an outdated build from an admin proxy entry —
+        // granting is a judgment call (the hint text says so).
+        const [rsvpRes, paidRes] = await Promise.all([
+          dbRsvp.listByWeek(weekRes.data.id),
+          dbPinLedger.rsvpBonusesForWeek(weekRes.data.id),
+        ])
+        const paid = new Set((paidRes.data ?? []).map(r => r.player_id))
+        setMissed(
+          (rsvpRes.data ?? [])
+            .filter(r => !paid.has(r.player_id))
+            .map(r => ({
+              playerId: r.player_id,
+              name: (r as { players: { name: string } | null }).players?.name ?? 'Unknown',
+              status: r.status,
+            }))
+            .sort((a, b) => a.name.localeCompare(b.name)),
+        )
       }
     } finally {
       setLoading(false)
@@ -255,6 +285,67 @@ export default function RsvpBonusAdminScreen() {
       >
         <Text style={styles.saveBtnText}>{saving ? 'Saving…' : 'Save bonus'}</Text>
       </TouchableOpacity>
+
+      {/* ── Missed bonuses (grant remediation) ───────────────────────────── */}
+      <Text style={[styles.sectionHeader, { marginTop: 24 }]}>
+        MISSED BONUSES{weekNumber != null ? ` · WEEK ${weekNumber}` : ''}
+      </Text>
+      <Text style={styles.sectionHint}>
+        Players who RSVP'd this week without earning the bonus. Grant only when
+        the player genuinely RSVP'd themselves (e.g. on an outdated app) — RSVPs
+        entered on their behalf also appear here and don't qualify.
+      </Text>
+      {missed.length === 0 ? (
+        <EmptyCard text="Everyone who RSVP'd has been paid" style={{ marginHorizontal: 16 }} />
+      ) : (
+        <View style={styles.card}>
+          {missed.map((m, i) => (
+            <View key={m.playerId} style={[styles.row, i < missed.length - 1 && styles.rowBorder]}>
+              <View style={styles.rowLeft}>
+                <Text style={styles.label}>{m.name}</Text>
+                <Text style={styles.hint}>RSVP'd {m.status === 'in' ? 'In' : 'Out'}</Text>
+              </View>
+              <TouchableOpacity
+                style={styles.grantBtn}
+                onPress={() => setGrantTarget(m)}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.grantBtnText}>Grant</Text>
+              </TouchableOpacity>
+            </View>
+          ))}
+        </View>
+      )}
+
+      {grantTarget && weekId && (
+        <ConfirmActionSheet
+          title="Grant RSVP bonus"
+          subtitle={weekNumber != null ? `Week ${weekNumber}` : undefined}
+          confirmLabel={`Grant +${amount} pins`}
+          successMessage={`+${amount} pins granted to ${grantTarget.name}`}
+          action={async () => {
+            const { data, error } = await dbRsvp.adminGrantBonus(grantTarget.playerId, weekId)
+            if (error) return { error }
+            const res = data as { awarded: boolean; reason: string } | null
+            if (!res?.awarded) {
+              const why =
+                res?.reason === 'already_claimed' ? 'Bonus already paid for this week'
+                : res?.reason === 'no_rsvp' ? 'No RSVP on record for this player'
+                : 'No bonus config found'
+              return { error: { message: why } }
+            }
+            return { error: null }
+          }}
+          onDone={load}
+          onClose={() => setGrantTarget(null)}
+        >
+          <Text style={styles.sheetBody}>
+            Pays {grantTarget.name} the {amount}-pin self-submit bonus for this
+            week, funded by the House — exactly what the app would have paid at
+            RSVP time. Once per player per week; this can't double-pay.
+          </Text>
+        </ConfirmActionSheet>
+      )}
     </ScreenContainer>
   )
 }
@@ -276,6 +367,14 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     overflow: 'hidden',
     marginHorizontal: 16,
+  },
+  sectionHint: {
+    fontFamily: fonts.barlow,
+    fontSize: 12,
+    color: colors.muted,
+    marginHorizontal: 16,
+    marginTop: -4,
+    marginBottom: 8,
   },
   row: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 14, gap: 12 },
   rowBorder: { borderBottomWidth: 1, borderBottomColor: colors.border },
@@ -306,6 +405,16 @@ const styles = StyleSheet.create({
   },
   dateBtnActive: { borderColor: colors.accent },
   dateBtnText: { fontFamily: fonts.barlowCondensed, fontSize: 15, color: colors.text },
+  grantBtn: {
+    backgroundColor: colors.surface2,
+    borderRadius: radius.cardSm,
+    borderWidth: 1,
+    borderColor: colors.accent,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+  },
+  grantBtnText: { fontFamily: fonts.barlowCondensed, fontSize: 15, color: colors.accent },
+  sheetBody: { fontFamily: fonts.barlow, fontSize: 14, color: colors.text, lineHeight: 20 },
   linkBtn: { paddingHorizontal: 14, paddingBottom: 12 },
   linkBtnText: { fontFamily: fonts.barlow, fontSize: 13, color: colors.accent },
   saveBtn: {

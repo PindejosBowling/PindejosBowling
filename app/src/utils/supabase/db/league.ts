@@ -106,6 +106,13 @@ export const rsvp = {
   // admin-guarded — use this for the Reset button, not the raw removeByWeek.
   resetForWeek: (weekId: string) =>
     supabase.rpc('reset_rsvp_for_week', { p_week_id: weekId }),
+  // Admin remediation: pay the missed self-submit bonus for a player who has
+  // an rsvp row but no rsvp_bonus credit (e.g. their outdated build saved via
+  // the plain upsert). SECURITY DEFINER + admin-guarded; same dedup key as
+  // submit_own_rsvp so it can never double-pay. Skips the deadline/is_enabled
+  // checks on purpose. Returns { awarded, amount, reason }.
+  adminGrantBonus: (playerId: string, weekId: string) =>
+    supabase.rpc('admin_grant_rsvp_bonus', { p_player_id: playerId, p_week_id: weekId }),
 }
 
 // Admin-editable config for the RSVP self-submit bonus (enable, amount, weekly

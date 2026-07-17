@@ -24,6 +24,7 @@ export type MoreStackParamList = {
   NotificationSettings: undefined
   BroadcastAdmin: undefined
   RsvpBonusAdmin: undefined
+  AppVersionAdmin: undefined
 }
 
 export type StandingsStackParamList = {
