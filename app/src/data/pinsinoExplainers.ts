@@ -94,7 +94,7 @@ export const EXPLAINERS: Record<PinsinoFeatureKey, FeatureExplainer> = {
     icon: '🦈',
     title: 'Loan Shark',
     hook: 'Borrow now, bowl it off later.',
-    tileHook: 'Borrow pins, repay weekly',
+    tileHook: 'Borrow pins now, repay them later',
     bullets: [
       'Take a loan and the pins hit your balance instantly — ready to put into play.',
       'Each week, the shark takes his cut straight from your bowling: a fixed percentage of the pins you knock down that week goes toward the debt. (He calls those pins your "pincome.")',
@@ -110,7 +110,7 @@ export const EXPLAINERS: Record<PinsinoFeatureKey, FeatureExplainer> = {
     icon: '📣',
     title: 'Auction House',
     hook: 'Sealed-bid auctions for scarce goods.',
-    tileHook: 'Sealed bids on rare goods',
+    tileHook: 'Bid for powerful items',
     bullets: [
       'The house lists something rare. You submit a single hidden bid — nobody sees what anyone else pledged, only how many bids are in.',
       'When it closes, the highest bidder who can still cover their bid wins and pays it. Multiple units up for grabs? The top bids each take one — one win per player.',

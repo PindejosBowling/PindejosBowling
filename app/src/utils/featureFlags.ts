@@ -7,6 +7,13 @@ export const SHOW_PINSINO = true
 // Pinsino can re-ship without leaking a half-wired Auction House.
 export const SHOW_AUCTION_HOUSE = true
 
+// PvP, Bounties, and Market Moves tiles inside Pinsino. Same pattern as
+// SHOW_AUCTION_HOUSE: only the hub tile is hidden — routes, screens, and data
+// stay registered and functional.
+export const SHOW_PVP = false
+export const SHOW_BOUNTIES = false
+export const SHOW_MARKET_MOVES = false
+
 // Pixel-art backdrop + header Artwork reveal button on the Pinsino landing
 // page. When false the landing page renders on a plain background and the
 // reveal toggle is hidden; subpage backdrops (Sportsbook, Loan Shark, …) are

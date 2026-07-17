@@ -27,7 +27,7 @@ import { useAuthStore } from '../stores/authStore'
 import { useNotificationStore } from '../stores/notificationStore'
 import { useUiStore } from '../stores/uiStore'
 import { countForRoute } from '../utils/notifications'
-import { SHOW_AUCTION_HOUSE, SHOW_PINSINO_ART } from '../utils/featureFlags'
+import { SHOW_AUCTION_HOUSE, SHOW_BOUNTIES, SHOW_MARKET_MOVES, SHOW_PINSINO_ART, SHOW_PVP } from '../utils/featureFlags'
 import { EXPLAINERS, PinsinoFeatureKey } from '../data/pinsinoExplainers'
 import { AUCTION_HOUSE_CLOSED_DEFAULT_MESSAGE } from '../utils/auction'
 import { PinsinoStackParamList } from '../navigation/types'
@@ -56,9 +56,9 @@ const MENU_TILES: { key: PinsinoFeatureKey; icon: string; label: string; route: 
   // Mock-backed while the auction DB layer is built — flag-gated independently.
   ...(SHOW_AUCTION_HOUSE ? [{ key: 'auctionHouse' as const, icon: '📣', label: 'Auction House', route: 'AuctionHouse' as const }] : []),
   { key: 'loanShark', icon: '🦈', label: 'Loan Shark', route: 'LoanShark' },
-  { key: 'pvp', icon: '⚔️', label: 'PvP', route: 'PvP' },
-  { key: 'bounties', icon: '🎯', label: 'Bounties', route: 'BountyBoard' },
-  { key: 'marketMoves', icon: '👀', label: 'Market Moves', route: 'MarketMoves' },
+  ...(SHOW_PVP ? [{ key: 'pvp' as const, icon: '⚔️', label: 'PvP', route: 'PvP' as const }] : []),
+  ...(SHOW_BOUNTIES ? [{ key: 'bounties' as const, icon: '🎯', label: 'Bounties', route: 'BountyBoard' as const }] : []),
+  ...(SHOW_MARKET_MOVES ? [{ key: 'marketMoves' as const, icon: '👀', label: 'Market Moves', route: 'MarketMoves' as const }] : []),
 ]
 
 export default function PinsinoScreen() {
@@ -144,7 +144,7 @@ export default function PinsinoScreen() {
       balanceValue: { fontSize: s(36) },
       balanceUnit: { fontSize: s(12) },
       grid: { rowGap: s(TILE_GAP), marginBottom: s(12) },
-      feedBox: { height: s(56) },
+      feedBox: { height: s(62) },
       tile: { height: s(TILE_WIDTH) },
       tileIcon: { fontSize: s(34), marginBottom: s(6) },
       tileLabel: { fontSize: s(13) },
@@ -242,7 +242,7 @@ export default function PinsinoScreen() {
           )}
         </TouchableOpacity>
 
-        {/* Top 3 leaderboard — always visible on the landing page */}
+        {/* Top 5 leaderboard — always visible on the landing page */}
         <TouchableOpacity
           style={styles.sectionHeader}
           onPress={() => navigation.navigate('PinsinoLeaderboard')}
@@ -255,7 +255,7 @@ export default function PinsinoScreen() {
           leaderboard={leaderboard}
           playerId={playerId}
           mode="summary"
-          limit={3}
+          limit={5}
           onRowPress={(id, name) => navigation.navigate('PlayerPinsino', { playerId: id, name })}
         />
 
@@ -307,6 +307,14 @@ export default function PinsinoScreen() {
             Fixed (scaled) height so the fit-to-one-screen pass stays
             convergent. Tapping an event opens the same detail it would on the
             Market Moves screen (shared useFeedEventPress routing). */}
+        <TouchableOpacity
+          style={styles.sectionHeader}
+          onPress={() => navigation.navigate('MarketMoves')}
+          activeOpacity={0.7}
+        >
+          <Text style={styles.sectionLabel}>MARKET MOVES</Text>
+          <Text style={styles.sectionChevron}>›</Text>
+        </TouchableOpacity>
         <View style={[styles.feedBox, sc.feedBox]}>
           {feedEvents.length === 0 ? (
             <Text style={styles.feedEmpty}>No moves yet this season.</Text>
@@ -466,10 +474,10 @@ const styles = StyleSheet.create({
     lineHeight: 24,
     color: colors.accent,
   },
-  // Market Moves mini-feed — a one-event-tall paged carousel box. No header:
-  // the Market Moves tile is the labeled entry point; this strip is ambient.
+  // Market Moves mini-feed — a one-event-tall paged carousel box under its
+  // labeled section header, last on the page below the tile grid.
   feedBox: {
-    height: 56,
+    height: 62,
     backgroundColor: colors.surface,
     borderRadius: radius.card,
     borderWidth: 1,
