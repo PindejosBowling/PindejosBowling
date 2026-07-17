@@ -90,9 +90,10 @@ export default function PinsinoScreen() {
   // Between seasons liveSeasonId is null; seasonNumber then carries the
   // last-ended season being shown live-style.
   const liveSeasonNumber = allSeasons.find(s => s.id === liveSeasonId)?.number ?? seasonNumber
+  // Uppercase to match the card's small-caps voice ("YOUR BALANCE IS" / "PINS").
   const seasonOptions = [
-    { key: 'live', label: `Season ${liveSeasonNumber}` },
-    ...concludedSeasons.map(s => ({ key: String(s.number), label: `Season ${s.number}` })),
+    { key: 'live', label: `SEASON ${liveSeasonNumber}` },
+    ...concludedSeasons.map(s => ({ key: String(s.number), label: `SEASON ${s.number}` })),
   ]
   const selectorValue = pinsinoViewSeasonId == null
     ? 'live'
@@ -211,6 +212,7 @@ export default function PinsinoScreen() {
                 value={selectorValue}
                 onChange={onSelectSeason}
                 style={styles.seasonDropdown}
+                triggerTextStyle={styles.seasonDropdownText}
               />
             )}
             <View style={styles.balanceSentenceRow}>
@@ -409,10 +411,21 @@ const styles = StyleSheet.create({
   balanceWords: {
     flexShrink: 1,
   },
-  // Compact trigger so the season pill reads as a small tag on the card edge.
+  // Compact trigger so the season pill reads as a small tag on the card edge —
+  // fully-rounded, in the card's own chrome (border, surface2) rather than the
+  // dropdown's default form-control look.
   seasonDropdown: {
     paddingVertical: 3,
-    paddingHorizontal: 8,
+    paddingHorizontal: 10,
+    borderRadius: 999,
+    borderColor: colors.border,
+  },
+  // Match the card's small-caps type (12pt condensed, wide tracking) so the
+  // pill reads as part of the balance sentence, not a foreign control.
+  seasonDropdownText: {
+    fontSize: 12,
+    letterSpacing: 1.5,
+    color: colors.muted,
   },
   // No explicit lineHeight — the sentence's line box must hug the glyphs so
   // the whole line centers vertically in the card.

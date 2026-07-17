@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react'
 import {
-  View, Text, TouchableOpacity, StyleSheet, Modal, StyleProp, ViewStyle, useWindowDimensions,
+  View, Text, TouchableOpacity, StyleSheet, Modal, StyleProp, TextStyle, ViewStyle, useWindowDimensions,
 } from 'react-native'
 import { colors, fonts, radius } from '../../theme'
 import type { Option as BaseOption } from './ToggleGroup'
@@ -18,6 +18,10 @@ interface DropdownProps<T extends string = string> {
   onChange: (key: T) => void
   disabled?: boolean
   style?: StyleProp<ViewStyle>
+  // Restyles the trigger label so the dropdown can adopt the type language of
+  // its host (e.g. the small-caps tag on the Pinsino balance card). Menu rows
+  // keep the standard menu type regardless.
+  triggerTextStyle?: StyleProp<TextStyle>
 }
 
 // Compact anchored dropdown menu. Renders a bordered trigger showing the current
@@ -30,6 +34,7 @@ export default function Dropdown<T extends string = string>({
   onChange,
   disabled,
   style,
+  triggerTextStyle,
 }: DropdownProps<T>) {
   const triggerRef = useRef<View>(null)
   const { width: screenW } = useWindowDimensions()
@@ -64,7 +69,7 @@ export default function Dropdown<T extends string = string>({
         disabled={disabled}
         activeOpacity={0.7}
       >
-        <Text style={[styles.triggerText, selected?.color ? { color: selected.color } : null]} numberOfLines={1}>
+        <Text style={[styles.triggerText, triggerTextStyle, selected?.color ? { color: selected.color } : null]} numberOfLines={1}>
           {selected?.label ?? '—'}
         </Text>
         <Text style={[styles.caret, selected?.color ? { color: selected.color } : null]}>▾</Text>
