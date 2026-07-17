@@ -2385,6 +2385,23 @@ END;
 $function$
 ;
 
+CREATE OR REPLACE FUNCTION public.auction_bidders(p_auction_id uuid)
+ RETURNS TABLE(player_id uuid, player_name text)
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+  SELECT b.player_id, p.name
+    FROM public.auction_bids b
+    JOIN public.players p ON p.id = b.player_id
+    JOIN public.auctions a ON a.id = b.auction_id
+   WHERE b.auction_id = p_auction_id
+     AND b.status = 'active'
+     AND a.status = 'open'
+   ORDER BY p.name;
+$function$
+;
+
 CREATE OR REPLACE FUNCTION public.broadcast_cancel(p_id uuid)
  RETURNS void
  LANGUAGE plpgsql

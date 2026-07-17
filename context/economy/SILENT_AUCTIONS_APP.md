@@ -18,11 +18,18 @@
 
 ## The sealed-bid display contract
 
-- Cards show a **BID PLACED tag only — never an amount**. Your amount exists
-  on the detail screen behind an owner-only **tap-to-reveal** (fed by the
+- Cards show a **BID PLACED tag only — never an amount**. Your amount shows
+  on your own row of the detail participants table (fed by the
   `my_bid_amount` RPC — the column is ciphertext; RLS means other players'
   rows never arrive at all).
-- The public signals are `bidder_count` while live, and the winners after:
+- **Participants roster** (2026-07, supersedes count-only §9 posture): the
+  detail screen shows an **AUCTION PARTICIPANTS** table of active bidders
+  while live — identity only via the `auction_bidders` RPC, **alphabetical so
+  position never leaks bid size**; other players' rows render `?` (their bid
+  is intentionally unknown), your own row is labeled "You" and shows your
+  amount. Roster goes dark once the auction leaves `open`
+  (losing bidders stay private in history).
+- The other public signals are `bidder_count` while live, and the winners after:
   the denorms hold the FIRST (highest) winner as the hammer-price headline,
   while the full pay-as-bid winners list (`AuctionView.winners`) derives from
   `auctionLedger` `auction_purchase` rows via `purchasesByAuction` — the same

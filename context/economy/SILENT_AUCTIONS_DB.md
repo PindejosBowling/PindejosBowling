@@ -88,7 +88,12 @@ encrypt/decrypt helpers) hold **no grants** — deny-by-default is their securit
 manually at push time via `vault.create_secret` — the value exists in no file,
 no migration, no snapshot). Randomized per row (equal pledges ≠ equal
 ciphertexts). Exactly two decode paths: `settle_auction_internal` (ranking)
-and `my_bid_amount(p_auction_id)` (the caller's own row, for tap-to-reveal).
+and `my_bid_amount(p_auction_id)` (the caller's own row, shown on the
+viewer's row of the detail participants table). A third read surface,
+`auction_bidders(p_auction_id)` (migration `…_auction_bidder_roster`,
+SECURITY DEFINER, auth grant), exposes the **identities** of active bidders
+alphabetically while the auction is `open` — never amounts, never after
+close; it supersedes the count-only public-signal posture of FINDINGS §9.
 `place_auction_bid` validates the in-flight plaintext and encrypts before
 INSERT; plaintext never lands in tables, payloads, logs, or probe captures.
 **Threat model**: prevents casual peeking by admin-players running queries; a

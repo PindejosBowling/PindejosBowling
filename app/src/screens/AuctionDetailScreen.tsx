@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native'
+import { View, Text, StyleSheet } from 'react-native'
 import { useRoute, useFocusEffect, RouteProp } from '@react-navigation/native'
 import { colors, fonts, radius } from '../theme'
 import ScreenContainer from '../components/ui/ScreenContainer'
@@ -24,10 +24,9 @@ export default function AuctionDetailScreen() {
 
   // Admin management lives on AuctionHouseAdmin (Pinsino Admin → Auction House).
   const { readOnly } = usePinsinoSeasonContext()
-  const { loading, balance, auction, reload } = useAuctionDetailData(params.auctionId, playerId)
+  const { loading, balance, auction, bidders, reload } = useAuctionDetailData(params.auctionId, playerId)
 
   const [bidOpen, setBidOpen] = useState(false)
-  const [bidRevealed, setBidRevealed] = useState(false)
   const [helpOpen, setHelpOpen] = useState(false)
   // Ticking clock for the live countdown (detail screen only; cards are static).
   const [now, setNow] = useState(() => new Date())
@@ -131,16 +130,29 @@ export default function AuctionDetailScreen() {
           </View>
         )}
 
-        {/* My bid (owner-only; RLS means others never receive this row). */}
-        {open && a.myBidAmount != null && (
+        {/* Who's in — identities are public while the auction is live, amounts
+            stay sealed. Alphabetical so position never leaks bid size. Only
+            the viewer's own row carries a number (owner-only decode). */}
+        {open && (
           <>
-            <Text style={styles.sectionLabel}>YOUR SEALED BID</Text>
-            <TouchableOpacity style={styles.card} onPress={() => setBidRevealed(r => !r)} activeOpacity={0.8}>
-              <View style={styles.kv}>
-                <Text style={styles.muted}>{bidRevealed ? 'Your pledge' : 'Tap to reveal'}</Text>
-                <Text style={styles.kvValue}>{bidRevealed ? `${formatPins(a.myBidAmount)} pins` : '•••'}</Text>
-              </View>
-            </TouchableOpacity>
+            <Text style={styles.sectionLabel}>AUCTION PARTICIPANTS</Text>
+            <View style={styles.card}>
+              {bidders.length === 0 ? (
+                <Text style={styles.muted}>No sealed bids yet.</Text>
+              ) : (
+                bidders.map(b => {
+                  const isMe = b.playerId === playerId
+                  return (
+                    <View key={b.playerId} style={styles.kv}>
+                      <Text style={styles.participantName}>{isMe ? 'You' : b.playerName}</Text>
+                      <Text style={styles.kvValue}>
+                        {isMe && a.myBidAmount != null ? `${formatPins(a.myBidAmount)} pins` : '?'}
+                      </Text>
+                    </View>
+                  )
+                })
+              )}
+            </View>
           </>
         )}
 
@@ -271,6 +283,7 @@ const styles = StyleSheet.create({
   kv: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 6 },
   kvValue: { fontFamily: fonts.barlowCondensed, fontSize: 15, color: colors.text },
   muted: { fontFamily: fonts.barlow, fontSize: 13, color: colors.muted, flex: 1, marginRight: 8 },
+  participantName: { fontFamily: fonts.barlow, fontSize: 13, color: colors.text, flex: 1, marginRight: 8 },
 
   cta: { marginTop: 6 },
 

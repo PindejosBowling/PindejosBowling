@@ -12,31 +12,6 @@ export type Database = {
   __InternalSupabase: {
     PostgrestVersion: "14.5"
   }
-  graphql_public: {
-    Tables: {
-      [_ in never]: never
-    }
-    Views: {
-      [_ in never]: never
-    }
-    Functions: {
-      graphql: {
-        Args: {
-          extensions?: Json
-          operationName?: string
-          query?: string
-          variables?: Json
-        }
-        Returns: Json
-      }
-    }
-    Enums: {
-      [_ in never]: never
-    }
-    CompositeTypes: {
-      [_ in never]: never
-    }
-  }
   public: {
     Tables: {
       activity_event_catalog: {
@@ -679,6 +654,7 @@ export type Database = {
       bets: {
         Row: {
           boost_item_id: string | null
+          boost_pct: number | null
           created_at: string
           crutch_item_id: string | null
           custom_line_category: string | null
@@ -699,6 +675,7 @@ export type Database = {
         }
         Insert: {
           boost_item_id?: string | null
+          boost_pct?: number | null
           created_at?: string
           crutch_item_id?: string | null
           custom_line_category?: string | null
@@ -719,6 +696,7 @@ export type Database = {
         }
         Update: {
           boost_item_id?: string | null
+          boost_pct?: number | null
           created_at?: string
           crutch_item_id?: string | null
           custom_line_category?: string | null
@@ -3044,6 +3022,13 @@ export type Database = {
       }
       assert_admin: { Args: never; Returns: undefined }
       auction_bid_key: { Args: never; Returns: string }
+      auction_bidders: {
+        Args: { p_auction_id: string }
+        Returns: {
+          player_id: string
+          player_name: string
+        }[]
+      }
       broadcast_cancel: { Args: { p_id: string }; Returns: undefined }
       broadcast_reach: {
         Args: { p_category_id: string; p_target_player_ids?: string[] }
@@ -3605,9 +3590,6 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
-  graphql_public: {
-    Enums: {},
-  },
   public: {
     Enums: {},
   },
