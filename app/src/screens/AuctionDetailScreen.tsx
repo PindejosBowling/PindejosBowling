@@ -91,7 +91,8 @@ export default function AuctionDetailScreen() {
               </>
             ) : (
               <>
-                {/* MIN BID leads, matching the card stat order. */}
+                {/* One row, card stat order: MIN BID / BIDDERS / CLOSES IN.
+                    Values sized so the ticker fits its (widened) cell. */}
                 <View style={styles.countdownRow}>
                   <View style={styles.countdownCell}>
                     <Text style={styles.countdownLabel}>MIN BID</Text>
@@ -103,11 +104,11 @@ export default function AuctionDetailScreen() {
                       <Text style={styles.countdownValue}>{a.bidderCount}</Text>
                     </View>
                   )}
+                  <View style={[styles.countdownCell, styles.tickerCell]}>
+                    <Text style={styles.countdownLabel}>{open ? 'CLOSES IN' : 'OPENS IN'}</Text>
+                    <Text style={styles.countdownValue} numberOfLines={1} adjustsFontSizeToFit>{countdown}</Text>
+                  </View>
                 </View>
-                {/* The ticker gets a full-width line of its own — "01:23:45"
-                    doesn't fit a shared row cell. */}
-                <Text style={styles.tickerLabel}>{open ? 'CLOSES IN' : 'OPENS IN'}</Text>
-                <Text style={styles.countdownValue}>{countdown}</Text>
                 {a.quantity > 1 && (
                   <>
                     <View style={styles.factsDivider} />
@@ -226,8 +227,10 @@ const styles = StyleSheet.create({
   countdownRow: { flexDirection: 'row', alignSelf: 'stretch' },
   countdownCell: { flex: 1, alignItems: 'center' },
   countdownLabel: { fontFamily: fonts.barlowCondensed, fontSize: 12, letterSpacing: 2, color: colors.muted },
-  countdownValue: { fontFamily: fonts.barlowCondensedHeavy, fontSize: 34, color: colors.accent, marginTop: 2 },
-  tickerLabel: { fontFamily: fonts.barlowCondensed, fontSize: 12, letterSpacing: 2, color: colors.muted, marginTop: 14 },
+  // 24 (down from the single-stat 34) so "01:23:45" shares the row; the
+  // ticker cell is widened and auto-shrinks for the "2d 01:23:45" case.
+  countdownValue: { fontFamily: fonts.barlowCondensedHeavy, fontSize: 24, color: colors.accent, marginTop: 2 },
+  tickerCell: { flex: 1.4, paddingHorizontal: 4 },
   hammer: { fontFamily: fonts.barlowCondensedHeavy, fontSize: 22, color: colors.gold, letterSpacing: 1 },
   bidderLine: { fontFamily: fonts.barlow, fontSize: 12, color: colors.muted, marginTop: 6 },
   factsDivider: { alignSelf: 'stretch', height: 1, backgroundColor: colors.border, marginTop: 12, marginBottom: 10, marginHorizontal: 14 },
