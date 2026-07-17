@@ -50,18 +50,21 @@ export function formatCloseTime(iso: string): string {
   }) + ' ET'
 }
 
-// Static minute-granularity remaining time for list cards ("3h 12m", "4d 2h").
-// Detail-screen ticking uses formatCountdown instead. (Moved from utils/auction.ts.)
-export function formatTimeRemaining(iso: string, now: Date = new Date()): string {
-  const ms = new Date(iso).getTime() - now.getTime()
-  if (ms <= 0) return 'now'
-  const mins = Math.floor(ms / 60000)
-  const days = Math.floor(mins / 1440)
-  const hours = Math.floor((mins % 1440) / 60)
-  const rem = mins % 60
-  if (days > 0) return `${days}d ${hours}h`
-  if (hours > 0) return `${hours}h ${rem}m`
-  return `${Math.max(rem, 1)}m`
+// Long-form absolute close time in ET, two lines: "Monday, July 20" over
+// "7:00 PM ET". The auction "closes at" contract — full weekday + month so the
+// day reads at a glance; formatCloseTime above stays the compact
+// bounty/inventory format.
+export function formatCloseDateLong(iso: string): string {
+  const d = new Date(iso)
+  const date = d.toLocaleDateString('en-US', {
+    timeZone: ET_TZ,
+    weekday: 'long', month: 'long', day: 'numeric',
+  })
+  const time = d.toLocaleTimeString('en-US', {
+    timeZone: ET_TZ,
+    hour: 'numeric', minute: '2-digit',
+  })
+  return `${date}\n${time} ET`
 }
 
 // Ticking countdown for the detail screen: "01:23:45" (h:mm:ss), with a day

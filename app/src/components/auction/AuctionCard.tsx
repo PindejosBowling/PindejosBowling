@@ -2,7 +2,7 @@ import { Text, StyleSheet } from 'react-native'
 import { colors, fonts } from '../../theme'
 import Button from '../ui/Button'
 import EconomyCard, { StatCell } from '../ui/EconomyCard'
-import { AuctionView, formatTimeRemaining } from '../../utils/auction'
+import { AuctionView, formatCloseDateLong } from '../../utils/auction'
 import { formatPins } from '../../utils/formatting'
 
 interface Props {
@@ -22,8 +22,8 @@ const STATUS_LABEL: Record<AuctionView['status'], string> = {
 }
 
 // One auction row for the Auction House list. Sealed-bid social contract:
-// the card carries a BID PLACED tag only — the amount is never rendered here
-// (it lives behind the owner-only reveal on the detail screen).
+// the card never renders a bid amount — your bid shows only on your own row
+// of the detail participants table. Having one is implied by the Edit Bid CTA.
 export default function AuctionCard({ auction: a, onPress, onBid }: Props) {
   const scheduled = a.status === 'scheduled'
   const open = a.status === 'open'
@@ -34,26 +34,27 @@ export default function AuctionCard({ auction: a, onPress, onBid }: Props) {
     { value: formatPins(a.minimumBid), label: 'MIN BID' },
   ]
   if (open) stats.push({ value: String(a.bidderCount), label: a.bidderCount === 1 ? 'BIDDER' : 'BIDDERS' })
-  stats.push({
-    value: open ? formatTimeRemaining(a.closesAt) : scheduled ? formatTimeRemaining(a.opensAt) : '—',
-    label: open ? 'CLOSES IN' : scheduled ? 'OPENS IN' : 'CLOSED',
-  })
+  // Absolute close/open time ("closes at", not "closes in") — a phrase, so it
+  // rides the row as a wider small-value cell.
+  stats.push(
+    open || scheduled
+      ? { value: formatCloseDateLong(open ? a.closesAt : a.opensAt), label: open ? 'CLOSES' : 'OPENS', small: true, flex: 1.7 }
+      : { value: '—', label: 'CLOSED' })
 
   return (
     <EconomyCard
       title={`${a.itemIcon} ${a.itemName}${a.quantity > 1 ? ` ×${a.quantity}` : ''}`}
       badge={{ text: STATUS_LABEL[a.status], color: open ? colors.success : undefined }}
       // Lead with the item's direct impact (catalog effect line) so the card
-      // answers "what does this do" at a glance; the auction's own pitch copy
-      // (legacy hand-written descriptions) stays on the detail screen.
+      // answers "what does this do" at a glance; the auction's own description
+      // is a fallback for legacy rows with no catalog copy.
       subtitle={a.itemEffectLine || a.description}
       subtitleLines={0}
       stats={stats}
+      statLabelsAbove
       dim={scheduled}
       onPress={onPress}
     >
-      {open && a.myBidAmount != null && <Text style={styles.bidTag}>BID PLACED</Text>}
-
       {open && !hammerFalling && onBid != null && (
         <Button
           label={a.myBidAmount != null ? 'Edit Bid' : 'Place Sealed Bid'}
@@ -80,7 +81,6 @@ export default function AuctionCard({ auction: a, onPress, onBid }: Props) {
 }
 
 const styles = StyleSheet.create({
-  bidTag: { fontFamily: fonts.barlowCondensed, fontSize: 13, color: colors.success, letterSpacing: 1, marginTop: 6 },
   bidBtn: { marginTop: 10 },
   result: { fontFamily: fonts.barlowCondensed, fontSize: 13, color: colors.text, letterSpacing: 0.3, marginTop: 6 },
 })

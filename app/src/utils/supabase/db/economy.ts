@@ -758,6 +758,10 @@ export const auctions = {
     supabase.from('auction_bids').select('id, auction_id, status').eq('status', 'active'),
   myBidAmount: (auctionId: string) =>
     supabase.rpc('my_bid_amount', { p_auction_id: auctionId }),
+  // Public roster of active bidders (identity only, alphabetical) — live
+  // auctions only; amounts stay sealed behind my_bid_amount.
+  listBidders: (auctionId: string) =>
+    supabase.rpc('auction_bidders', { p_auction_id: auctionId }),
   // Bids are commitments: placeBid also edits (>= minimum_bid). There is no
   // cancel — the RPC was dropped (no-cancel decision, AUCTION_FINDINGS).
   placeBid: (auctionId: string, amount: number) =>

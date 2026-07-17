@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native'
+import { View, Text, StyleSheet } from 'react-native'
 import { useRoute, useFocusEffect, RouteProp } from '@react-navigation/native'
 import { colors, fonts, radius } from '../theme'
 import ScreenContainer from '../components/ui/ScreenContainer'
@@ -13,7 +13,6 @@ import { usePinsinoSeasonContext } from '../hooks/usePinsinoSeasonContext'
 import { useEconomyRefresh } from '../hooks/useEconomyRefresh'
 import { useAuthStore } from '../stores/authStore'
 import { formatCountdown } from '../utils/auction'
-import { formatCloseTime } from '../utils/bounty'
 import { PinsinoStackParamList } from '../navigation/types'
 import { formatPins } from '../utils/formatting'
 
@@ -25,10 +24,9 @@ export default function AuctionDetailScreen() {
 
   // Admin management lives on AuctionHouseAdmin (Pinsino Admin → Auction House).
   const { readOnly } = usePinsinoSeasonContext()
-  const { loading, balance, auction, reload } = useAuctionDetailData(params.auctionId, playerId)
+  const { loading, balance, auction, bidders, reload } = useAuctionDetailData(params.auctionId, playerId)
 
   const [bidOpen, setBidOpen] = useState(false)
-  const [bidRevealed, setBidRevealed] = useState(false)
   const [helpOpen, setHelpOpen] = useState(false)
   // Ticking clock for the live countdown (detail screen only; cards are static).
   const [now, setNow] = useState(() => new Date())
@@ -74,11 +72,6 @@ export default function AuctionDetailScreen() {
             </Text>
           </View>
           <Text style={styles.effectLine}>{a.itemEffectLine}</Text>
-          {/* New auctions derive description from the catalog copy above —
-              render it only when distinct (legacy hand-written pitches). */}
-          {a.description !== a.itemEffectLine && (
-            <Text style={styles.description}>{a.description}</Text>
-          )}
         </View>
 
         {/* Live countdown / hammer — open auctions pair the clock with the
@@ -97,10 +90,12 @@ export default function AuctionDetailScreen() {
               </>
             ) : (
               <>
+                {/* One row, card stat order: MIN BID / BIDDERS / CLOSES IN.
+                    Values sized so the ticker fits its (widened) cell. */}
                 <View style={styles.countdownRow}>
                   <View style={styles.countdownCell}>
-                    <Text style={styles.countdownLabel}>{open ? 'CLOSES IN' : 'OPENS IN'}</Text>
-                    <Text style={styles.countdownValue}>{countdown}</Text>
+                    <Text style={styles.countdownLabel}>MIN BID</Text>
+                    <Text style={styles.countdownValue}>{formatPins(a.minimumBid)}</Text>
                   </View>
                   {open && (
                     <View style={styles.countdownCell}>
@@ -108,29 +103,56 @@ export default function AuctionDetailScreen() {
                       <Text style={styles.countdownValue}>{a.bidderCount}</Text>
                     </View>
                   )}
+                  <View style={[styles.countdownCell, styles.tickerCell]}>
+                    <Text style={styles.countdownLabel}>{open ? 'CLOSES IN' : 'OPENS IN'}</Text>
+                    <Text style={styles.countdownValue} numberOfLines={1} adjustsFontSizeToFit>{countdown}</Text>
+                  </View>
                 </View>
-                <View style={styles.factsDivider} />
-                <Text style={styles.factsLine}>
-                  Min bid {formatPins(a.minimumBid)} pins
-                  {a.quantity > 1 ? ` · ${a.quantity} up for grabs` : ''}
-                  {' · '}
-                  {open ? `Closes ${formatCloseTime(a.closesAt)}` : `Opens ${formatCloseTime(a.opensAt)}`}
-                </Text>
+                {a.quantity > 1 && (
+                  <>
+                    <View style={styles.factsDivider} />
+                    {/* One bordered tile per unit on the block — items, not a
+                        string of emoji. */}
+                    <View style={styles.unitRow}>
+                      {Array.from({ length: a.quantity }, (_, i) => (
+                        <View key={i} style={styles.unitTile}>
+                          <Text style={styles.unitIcon}>{a.itemIcon}</Text>
+                        </View>
+                      ))}
+                    </View>
+                    <Text style={styles.factsLine}>
+                      {a.quantity} up for grabs — the top {a.quantity} sealed bids each win one
+                    </Text>
+                  </>
+                )}
               </>
             )}
           </View>
         )}
 
-        {/* My bid (owner-only; RLS means others never receive this row). */}
-        {open && a.myBidAmount != null && (
+        {/* Who's in — identities are public while the auction is live, amounts
+            stay sealed. Alphabetical so position never leaks bid size. Only
+            the viewer's own row carries a number (owner-only decode). */}
+        {open && (
           <>
-            <Text style={styles.sectionLabel}>YOUR SEALED BID</Text>
-            <TouchableOpacity style={styles.card} onPress={() => setBidRevealed(r => !r)} activeOpacity={0.8}>
-              <View style={styles.kv}>
-                <Text style={styles.muted}>{bidRevealed ? 'Your pledge' : 'Tap to reveal'}</Text>
-                <Text style={styles.kvValue}>{bidRevealed ? `${formatPins(a.myBidAmount)} pins` : '•••'}</Text>
-              </View>
-            </TouchableOpacity>
+            <Text style={styles.sectionLabel}>AUCTION PARTICIPANTS</Text>
+            <View style={styles.card}>
+              {bidders.length === 0 ? (
+                <Text style={styles.muted}>No sealed bids yet.</Text>
+              ) : (
+                bidders.map(b => {
+                  const isMe = b.playerId === playerId
+                  return (
+                    <View key={b.playerId} style={styles.kv}>
+                      <Text style={styles.participantName}>{isMe ? 'You' : b.playerName}</Text>
+                      <Text style={styles.kvValue}>
+                        {isMe && a.myBidAmount != null ? `${formatPins(a.myBidAmount)} pins` : '?'}
+                      </Text>
+                    </View>
+                  )
+                })
+              )}
+            </View>
           </>
         )}
 
@@ -215,7 +237,6 @@ const styles = StyleSheet.create({
   status: { fontFamily: fonts.barlowCondensed, fontSize: 11, letterSpacing: 1.5, color: colors.muted },
   statusOpen: { color: colors.success },
   effectLine: { fontFamily: fonts.barlow, fontSize: 13, color: colors.text, marginTop: 6, lineHeight: 18 },
-  description: { fontFamily: fonts.barlow, fontSize: 13, color: colors.muted, marginTop: 6, lineHeight: 18 },
 
   countdownCard: {
     backgroundColor: colors.surface,
@@ -229,11 +250,26 @@ const styles = StyleSheet.create({
   countdownRow: { flexDirection: 'row', alignSelf: 'stretch' },
   countdownCell: { flex: 1, alignItems: 'center' },
   countdownLabel: { fontFamily: fonts.barlowCondensed, fontSize: 12, letterSpacing: 2, color: colors.muted },
-  countdownValue: { fontFamily: fonts.barlowCondensedHeavy, fontSize: 34, color: colors.accent, marginTop: 2 },
+  // 24 (down from the single-stat 34) so "01:23:45" shares the row; the
+  // ticker cell is widened and auto-shrinks for the "2d 01:23:45" case.
+  countdownValue: { fontFamily: fonts.barlowCondensedHeavy, fontSize: 24, color: colors.accent, marginTop: 2 },
+  tickerCell: { flex: 1.4, paddingHorizontal: 4 },
   hammer: { fontFamily: fonts.barlowCondensedHeavy, fontSize: 22, color: colors.gold, letterSpacing: 1 },
   bidderLine: { fontFamily: fonts.barlow, fontSize: 12, color: colors.muted, marginTop: 6 },
   factsDivider: { alignSelf: 'stretch', height: 1, backgroundColor: colors.border, marginTop: 12, marginBottom: 10, marginHorizontal: 14 },
   factsLine: { fontFamily: fonts.barlow, fontSize: 12, color: colors.muted, textAlign: 'center', paddingHorizontal: 14 },
+  unitRow: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 10, marginBottom: 8, paddingHorizontal: 14 },
+  unitTile: {
+    width: 48,
+    height: 48,
+    borderRadius: radius.icon,
+    borderWidth: 1,
+    borderColor: colors.accent,
+    backgroundColor: colors.surface2,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  unitIcon: { fontSize: 24 },
 
   sectionLabel: {
     fontFamily: fonts.barlowCondensed,
@@ -247,6 +283,7 @@ const styles = StyleSheet.create({
   kv: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 6 },
   kvValue: { fontFamily: fonts.barlowCondensed, fontSize: 15, color: colors.text },
   muted: { fontFamily: fonts.barlow, fontSize: 13, color: colors.muted, flex: 1, marginRight: 8 },
+  participantName: { fontFamily: fonts.barlow, fontSize: 13, color: colors.text, flex: 1, marginRight: 8 },
 
   cta: { marginTop: 6 },
 

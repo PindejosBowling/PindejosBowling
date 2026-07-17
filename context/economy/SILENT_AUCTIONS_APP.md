@@ -18,11 +18,19 @@
 
 ## The sealed-bid display contract
 
-- Cards show a **BID PLACED tag only — never an amount**. Your amount exists
-  on the detail screen behind an owner-only **tap-to-reveal** (fed by the
+- Cards **never show an amount — or any bid tag**: having a bid is implied by
+  the card's Edit Bid CTA. Your amount shows
+  on your own row of the detail participants table (fed by the
   `my_bid_amount` RPC — the column is ciphertext; RLS means other players'
   rows never arrive at all).
-- The public signals are `bidder_count` while live, and the winners after:
+- **Participants roster** (2026-07, supersedes count-only §9 posture): the
+  detail screen shows an **AUCTION PARTICIPANTS** table of active bidders
+  while live — identity only via the `auction_bidders` RPC, **alphabetical so
+  position never leaks bid size**; other players' rows render `?` (their bid
+  is intentionally unknown), your own row is labeled "You" and shows your
+  amount. Roster goes dark once the auction leaves `open`
+  (losing bidders stay private in history).
+- The other public signals are `bidder_count` while live, and the winners after:
   the denorms hold the FIRST (highest) winner as the hammer-price headline,
   while the full pay-as-bid winners list (`AuctionView.winners`) derives from
   `auctionLedger` `auction_purchase` rows via `purchasesByAuction` — the same
@@ -46,11 +54,19 @@
   The detail screen remains for the ticking countdown, the tap-to-reveal, and
   settlement results. This supersedes the original fixed section order
   (OPEN → SCHEDULED → MY ITEMS → RECENTLY SETTLED, one scroll).
-- **Countdown**: per-second tick on detail only; static minute-granularity on
-  cards; past 0:00 while still open → `🔨 HAMMER FALLING…` (cron lag as
+- **Close time display** (2026-07): cards show the *absolute* close/open time
+  ("Monday, July 20" over "7:00 PM ET" via `formatCloseDateLong`, two stacked
+  lines) as a CLOSES/OPENS
+  cell in-line with MIN BID and BIDDERS (a wider small-value `StatCell`;
+  auction cards render stat labels as column headers above the values via
+  `statLabelsAbove` — no countdown on cards); the detail screen keeps the
+  per-second tick as the last cell of its single stat row (the absolute
+  time lives on the cards).
+  Past `closes_at` while still open → `🔨 HAMMER FALLING…` (cron lag as
   theater) with the bid CTAs hidden (hub card + detail both).
-- **Detail facts**: min bid / quantity / opens-closes render as a compact row
-  inside the countdown card; the four prose rules (win rule, secrecy,
+- **Detail facts**: one headline row — MIN BID / BIDDERS / CLOSES IN
+  (card stat order); quantity renders as a compact line below
+  when >1; the four prose rules (win rule, secrecy,
   no-takebacks, bounce) live in `EXPLAINERS.auctionHouse` behind the screen's
   `?` — the dynamic bounce-fee and top-N lines still ride the bid sheet's
   `TermsBlock`.
