@@ -73,11 +73,6 @@ export default function AuctionDetailScreen() {
             </Text>
           </View>
           <Text style={styles.effectLine}>{a.itemEffectLine}</Text>
-          {/* New auctions derive description from the catalog copy above —
-              render it only when distinct (legacy hand-written pitches). */}
-          {a.description !== a.itemEffectLine && (
-            <Text style={styles.description}>{a.description}</Text>
-          )}
         </View>
 
         {/* Live countdown / hammer — open auctions pair the clock with the
@@ -218,7 +213,6 @@ const styles = StyleSheet.create({
   status: { fontFamily: fonts.barlowCondensed, fontSize: 11, letterSpacing: 1.5, color: colors.muted },
   statusOpen: { color: colors.success },
   effectLine: { fontFamily: fonts.barlow, fontSize: 13, color: colors.text, marginTop: 6, lineHeight: 18 },
-  description: { fontFamily: fonts.barlow, fontSize: 13, color: colors.muted, marginTop: 6, lineHeight: 18 },
 
   countdownCard: {
     backgroundColor: colors.surface,
