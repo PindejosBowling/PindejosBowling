@@ -16,9 +16,12 @@ import AppHeader from '../components/league/AppHeader'
 import PinsinoNoirBackdrop from '../components/pixelart/PinsinoNoirBackdrop'
 import LoadingView from '../components/ui/LoadingView'
 import PinsinoLeaderboardTable from '../components/betting/PinsinoLeaderboardTable'
-import PillFilter from '../components/ui/PillFilter'
+import Dropdown from '../components/ui/Dropdown'
+import MarketMovePreviewRow from '../components/economy/MarketMovePreviewRow'
 import { usePinsinoData } from '../hooks/usePinsinoData'
 import { usePinsinoSeasonContext } from '../hooks/usePinsinoSeasonContext'
+import { useMarketMovesPreview } from '../hooks/useMarketMovesPreview'
+import { useFeedEventPress } from '../hooks/useFeedEventPress'
 import { useRefresh } from '../hooks/useRefresh'
 import { useAuthStore } from '../stores/authStore'
 import { useNotificationStore } from '../stores/notificationStore'
@@ -34,6 +37,12 @@ type PinsinoNav = NativeStackNavigationProp<PinsinoStackParamList>
 
 const TILE_GAP = 12
 const TILE_WIDTH = (Dimensions.get('window').width - 32 - TILE_GAP * 2) / 3
+
+// Market Moves carousel page width. pagingEnabled snaps by the ScrollView's
+// frame width, so each page must match it exactly: screen − content padding
+// (16×2) − feed-box borders (1×2). Inner padding lives on the page, not the
+// box, to keep the math flat.
+const FEED_PAGE_WIDTH = Dimensions.get('window').width - 32 - 2
 
 // Fit-to-one-screen floor: below this the landing page becomes unreadable, so
 // scrolling is the graceful fallback on pathologically short viewports.
@@ -62,15 +71,29 @@ export default function PinsinoScreen() {
 
   // The shared "viewed season" context drives the selector + read-only gating
   // across the whole Pinsino tab.
-  const { seasons: allSeasons, readOnly } = usePinsinoSeasonContext()
+  const { seasons: allSeasons, liveSeasonId, readOnly } = usePinsinoSeasonContext()
   const { loading, balance, debt, openAction, netWorth, leaderboard, seasonNumber, seasonConcluded, auctionHouseClosed, auctionHouseClosedMessage, reload } = usePinsinoData(playerId, pinsinoViewSeasonId)
-  const { refreshing, onRefresh } = useRefresh(reload)
+  const { events: feedEvents, reload: reloadFeed } = useMarketMovesPreview(pinsinoViewSeasonId)
+  // Which carousel page is showing — drives the scrollability dots.
+  const [feedPage, setFeedPage] = useState(0)
+  // Tapping a feed event opens the same detail it would on the Market Moves
+  // screen (bet/PvP overlays, bounty/auction pages, own-loan deep link).
+  const { onPressFor, modals: feedDetailModals } = useFeedEventPress(reloadFeed)
+  const { refreshing, onRefresh } = useRefresh(async () => { await Promise.all([reload(), reloadFeed()]) })
 
-  // Selector options: 'live' (default) + each concluded season, newest first.
+  // Selector options: the live season (default) + each concluded season, newest
+  // first. The live entry is labeled with its season number ("Season 3") for
+  // consistency with the rest of the app; picking it clears back to live mode.
   // Season 1 predates the Pinsino economy (no pin ledger / bets / outcomes to
   // review), so it's excluded entirely from the history selector.
   const concludedSeasons = allSeasons.filter(s => !s.is_active && s.number > 1)
-  const seasonItems = ['live', ...concludedSeasons.map(s => String(s.number))]
+  // Between seasons liveSeasonId is null; seasonNumber then carries the
+  // last-ended season being shown live-style.
+  const liveSeasonNumber = allSeasons.find(s => s.id === liveSeasonId)?.number ?? seasonNumber
+  const seasonOptions = [
+    { key: 'live', label: `Season ${liveSeasonNumber}` },
+    ...concludedSeasons.map(s => ({ key: String(s.number), label: `Season ${s.number}` })),
+  ]
   const selectorValue = pinsinoViewSeasonId == null
     ? 'live'
     : String(concludedSeasons.find(s => s.id === pinsinoViewSeasonId)?.number ?? 'live')
@@ -92,7 +115,7 @@ export default function PinsinoScreen() {
   // Fit-to-one-screen: measure the scroll viewport and the natural content
   // height, then ratchet a single scale factor down until the content fits.
   // The multiplicative update converges even though some children (the shared
-  // leaderboard table, PillFilter) don't scale — each pass re-measures the
+  // leaderboard table, the season dropdown) don't scale — each pass re-measures the
   // real rendered height. Scale only ever decreases, so it's reset whenever
   // the set of stacked sections changes (banner/selector appearing).
   const [fitScale, setFitScale] = useState(1)
@@ -118,10 +141,10 @@ export default function PinsinoScreen() {
       content: { paddingBottom: s(16) },
       finalBanner: { paddingVertical: s(10), marginBottom: s(12) },
       balanceCard: { paddingVertical: s(14), marginBottom: s(16) },
-      balanceLabel: { fontSize: s(12) },
-      balanceValue: { fontSize: s(36), lineHeight: s(38) },
+      balanceValue: { fontSize: s(36) },
       balanceUnit: { fontSize: s(12) },
-      grid: { rowGap: s(TILE_GAP) },
+      grid: { rowGap: s(TILE_GAP), marginBottom: s(12) },
+      feedBox: { height: s(56) },
       tile: { height: s(TILE_WIDTH) },
       tileIcon: { fontSize: s(34), marginBottom: s(6) },
       tileLabel: { fontSize: s(13) },
@@ -151,19 +174,6 @@ export default function PinsinoScreen() {
         onContentSizeChange={(_w, h) => { contentH.current = h; maybeShrink() }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.muted} />}
       >
-        {/* Season selector — governs the entire tab. 'Live' (default) shows the
-            current season; picking a concluded season puts the whole Pinsino tab
-            into read-only end-of-season review. Only shown once there's a prior
-            season to review. */}
-        {concludedSeasons.length > 0 && (
-          <PillFilter
-            items={seasonItems}
-            value={selectorValue}
-            onChange={onSelectSeason}
-            renderLabel={item => (item === 'live' ? 'Live' : `Season ${item}`)}
-          />
-        )}
-
         {/* Between seasons: the most-recently-ended season is frozen here as a
             final outcome until the next season starts. */}
         {seasonConcluded && (
@@ -188,26 +198,48 @@ export default function PinsinoScreen() {
           activeOpacity={0.7}
           disabled={!playerId}
         >
-          <View style={styles.balanceLeft}>
-            <Text style={[styles.balanceLabel, sc.balanceLabel]}>{readOnly ? `SEASON ${seasonNumber} FINAL BALANCE` : 'YOUR BALANCE'}</Text>
-            {(debt > 0 || openAction > 0) && (
-              <View style={styles.netRow}>
-                {openAction > 0 && (
-                  <Text style={styles.openActionText}>OPEN {formatPins(openAction)}</Text>
-                )}
-                {debt > 0 && (
-                  <Text style={styles.owedText}>OWED −{formatPins(debt)}</Text>
-                )}
-                <Text style={[styles.netText, netWorth < 0 && styles.netTextNeg]}>
-                  NET {formatPins(netWorth)}
-                </Text>
-              </View>
+          {/* One row, middle-aligned: season pill · explanatory words ·
+              emphasized value. The season selector governs the entire tab
+              ('live' shows the current season; a concluded season flips the
+              whole tab into read-only end-of-season review) and only appears
+              once there's a prior season to review. It's a nested tap target,
+              so opening it never navigates into PlayerPinsino. */}
+          <View style={styles.balanceRow}>
+            {concludedSeasons.length > 0 && (
+              <Dropdown
+                options={seasonOptions}
+                value={selectorValue}
+                onChange={onSelectSeason}
+                style={styles.seasonDropdown}
+              />
             )}
+            <View style={styles.balanceSentenceRow}>
+              {/* The words auto-shrink if space runs out; the value never does. */}
+              <Text
+                style={[styles.balanceUnit, sc.balanceUnit, styles.balanceWords]}
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.6}
+              >
+                {readOnly ? 'FINAL BALANCE IS' : 'YOUR BALANCE IS'}
+              </Text>
+              <Text style={[styles.balanceValue, sc.balanceValue]}>{formatPins(balance)}</Text>
+              <Text style={[styles.balanceUnit, sc.balanceUnit]}>PINS</Text>
+            </View>
           </View>
-          <View style={styles.balanceValueWrap}>
-            <Text style={[styles.balanceValue, sc.balanceValue]}>{formatPins(balance)}</Text>
-            <Text style={[styles.balanceUnit, sc.balanceUnit]}>PINS</Text>
-          </View>
+          {(debt > 0 || openAction > 0) && (
+            <View style={styles.netRow}>
+              {openAction > 0 && (
+                <Text style={styles.openActionText}>OPEN {formatPins(openAction)}</Text>
+              )}
+              {debt > 0 && (
+                <Text style={styles.owedText}>OWED −{formatPins(debt)}</Text>
+              )}
+              <Text style={[styles.netText, netWorth < 0 && styles.netTextNeg]}>
+                NET {formatPins(netWorth)}
+              </Text>
+            </View>
+          )}
         </TouchableOpacity>
 
         {/* Top 3 leaderboard — always visible on the landing page */}
@@ -269,8 +301,46 @@ export default function PinsinoScreen() {
             )
           })}
         </View>
+
+        {/* Market Moves mini-feed — a one-event-tall carousel of the latest
+            public events; swipe horizontally (paged) to move between them.
+            Fixed (scaled) height so the fit-to-one-screen pass stays
+            convergent. Tapping an event opens the same detail it would on the
+            Market Moves screen (shared useFeedEventPress routing). */}
+        <View style={[styles.feedBox, sc.feedBox]}>
+          {feedEvents.length === 0 ? (
+            <Text style={styles.feedEmpty}>No moves yet this season.</Text>
+          ) : (
+            <>
+              <ScrollView
+                horizontal
+                pagingEnabled
+                nestedScrollEnabled
+                showsHorizontalScrollIndicator={false}
+                onMomentumScrollEnd={e => {
+                  const page = Math.round(e.nativeEvent.contentOffset.x / FEED_PAGE_WIDTH)
+                  setFeedPage(Math.max(0, Math.min(page, feedEvents.length - 1)))
+                }}
+              >
+                {feedEvents.map(e => (
+                  <View key={e.id} style={styles.feedPage}>
+                    <MarketMovePreviewRow event={e} onPress={onPressFor(e)} />
+                  </View>
+                ))}
+              </ScrollView>
+              {feedEvents.length > 1 && (
+                <View style={styles.feedDots} pointerEvents="none">
+                  {feedEvents.map((e, i) => (
+                    <View key={e.id} style={[styles.feedDot, i === feedPage && styles.feedDotActive]} />
+                  ))}
+                </View>
+              )}
+            </>
+          )}
+        </View>
       </ScrollView>
       )}
+      {feedDetailModals}
     </SafeAreaView>
   )
 }
@@ -308,35 +378,40 @@ const styles = StyleSheet.create({
     borderRadius: radius.card,
     borderWidth: 1,
     borderColor: colors.border,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
     paddingVertical: 14,
     paddingHorizontal: 18,
     marginTop: 4,
     marginBottom: 16,
-  },
-  balanceLeft: {
-    flexShrink: 1,
     gap: 6,
   },
-  balanceLabel: {
-    fontFamily: fonts.barlowCondensed,
-    fontSize: 12,
-    letterSpacing: 2,
-    color: colors.muted,
-  },
-  balanceValueWrap: {
+  // Pill · words · value on one middle-aligned line. alignItems 'center'
+  // (not baseline) is what keeps the small text vertically centered against
+  // the emphasized value.
+  balanceRow: {
     flexDirection: 'row',
-    alignItems: 'baseline',
-    gap: 5,
-    flexShrink: 0,
+    alignItems: 'center',
   },
+  balanceSentenceRow: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    gap: 6,
+  },
+  balanceWords: {
+    flexShrink: 1,
+  },
+  // Compact trigger so the season pill reads as a small tag on the card edge.
+  seasonDropdown: {
+    paddingVertical: 3,
+    paddingHorizontal: 8,
+  },
+  // No explicit lineHeight — the sentence's line box must hug the glyphs so
+  // the whole line centers vertically in the card.
   balanceValue: {
     fontFamily: fonts.barlowCondensedHeavy,
     fontSize: 36,
     color: colors.accent,
-    lineHeight: 38,
   },
   balanceUnit: {
     fontFamily: fonts.barlowCondensed,
@@ -347,6 +422,7 @@ const styles = StyleSheet.create({
   netRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'flex-end',
     flexWrap: 'wrap',
     gap: 10,
   },
@@ -389,6 +465,49 @@ const styles = StyleSheet.create({
     fontSize: 24,
     lineHeight: 24,
     color: colors.accent,
+  },
+  // Market Moves mini-feed — a one-event-tall paged carousel box. No header:
+  // the Market Moves tile is the labeled entry point; this strip is ambient.
+  feedBox: {
+    height: 56,
+    backgroundColor: colors.surface,
+    borderRadius: radius.card,
+    borderWidth: 1,
+    borderColor: colors.border,
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  feedPage: {
+    width: FEED_PAGE_WIDTH,
+    paddingHorizontal: 12,
+    // Keep the event line clear of the page dots along the bottom edge.
+    paddingBottom: 8,
+    justifyContent: 'center',
+  },
+  feedDots: {
+    position: 'absolute',
+    bottom: 4,
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 5,
+  },
+  feedDot: {
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: colors.border,
+  },
+  feedDotActive: {
+    backgroundColor: colors.accent,
+  },
+  feedEmpty: {
+    fontFamily: fonts.barlowCondensed,
+    fontSize: 13,
+    letterSpacing: 0.5,
+    color: colors.muted,
+    textAlign: 'center',
   },
 
   // Subpage menu tiles (mirrors MoreHomeScreen)

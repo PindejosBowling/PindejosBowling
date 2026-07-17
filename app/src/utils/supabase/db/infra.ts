@@ -36,11 +36,11 @@ const feedCursorFilter = (c: FeedCursor) =>
 
 export const activityFeed = {
   // Public feed (design §15.1) — published + public rows, newest first.
-  listPublic: (seasonId: string, cursor?: FeedCursor) => {
+  listPublic: (seasonId: string, cursor?: FeedCursor, limit = 50) => {
     let q = supabase.from('activity_feed_events').select(FEED_GRAPH)
       .eq('season_id', seasonId).eq('status', 'published').eq('visibility', 'public')
     if (cursor) q = q.or(feedCursorFilter(cursor))
-    return q.order('published_at', { ascending: false }).order('id', { ascending: false }).limit(50)
+    return q.order('published_at', { ascending: false }).order('id', { ascending: false }).limit(limit)
   },
 
   // Feature filter (design §15.2): sourceFeature in ('sportsbook','loan_shark').

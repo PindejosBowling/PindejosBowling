@@ -1,7 +1,6 @@
 import { useState, useCallback, useMemo } from 'react'
 import { View, Text, TouchableOpacity, FlatList, StyleSheet, RefreshControl, ActivityIndicator } from 'react-native'
-import { useNavigation, useFocusEffect } from '@react-navigation/native'
-import { NativeStackNavigationProp } from '@react-navigation/native-stack'
+import { useFocusEffect } from '@react-navigation/native'
 import { colors, fonts, radius } from '../theme'
 import ScreenContainer from '../components/ui/ScreenContainer'
 import MarketMovesTownBackdrop from '../components/pixelart/MarketMovesTownBackdrop'
@@ -9,20 +8,13 @@ import PillFilter from '../components/ui/PillFilter'
 import MarketMoveCard from '../components/economy/MarketMoveCard'
 import ReadOnlySeasonBanner from '../components/betting/ReadOnlySeasonBanner'
 import { usePinsinoSeasonContext } from '../hooks/usePinsinoSeasonContext'
-import BetDetailModal from '../components/betting/BetDetailModal'
-import PvpChallengeDetailModal from '../components/pvp/PvpChallengeDetailModal'
 import FeatureExplainerSheet from '../components/pinsino/FeatureExplainerSheet'
 import { EXPLAINERS } from '../data/pinsinoExplainers'
 import { useMarketMovesData, FeedFilter, WeekInfoById } from '../hooks/useMarketMovesData'
+import { useFeedEventPress } from '../hooks/useFeedEventPress'
 import { useRefresh } from '../hooks/useRefresh'
-import { useAuthStore } from '../stores/authStore'
 import { useUiStore } from '../stores/uiStore'
-import { PinsinoStackParamList } from '../navigation/types'
 import { FeedEventView } from '../utils/activityFeedTemplates'
-import { bets } from '../utils/supabase/db'
-import { normalizeBet, BetView } from '../hooks/usePinsinoData'
-
-type Nav = NativeStackNavigationProp<PinsinoStackParamList>
 
 // Filter chips (design §16.2). The pill component is string-keyed; map the labels
 // back to the hook's FeedFilter values.
@@ -75,8 +67,6 @@ function groupEventsByWeek(events: FeedEventView[], weekInfoById: WeekInfoById):
 }
 
 export default function MarketMovesScreen() {
-  const navigation = useNavigation<Nav>()
-  const playerId = useAuthStore(s => s.playerId)
   const pinsinoViewSeasonId = useUiStore(s => s.pinsinoViewSeasonId)
   const { readOnly, viewSeasonNumber } = usePinsinoSeasonContext()
   const { loading, events, filter, setFilter, hasMore, loadMore, reload, weekInfoById, currentWeekId } = useMarketMovesData(pinsinoViewSeasonId)
@@ -98,58 +88,11 @@ export default function MarketMovesScreen() {
   // manual pull. The hook's mount load covers first paint; focus reloads are silent.
   useFocusEffect(useCallback(() => { reload() }, [reload]))
 
-  // The bet behind a tapped Sportsbook card → the shared Bet Details overlay.
-  const [detailBet, setDetailBet] = useState<BetView | null>(null)
-  // The challenge behind a tapped PvP card → the shared PvP detail overlay.
-  const [detailChallengeId, setDetailChallengeId] = useState<string | null>(null)
   const [helpOpen, setHelpOpen] = useState(false)
 
-  // Fetch the bet anchoring a Sportsbook card and open Bet Details. Stake/payout
-  // are public in the Sportsbook view, so this surfaces the same breakdown.
-  async function openBetDetail(betId: string) {
-    const { data, error } = await bets.getById(betId)
-    if (error || !data) {
-      console.error('MarketMoves openBetDetail error:', error)
-      return
-    }
-    setDetailBet(normalizeBet(data))
-  }
-
-  // Privacy-aware tap target (design §16.3). Returns undefined for a
-  // non-tappable card so a viewer can never reach another player's private detail.
-  function onPressFor(event: FeedEventView): (() => void) | undefined {
-    // Sportsbook moves → the corresponding bet's Bet Details overlay.
-    if (event.sportsbookBetId) {
-      const betId = event.sportsbookBetId
-      return () => openBetDetail(betId)
-    }
-    // Loan moves → ONLY the borrower viewing their own row may deep-link to Loan
-    // Shark; everyone else gets a non-tappable card (§16.3, §3.5).
-    if (event.loanId) {
-      if (playerId && event.actorPlayerId === playerId) {
-        return () => navigation.navigate('LoanShark')
-      }
-      return undefined
-    }
-    // PvP moves → the shared PvP challenge detail (contracts are public).
-    if (event.pvpChallengeId) {
-      const challengeId = event.pvpChallengeId
-      return () => setDetailChallengeId(challengeId)
-    }
-    // Bounty moves → the public Bounty detail page.
-    if (event.bountySourceId) {
-      const bountyId = event.bountySourceId
-      return () => navigation.navigate('BountyDetail', { bountyId })
-    }
-    // Auction moves → the public Auction detail page (a reversed auction's
-    // feed rows cascade away, so a live id always resolves).
-    if (event.auctionSourceId) {
-      const auctionId = event.auctionSourceId
-      return () => navigation.navigate('AuctionDetail', { auctionId })
-    }
-    // Weekly House result + system events: no detail in v1.
-    return undefined
-  }
+  // Privacy-aware tap routing + the bet/PvP detail overlays it opens — shared
+  // with the Pinsino hub's mini-feed (design §16.3).
+  const { onPressFor, modals: feedDetailModals } = useFeedEventPress(reload)
 
   return (
     <ScreenContainer
@@ -210,14 +153,7 @@ export default function MarketMovesScreen() {
           hasMore ? <ActivityIndicator color={colors.muted} style={styles.footer} /> : null
         }
       />
-      <BetDetailModal bet={detailBet} onClose={() => setDetailBet(null)} />
-      {detailChallengeId && (
-        <PvpChallengeDetailModal
-          challengeId={detailChallengeId}
-          onClose={() => setDetailChallengeId(null)}
-          onChanged={reload}
-        />
-      )}
+      {feedDetailModals}
       {helpOpen && (
         <FeatureExplainerSheet explainer={EXPLAINERS.marketMoves} onClose={() => setHelpOpen(false)} />
       )}
