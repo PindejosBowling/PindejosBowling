@@ -326,7 +326,7 @@ export default function RsvpBonusAdminScreen() {
           action={async () => {
             const { data, error } = await dbRsvp.adminGrantBonus(grantTarget.playerId, weekId)
             if (error) return { error }
-            const res = data as { awarded: boolean; reason: string } | null
+            const res = data as unknown as { awarded: boolean; reason: string } | null
             if (!res?.awarded) {
               const why =
                 res?.reason === 'already_claimed' ? 'Bonus already paid for this week'

@@ -216,6 +216,41 @@ export type Database = {
           },
         ]
       }
+      app_version_config: {
+        Row: {
+          created_at: string
+          id: string
+          message: string
+          min_supported_version: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          message?: string
+          min_supported_version?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          message?: string
+          min_supported_version?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "app_version_config_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       auction_bids: {
         Row: {
           auction_id: string
@@ -3011,6 +3046,10 @@ export type Database = {
       accept_pvp_challenge: {
         Args: { p_challenge_id: string }
         Returns: undefined
+      }
+      admin_grant_rsvp_bonus: {
+        Args: { p_player_id: string; p_week_id: string }
+        Returns: Json
       }
       advance_week: {
         Args: { p_fill_scores?: Json; p_force?: boolean; p_week_id: string }

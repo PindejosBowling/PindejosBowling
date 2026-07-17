@@ -12,9 +12,11 @@ import { appVersionConfig } from '../utils/supabase/db'
 //
 // FAILS OPEN by design: web, __DEV__, fetch errors, missing config, or an
 // unreadable version all mean "don't block" — a config table must never be
-// able to brick the app. Checks on mount and on each foreground (the same
-// signal useOtaUpdates keys on), so raising the minimum reaches running
-// sessions without a relaunch.
+// able to brick the app. Reads are authenticated-only (the repo's anon
+// posture), so pre-sign-in the fetch returns nothing and the gate stays open;
+// it engages on the first check after sign-in. Checks on mount and on each
+// foreground (the same signal useOtaUpdates keys on), so raising the minimum
+// reaches running sessions without a relaunch.
 const MIN_CHECK_INTERVAL_MS = 60_000
 
 // True when `installed` is below `min`, comparing dotted numeric segments

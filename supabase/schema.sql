@@ -45,6 +45,15 @@ CREATE TABLE activity_feed_events (
   auction_id uuid
 );
 
+CREATE TABLE app_version_config (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  min_supported_version text NOT NULL DEFAULT '1.0.23'::text,
+  message text NOT NULL DEFAULT 'A new version of the app is required. Update on TestFlight to keep playing.'::text,
+  updated_by uuid,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now()
+);
+
 CREATE TABLE auction_bids (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   auction_id uuid NOT NULL,
@@ -731,6 +740,12 @@ ALTER TABLE activity_feed_events ADD CONSTRAINT activity_feed_events_week_id_fke
 
 ALTER TABLE activity_feed_events ADD CONSTRAINT activity_feed_one_source_check CHECK ((((((((sportsbook_bet_id IS NOT NULL))::integer + ((loan_id IS NOT NULL))::integer) + ((pvp_challenge_id IS NOT NULL))::integer) + ((bounty_post_id IS NOT NULL))::integer) + ((auction_id IS NOT NULL))::integer) <= 1));
 
+ALTER TABLE app_version_config ADD CONSTRAINT app_version_config_min_supported_version_check CHECK ((min_supported_version ~ '^[0-9]+(\.[0-9]+)*$'::text));
+
+ALTER TABLE app_version_config ADD CONSTRAINT app_version_config_pkey PRIMARY KEY (id);
+
+ALTER TABLE app_version_config ADD CONSTRAINT app_version_config_updated_by_fkey FOREIGN KEY (updated_by) REFERENCES players(id) ON DELETE SET NULL;
+
 ALTER TABLE auction_bids ADD CONSTRAINT auction_bids_auction_id_fkey FOREIGN KEY (auction_id) REFERENCES auctions(id) ON DELETE CASCADE;
 
 ALTER TABLE auction_bids ADD CONSTRAINT auction_bids_pkey PRIMARY KEY (id);
@@ -1322,6 +1337,8 @@ CREATE UNIQUE INDEX activity_feed_unique_loan_event ON public.activity_feed_even
 
 CREATE UNIQUE INDEX activity_feed_unique_pvp_event ON public.activity_feed_events USING btree (pvp_challenge_id, event_type) WHERE (pvp_challenge_id IS NOT NULL);
 
+CREATE UNIQUE INDEX app_version_config_singleton ON public.app_version_config USING btree ((true));
+
 CREATE INDEX auction_bids_auction_idx ON public.auction_bids USING btree (auction_id);
 
 CREATE UNIQUE INDEX auction_bids_one_active_per_player ON public.auction_bids USING btree (auction_id, player_id) WHERE (status = 'active'::text);
@@ -1547,6 +1564,15 @@ CREATE POLICY "admin can update" ON activity_feed_events AS PERMISSIVE FOR UPDAT
 
 CREATE POLICY "authenticated can read public published" ON activity_feed_events AS PERMISSIVE FOR SELECT TO authenticated
   USING (((status = 'published'::text) AND (visibility = 'public'::text)));
+
+ALTER TABLE app_version_config ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "admin can manage" ON app_version_config AS PERMISSIVE FOR ALL TO authenticated
+  USING (is_admin())
+  WITH CHECK (is_admin());
+
+CREATE POLICY "authenticated can read" ON app_version_config AS PERMISSIVE FOR SELECT TO authenticated
+  USING (true);
 
 ALTER TABLE auction_bids ENABLE ROW LEVEL SECURITY;
 
@@ -2223,6 +2249,71 @@ BEGIN
     jsonb_build_object('challenge_id', p_challenge_id),
     NULL, now(),
     p_challenge_id);
+END;
+$function$
+;
+
+CREATE OR REPLACE FUNCTION public.admin_grant_rsvp_bonus(p_player_id uuid, p_week_id uuid)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+DECLARE
+  v_week    public.weeks%ROWTYPE;
+  v_season  public.seasons%ROWTYPE;
+  v_cfg     public.rsvp_bonus_config%ROWTYPE;
+  v_awarded boolean := false;
+  v_amount  integer := 0;
+  v_reason  text;
+BEGIN
+  PERFORM public.assert_admin();
+
+  IF p_player_id IS NULL OR p_week_id IS NULL THEN
+    RAISE EXCEPTION 'player id and week id are required';
+  END IF;
+
+  SELECT * INTO v_week FROM public.weeks WHERE id = p_week_id;
+  IF v_week.id IS NULL THEN
+    RAISE EXCEPTION 'Week not found';
+  END IF;
+  SELECT * INTO v_season FROM public.seasons WHERE id = v_week.season_id;
+
+  -- The player must actually have an RSVP on record for this week.
+  IF NOT EXISTS (
+    SELECT 1 FROM public.rsvp
+    WHERE player_id = p_player_id AND week_id = p_week_id
+  ) THEN
+    v_reason := 'no_rsvp';
+  ELSIF EXISTS (
+    SELECT 1 FROM public.pin_ledger
+    WHERE player_id = p_player_id AND week_id = p_week_id AND type = 'rsvp_bonus'
+  ) THEN
+    v_reason := 'already_claimed';
+  ELSE
+    -- Config resolution: current-season row first, else global (same as
+    -- submit_own_rsvp). Only the amount is honored — is_enabled and the
+    -- deadline are intentionally not checked here.
+    SELECT * INTO v_cfg FROM public.rsvp_bonus_config
+      WHERE season_id = v_week.season_id;
+    IF v_cfg.id IS NULL THEN
+      SELECT * INTO v_cfg FROM public.rsvp_bonus_config
+        WHERE season_id IS NULL;
+    END IF;
+
+    IF v_cfg.id IS NULL THEN
+      v_reason := 'disabled';
+    ELSE
+      PERFORM public.pin_ledger_double_entry(
+        p_player_id, v_season.id, p_week_id, v_cfg.bonus_amount, 'rsvp_bonus',
+        'RSVP bonus — thanks from the House', 'RSVP bonus (house)');
+      v_awarded := true;
+      v_amount  := v_cfg.bonus_amount;
+      v_reason  := 'ok';
+    END IF;
+  END IF;
+
+  RETURN jsonb_build_object('awarded', v_awarded, 'amount', v_amount, 'reason', v_reason);
 END;
 $function$
 ;
@@ -9113,6 +9204,8 @@ CREATE TRIGGER set_updated_at BEFORE UPDATE ON public.activity_event_catalog FOR
 CREATE TRIGGER enqueue_event_broadcast AFTER INSERT ON public.activity_feed_events FOR EACH ROW EXECUTE FUNCTION enqueue_broadcast_for_activity_event();
 
 CREATE TRIGGER set_updated_at BEFORE UPDATE ON public.activity_feed_events FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+CREATE TRIGGER set_updated_at BEFORE UPDATE ON public.app_version_config FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
 CREATE TRIGGER set_updated_at BEFORE UPDATE ON public.auction_bids FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
