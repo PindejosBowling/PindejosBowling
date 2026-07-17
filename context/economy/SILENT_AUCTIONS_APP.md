@@ -46,11 +46,14 @@
   The detail screen remains for the ticking countdown, the tap-to-reveal, and
   settlement results. This supersedes the original fixed section order
   (OPEN → SCHEDULED → MY ITEMS → RECENTLY SETTLED, one scroll).
-- **Countdown**: per-second tick on detail only; static minute-granularity on
-  cards; past 0:00 while still open → `🔨 HAMMER FALLING…` (cron lag as
+- **Close time display** (2026-07): cards show the *absolute* close/open time
+  ("CLOSES Monday, July 20, 7:00 PM ET" via `formatCloseDateLong`, a footer
+  line — no countdown on cards); the detail screen keeps the per-second tick
+  with the absolute time promoted to headline weight directly beneath it.
+  Past `closes_at` while still open → `🔨 HAMMER FALLING…` (cron lag as
   theater) with the bid CTAs hidden (hub card + detail both).
-- **Detail facts**: min bid / quantity / opens-closes render as a compact row
-  inside the countdown card; the four prose rules (win rule, secrecy,
+- **Detail facts**: min bid / quantity render as a compact row inside the
+  countdown card; the four prose rules (win rule, secrecy,
   no-takebacks, bounce) live in `EXPLAINERS.auctionHouse` behind the screen's
   `?` — the dynamic bounce-fee and top-N lines still ride the bid sheet's
   `TermsBlock`.

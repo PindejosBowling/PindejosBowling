@@ -13,9 +13,8 @@ import { usePinsinoSeasonContext } from '../hooks/usePinsinoSeasonContext'
 import { useEconomyRefresh } from '../hooks/useEconomyRefresh'
 import { useAuthStore } from '../stores/authStore'
 import { formatCountdown } from '../utils/auction'
-import { formatCloseTime } from '../utils/bounty'
 import { PinsinoStackParamList } from '../navigation/types'
-import { formatPins } from '../utils/formatting'
+import { formatPins, formatCloseDateLong } from '../utils/formatting'
 
 type Route = RouteProp<PinsinoStackParamList, 'AuctionDetail'>
 
@@ -109,12 +108,16 @@ export default function AuctionDetailScreen() {
                     </View>
                   )}
                 </View>
+                {/* The actual deadline, promoted to headline weight — the
+                    countdown is theater, this is the fact. */}
+                <Text style={styles.closesAtLabel}>{open ? 'CLOSES' : 'OPENS'}</Text>
+                <Text style={styles.closesAtValue}>
+                  {formatCloseDateLong(open ? a.closesAt : a.opensAt)}
+                </Text>
                 <View style={styles.factsDivider} />
                 <Text style={styles.factsLine}>
                   Min bid {formatPins(a.minimumBid)} pins
                   {a.quantity > 1 ? ` · ${a.quantity} up for grabs` : ''}
-                  {' · '}
-                  {open ? `Closes ${formatCloseTime(a.closesAt)}` : `Opens ${formatCloseTime(a.opensAt)}`}
                 </Text>
               </>
             )}
@@ -230,6 +233,8 @@ const styles = StyleSheet.create({
   countdownCell: { flex: 1, alignItems: 'center' },
   countdownLabel: { fontFamily: fonts.barlowCondensed, fontSize: 12, letterSpacing: 2, color: colors.muted },
   countdownValue: { fontFamily: fonts.barlowCondensedHeavy, fontSize: 34, color: colors.accent, marginTop: 2 },
+  closesAtLabel: { fontFamily: fonts.barlowCondensed, fontSize: 12, letterSpacing: 2, color: colors.muted, marginTop: 14 },
+  closesAtValue: { fontFamily: fonts.barlowCondensed, fontSize: 19, color: colors.text, letterSpacing: 0.3, marginTop: 2, textAlign: 'center', paddingHorizontal: 14 },
   hammer: { fontFamily: fonts.barlowCondensedHeavy, fontSize: 22, color: colors.gold, letterSpacing: 1 },
   bidderLine: { fontFamily: fonts.barlow, fontSize: 12, color: colors.muted, marginTop: 6 },
   factsDivider: { alignSelf: 'stretch', height: 1, backgroundColor: colors.border, marginTop: 12, marginBottom: 10, marginHorizontal: 14 },

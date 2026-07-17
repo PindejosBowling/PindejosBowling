@@ -6,11 +6,10 @@
 // shapes and the components don't change.
 
 import { upcomingMondayCloseAt } from './bounty'
-import { formatTimeRemaining, formatCountdown } from './formatting'
+import { formatCountdown, formatCloseDateLong } from './formatting'
 
-// `formatTimeRemaining` / `formatCountdown` now live in utils/formatting.ts;
-// re-exported here for back-compat.
-export { formatTimeRemaining, formatCountdown }
+// Time formatters live in utils/formatting.ts; re-exported here for back-compat.
+export { formatCountdown, formatCloseDateLong }
 
 // No `draft` ("auctions either exist or they don't") and no `cancelled`
 // (pre-settlement cancel is a hard delete) — AUCTION_FINDINGS.md §10.
