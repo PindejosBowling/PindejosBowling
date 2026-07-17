@@ -6,6 +6,11 @@ import { colors, fonts, radius } from '../../theme'
 export interface StatCell {
   value: string
   label: string
+  // Render the value at text size instead of headline size — for cells whose
+  // value is a phrase (e.g. an absolute close date) rather than a number.
+  small?: boolean
+  // Width weight within the row (default 1) — widen a cell whose value wraps.
+  flex?: number
 }
 
 interface Props {
@@ -50,8 +55,8 @@ export default function EconomyCard({ title, badge, subtitle, subtitleLines = 1,
       {stats != null && stats.length > 0 && (
         <View style={styles.statRow}>
           {stats.map((s, i) => (
-            <View key={i} style={styles.statCell}>
-              <Text style={styles.statValue}>{s.value}</Text>
+            <View key={i} style={[styles.statCell, s.flex != null && { flex: s.flex }]}>
+              <Text style={[styles.statValue, s.small && styles.statValueSmall]}>{s.value}</Text>
               <Text style={styles.statLabel}>{s.label}</Text>
             </View>
           ))}
@@ -85,7 +90,9 @@ const styles = StyleSheet.create({
   subtitle: { fontFamily: fonts.barlow, fontSize: 12, color: colors.muted, marginTop: 2 },
 
   statRow: { flexDirection: 'row', marginTop: 12, marginBottom: 4 },
-  statCell: { flex: 1, alignItems: 'center' },
+  statCell: { flex: 1, alignItems: 'center', justifyContent: 'flex-end' },
   statValue: { fontFamily: fonts.barlowCondensedHeavy, fontSize: 20, color: colors.accent },
+  // Phrase-valued cells: smaller, wrappable, baseline-aligned with the row.
+  statValueSmall: { fontFamily: fonts.barlowCondensed, fontSize: 14, lineHeight: 17, textAlign: 'center' },
   statLabel: { fontFamily: fonts.barlowCondensed, fontSize: 10, letterSpacing: 1, color: colors.muted, marginTop: 1 },
 })

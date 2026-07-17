@@ -34,6 +34,12 @@ export default function AuctionCard({ auction: a, onPress, onBid }: Props) {
     { value: formatPins(a.minimumBid), label: 'MIN BID' },
   ]
   if (open) stats.push({ value: String(a.bidderCount), label: a.bidderCount === 1 ? 'BIDDER' : 'BIDDERS' })
+  // Absolute close/open time ("closes at", not "closes in") — a phrase, so it
+  // rides the row as a wider small-value cell.
+  stats.push(
+    open || scheduled
+      ? { value: formatCloseDateLong(open ? a.closesAt : a.opensAt), label: open ? 'CLOSES' : 'OPENS', small: true, flex: 1.7 }
+      : { value: '—', label: 'CLOSED' })
 
   return (
     <EconomyCard
@@ -48,15 +54,6 @@ export default function AuctionCard({ auction: a, onPress, onBid }: Props) {
       dim={scheduled}
       onPress={onPress}
     >
-      {/* Absolute close/open time (no countdown on cards — "closes at", not
-          "closes in"). Settled cards skip it; the badge already says so. */}
-      {(open || scheduled) && (
-        <Text style={styles.closeLine}>
-          <Text style={styles.closeLabel}>{open ? 'CLOSES  ' : 'OPENS  '}</Text>
-          {formatCloseDateLong(open ? a.closesAt : a.opensAt)}
-        </Text>
-      )}
-
       {open && a.myBidAmount != null && <Text style={styles.bidTag}>BID PLACED</Text>}
 
       {open && !hammerFalling && onBid != null && (
@@ -85,8 +82,6 @@ export default function AuctionCard({ auction: a, onPress, onBid }: Props) {
 }
 
 const styles = StyleSheet.create({
-  closeLine: { fontFamily: fonts.barlowCondensed, fontSize: 15, color: colors.accent, letterSpacing: 0.3, marginTop: 8, textAlign: 'center' },
-  closeLabel: { fontSize: 12, letterSpacing: 1.5, color: colors.muted },
   bidTag:{ fontFamily: fonts.barlowCondensed, fontSize: 13, color: colors.success, letterSpacing: 1, marginTop: 6 },
   bidBtn: { marginTop: 10 },
   result: { fontFamily: fonts.barlowCondensed, fontSize: 13, color: colors.text, letterSpacing: 0.3, marginTop: 6 },
