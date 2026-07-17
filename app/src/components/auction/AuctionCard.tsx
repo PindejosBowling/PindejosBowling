@@ -22,8 +22,8 @@ const STATUS_LABEL: Record<AuctionView['status'], string> = {
 }
 
 // One auction row for the Auction House list. Sealed-bid social contract:
-// the card carries a BID PLACED tag only — the amount is never rendered here
-// (it lives behind the owner-only reveal on the detail screen).
+// the card never renders a bid amount — your bid shows only on your own row
+// of the detail participants table. Having one is implied by the Edit Bid CTA.
 export default function AuctionCard({ auction: a, onPress, onBid }: Props) {
   const scheduled = a.status === 'scheduled'
   const open = a.status === 'open'
@@ -55,8 +55,6 @@ export default function AuctionCard({ auction: a, onPress, onBid }: Props) {
       dim={scheduled}
       onPress={onPress}
     >
-      {open && a.myBidAmount != null && <Text style={styles.bidTag}>BID PLACED</Text>}
-
       {open && !hammerFalling && onBid != null && (
         <Button
           label={a.myBidAmount != null ? 'Edit Bid' : 'Place Sealed Bid'}
@@ -83,7 +81,6 @@ export default function AuctionCard({ auction: a, onPress, onBid }: Props) {
 }
 
 const styles = StyleSheet.create({
-  bidTag:{ fontFamily: fonts.barlowCondensed, fontSize: 13, color: colors.success, letterSpacing: 1, marginTop: 6 },
   bidBtn: { marginTop: 10 },
   result: { fontFamily: fonts.barlowCondensed, fontSize: 13, color: colors.text, letterSpacing: 0.3, marginTop: 6 },
 })

@@ -18,7 +18,8 @@
 
 ## The sealed-bid display contract
 
-- Cards show a **BID PLACED tag only — never an amount**. Your amount shows
+- Cards **never show an amount — or any bid tag**: having a bid is implied by
+  the card's Edit Bid CTA. Your amount shows
   on your own row of the detail participants table (fed by the
   `my_bid_amount` RPC — the column is ciphertext; RLS means other players'
   rows never arrive at all).
