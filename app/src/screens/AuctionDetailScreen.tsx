@@ -112,11 +112,15 @@ export default function AuctionDetailScreen() {
                 {a.quantity > 1 && (
                   <>
                     <View style={styles.factsDivider} />
-                    {/* One emoji per unit on the block — the quantity, made
-                        visible. */}
-                    <Text style={styles.quantityIcons}>
-                      {Array(a.quantity).fill(a.itemIcon).join(' ')}
-                    </Text>
+                    {/* One bordered tile per unit on the block — items, not a
+                        string of emoji. */}
+                    <View style={styles.unitRow}>
+                      {Array.from({ length: a.quantity }, (_, i) => (
+                        <View key={i} style={styles.unitTile}>
+                          <Text style={styles.unitIcon}>{a.itemIcon}</Text>
+                        </View>
+                      ))}
+                    </View>
                     <Text style={styles.factsLine}>
                       {a.quantity} up for grabs — the top {a.quantity} sealed bids each win one
                     </Text>
@@ -242,7 +246,18 @@ const styles = StyleSheet.create({
   bidderLine: { fontFamily: fonts.barlow, fontSize: 12, color: colors.muted, marginTop: 6 },
   factsDivider: { alignSelf: 'stretch', height: 1, backgroundColor: colors.border, marginTop: 12, marginBottom: 10, marginHorizontal: 14 },
   factsLine: { fontFamily: fonts.barlow, fontSize: 12, color: colors.muted, textAlign: 'center', paddingHorizontal: 14 },
-  quantityIcons: { fontSize: 24, textAlign: 'center', marginBottom: 6, paddingHorizontal: 14 },
+  unitRow: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 10, marginBottom: 8, paddingHorizontal: 14 },
+  unitTile: {
+    width: 48,
+    height: 48,
+    borderRadius: radius.icon,
+    borderWidth: 1,
+    borderColor: colors.accent,
+    backgroundColor: colors.surface2,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  unitIcon: { fontSize: 24 },
 
   sectionLabel: {
     fontFamily: fonts.barlowCondensed,
