@@ -2263,6 +2263,7 @@ DECLARE
   v_week    public.weeks%ROWTYPE;
   v_season  public.seasons%ROWTYPE;
   v_cfg     public.rsvp_bonus_config%ROWTYPE;
+  v_desc    text;
   v_awarded boolean := false;
   v_amount  integer := 0;
   v_reason  text;
@@ -2304,9 +2305,10 @@ BEGIN
     IF v_cfg.id IS NULL THEN
       v_reason := 'disabled';
     ELSE
+      v_desc := format('RSVP Bonus - Season %s Week %s', v_season.number, v_week.week_number);
       PERFORM public.pin_ledger_double_entry(
         p_player_id, v_season.id, p_week_id, v_cfg.bonus_amount, 'rsvp_bonus',
-        'RSVP bonus — thanks from the House', 'RSVP bonus (house)');
+        v_desc, v_desc || ' (House)');
       v_awarded := true;
       v_amount  := v_cfg.bonus_amount;
       v_reason  := 'ok';
@@ -7480,6 +7482,7 @@ DECLARE
   v_season   public.seasons%ROWTYPE;
   v_cfg      public.rsvp_bonus_config%ROWTYPE;
   v_deadline timestamptz;
+  v_desc     text;
   v_awarded  boolean := false;
   v_amount   integer := 0;
   v_reason   text;
@@ -7540,9 +7543,10 @@ BEGIN
     IF v_deadline IS NOT NULL AND now() > v_deadline THEN
       v_reason := 'past_deadline';
     ELSE
+      v_desc := format('RSVP Bonus - Season %s Week %s', v_season.number, v_week.week_number);
       PERFORM public.pin_ledger_double_entry(
         v_player, v_season.id, p_week_id, v_cfg.bonus_amount, 'rsvp_bonus',
-        'RSVP bonus — thanks from the House', 'RSVP bonus (house)');
+        v_desc, v_desc || ' (House)');
       v_awarded := true;
       v_amount  := v_cfg.bonus_amount;
       v_reason  := 'ok';
