@@ -466,6 +466,15 @@ export const pinLedger = {
       .eq('type', 'rsvp_bonus')
       .limit(1)
       .maybeSingle(),
+  // All players paid the RSVP bonus for a week (player + sides only) — backs
+  // the admin Missed Bonuses list, diffed against the week's rsvp rows.
+  rsvpBonusesForWeek: (weekId: string) =>
+    supabase
+      .from('pin_ledger')
+      .select('player_id')
+      .eq('week_id', weekId)
+      .eq('type', 'rsvp_bonus')
+      .gt('amount', 0),
 }
 
 // Admin-issued, house-funded `bonus` pins (e.g. a "Reigning Champion" bonus).

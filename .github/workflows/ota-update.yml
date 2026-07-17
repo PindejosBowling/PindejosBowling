@@ -1,9 +1,11 @@
 # OTA update for installed iOS builds (EAS Update). Publishes the JS bundle
 # to the production channel on every merge; installs whose runtime (= the
-# app version baked in at build time) matches pick it up on next launch.
-# Native changes (new module, plugin, SDK bump) do NOT ship this way — they
-# need a TestFlight build (testflight.yml), which also bumps the version so
-# stale JS can never land on a mismatched binary.
+# native-code FINGERPRINT baked in at build time, runtimeVersion.policy =
+# "fingerprint") matches pick it up on next launch — across marketing
+# versions, so a version bump alone never strands older installs.
+# Native changes (new module, plugin, SDK bump) change the fingerprint and do
+# NOT ship this way — they need a TestFlight build (testflight.yml); stale JS
+# can never land on a mismatched binary.
 # See context/tech-stack.md "Shipping changes to devices".
 name: OTA Update (EAS)
 

@@ -25,6 +25,8 @@ import { useAvatarStore } from './src/stores/avatarStore'
 import { useNotificationStore } from './src/stores/notificationStore'
 import { useWeekClock } from './src/hooks/useWeekClock'
 import { useOtaUpdates } from './src/hooks/useOtaUpdates'
+import { useUpdateGate } from './src/hooks/useUpdateGate'
+import UpdateRequiredScreen from './src/screens/UpdateRequiredScreen'
 import { syncPushToken } from './src/utils/pushTokens'
 
 const BASE = 'PindejosBowling'
@@ -95,6 +97,8 @@ const linking = {
           AuctionHouseAdmin: `${BASE}/more/auction-house-admin`,
           Archives: `${BASE}/more/archives`,
           LanetalkImportAdmin: `${BASE}/more/lanetalk-import`,
+          RsvpBonusAdmin: `${BASE}/more/rsvp-bonus`,
+          AppVersionAdmin: `${BASE}/more/app-version`,
         },
       },
     },
@@ -121,6 +125,10 @@ export default function App() {
   // Silently pull + apply the latest OTA update whenever the app foregrounds.
   useOtaUpdates()
 
+  // Update gate: block builds below app_version_config.min_supported_version
+  // (they can no longer receive OTA updates). Fails open; no-op on web/dev.
+  const { updateRequired, message: updateMessage } = useUpdateGate()
+
   useEffect(() => {
     useAuthStore.getState().hydrate()
   }, [])
@@ -141,6 +149,14 @@ export default function App() {
   }, [role])
 
   if (!fontsLoaded || !isHydrated) return null
+
+  if (updateRequired) {
+    return (
+      <SafeAreaProvider>
+        <UpdateRequiredScreen message={updateMessage} />
+      </SafeAreaProvider>
+    )
+  }
 
   if (!role) {
     return (

@@ -35,6 +35,22 @@ so the client can toast on award. The bonus is a house-funded **double-entry**
 credit via `pin_ledger_double_entry` with `type='rsvp_bonus'`, `week_id` = the
 RSVP'd week (the dedup key). See [supabase/PIN_ECONOMY_SCHEMA.md](../supabase/PIN_ECONOMY_SCHEMA.md).
 
+## Missed bonuses — the admin grant path
+
+A build that predates the split write path saves the player's own row through
+the plain upsert — RSVP recorded, **no bonus, no error** (this actually
+happened: a stranded pre-1.0.23 install, July 2026). The rsvp table records no
+actor, so the server can't detect it; remediation is a human call. The **Missed
+Bonuses** section on the same admin screen lists the active week's RSVPs with
+no `rsvp_bonus` credit (proxy-entered rows appear too — the hint says only
+genuine self-RSVPs qualify) with a per-row **Grant** →
+`admin_grant_rsvp_bonus(player_id, week_id)` (`rsvp.adminGrantBonus`):
+`SECURITY DEFINER` + `assert_admin`, requires an existing rsvp row
+(`no_rsvp`), same once-per-(player,week) dedup key (`already_claimed` — a
+later self-submit can never double-pay), **deliberately skips** the deadline
+and `is_enabled` checks, and pays the identical `pin_ledger_double_entry`.
+`pinLedger.rsvpBonusesForWeek` backs the list.
+
 ## Reset revokes bonuses
 
 The admin **Reset** on the RSVP screen goes through `reset_rsvp_for_week(week_id)`
@@ -77,8 +93,12 @@ authoritative) shown while enabled, unclaimed, and before the deadline.
 
 - Migrations: `20260714210000_rsvp_bonus_ledger_type.sql` (adds `rsvp_bonus` to the
   `pin_ledger_type_check` vocabulary), `20260714211000_rsvp_bonus_config.sql`
-  (table + seed + RLS), `20260714212000_submit_own_rsvp.sql` (the RPC).
-- `db.ts`: `rsvp.submitOwn`, `rsvpBonusConfig.{getGlobal,update}`,
-  `pinLedger.rsvpBonusForWeek` (backs the hide-once-claimed banner).
+  (table + seed + RLS), `20260714212000_submit_own_rsvp.sql` (the RPC),
+  `20260717120000_admin_grant_rsvp_bonus.sql` (the admin missed-bonus grant).
+- `db/`: `rsvp.submitOwn`, `rsvp.adminGrantBonus`,
+  `rsvpBonusConfig.{getGlobal,update}`, `pinLedger.rsvpBonusForWeek` (backs the
+  hide-once-claimed banner), `pinLedger.rsvpBonusesForWeek` (backs the
+  missed-bonus list).
 - Probe: `supabase/verify/probe-rsvp-bonus.sql` (award / dedup / past-deadline /
-  disabled / double-entry net-zero). In `run-all-probes.sh`.
+  disabled / double-entry net-zero / admin grant: non-admin rejected, no_rsvp,
+  pays despite disabled+past-deadline, re-grant dedup). In `run-all-probes.sh`.

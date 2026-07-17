@@ -1,5 +1,5 @@
 import { supabase } from '../client'
-import type { TablesInsert, Json } from '../database.types'
+import type { TablesInsert, TablesUpdate, Json } from '../database.types'
 import { HIGHLIGHT_EVENT_TYPES } from '../../activityFeedTemplates'
 
 export const boardPosts = {
@@ -312,4 +312,14 @@ export const broadcastEventRules = {
     supabase.from('broadcast_event_rules').upsert(rule, { onConflict: 'event_type' }),
   setEnabled: (eventType: string, enabled: boolean) =>
     supabase.from('broadcast_event_rules').update({ enabled }).eq('event_type', eventType),
+}
+
+// App version gate — the single global row behind the launch-time "update
+// required" screen. Anon-readable (the gate runs before sign-in and must be
+// able to fail open, not fail locked-out); writes admin-only.
+export const appVersionConfig = {
+  get: () =>
+    supabase.from('app_version_config').select('*').maybeSingle(),
+  update: (id: string, data: TablesUpdate<'app_version_config'>) =>
+    supabase.from('app_version_config').update(data).eq('id', id),
 }

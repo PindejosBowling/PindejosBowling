@@ -14,6 +14,17 @@
 --   * p2, deadline in the PAST        → NOT awarded, reason 'past_deadline',
 --                                        rsvp row written, no bonus for p2;
 --   * p3, bonus DISABLED              → NOT awarded, reason 'disabled', no bonus.
+--
+-- And against admin_grant_rsvp_bonus (the missed-bonus remediation; runs after
+-- the reset section so the week's bonus slate is clean):
+--   * non-admin caller                → rejected (assert_admin);
+--   * admin, player with NO rsvp row  → NOT awarded, reason 'no_rsvp';
+--   * admin, rsvp row present, config DISABLED and deadline PAST
+--                                     → awarded anyway (both checks are
+--                                        intentionally skipped), +amount
+--                                        double-entry (player + house mirror);
+--   * admin, grant again              → NOT awarded, 'already_claimed', still
+--                                        exactly one player-side bonus row.
 -- Raises PROBE_RESULT (always aborts — nothing persists; PROBE_FAIL on violation).
 DO $$
 DECLARE
@@ -174,6 +185,63 @@ BEGIN
     RAISE EXCEPTION 'PROBE_FAIL: reset left rsvp_bonus rows behind';
   END IF;
 
+  ------------------------------------------- admin grant (missed-bonus remedy)
+  -- Slate is clean post-reset. Config is still DISABLED (p3 block) and we set
+  -- the deadline in the PAST — admin_grant_rsvp_bonus must pay regardless.
+  UPDATE public.weeks SET bowled_at = (current_date - 7) WHERE id = v_week;
+
+  -- non-admin caller is rejected
+  PERFORM set_config('request.jwt.claims', json_build_object(
+    'sub', v_u2, 'role', 'authenticated', 'app_metadata', json_build_object('role', 'player'))::text, true);
+  BEGIN
+    PERFORM public.admin_grant_rsvp_bonus(v_p2, v_week);
+    RAISE EXCEPTION 'PROBE_FAIL: non-admin was allowed to grant a bonus';
+  EXCEPTION WHEN OTHERS THEN
+    IF SQLERRM LIKE 'PROBE_FAIL%' THEN RAISE; END IF;  -- real guard fired: fall through
+  END;
+
+  PERFORM set_config('request.jwt.claims', json_build_object(
+    'sub', v_u1, 'role', 'authenticated', 'app_metadata', json_build_object('role', 'admin'))::text, true);
+
+  -- no rsvp row on record → no_rsvp, nothing paid
+  v_res := public.admin_grant_rsvp_bonus(v_p3, v_week);
+  IF (v_res->>'awarded')::boolean OR v_res->>'reason' <> 'no_rsvp' THEN
+    RAISE EXCEPTION 'PROBE_FAIL: grant without rsvp row → % (expected no_rsvp)', v_res->>'reason';
+  END IF;
+
+  -- p2 gets an rsvp row (proxy-style plain insert — the no-bonus write path)
+  INSERT INTO public.rsvp (week_id, player_id, status) VALUES (v_week, v_p2, 'in');
+
+  v_res := public.admin_grant_rsvp_bonus(v_p2, v_week);
+  IF NOT (v_res->>'awarded')::boolean THEN
+    RAISE EXCEPTION 'PROBE_FAIL: admin grant not awarded (reason=%)', v_res->>'reason';
+  END IF;
+  IF (v_res->>'amount')::int <> v_amount THEN
+    RAISE EXCEPTION 'PROBE_FAIL: admin grant amount % (expected %)', v_res->>'amount', v_amount;
+  END IF;
+  IF (SELECT count(*) FROM public.pin_ledger
+      WHERE player_id = v_p2 AND week_id = v_week AND type = 'rsvp_bonus') <> 1 THEN
+    RAISE EXCEPTION 'PROBE_FAIL: admin grant did not write exactly one player bonus row';
+  END IF;
+  IF (SELECT count(*) FROM public.pin_ledger
+      WHERE week_id = v_week AND type = 'rsvp_bonus' AND is_house) <> 1 THEN
+    RAISE EXCEPTION 'PROBE_FAIL: admin grant missing the house mirror row';
+  END IF;
+  IF (SELECT COALESCE(SUM(amount), 0) FROM public.pin_ledger
+      WHERE week_id = v_week AND type = 'rsvp_bonus') <> 0 THEN
+    RAISE EXCEPTION 'PROBE_FAIL: admin grant double entry does not net to zero';
+  END IF;
+
+  -- grant again → already_claimed, still exactly one player-side row
+  v_res := public.admin_grant_rsvp_bonus(v_p2, v_week);
+  IF (v_res->>'awarded')::boolean OR v_res->>'reason' <> 'already_claimed' THEN
+    RAISE EXCEPTION 'PROBE_FAIL: admin re-grant → % (expected already_claimed)', v_res->>'reason';
+  END IF;
+  IF (SELECT count(*) FROM public.pin_ledger
+      WHERE player_id = v_p2 AND week_id = v_week AND type = 'rsvp_bonus') <> 1 THEN
+    RAISE EXCEPTION 'PROBE_FAIL: admin grant paid more than once';
+  END IF;
+
   ------------------------------------------------------------------ capture
   SELECT jsonb_build_object(
     'bonus_amount', v_amount,
@@ -183,8 +251,12 @@ BEGIN
     'p3_reason', 'disabled',
     'pre_reset_bonus_net', v_got,        -- was 0 (double-entry) before reset
     'reset_cleared_bonus', true,         -- reset revoked both sides
-    'post_reset_bonus_rows', (SELECT count(*) FROM public.pin_ledger
-                              WHERE week_id = v_week AND type = 'rsvp_bonus')
+    'admin_grant_nonadmin_rejected', true,
+    'admin_grant_no_rsvp_reason', 'no_rsvp',
+    'admin_grant_awarded', true,         -- despite disabled config + past deadline
+    'admin_grant_dedup_reason', 'already_claimed',
+    'admin_grant_bonus_rows', (SELECT count(*) FROM public.pin_ledger
+                               WHERE week_id = v_week AND type = 'rsvp_bonus')
   ) INTO v_result;
 
   RAISE EXCEPTION 'PROBE_RESULT %', v_result;

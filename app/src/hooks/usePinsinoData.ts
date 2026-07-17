@@ -323,7 +323,7 @@ export interface LeaderboardEntry {
   movement: 'up' | 'down' | 'same' | null
   // Balance partition mirroring PlayerPinsinoScreen's summary card, reconciled to
   // the net-worth headline: pincome + gaming + loanProceeds − debt === netWorth.
-  pincome: number       // scores bowled + house bonuses (score_credit, bonus)
+  pincome: number       // scores bowled + house bonuses (score_credit, bonus, rsvp_bonus)
   loanProceeds: number  // net cash the loan system moved through balance (loan_*)
   gaming: number        // remainder incl. at-risk open action (bets, PvP, bounties, auctions, items)
 }
@@ -976,7 +976,7 @@ export function usePinsinoData(playerId: string | null, viewSeasonId?: string | 
           byPlayer[pid] = seedRow(pid, e.players?.name ?? '—', e.players?.is_active ?? true)
         }
         byPlayer[pid].balance += e.amount
-        if (e.type === 'score_credit' || e.type === 'bonus') byPlayer[pid].pincome += e.amount
+        if (e.type === 'score_credit' || e.type === 'bonus' || e.type === 'rsvp_bonus') byPlayer[pid].pincome += e.amount
         else if (typeof e.type === 'string' && e.type.startsWith('loan_')) byPlayer[pid].loanProceeds += e.amount
         if (settleCutoff && e.created_at && e.created_at < settleCutoff) {
           byPlayer[pid].priorBalance += e.amount
