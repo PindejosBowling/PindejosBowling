@@ -52,12 +52,12 @@
   cell in-line with MIN BID and BIDDERS (a wider small-value `StatCell`;
   auction cards render stat labels as column headers above the values via
   `statLabelsAbove` — no countdown on cards); the detail screen keeps the
-  per-second tick, on a full-width line beneath the stat row (the absolute
-  time lives on the cards; "01:23:45" doesn't fit a shared row cell).
+  per-second tick as the last cell of its single stat row (the absolute
+  time lives on the cards).
   Past `closes_at` while still open → `🔨 HAMMER FALLING…` (cron lag as
   theater) with the bid CTAs hidden (hub card + detail both).
-- **Detail facts**: bidders + min bid render as headline cells above the
-  full-width CLOSES IN ticker; quantity renders as a compact line below
+- **Detail facts**: one headline row — MIN BID / BIDDERS / CLOSES IN
+  (card stat order); quantity renders as a compact line below
   when >1; the four prose rules (win rule, secrecy,
   no-takebacks, bounce) live in `EXPLAINERS.auctionHouse` behind the screen's
   `?` — the dynamic bounce-fee and top-N lines still ride the bid sheet's
