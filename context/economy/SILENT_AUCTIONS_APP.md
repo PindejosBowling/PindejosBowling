@@ -55,8 +55,9 @@
   absolute time promoted to headline weight directly beneath it.
   Past `closes_at` while still open → `🔨 HAMMER FALLING…` (cron lag as
   theater) with the bid CTAs hidden (hub card + detail both).
-- **Detail facts**: min bid / quantity render as a compact row inside the
-  countdown card; the four prose rules (win rule, secrecy,
+- **Detail facts**: min bid rides the countdown row at equal prominence
+  (CLOSES IN / BIDDERS / MIN BID); quantity renders as a compact line below
+  when >1; the four prose rules (win rule, secrecy,
   no-takebacks, bounce) live in `EXPLAINERS.auctionHouse` behind the screen's
   `?` — the dynamic bounce-fee and top-N lines still ride the bid sheet's
   `TermsBlock`.

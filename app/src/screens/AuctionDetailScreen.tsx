@@ -102,6 +102,10 @@ export default function AuctionDetailScreen() {
                       <Text style={styles.countdownValue}>{a.bidderCount}</Text>
                     </View>
                   )}
+                  <View style={styles.countdownCell}>
+                    <Text style={styles.countdownLabel}>MIN BID</Text>
+                    <Text style={styles.countdownValue}>{formatPins(a.minimumBid)}</Text>
+                  </View>
                 </View>
                 {/* The actual deadline, promoted to headline weight — the
                     countdown is theater, this is the fact. */}
@@ -109,11 +113,12 @@ export default function AuctionDetailScreen() {
                 <Text style={styles.closesAtValue}>
                   {formatCloseDateLong(open ? a.closesAt : a.opensAt)}
                 </Text>
-                <View style={styles.factsDivider} />
-                <Text style={styles.factsLine}>
-                  Min bid {formatPins(a.minimumBid)} pins
-                  {a.quantity > 1 ? ` · ${a.quantity} up for grabs` : ''}
-                </Text>
+                {a.quantity > 1 && (
+                  <>
+                    <View style={styles.factsDivider} />
+                    <Text style={styles.factsLine}>{a.quantity} up for grabs</Text>
+                  </>
+                )}
               </>
             )}
           </View>
