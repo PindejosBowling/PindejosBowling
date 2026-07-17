@@ -49,8 +49,9 @@
 - **Close time display** (2026-07): cards show the *absolute* close/open time
   ("Monday, July 20" over "7:00 PM ET" via `formatCloseDateLong`, two stacked
   lines) as a CLOSES/OPENS
-  cell in-line with MIN BID and BIDDERS (a wider small-value `StatCell` — no
-  countdown on cards); the detail screen keeps the per-second tick with the
+  cell in-line with MIN BID and BIDDERS (a wider small-value `StatCell`;
+  auction cards render stat labels as column headers above the values via
+  `statLabelsAbove` — no countdown on cards); the detail screen keeps the per-second tick with the
   absolute time promoted to headline weight directly beneath it.
   Past `closes_at` while still open → `🔨 HAMMER FALLING…` (cron lag as
   theater) with the bid CTAs hidden (hub card + detail both).

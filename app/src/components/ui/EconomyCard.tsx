@@ -24,6 +24,9 @@ interface Props {
   // item's effect line).
   subtitleLines?: number
   stats?: StatCell[]
+  // Render stat labels as column headers above the values (default: value
+  // over label, the original economy-card order).
+  statLabelsAbove?: boolean
   // Dim the whole card (e.g. a scheduled auction).
   dim?: boolean
   // Omit for a non-tappable card.
@@ -36,7 +39,7 @@ interface Props {
 // The economy list-card primitive: the surface/border/padding shell + the
 // header / subtitle / stat-row skeleton previously re-declared by BountyCard,
 // AuctionCard, PvpChallengeRow, and MarketMoveCard.
-export default function EconomyCard({ title, badge, subtitle, subtitleLines = 1, stats, dim, onPress, children }: Props) {
+export default function EconomyCard({ title, badge, subtitle, subtitleLines = 1, stats, statLabelsAbove, dim, onPress, children }: Props) {
   const body = (
     <>
       {(title != null || badge != null) && (
@@ -54,12 +57,15 @@ export default function EconomyCard({ title, badge, subtitle, subtitleLines = 1,
       )}
       {stats != null && stats.length > 0 && (
         <View style={styles.statRow}>
-          {stats.map((s, i) => (
-            <View key={i} style={[styles.statCell, s.flex != null && { flex: s.flex }]}>
-              <Text style={[styles.statValue, s.small && styles.statValueSmall]}>{s.value}</Text>
-              <Text style={styles.statLabel}>{s.label}</Text>
-            </View>
-          ))}
+          {stats.map((s, i) => {
+            const value = <Text key="v" style={[styles.statValue, s.small && styles.statValueSmall]}>{s.value}</Text>
+            const label = <Text key="l" style={[styles.statLabel, statLabelsAbove && styles.statLabelAbove]}>{s.label}</Text>
+            return (
+              <View key={i} style={[styles.statCell, s.flex != null && { flex: s.flex }, statLabelsAbove && styles.statCellHeadered]}>
+                {statLabelsAbove ? [label, value] : [value, label]}
+              </View>
+            )
+          })}
         </View>
       )}
       {children}
@@ -95,4 +101,7 @@ const styles = StyleSheet.create({
   // Phrase-valued cells: smaller, wrappable, baseline-aligned with the row.
   statValueSmall: { fontFamily: fonts.barlowCondensed, fontSize: 14, lineHeight: 17, textAlign: 'center' },
   statLabel: { fontFamily: fonts.barlowCondensed, fontSize: 10, letterSpacing: 1, color: colors.muted, marginTop: 1 },
+  // Header order: label sits on the shared top line, value hangs below.
+  statCellHeadered: { justifyContent: 'flex-start' },
+  statLabelAbove: { marginTop: 0, marginBottom: 2 },
 })

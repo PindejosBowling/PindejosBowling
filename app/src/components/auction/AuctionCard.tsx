@@ -51,6 +51,7 @@ export default function AuctionCard({ auction: a, onPress, onBid }: Props) {
       subtitle={a.itemEffectLine || a.description}
       subtitleLines={0}
       stats={stats}
+      statLabelsAbove
       dim={scheduled}
       onPress={onPress}
     >
