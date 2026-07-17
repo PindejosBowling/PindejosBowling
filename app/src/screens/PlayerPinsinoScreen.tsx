@@ -61,7 +61,8 @@ export default function PlayerPinsinoScreen() {
 
   const summary = useMemo(() => {
     // Three economic buckets that partition every pin_ledger type:
-    //   pincome — pins earned bowling + house bonuses (score_credit, bonus)
+    //   pincome — pins earned bowling + house bonuses (score_credit, bonus,
+    //             rsvp_bonus)
     //   loans   — net cash the loan system moved through the balance
     //             (loan_issued proceeds, less repayments/garnishments/settlement)
     //   gaming  — net across everything else you wager on (bets, PvP, bounties,
@@ -71,7 +72,7 @@ export default function PlayerPinsinoScreen() {
     let pincome = 0
     let loans = 0
     for (const e of ledger) {
-      if (e.type === 'score_credit' || e.type === 'bonus') pincome += e.amount
+      if (e.type === 'score_credit' || e.type === 'bonus' || e.type === 'rsvp_bonus') pincome += e.amount
       else if (e.type.startsWith('loan_')) loans += e.amount
     }
     const gaming = balance - pincome - loans
