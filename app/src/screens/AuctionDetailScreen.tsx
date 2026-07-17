@@ -91,17 +91,18 @@ export default function AuctionDetailScreen() {
               </>
             ) : (
               <>
+                {/* MIN BID leads, matching the card stat order. */}
                 <View style={styles.countdownRow}>
+                  <View style={styles.countdownCell}>
+                    <Text style={styles.countdownLabel}>MIN BID</Text>
+                    <Text style={styles.countdownValue}>{formatPins(a.minimumBid)}</Text>
+                  </View>
                   {open && (
                     <View style={styles.countdownCell}>
                       <Text style={styles.countdownLabel}>{a.bidderCount === 1 ? 'BIDDER' : 'BIDDERS'}</Text>
                       <Text style={styles.countdownValue}>{a.bidderCount}</Text>
                     </View>
                   )}
-                  <View style={styles.countdownCell}>
-                    <Text style={styles.countdownLabel}>MIN BID</Text>
-                    <Text style={styles.countdownValue}>{formatPins(a.minimumBid)}</Text>
-                  </View>
                 </View>
                 {/* The ticker gets a full-width line of its own — "01:23:45"
                     doesn't fit a shared row cell. */}
