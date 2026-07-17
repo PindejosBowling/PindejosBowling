@@ -112,7 +112,14 @@ export default function AuctionDetailScreen() {
                 {a.quantity > 1 && (
                   <>
                     <View style={styles.factsDivider} />
-                    <Text style={styles.factsLine}>{a.quantity} up for grabs</Text>
+                    {/* One emoji per unit on the block — the quantity, made
+                        visible. */}
+                    <Text style={styles.quantityIcons}>
+                      {Array(a.quantity).fill(a.itemIcon).join(' ')}
+                    </Text>
+                    <Text style={styles.factsLine}>
+                      {a.quantity} up for grabs — the top {a.quantity} sealed bids each win one
+                    </Text>
                   </>
                 )}
               </>
@@ -235,6 +242,7 @@ const styles = StyleSheet.create({
   bidderLine: { fontFamily: fonts.barlow, fontSize: 12, color: colors.muted, marginTop: 6 },
   factsDivider: { alignSelf: 'stretch', height: 1, backgroundColor: colors.border, marginTop: 12, marginBottom: 10, marginHorizontal: 14 },
   factsLine: { fontFamily: fonts.barlow, fontSize: 12, color: colors.muted, textAlign: 'center', paddingHorizontal: 14 },
+  quantityIcons: { fontSize: 24, textAlign: 'center', marginBottom: 6, paddingHorizontal: 14 },
 
   sectionLabel: {
     fontFamily: fonts.barlowCondensed,
