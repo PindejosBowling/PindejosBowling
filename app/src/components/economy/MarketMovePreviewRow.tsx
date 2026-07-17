@@ -20,16 +20,20 @@ export default function MarketMovePreviewRow({ event, onPress, fontScale = 1 }: 
   const parts = useMemo(() => renderFeedEvent(event), [event])
   const f = (n: number) => Math.round(n * fontScale)
 
+  // Deterministic length-based sizing instead of adjustsFontSizeToFit: iOS
+  // shrinks multiline text by where the words happen to wrap, so two lines of
+  // near-identical length can land at very different sizes. Thresholds are
+  // tuned to the ~2-line capacity of the feed box at each size; numberOfLines
+  // still ellipsizes the rare overflow.
+  const len = parts.line.length
+  const lineSize = len <= 52 ? 16 : len <= 80 ? 14 : 12
+
   return (
     <TouchableOpacity style={styles.row} onPress={onPress} activeOpacity={0.7} disabled={!onPress}>
       <Text style={[styles.icon, { fontSize: f(18) }]}>{parts.icon}</Text>
-      {/* adjustsFontSizeToFit: the whole line always renders inside the box —
-          long events shrink instead of truncating with an ellipsis. */}
       <Text
-        style={[styles.line, { fontSize: f(16), lineHeight: f(20) }]}
+        style={[styles.line, { fontSize: f(lineSize), lineHeight: f(Math.round(lineSize * 1.3)) }]}
         numberOfLines={2}
-        adjustsFontSizeToFit
-        minimumFontScale={0.6}
       >
         {parts.line}
       </Text>

@@ -37,6 +37,10 @@ type PinsinoNav = NativeStackNavigationProp<PinsinoStackParamList>
 
 const TILE_GAP = 12
 const TILE_WIDTH = (Dimensions.get('window').width - 32 - TILE_GAP * 2) / 3
+// Tile fonts track the tile size (which tracks screen width). ~111pt is the
+// tile width on a 390pt-wide baseline screen, where the base font sizes were
+// designed.
+const TILE_FONT_SCALE = TILE_WIDTH / 111
 
 // Market Moves carousel page width. pagingEnabled snaps by the ScrollView's
 // frame width, so each page must match it exactly: screen − content padding
@@ -138,6 +142,8 @@ export default function PinsinoScreen() {
 
   const sc = useMemo(() => {
     const s = (n: number) => Math.round(n * fitScale)
+    // Tile typography scales with both the screen size and the fit pass.
+    const t = (n: number) => Math.round(n * fitScale * TILE_FONT_SCALE)
     return {
       content: { paddingBottom: s(16) },
       finalBanner: { paddingVertical: s(10), marginBottom: s(12) },
@@ -147,9 +153,9 @@ export default function PinsinoScreen() {
       grid: { rowGap: s(TILE_GAP), marginBottom: s(12) },
       feedBox: { height: s(80) },
       tile: { height: s(TILE_WIDTH) },
-      tileIcon: { fontSize: s(34), marginBottom: s(6) },
-      tileLabel: { fontSize: s(16) },
-      tileHook: { fontSize: s(10), marginTop: s(2) },
+      tileIcon: { fontSize: t(34), marginBottom: s(6) },
+      tileLabel: { fontSize: t(16) },
+      tileHook: { fontSize: t(10), lineHeight: t(13), marginTop: s(2) },
     }
   }, [fitScale])
 
@@ -279,7 +285,18 @@ export default function PinsinoScreen() {
                 activeOpacity={closed ? 1 : 0.7}
               >
                 <Text style={[styles.tileIcon, sc.tileIcon, closed && styles.tileIconClosed]}>{tile.icon}</Text>
-                <Text style={[styles.tileLabel, sc.tileLabel, closed && styles.tileLabelClosed]}>{tile.label}</Text>
+                {/* Always one line: longer labels ("Auction House") shrink to
+                    fit the tile width instead of wrapping. Single-line
+                    adjustsFontSizeToFit is deterministic (width-only), unlike
+                    the multiline variant. */}
+                <Text
+                  style={[styles.tileLabel, sc.tileLabel, closed && styles.tileLabelClosed]}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.6}
+                >
+                  {tile.label}
+                </Text>
                 <Text
                   style={[styles.tileHook, sc.tileHook, closed && styles.tileLabelClosed]}
                   numberOfLines={2}
@@ -580,7 +597,7 @@ const styles = StyleSheet.create({
   tileHook: {
     fontFamily: fonts.barlow,
     fontSize: 10,
-    color: colors.muted,
+    color: colors.text,
     textAlign: 'center',
     marginTop: 2,
     lineHeight: 13,
