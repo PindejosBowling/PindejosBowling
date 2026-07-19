@@ -122,6 +122,18 @@ export default function RsvpScreen() {
     return [...mine, ...playerList.filter(p => p.id !== myPlayerId)]
   }, [playerList, myPlayerId])
 
+  // Header label for the upcoming bowl night: "Day Of Week, Month Day @ Time".
+  // bowled_at is a date-only column (a Monday); the DB has no time-of-day field,
+  // so the time is the fixed league-night convention (7pm ET). Parse at noon to
+  // dodge the UTC-midnight → prior-day shift in negative-offset timezones.
+  const gameHeader = useMemo(() => {
+    if (!bowledAt) return null
+    const d = new Date(`${bowledAt}T12:00:00`)
+    if (isNaN(d.getTime())) return null
+    const dateLabel = d.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })
+    return `${dateLabel} @ 7:00 PM`
+  }, [bowledAt])
+
   // Deadline banner (display only — submit_own_rsvp is authoritative). The exact
   // cutoff is (bowled_at + deadline_time) in the configured timezone; here we
   // parse it as a wall-clock Date for the "by <day> <time>" label and to hide the
@@ -253,6 +265,12 @@ export default function RsvpScreen() {
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent} />}
           ListHeaderComponent={
             <>
+              {gameHeader && (
+                <View style={styles.gameHeader}>
+                  <Text style={styles.gameHeaderLabel}>NEXT UP</Text>
+                  <Text style={styles.gameHeaderDate}>{gameHeader}</Text>
+                </View>
+              )}
               {bonusBanner && (
                 <View style={styles.bonusBanner}>
                   <Text style={styles.bonusBannerEmoji}>🎳</Text>
@@ -337,6 +355,25 @@ export default function RsvpScreen() {
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: colors.bg },
   listContent: { paddingHorizontal: 16, paddingBottom: 24 },
+  gameHeader: {
+    marginTop: 12,
+    alignItems: 'center',
+  },
+  gameHeaderLabel: {
+    fontFamily: fonts.barlowCondensed,
+    fontSize: 11,
+    letterSpacing: 1.5,
+    textTransform: 'uppercase',
+    color: colors.muted,
+    marginBottom: 2,
+    textAlign: 'center',
+  },
+  gameHeaderDate: {
+    fontFamily: fonts.barlowCondensed,
+    fontSize: 22,
+    color: colors.text,
+    textAlign: 'center',
+  },
   bonusBanner: {
     flexDirection: 'row',
     alignItems: 'center',
