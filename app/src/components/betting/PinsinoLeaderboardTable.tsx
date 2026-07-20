@@ -91,7 +91,10 @@ export default function PinsinoLeaderboardTable({
                 {p.name}
               </Text>
               {p.openBetCount > 0 && (
-                <Text style={styles.sbTickets}>{'🎟️'.repeat(p.openBetCount)}</Text>
+                <Text style={styles.sbTickets}>
+                  {'🎟️'.repeat(p.openBetCount)}
+                  <Text style={styles.sbTicketPayout}>  to win +{formatPins(p.openBetProfit)} pins</Text>
+                </Text>
               )}
               {showCols && (
                 <View style={styles.sbBreakRow}>
@@ -193,6 +196,15 @@ const styles = StyleSheet.create({
   // Open-bet tracker: one 🎟️ per pending sportsbook bet, deliberately uncapped —
   // the strip wraps within the name column so heavy bettors' rows visibly pile up.
   sbTickets: { fontSize: 11, marginTop: 1 },
+  // Trailing "to win +N" after the ticket strip — summed profit above stake if
+  // every pending bet hits (boost incl.). Stake-exclusive: net worth already
+  // counts open stakes, so full payout would read as double-counting.
+  sbTicketPayout: {
+    fontFamily: fonts.barlowCondensed,
+    fontSize: 11,
+    color: colors.muted,
+    letterSpacing: 0.5,
+  },
   // Legend footer for the 🎟️ tracker — only rendered while any visible row
   // actually shows tickets, so the card stays clean when nothing is pending.
   sbKeyRow: {

@@ -1,5 +1,6 @@
 import { weeks, seasons, betMarkets, bets, pinLedger, loanLedger, loans, pvpChallenges, bountyPosts, teamSlots, customLines, games, players, auctionHouseState } from '../utils/supabase/db'
 import { computeBalance } from '../utils/ledger'
+import { betPayout } from '../utils/bets'
 import { useAsyncData } from './useAsyncData'
 
 // One bettable side of a market (a single `bet_selections` row, flattened).
@@ -321,6 +322,8 @@ export interface LeaderboardEntry {
   debt: number          // outstanding active-loan debt (≥ 0)
   netWorth: number      // balance + openAction − debt
   openBetCount: number  // pending sportsbook bets (excludes PvP/bounty action)
+  openBetProfit: number // profit above stake if every pending bet hits (incl. boost bonuses) —
+                        // stake-exclusive because netWorth already counts open stakes via openAction
   movement: 'up' | 'down' | 'same' | null
   // Balance partition mirroring PlayerPinsinoScreen's summary card, reconciled to
   // the net-worth headline: pincome + gaming + loanProceeds − debt === netWorth.
@@ -995,13 +998,20 @@ export function usePinsinoData(playerId: string | null, viewSeasonId?: string | 
         if (!pid || !amount) return
         openActionByPlayer[pid] = (openActionByPlayer[pid] ?? 0) + amount
       }
-      // Pending-bet count feeds the leaderboard's 🎟️ tracker (sportsbook only,
-      // unlike openAction which also folds in PvP + bounty escrow).
+      // Pending-bet count + possible profit feed the leaderboard's 🎟️ tracker
+      // (sportsbook only, unlike openAction which also folds in PvP + bounty
+      // escrow). Profit is stake-exclusive (betPayout − stake, boost incl.):
+      // netWorth already credits open stakes via openAction, so showing full
+      // payout would double-count the stake portion.
       const openBetCountByPlayer: Record<string, number> = {}
+      const openBetProfitByPlayer: Record<string, number> = {}
       for (const b of weekBetViews) {
         if (b.status === 'pending') {
           addAction(b.playerId, b.stake)
-          if (b.playerId) openBetCountByPlayer[b.playerId] = (openBetCountByPlayer[b.playerId] ?? 0) + 1
+          if (b.playerId) {
+            openBetCountByPlayer[b.playerId] = (openBetCountByPlayer[b.playerId] ?? 0) + 1
+            openBetProfitByPlayer[b.playerId] = (openBetProfitByPlayer[b.playerId] ?? 0) + (betPayout(b) - b.stake)
+          }
         }
       }
       for (const c of seasonPvpData) {
@@ -1049,6 +1059,7 @@ export function usePinsinoData(playerId: string | null, viewSeasonId?: string | 
             debt,
             netWorth: balance + openAction - debt,
             openBetCount: openBetCountByPlayer[playerId] ?? 0,
+            openBetProfit: openBetProfitByPlayer[playerId] ?? 0,
             pincome,
             loanProceeds,
             // Fold at-risk open action into gaming so the buckets reconcile to
