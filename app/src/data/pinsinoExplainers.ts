@@ -83,7 +83,7 @@ export const EXPLAINERS: Record<PinsinoFeatureKey, FeatureExplainer> = {
     tileHook: 'Borrow pins now, repay them later',
     bullets: [
       'Take a loan and the pins hit your balance instantly — ready to put into play.',
-      'Each week, the shark takes his cut straight from your bowling: a fixed percentage of the pins you knock down that week goes toward the debt. (He calls those pins your "pincome.")',
+      'Each week, the shark takes his cut straight from your bowling: a fixed percentage of the pins you knock down that week goes toward the debt. This is the Weekly Cut.',
       'After the cut, interest is added to whatever you still owe. Bowl every week and the debt shrinks; miss a week and it only grows.',
       'You can repay early, any amount, any time — no penalty.',
     ],
