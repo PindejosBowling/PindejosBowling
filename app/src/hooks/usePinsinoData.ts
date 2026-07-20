@@ -320,6 +320,7 @@ export interface LeaderboardEntry {
   openAction: number    // at-risk escrow: pending bets + locked PvP + active bounties
   debt: number          // outstanding active-loan debt (≥ 0)
   netWorth: number      // balance + openAction − debt
+  openBetCount: number  // pending sportsbook bets (excludes PvP/bounty action)
   movement: 'up' | 'down' | 'same' | null
   // Balance partition mirroring PlayerPinsinoScreen's summary card, reconciled to
   // the net-worth headline: pincome + gaming + loanProceeds − debt === netWorth.
@@ -994,8 +995,14 @@ export function usePinsinoData(playerId: string | null, viewSeasonId?: string | 
         if (!pid || !amount) return
         openActionByPlayer[pid] = (openActionByPlayer[pid] ?? 0) + amount
       }
+      // Pending-bet count feeds the leaderboard's 🎟️ tracker (sportsbook only,
+      // unlike openAction which also folds in PvP + bounty escrow).
+      const openBetCountByPlayer: Record<string, number> = {}
       for (const b of weekBetViews) {
-        if (b.status === 'pending') addAction(b.playerId, b.stake)
+        if (b.status === 'pending') {
+          addAction(b.playerId, b.stake)
+          if (b.playerId) openBetCountByPlayer[b.playerId] = (openBetCountByPlayer[b.playerId] ?? 0) + 1
+        }
       }
       for (const c of seasonPvpData) {
         if (c.status !== 'locked') continue
@@ -1041,6 +1048,7 @@ export function usePinsinoData(playerId: string | null, viewSeasonId?: string | 
             openAction,
             debt,
             netWorth: balance + openAction - debt,
+            openBetCount: openBetCountByPlayer[playerId] ?? 0,
             pincome,
             loanProceeds,
             // Fold at-risk open action into gaming so the buckets reconcile to

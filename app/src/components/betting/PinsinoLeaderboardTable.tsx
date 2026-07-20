@@ -49,6 +49,7 @@ export default function PinsinoLeaderboardTable({
   const rows = limit ? leaderboard.slice(0, limit) : leaderboard
   const isSummary = mode === 'summary'
   const showCols = !isSummary && expanded
+  const showTicketKey = rows.some(p => p.openBetCount > 0)
 
   return (
     <View style={styles.sbCard}>
@@ -89,6 +90,9 @@ export default function PinsinoLeaderboardTable({
               <Text style={[styles.sbName, isMe && styles.sbNameMe]} numberOfLines={1}>
                 {p.name}
               </Text>
+              {p.openBetCount > 0 && (
+                <Text style={styles.sbTickets}>{'🎟️'.repeat(p.openBetCount)}</Text>
+              )}
               {showCols && (
                 <View style={styles.sbBreakRow}>
                   <Metric label="Pincome" value={signed(p.pincome)} tone={p.pincome < 0 ? 'neg' : 'pos'} />
@@ -114,6 +118,11 @@ export default function PinsinoLeaderboardTable({
           </TouchableOpacity>
         )
       })}
+      {showTicketKey && (
+        <View style={styles.sbKeyRow}>
+          <Text style={styles.sbKeyText}>🎟️ = bet placed</Text>
+        </View>
+      )}
     </View>
   )
 }
@@ -181,6 +190,24 @@ const styles = StyleSheet.create({
   sbMoveBox: { width: 16, marginRight: 6, alignItems: 'center', justifyContent: 'center' },
   sbNameCol: { flex: 1, marginRight: 10, gap: 2 },
   sbName: { fontFamily: fonts.barlow, fontSize: 15, color: colors.text },
+  // Open-bet tracker: one 🎟️ per pending sportsbook bet, deliberately uncapped —
+  // the strip wraps within the name column so heavy bettors' rows visibly pile up.
+  sbTickets: { fontSize: 11, marginTop: 1 },
+  // Legend footer for the 🎟️ tracker — only rendered while any visible row
+  // actually shows tickets, so the card stays clean when nothing is pending.
+  sbKeyRow: {
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    alignItems: 'flex-end',
+  },
+  sbKeyText: {
+    fontFamily: fonts.barlowCondensed,
+    fontSize: 10,
+    letterSpacing: 0.5,
+    color: colors.muted,
+  },
   sbNameMe: { color: colors.accent },
   // Expanded breakdown — Pincome / Gaming / Loan Proceeds / Debt as label-over-value
   // stat tiles in a wrapping row, so they reflow to a second line rather than
