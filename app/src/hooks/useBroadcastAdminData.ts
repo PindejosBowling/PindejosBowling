@@ -1,6 +1,13 @@
 import { useState, useCallback, useEffect } from 'react'
-import { push, broadcasts, broadcastEventRules, players } from '../utils/supabase/db'
+import {
+  push,
+  broadcasts,
+  broadcastEventRules,
+  recurringBroadcastSchedules,
+  players,
+} from '../utils/supabase/db'
 import type { BroadcastCategoryRow } from './useNotificationSettingsData'
+import type { Tables } from '../utils/supabase/database.types'
 
 export interface BroadcastRow {
   id: string
@@ -9,7 +16,7 @@ export interface BroadcastRow {
   body: string
   target_player_ids: string[] | null
   data: { route?: string } | null
-  source: 'admin' | 'event'
+  source: 'admin' | 'event' | 'recurring'
   status: 'pending' | 'sending' | 'sent' | 'failed' | 'canceled'
   scheduled_for: string
   sent_at: string | null
@@ -36,6 +43,8 @@ export interface EventRuleCatalogRow {
   } | null
 }
 
+export type RecurringScheduleRow = Tables<'recurring_broadcast_schedules'>
+
 // 'sportsbook_big_win' (source 'sportsbook') → 'Big Win'. Pure string
 // prettifying — event types are machine keys, so the label is derived, never
 // stored, and new catalog rows get a readable label for free.
@@ -57,20 +66,23 @@ export function useBroadcastAdminData() {
   const [rawPlayers, setRawPlayers] = useState<{ id: string; name: string }[]>([])
   const [rawBroadcasts, setRawBroadcasts] = useState<BroadcastRow[]>([])
   const [rawEventRules, setRawEventRules] = useState<EventRuleCatalogRow[]>([])
+  const [rawRecurringSchedules, setRawRecurringSchedules] = useState<RecurringScheduleRow[]>([])
 
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const [catsRes, playersRes, historyRes, rulesRes] = await Promise.all([
+      const [catsRes, playersRes, historyRes, rulesRes, schedulesRes] = await Promise.all([
         push.listCategories(),
         players.listActive(),
         broadcasts.listRecent(),
         broadcastEventRules.listCatalog(),
+        recurringBroadcastSchedules.list(),
       ])
       setRawCategories((catsRes.data ?? []) as BroadcastCategoryRow[])
       setRawPlayers((playersRes.data ?? []).map(p => ({ id: p.id, name: p.name ?? '' })))
       setRawBroadcasts((historyRes.data ?? []) as unknown as BroadcastRow[])
       setRawEventRules((rulesRes.data ?? []) as unknown as EventRuleCatalogRow[])
+      setRawRecurringSchedules(schedulesRes.data ?? [])
     } catch (e) {
       console.error('useBroadcastAdminData error:', e)
     } finally {
@@ -80,5 +92,13 @@ export function useBroadcastAdminData() {
 
   useEffect(() => { load() }, [load])
 
-  return { loading, rawCategories, rawPlayers, rawBroadcasts, rawEventRules, reload: load }
+  return {
+    loading,
+    rawCategories,
+    rawPlayers,
+    rawBroadcasts,
+    rawEventRules,
+    rawRecurringSchedules,
+    reload: load,
+  }
 }

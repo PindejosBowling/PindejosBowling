@@ -314,6 +314,24 @@ export const broadcastEventRules = {
     supabase.from('broadcast_event_rules').update({ enabled }).eq('event_type', eventType),
 }
 
+// Recurring broadcast schedules — admin-defined weekly push slots
+// (context/push-broadcasts.md). The DB owns last_fired_at (a BEFORE UPDATE
+// trigger resets it on reschedule/re-enable) — never send it from the app.
+export const recurringBroadcastSchedules = {
+  list: () =>
+    supabase
+      .from('recurring_broadcast_schedules')
+      .select('*')
+      .order('day_of_week')
+      .order('send_time'),
+  upsert: (row: TablesInsert<'recurring_broadcast_schedules'>) =>
+    supabase.from('recurring_broadcast_schedules').upsert(row).select('id').single(),
+  setEnabled: (id: string, enabled: boolean) =>
+    supabase.from('recurring_broadcast_schedules').update({ enabled }).eq('id', id),
+  remove: (id: string) =>
+    supabase.from('recurring_broadcast_schedules').delete().eq('id', id),
+}
+
 // App version gate — the single global row behind the launch-time "update
 // required" screen. Anon-readable (the gate runs before sign-in and must be
 // able to fail open, not fail locked-out); writes admin-only.

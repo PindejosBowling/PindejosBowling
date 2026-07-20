@@ -580,6 +580,23 @@ CREATE TABLE pvp_ledger (
   updated_at timestamp with time zone NOT NULL DEFAULT now()
 );
 
+CREATE TABLE recurring_broadcast_schedules (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  audience text NOT NULL,
+  day_of_week smallint NOT NULL,
+  send_time time without time zone NOT NULL,
+  timezone text NOT NULL DEFAULT 'America/New_York'::text,
+  category_id uuid NOT NULL,
+  route_key text,
+  title text NOT NULL,
+  body text NOT NULL,
+  enabled boolean NOT NULL DEFAULT true,
+  created_by uuid,
+  last_fired_at timestamp with time zone NOT NULL DEFAULT now(),
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now()
+);
+
 CREATE TABLE registrations (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   player_id uuid NOT NULL,
@@ -950,11 +967,11 @@ ALTER TABLE broadcasts ADD CONSTRAINT broadcasts_category_id_fkey FOREIGN KEY (c
 
 ALTER TABLE broadcasts ADD CONSTRAINT broadcasts_created_by_fkey FOREIGN KEY (created_by) REFERENCES players(id);
 
-ALTER TABLE broadcasts ADD CONSTRAINT broadcasts_created_by_required CHECK (((created_by IS NOT NULL) OR (source = 'event'::text)));
+ALTER TABLE broadcasts ADD CONSTRAINT broadcasts_created_by_required CHECK (((created_by IS NOT NULL) OR (source = ANY (ARRAY['event'::text, 'recurring'::text]))));
 
 ALTER TABLE broadcasts ADD CONSTRAINT broadcasts_pkey PRIMARY KEY (id);
 
-ALTER TABLE broadcasts ADD CONSTRAINT broadcasts_source_check CHECK ((source = ANY (ARRAY['admin'::text, 'event'::text])));
+ALTER TABLE broadcasts ADD CONSTRAINT broadcasts_source_check CHECK ((source = ANY (ARRAY['admin'::text, 'event'::text, 'recurring'::text])));
 
 ALTER TABLE broadcasts ADD CONSTRAINT broadcasts_status_check CHECK ((status = ANY (ARRAY['pending'::text, 'sending'::text, 'sent'::text, 'failed'::text, 'canceled'::text])));
 
@@ -1209,6 +1226,20 @@ ALTER TABLE pvp_ledger ADD CONSTRAINT pvp_ledger_season_id_fkey FOREIGN KEY (sea
 ALTER TABLE pvp_ledger ADD CONSTRAINT pvp_ledger_type_check CHECK ((type = ANY (ARRAY['stake'::text, 'payout'::text, 'refund'::text])));
 
 ALTER TABLE pvp_ledger ADD CONSTRAINT pvp_ledger_week_id_fkey FOREIGN KEY (week_id) REFERENCES weeks(id) ON DELETE SET NULL;
+
+ALTER TABLE recurring_broadcast_schedules ADD CONSTRAINT recurring_broadcast_schedules_audience_check CHECK ((audience = ANY (ARRAY['rsvp_non_responders'::text, 'everyone'::text])));
+
+ALTER TABLE recurring_broadcast_schedules ADD CONSTRAINT recurring_broadcast_schedules_body_check CHECK (((char_length(body) >= 1) AND (char_length(body) <= 1000)));
+
+ALTER TABLE recurring_broadcast_schedules ADD CONSTRAINT recurring_broadcast_schedules_category_id_fkey FOREIGN KEY (category_id) REFERENCES broadcast_categories(id);
+
+ALTER TABLE recurring_broadcast_schedules ADD CONSTRAINT recurring_broadcast_schedules_created_by_fkey FOREIGN KEY (created_by) REFERENCES players(id) ON DELETE SET NULL;
+
+ALTER TABLE recurring_broadcast_schedules ADD CONSTRAINT recurring_broadcast_schedules_day_of_week_check CHECK (((day_of_week >= 0) AND (day_of_week <= 6)));
+
+ALTER TABLE recurring_broadcast_schedules ADD CONSTRAINT recurring_broadcast_schedules_pkey PRIMARY KEY (id);
+
+ALTER TABLE recurring_broadcast_schedules ADD CONSTRAINT recurring_broadcast_schedules_title_check CHECK (((char_length(title) >= 1) AND (char_length(title) <= 120)));
 
 ALTER TABLE registrations ADD CONSTRAINT registrations_pkey PRIMARY KEY (id);
 
@@ -1987,6 +2018,12 @@ CREATE POLICY "admin can update" ON pvp_ledger AS PERMISSIVE FOR UPDATE TO authe
 
 CREATE POLICY "authenticated can read" ON pvp_ledger AS PERMISSIVE FOR SELECT TO authenticated
   USING (true);
+
+ALTER TABLE recurring_broadcast_schedules ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "admin can manage recurring schedules" ON recurring_broadcast_schedules AS PERMISSIVE FOR ALL TO authenticated
+  USING (( SELECT is_admin() AS is_admin))
+  WITH CHECK (( SELECT is_admin() AS is_admin));
 
 ALTER TABLE registrations ENABLE ROW LEVEL SECURITY;
 
@@ -4103,6 +4140,14 @@ DECLARE
   v_url text;
   v_key text;
 BEGIN
+  -- Materialize due recurring slots first; a failure here can never block
+  -- normal broadcast sending.
+  BEGIN
+    PERFORM public.materialize_due_recurring_broadcasts();
+  EXCEPTION WHEN OTHERS THEN
+    RAISE WARNING 'invoke_broadcast_sender: recurring materialization failed: %', SQLERRM;
+  END;
+
   -- Anything to do? Due pending sends, stale 'sending' reclaims, or receipts
   -- old enough to resolve (the Edge Function owns the exact cutoffs; these
   -- probes just avoid pointless invokes).
@@ -4271,6 +4316,99 @@ BEGIN
       AND user_id IS NULL;
   END IF;
   RETURN NEW;
+END;
+$function$
+;
+
+CREATE OR REPLACE FUNCTION public.materialize_due_recurring_broadcasts()
+ RETURNS void
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+DECLARE
+  s           record;
+  v_local_now timestamp;   -- wall clock in the slot's timezone
+  v_occ_local timestamp;   -- this week's occurrence, local wall clock
+  v_due       timestamptz; -- same instant, absolute
+  v_days_back int;
+  v_week_id   uuid;
+  v_targets   uuid[];
+  v_data      jsonb;
+BEGIN
+  FOR s IN SELECT * FROM public.recurring_broadcast_schedules WHERE enabled LOOP
+    BEGIN
+      -- Most recent occurrence of (day_of_week, send_time) at or before now,
+      -- computed in local wall-clock space (DST-safe), converted once.
+      v_local_now := now() AT TIME ZONE s.timezone;
+      v_days_back := ((EXTRACT(DOW FROM v_local_now)::int - s.day_of_week) + 7) % 7;
+      v_occ_local := (v_local_now::date - v_days_back) + s.send_time;
+      IF v_occ_local > v_local_now THEN
+        v_occ_local := v_occ_local - interval '7 days';
+      END IF;
+      v_due := v_occ_local AT TIME ZONE s.timezone;
+
+      -- Each occurrence fires at most once (last_fired_at only moves forward).
+      IF v_due <= s.last_fired_at THEN
+        CONTINUE;
+      END IF;
+
+      -- Consume the occurrence before any skip: a skipped one never fires late.
+      UPDATE public.recurring_broadcast_schedules
+         SET last_fired_at = now()
+       WHERE id = s.id;
+
+      -- Lateness cap: downtime must never cause a middle-of-the-night nag.
+      IF now() - v_due > interval '2 hours' THEN
+        CONTINUE;
+      END IF;
+
+      v_data := jsonb_build_object('recurring_schedule_id', s.id);
+      IF s.route_key IS NOT NULL THEN
+        v_data := v_data || jsonb_build_object('route', s.route_key);
+      END IF;
+
+      IF s.audience = 'rsvp_non_responders' THEN
+        -- Current week: latest unarchived week of the active, registration-closed
+        -- season (same rule as weeks.getCurrent() / submit_own_rsvp).
+        SELECT w.id INTO v_week_id
+          FROM public.weeks w
+          JOIN public.seasons se ON se.id = w.season_id
+         WHERE se.is_active AND NOT se.registration_open AND NOT w.is_archived
+         ORDER BY w.week_number DESC
+         LIMIT 1;
+        IF v_week_id IS NULL THEN
+          CONTINUE;  -- offseason / registration / unarchive window
+        END IF;
+
+        SELECT array_agg(p.id) INTO v_targets
+          FROM public.players p
+         WHERE p.is_active
+           AND NOT EXISTS (
+             SELECT 1 FROM public.rsvp r
+              WHERE r.week_id = v_week_id AND r.player_id = p.id
+           );
+        IF v_targets IS NULL THEN
+          CONTINUE;  -- everyone has responded
+        END IF;
+
+        v_data := v_data || jsonb_build_object('week_id', v_week_id);
+      ELSIF s.audience = 'everyone' THEN
+        v_targets := NULL;  -- whole category (broadcast_recipients semantics)
+      ELSE
+        RAISE WARNING 'materialize_due_recurring_broadcasts: slot % has unknown audience %', s.id, s.audience;
+        CONTINUE;
+      END IF;
+
+      INSERT INTO public.broadcasts
+        (category_id, title, body, target_player_ids, data, source, scheduled_for)
+      VALUES
+        (s.category_id, s.title, s.body, v_targets, v_data, 'recurring', now());
+    EXCEPTION WHEN OTHERS THEN
+      -- Per-slot isolation (also contains an invalid timezone value).
+      RAISE WARNING 'materialize_due_recurring_broadcasts: slot % skipped: %', s.id, SQLERRM;
+    END;
+  END LOOP;
 END;
 $function$
 ;
@@ -5720,6 +5858,23 @@ BEGIN
       jsonb_build_object('loan_id', p_loan_id),
       NULL, now());
   END IF;
+END;
+$function$
+;
+
+CREATE OR REPLACE FUNCTION public.reset_recurring_schedule_last_fired()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SET search_path TO ''
+AS $function$
+BEGIN
+  IF NEW.day_of_week IS DISTINCT FROM OLD.day_of_week
+     OR NEW.send_time IS DISTINCT FROM OLD.send_time
+     OR NEW.timezone  IS DISTINCT FROM OLD.timezone
+     OR (NEW.enabled AND NOT OLD.enabled) THEN
+    NEW.last_fired_at := now();
+  END IF;
+  RETURN NEW;
 END;
 $function$
 ;
@@ -9311,6 +9466,10 @@ CREATE TRIGGER set_updated_at BEFORE UPDATE ON public.pvp_challenge_offers FOR E
 CREATE TRIGGER set_updated_at BEFORE UPDATE ON public.pvp_challenges FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
 CREATE TRIGGER set_updated_at BEFORE UPDATE ON public.pvp_ledger FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+CREATE TRIGGER reset_recurring_last_fired BEFORE UPDATE ON public.recurring_broadcast_schedules FOR EACH ROW EXECUTE FUNCTION reset_recurring_schedule_last_fired();
+
+CREATE TRIGGER set_updated_at BEFORE UPDATE ON public.recurring_broadcast_schedules FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
 CREATE TRIGGER rsvp_resync_markets_del AFTER DELETE ON public.rsvp REFERENCING OLD TABLE AS old_rows FOR EACH STATEMENT EXECUTE FUNCTION trg_resync_markets_rsvp();
 

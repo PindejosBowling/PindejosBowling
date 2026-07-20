@@ -21,13 +21,14 @@ import SettingToggleRow from '../components/ui/SettingToggleRow'
 import CenterModal from '../components/ui/CenterModal'
 import { useAuthStore } from '../stores/authStore'
 import { useUiStore } from '../stores/uiStore'
-import { broadcasts, broadcastEventRules } from '../utils/supabase/db'
+import { broadcasts, broadcastEventRules, recurringBroadcastSchedules } from '../utils/supabase/db'
 import { BROADCAST_TARGETS, getBroadcastTarget } from '../utils/broadcastTargets'
 import { featureMeta } from '../utils/activityFeedTemplates'
 import {
   useBroadcastAdminData,
   BroadcastRow,
   EventRuleCatalogRow,
+  RecurringScheduleRow,
   prettifyEventType,
 } from '../hooks/useBroadcastAdminData'
 import { useDatePicker } from '../hooks/useDatePicker'
@@ -37,6 +38,38 @@ import { useDatePicker } from '../hooks/useDatePicker'
 // or targeted audience, send-now or schedule. The reach line previews the
 // recipient count through the SAME opt-out predicate the sender uses, so
 // what it says is what will happen. Opt-out always wins, even when targeting.
+
+// Recurring schedule audiences — the per-kind targeting strategies the
+// materializer implements (context/push-broadcasts.md). Defaults prefill the
+// editor; category defaults to `league` for both.
+const AUDIENCES: Record<
+  string,
+  { label: string; defaultRoute: string | null; defaultTitle: string; defaultBody: string }
+> = {
+  rsvp_non_responders: {
+    label: "Hasn't RSVP'd",
+    defaultRoute: 'rsvp',
+    defaultTitle: 'RSVP for bowl night',
+    defaultBody: "You haven't RSVP'd this week yet — tap to lock in your answer.",
+  },
+  everyone: {
+    label: 'Everyone',
+    defaultRoute: null,
+    defaultTitle: 'Bowl night tonight',
+    defaultBody: 'Lanes at 7:00 PM — see you there.',
+  },
+}
+const AUDIENCE_KEYS = Object.keys(AUDIENCES)
+
+const DAY_LABELS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
+
+// 'HH:MM:SS' (the DB time round-trip) → '6:00 PM'.
+function formatSendTime(t: string): string {
+  const [h, m] = t.split(':').map(Number)
+  const suffix = h < 12 ? 'AM' : 'PM'
+  const hour12 = h % 12 === 0 ? 12 : h % 12
+  return `${hour12}:${String(m).padStart(2, '0')} ${suffix}`
+}
 
 const STATUS_STYLE: Record<BroadcastRow['status'], { label: string; bg: string }> = {
   pending: { label: 'SCHEDULED', bg: 'rgba(232,255,71,0.14)' },
@@ -50,8 +83,15 @@ export default function BroadcastAdminScreen() {
   const isAdmin = useAuthStore(s => s.role) === 'admin'
   const playerId = useAuthStore(s => s.playerId)
   const { showToast } = useUiStore()
-  const { loading, rawCategories, rawPlayers, rawBroadcasts, rawEventRules, reload } =
-    useBroadcastAdminData()
+  const {
+    loading,
+    rawCategories,
+    rawPlayers,
+    rawBroadcasts,
+    rawEventRules,
+    rawRecurringSchedules,
+    reload,
+  } = useBroadcastAdminData()
 
   // Composer state.
   const [categoryId, setCategoryId] = useState<string | null>(null)
@@ -185,6 +225,23 @@ export default function BroadcastAdminScreen() {
       return
     }
     const { error } = await broadcastEventRules.setEnabled(row.event_type, value)
+    if (error) showToast(error.message, 'error')
+    reload()
+  }
+
+  // ── Recurring schedules ──
+  const [recurringOpen, setRecurringOpen] = useState(false)
+  // null = closed; { row: null } = creating a new slot.
+  const [recurringEdit, setRecurringEdit] = useState<{ row: RecurringScheduleRow | null } | null>(
+    null,
+  )
+  const enabledScheduleCount = useMemo(
+    () => rawRecurringSchedules.filter(s => s.enabled).length,
+    [rawRecurringSchedules],
+  )
+
+  async function onToggleSchedule(s: RecurringScheduleRow, value: boolean) {
+    const { error } = await recurringBroadcastSchedules.setEnabled(s.id, value)
     if (error) showToast(error.message, 'error')
     reload()
   }
@@ -371,6 +428,62 @@ export default function BroadcastAdminScreen() {
           )
         })}
 
+      {/* ── Recurring schedules ── */}
+      <TouchableOpacity
+        style={styles.autoHeader}
+        onPress={() => setRecurringOpen(o => !o)}
+        activeOpacity={0.7}
+      >
+        <Text style={styles.sectionHeader}>
+          RECURRING {recurringOpen ? '▾' : '▸'}
+        </Text>
+        {!recurringOpen && (
+          <Text style={styles.autoCount}>
+            {enabledScheduleCount > 0 ? `${enabledScheduleCount} on` : 'all off'}
+          </Text>
+        )}
+      </TouchableOpacity>
+      {recurringOpen && (
+        <View style={styles.card}>
+          <Text style={styles.autoGroupHeader}>🔁 EVERY WEEK</Text>
+          {rawRecurringSchedules.length === 0 && (
+            <Text style={styles.autoRowMeta}>
+              No recurring notifications yet — add one below.
+            </Text>
+          )}
+          {rawRecurringSchedules.map(s => (
+            <View key={s.id} style={styles.autoRow}>
+              <TouchableOpacity
+                style={styles.autoRowText}
+                onPress={() => setRecurringEdit({ row: s })}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.autoRowLabel}>
+                  {DAY_LABELS[s.day_of_week]} · {formatSendTime(s.send_time)}
+                </Text>
+                <Text style={styles.autoRowMeta} numberOfLines={1}>
+                  {AUDIENCES[s.audience]?.label ?? s.audience} · {s.title}
+                </Text>
+              </TouchableOpacity>
+              <Switch
+                value={s.enabled}
+                onValueChange={v => onToggleSchedule(s, v)}
+                trackColor={{ false: colors.surface2, true: colors.accentDim }}
+                thumbColor={s.enabled ? colors.accent : colors.muted}
+                ios_backgroundColor={colors.surface2}
+              />
+            </View>
+          ))}
+          <TouchableOpacity
+            style={styles.autoRow}
+            onPress={() => setRecurringEdit({ row: null })}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.chipAddText}>+ Add recurring notification</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
       {/* ── History ── */}
       <Text style={styles.sectionHeader}>HISTORY</Text>
       {rawBroadcasts.length === 0 ? (
@@ -389,9 +502,11 @@ export default function BroadcastAdminScreen() {
             <View key={b.id} style={styles.card}>
               <View style={styles.histHead}>
                 <Text style={styles.histTitle} numberOfLines={1}>{b.title}</Text>
-                {b.source === 'event' && (
+                {b.source !== 'admin' && (
                   <View style={[styles.badge, styles.badgeAuto]}>
-                    <Text style={styles.badgeText}>AUTO</Text>
+                    <Text style={styles.badgeText}>
+                      {b.source === 'event' ? 'AUTO' : 'RECURRING'}
+                    </Text>
                   </View>
                 )}
                 <View style={[styles.badge, { backgroundColor: badge.bg }]}>
@@ -437,6 +552,25 @@ export default function BroadcastAdminScreen() {
           broadcast={cancelTarget}
           onConfirm={() => onCancel(cancelTarget)}
           onClose={() => setCancelTarget(null)}
+        />
+      )}
+
+      {recurringEdit && (
+        <RecurringEditModal
+          row={recurringEdit.row}
+          categories={rawCategories}
+          playerId={playerId}
+          onSaved={() => {
+            setRecurringEdit(null)
+            showToast('Recurring notification saved', 'success')
+            reload()
+          }}
+          onDeleted={() => {
+            setRecurringEdit(null)
+            showToast('Recurring notification deleted', 'success')
+            reload()
+          }}
+          onClose={() => setRecurringEdit(null)}
         />
       )}
 
@@ -591,6 +725,232 @@ function RuleEditModal({
           onChange={setEnabled}
         />
       </View>
+    </CenterModal>
+  )
+}
+
+// ── Recurring editor — one weekly push slot ──
+// The slot fires every week at (day, time) ET; the DB materializer resolves
+// the audience at fire time (RSVP non-responders are recomputed each week).
+// last_fired_at is DB-owned — rescheduling resets it server-side.
+function RecurringEditModal({
+  row,
+  categories,
+  playerId,
+  onSaved,
+  onDeleted,
+  onClose,
+}: {
+  row: RecurringScheduleRow | null
+  categories: { id: string; key: string; label: string }[]
+  playerId: string | null
+  onSaved: () => void
+  onDeleted: () => void
+  onClose: () => void
+}) {
+  const { showToast } = useUiStore()
+  const defaultCategoryId =
+    categories.find(c => c.key === 'league')?.id ?? categories[0]?.id ?? null
+
+  const [audience, setAudience] = useState<string>(row?.audience ?? 'rsvp_non_responders')
+  const [day, setDay] = useState<string>(String(row?.day_of_week ?? 1))
+  const [categoryId, setCategoryId] = useState<string | null>(
+    row?.category_id ?? defaultCategoryId,
+  )
+  const [routeKey, setRouteKey] = useState<string>(
+    row ? row.route_key ?? 'none' : AUDIENCES.rsvp_non_responders.defaultRoute ?? 'none',
+  )
+  const [title, setTitle] = useState(row?.title ?? AUDIENCES.rsvp_non_responders.defaultTitle)
+  const [body, setBody] = useState(row?.body ?? AUDIENCES.rsvp_non_responders.defaultBody)
+  const [enabled, setEnabled] = useState(row?.enabled ?? true)
+  const [saving, setSaving] = useState(false)
+  const [deleteArmed, setDeleteArmed] = useState(false)
+
+  // The picker edits ET wall clock regardless of device timezone: only the
+  // picked hours/minutes are read, never an absolute instant.
+  const picker = useDatePicker(() => {
+    const d = new Date()
+    const [h, m] = (row?.send_time ?? '10:00:00').split(':').map(Number)
+    d.setHours(h, m, 0, 0)
+    return d
+  })
+
+  // Switching audience re-prefills any field the admin hasn't customized.
+  function onSelectAudience(next: string) {
+    const prev = AUDIENCES[audience]
+    const meta = AUDIENCES[next]
+    if (title === prev.defaultTitle) setTitle(meta.defaultTitle)
+    if (body === prev.defaultBody) setBody(meta.defaultBody)
+    if (routeKey === (prev.defaultRoute ?? 'none')) setRouteKey(meta.defaultRoute ?? 'none')
+    setAudience(next)
+  }
+
+  const valid = title.trim().length > 0 && body.trim().length > 0 && !!categoryId
+
+  async function onSave() {
+    if (!categoryId) return
+    setSaving(true)
+    try {
+      const pad = (n: number) => String(n).padStart(2, '0')
+      const { error } = await recurringBroadcastSchedules.upsert({
+        ...(row ? { id: row.id } : {}),
+        audience,
+        day_of_week: Number(day),
+        send_time: `${pad(picker.value.getHours())}:${pad(picker.value.getMinutes())}:00`,
+        timezone: 'America/New_York',
+        category_id: categoryId,
+        route_key: routeKey === 'none' ? null : routeKey,
+        title: title.trim(),
+        body: body.trim(),
+        enabled,
+        created_by: row?.created_by ?? playerId,
+      })
+      if (error) {
+        showToast(error.message, 'error')
+        return
+      }
+      onSaved()
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function onDelete() {
+    if (!row) return
+    if (!deleteArmed) {
+      setDeleteArmed(true)
+      return
+    }
+    setSaving(true)
+    try {
+      const { error } = await recurringBroadcastSchedules.remove(row.id)
+      if (error) {
+        showToast(error.message, 'error')
+        return
+      }
+      onDeleted()
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <CenterModal
+      title={row ? 'Edit recurring notification' : 'New recurring notification'}
+      onClose={onClose}
+      busy={saving}
+      keyboardAvoiding
+      footer={
+        <View style={styles.modalBtns}>
+          <Button variant="outline" label="Back" onPress={onClose} fullWidth style={styles.modalCancel} />
+          <Button
+            label="Save"
+            onPress={onSave}
+            disabled={!valid || saving}
+            loading={saving}
+            fullWidth
+          />
+        </View>
+      }
+    >
+      <Text style={styles.modalHint}>
+        Sends every week at this time (Eastern). "Hasn't RSVP'd" only nags players
+        with no answer for the current week — and skips entirely once everyone has
+        replied.
+      </Text>
+
+      <Text style={styles.fieldLabel}>WHO GETS IT</Text>
+      <ToggleGroup
+        options={AUDIENCE_KEYS.map(k => ({ key: k, label: AUDIENCES[k].label }))}
+        value={audience}
+        onChange={onSelectAudience}
+      />
+
+      <Text style={styles.fieldLabel}>DAY OF WEEK</Text>
+      <ToggleGroup
+        variant="pill"
+        scrollable
+        options={DAY_LABELS.map((label, i) => ({ key: String(i), label }))}
+        value={day}
+        onChange={setDay}
+      />
+
+      <Text style={styles.fieldLabel}>TIME (EASTERN)</Text>
+      {Platform.OS === 'android' && (
+        <Button
+          variant="outline"
+          selectable
+          value={picker.value.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
+          onPress={() => picker.setOpen(true)}
+        />
+      )}
+      {(Platform.OS === 'ios' || picker.open) && (
+        <DateTimePicker
+          value={picker.value}
+          mode="time"
+          display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+          onChange={picker.onChange}
+          themeVariant="dark"
+        />
+      )}
+
+      <Text style={styles.fieldLabel}>TITLE</Text>
+      <TextInput
+        style={styles.input}
+        value={title}
+        onChangeText={setTitle}
+        placeholder="e.g. RSVP for bowl night"
+        placeholderTextColor={colors.muted2}
+        maxLength={120}
+      />
+
+      <Text style={styles.fieldLabel}>MESSAGE</Text>
+      <TextInput
+        style={[styles.input, styles.inputMultiline]}
+        value={body}
+        onChangeText={setBody}
+        placeholder="The notification body"
+        placeholderTextColor={colors.muted2}
+        multiline
+        maxLength={1000}
+      />
+
+      <Text style={styles.fieldLabel}>CATEGORY (WHAT USERS CAN MUTE)</Text>
+      <ToggleGroup
+        scrollable
+        options={categories.map(c => ({ key: c.id, label: c.label }))}
+        value={categoryId}
+        onChange={setCategoryId}
+      />
+
+      <Text style={styles.fieldLabel}>TAP DESTINATION</Text>
+      <ToggleGroup
+        variant="pill"
+        scrollable
+        options={[
+          { key: 'none', label: 'None (opens app)' },
+          ...BROADCAST_TARGETS.map(t => ({ key: t.key, label: t.label })),
+        ]}
+        value={routeKey}
+        onChange={setRouteKey}
+      />
+
+      <View style={{ marginTop: 16 }}>
+        <SettingToggleRow
+          label="Enabled"
+          description="Fire this slot every week"
+          value={enabled}
+          onChange={setEnabled}
+        />
+      </View>
+
+      {row && (
+        <TouchableOpacity onPress={onDelete} activeOpacity={0.7} disabled={saving}>
+          <Text style={styles.cancelLink}>
+            {deleteArmed ? 'Tap again to confirm delete →' : 'Delete this recurring notification →'}
+          </Text>
+        </TouchableOpacity>
+      )}
     </CenterModal>
   )
 }

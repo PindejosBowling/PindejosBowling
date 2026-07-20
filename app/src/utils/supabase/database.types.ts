@@ -2551,6 +2551,72 @@ export type Database = {
           },
         ]
       }
+      recurring_broadcast_schedules: {
+        Row: {
+          audience: string
+          body: string
+          category_id: string
+          created_at: string
+          created_by: string | null
+          day_of_week: number
+          enabled: boolean
+          id: string
+          last_fired_at: string
+          route_key: string | null
+          send_time: string
+          timezone: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          audience: string
+          body: string
+          category_id: string
+          created_at?: string
+          created_by?: string | null
+          day_of_week: number
+          enabled?: boolean
+          id?: string
+          last_fired_at?: string
+          route_key?: string | null
+          send_time: string
+          timezone?: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          audience?: string
+          body?: string
+          category_id?: string
+          created_at?: string
+          created_by?: string | null
+          day_of_week?: number
+          enabled?: boolean
+          id?: string
+          last_fired_at?: string
+          route_key?: string | null
+          send_time?: string
+          timezone?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "recurring_broadcast_schedules_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "broadcast_categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "recurring_broadcast_schedules_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       registrations: {
         Row: {
           created_at: string
@@ -3240,6 +3306,7 @@ export type Database = {
           strikes_per_game: number
         }[]
       }
+      materialize_due_recurring_broadcasts: { Args: never; Returns: undefined }
       my_bid_amount: { Args: { p_auction_id: string }; Returns: number }
       open_auction_internal: {
         Args: { p_auction_id: string }
