@@ -88,7 +88,7 @@ export const EXPLAINERS: Record<PinsinoFeatureKey, FeatureExplainer> = {
       'You can repay early, any amount, any time — no penalty.',
     ],
     caveat:
-      'What counts is net worth: balance minus debt. At season close, anything you still owe comes out of your balance.',
+      'At season close, anything you still owe gets paid from your pin balance.',
   },
 
   auctionHouse: {
