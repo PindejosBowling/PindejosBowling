@@ -41,7 +41,7 @@ export const EXPLAINERS: Record<PinsinoFeatureKey, FeatureExplainer> = {
     bullets: [
       'Back a player to beat their projected line for the week, or back your own team to win its matchup.',
       'Stack multiple picks into a parlay — every leg has to hit, but the payout multiplies.',
-      'Pins leave your balance when you place a bet. Tickets settle automatically when the week is finalized — stat props once an admin confirms the lane data, sometimes a beat later.',
+      'Pins leave your balance when you place a bet. Tickets settle automatically when the week is finalized.',
     ],
     caveat:
       'Scared money don\'t make no money - go big or go home!',

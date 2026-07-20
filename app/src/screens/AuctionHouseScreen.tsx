@@ -88,7 +88,7 @@ export default function AuctionHouseScreen() {
   return (
     <ScreenContainer
       title="Auction House"
-      subtitle="Sealed bids · the hammer falls on its own"
+      subtitle="Secret bids for big prizes"
       backdrop={<AuctionBankBackdrop />}
       loading={loading}
       onRefresh={reloadAll}
