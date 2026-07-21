@@ -79,10 +79,18 @@ semantics.
 
 **Line seeding**: `combo_seed_line(member_ids[], stat, season, n_games)` —
 `team_prop_seed_line` generalized from a roster scan to `unnest(member_ids)`.
-Granted to `authenticated` (STABLE, read-only) so the composer sheet previews
-the server number (display-only; the RPC re-seeds at placement). The line
-freezes at market birth (a combo always carries a bet, and no sync ever
-reseeds combos).
+**One half point total** (since `…234333_fix_combo_seed_line_single_half_point`,
+2026-07-21): the line = Σ per-member `floor(avg × n_games)` + 0.5 — each
+member contributes their solo whole-number base (their displayed line minus
+its half point), and the combo adds a single half point, so the combined line
+always equals the sum of the solo lines the combine-mode board shows, minus
+the extra halves. (The original math floored the SUMMED raw averages —
+`floor(Σavg × n) + 0.5` — letting per-member fractions accumulate and
+overstate the line; owner-reported and fixed.) Granted to `authenticated`
+(STABLE, read-only) so the combine-mode BuilderBar previews the server number
+(display-only; the RPC re-seeds at placement). The line freezes at market
+birth (a combo always carries a bet, and no sync ever reseeds combos) —
+combos composed before the fix keep their old lines.
 
 **Feed**: at most ONE `sportsbook_combo_composed` card per bet (the
 `activity_feed_unique_bet_event` index is (bet, event_type)), published only

@@ -544,10 +544,13 @@ export default function SportsbookScreen() {
                           <Text style={styles.memberName}>
                             {m.name}{m.playerId === playerId ? ' (you)' : ''}
                           </Text>
-                          {solo?.line != null && (
-                            <Text style={styles.memberSolo}>solo line {solo.line.toFixed(1)}</Text>
-                          )}
+                          {solo?.line != null && <Text style={styles.memberSoloLabel}>SOLO LINE</Text>}
                         </View>
+                        {/* The player's own line for this stat — the number a
+                            combiner is actually shopping on, so it reads big. */}
+                        <Text style={[styles.memberSoloValue, solo?.line == null && styles.memberSoloNone]}>
+                          {solo?.line != null ? `${solo.line.toFixed(1)}+` : '—'}
+                        </Text>
                         <PickChip
                           label={on ? '✓' : '+'}
                           selected={on}
@@ -750,13 +753,24 @@ const styles = StyleSheet.create({
     color: colors.text,
     letterSpacing: 0.3,
   },
-  memberSolo: {
+  // The member's own line for the combo's stat — the deciding number, so it
+  // gets the big accent value treatment; "—" (muted size stays) when the
+  // player has no individual market for this stat.
+  memberSoloLabel: {
     fontFamily: fonts.barlowCondensed,
-    fontSize: 12,
+    fontSize: 10,
+    letterSpacing: 1.5,
     color: colors.muted,
     marginTop: 1,
-    letterSpacing: 0.5,
   },
+  memberSoloValue: {
+    fontFamily: fonts.barlowCondensedHeavy,
+    fontSize: 20,
+    color: colors.accent,
+    letterSpacing: 0.5,
+    marginRight: 4,
+  },
+  memberSoloNone: { color: colors.muted2 },
   // Scope-level in-progress warning — shown above the rows when any in-scope
   // market is closed for betting.
   inProgressNote: {

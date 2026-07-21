@@ -2870,7 +2870,9 @@ BEGIN
   IF v_n_members = 0 THEN v_n_members := 1; END IF;
 
   IF p_stat IN ('clean_frames', 'strikes', 'spares') THEN
-    SELECT COALESCE(SUM(pl.avg_stat), 0) INTO v_sum
+    -- Per member: floor(per-game avg × games) = their solo whole-number base
+    -- (no data → 0). Summed bases + ONE half point.
+    SELECT COALESCE(SUM(floor(COALESCE(pl.avg_stat, 0) * p_n_games)), 0) INTO v_sum
     FROM (SELECT DISTINCT m AS player_id FROM unnest(p_member_ids) m) mem
     CROSS JOIN LATERAL (
       SELECT CASE p_stat
@@ -2881,14 +2883,14 @@ BEGIN
       FROM public.lanetalk_game_imports i
       WHERE i.player_id = mem.player_id AND i.classification = 'official' AND i.frames > 0
     ) pl;
-    -- Half-point, floored once; clamp to [0.5, 10 frames/game × games × members − 0.5].
+    -- Clamp to [0.5, 10 frames/game × games × members − 0.5].
     RETURN LEAST(10 * p_n_games * v_n_members - 0.5,
-                 GREATEST(0.5, floor(COALESCE(v_sum, 0) * p_n_games) + 0.5));
+                 GREATEST(0.5, v_sum + 0.5));
 
   ELSIF p_stat = 'total_pins' THEN
-    SELECT COALESCE(SUM(public.player_raw_avg_score(mem.player_id, p_season_id)), 0) INTO v_sum
+    SELECT COALESCE(SUM(floor(public.player_raw_avg_score(mem.player_id, p_season_id) * p_n_games)), 0) INTO v_sum
     FROM (SELECT DISTINCT m AS player_id FROM unnest(p_member_ids) m) mem;
-    RETURN GREATEST(0.5, floor(COALESCE(v_sum, 0) * p_n_games) + 0.5);
+    RETURN GREATEST(0.5, v_sum + 0.5);
 
   ELSE
     RAISE EXCEPTION 'Unknown combo stat %', p_stat;
