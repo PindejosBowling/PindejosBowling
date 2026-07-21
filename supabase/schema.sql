@@ -9327,10 +9327,21 @@ CREATE OR REPLACE FUNCTION public.weeks_derive_bowled_at()
  SET search_path TO ''
 AS $function$
 DECLARE
+  v_prev_bowled   date;
   v_start_date    date;
   v_bowling_night text;
 BEGIN
   IF NEW.bowled_at IS NOT NULL THEN
+    RETURN NEW;
+  END IF;
+
+  -- Chain: the previous week's actual date + 7. Survives schedule slips the
+  -- season-start formula below cannot see (the 2026-07-20 collision incident).
+  SELECT bowled_at INTO v_prev_bowled
+    FROM public.weeks
+   WHERE season_id = NEW.season_id AND week_number = NEW.week_number - 1;
+  IF v_prev_bowled IS NOT NULL THEN
+    NEW.bowled_at := v_prev_bowled + 7;
     RETURN NEW;
   END IF;
 
@@ -9344,7 +9355,8 @@ BEGIN
     RETURN NEW;
   END IF;
 
-  -- Scheduled bowl day = the season's start Monday plus one week per week_number.
+  -- No prior week to chain from: scheduled bowl day = the season's start
+  -- Monday plus one week per week_number.
   NEW.bowled_at := v_start_date + ((NEW.week_number - 1) * 7);
 
   -- The formula (and parseLanetalk.toMonday) assume a Monday cadence. Flag any

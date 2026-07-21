@@ -138,15 +138,18 @@ async function reprocessWeek(
   // playerId → that player's non-fill team_slots this week (for official scores).
   const { data: slotRows, error: slotErr } = await admin
     .from('team_slots')
-    .select('id, player_id, teams!inner(week_id)')
+    .select('id, player_id, players(name), teams!inner(week_id)')
     .eq('teams.week_id', weekId)
     .not('player_id', 'is', null)
   if (slotErr) return { ok: false, stage: 'reprocess_slots', message: `Slot lookup failed: ${slotErr.message}` }
   const slotsByPlayer = new Map<string, string[]>()
+  const candidates: SlotCandidate[] = []
   for (const r of (slotRows ?? []) as any[]) {
     const arr = slotsByPlayer.get(r.player_id as string) ?? []
     arr.push(r.id as string)
     slotsByPlayer.set(r.player_id as string, arr)
+    const name = (r.players?.name ?? '') as string
+    if (name) candidates.push({ playerId: r.player_id as string, teamSlotId: r.id as string, name })
   }
 
   // Group imports: matched players by player_id (combined night), unmatched by
@@ -164,6 +167,22 @@ async function reprocessWeek(
     }
   }
 
+  // Second chance for unmatched links: newer imports persist the parsed bowler
+  // name as payload.session_player, so reprocess can re-run the name match —
+  // e.g. after a roster fix, or after a mis-bound week's rows were moved here.
+  let rematchedLinks = 0
+  for (const [srcUrl, games] of [...byUrl]) {
+    const name = games.map(g => g.payload?.session_player).find(v => typeof v === 'string' && v) as string | undefined
+    if (!name) continue
+    const m = matchPlayer(name, candidates)
+    if (!m) continue
+    const arr = byPlayer.get(m.playerId) ?? []
+    arr.push(...games); byPlayer.set(m.playerId, arr)
+    byUrl.delete(srcUrl)
+    rematchedLinks++
+    log('reprocess_rematched', { srcUrl, sessionPlayer: name, matchedPlayer: m.name, playerId: m.playerId })
+  }
+
   const outRows: ReturnType<typeof buildNightRows> = []
   let officialCount = 0
   for (const [playerId, games] of byPlayer) {
@@ -178,7 +197,7 @@ async function reprocessWeek(
     outRows.push(...buildNightRows(games, [], null, null, weekId))
   }
 
-  log('reprocess_derived', { weekId, players: byPlayer.size, unmatchedLinks: byUrl.size, rows: outRows.length, officialCount })
+  log('reprocess_derived', { weekId, players: byPlayer.size, unmatchedLinks: byUrl.size, rematchedLinks, rows: outRows.length, officialCount })
 
   // Replace the week's imports (rows built fully in memory first; nothing
   // references these by FK). Renumbering across links can't survive the
@@ -192,6 +211,7 @@ async function reprocessWeek(
     ok: true,
     reprocessed: true,
     weekId,
+    rematchedLinks,
     players: byPlayer.size,
     rowCount: outRows.length,
     officialCount,
@@ -371,18 +391,29 @@ Deno.serve(async (req) => {
       }
       const { data: weekRows, error: weekErr } = await admin
         .from('weeks')
-        .select('id')
+        .select('id, week_number, teams(id)')
         .eq('bowled_at', session.date)
-        .order('week_number', { ascending: false })
-        .limit(1)
       if (weekErr) return fail('week_lookup', `Week lookup failed: ${weekErr.message}`, 500, { date: session.date, error: weekErr.message })
-      weekId = weekRows?.[0]?.id ?? null
-      if (!weekId) {
+      if (!weekRows?.length) {
         return fail('week_not_found', `No league week found for ${session.date}`, 200, {
           weekResolved: false, date: session.date, datetimeText: session.datetime_text, player: session.player,
         })
       }
-      log('week_resolved', { weekId, date: session.date, source: 'date' })
+      // Two weeks can share a bowled_at only through a scheduling anomaly (a
+      // stale derived date colliding with a real one — the 2026-07-20 incident
+      // bound imports to an empty just-opened week and every game came out
+      // unmatched). Prefer the week that actually has teams; if that doesn't
+      // disambiguate, refuse loudly rather than silently guessing.
+      const withTeams = weekRows.filter((w: any) => (w.teams ?? []).length > 0)
+      const pool = withTeams.length ? withTeams : weekRows
+      if (pool.length > 1) {
+        return fail('week_ambiguous', `Multiple league weeks share ${session.date} — fix the week dates or pin a week for this import`, 200, {
+          weekResolved: false, date: session.date, player: session.player,
+          weeks: weekRows.map((w: any) => ({ id: w.id, weekNumber: w.week_number, teamCount: (w.teams ?? []).length })),
+        })
+      }
+      weekId = pool[0].id as string
+      log('week_resolved', { weekId, date: session.date, source: 'date', candidates: weekRows.length })
     }
 
     // ── Candidate set: non-fill team_slots in that week ───────────────────────
@@ -421,7 +452,10 @@ Deno.serve(async (req) => {
       sessionPosition: g.game_number,
       score: g.score,
       playedAt: g.played_at,
-      payload: g as unknown as Record<string, unknown>,
+      // Carry the parsed bowler name into the stored payload: without it an
+      // unmatched row can never be re-matched by reprocess (nothing else
+      // records who the session belonged to).
+      payload: { ...(g as unknown as Record<string, unknown>), session_player: session.player ?? null },
     }))
     let prior: NightRow[] = []
     if (matched) {
