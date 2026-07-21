@@ -10,7 +10,7 @@ import {
 } from 'react'
 import { View, StyleSheet } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import BetSlip, { type SlipPick, type SlipSpecial, type SlipSubmit } from './BetSlip'
+import BetSlip, { type SlipPick, type SlipSpecial, type SlipCombo, type SlipSubmit } from './BetSlip'
 import {
   normalizeMarket,
   isSelectionHiddenInUI,
@@ -41,11 +41,15 @@ interface BetSlipContextValue {
   // Current staged contents — read by the board to highlight selected cells.
   slipPicks: SlipPick[]
   slipSpecials: SlipSpecial[]
-  // Staging (board taps hand in a fully-built pick; specials hand in a bundle).
+  slipCombos: SlipCombo[]
+  // Staging (board taps hand in a fully-built pick; specials hand in a bundle;
+  // the combo composer hands in a market-less combo spec).
   stagePick: (pick: SlipPick) => void
   removeSlipPick: (marketId: string) => void
   stageSpecial: (special: SlipSpecial) => void
   removeSlipSpecial: (key: string) => void
+  stageCombo: (combo: SlipCombo) => void
+  removeSlipCombo: (key: string) => void
   clearSlip: () => void
   openSlip: () => void
   // Copy an existing active bet into the slip, re-resolved against current live
@@ -64,10 +68,13 @@ const BetSlipContext = createContext<BetSlipContextValue>({
   enabled: false,
   slipPicks: [],
   slipSpecials: [],
+  slipCombos: [],
   stagePick: NOOP,
   removeSlipPick: NOOP,
   stageSpecial: NOOP,
   removeSlipSpecial: NOOP,
+  stageCombo: NOOP,
+  removeSlipCombo: NOOP,
   clearSlip: NOOP,
   openSlip: NOOP,
   copyBet: async () => {},
@@ -109,6 +116,7 @@ export function BetSlipProvider({ children }: { children: ReactNode }) {
 
   const [slipPicks, setSlipPicks] = useState<SlipPick[]>([])
   const [slipSpecials, setSlipSpecials] = useState<SlipSpecial[]>([])
+  const [slipCombos, setSlipCombos] = useState<SlipCombo[]>([])
   const [slipOpen, setSlipOpen] = useState(false)
   const [placing, setPlacing] = useState(false)
 
@@ -157,7 +165,7 @@ export function BetSlipProvider({ children }: { children: ReactNode }) {
   // Lazy load: fetch balance + inventory the first time the slip fills, and
   // refresh whenever it empties→fills again. Keeps idle cost ~zero (nothing
   // fetches until a pick is staged from the board or a bet is copied).
-  const count = slipPicks.length + slipSpecials.length
+  const count = slipPicks.length + slipSpecials.length + slipCombos.length
   const wasEmpty = useRef(true)
   useEffect(() => {
     if (count > 0 && wasEmpty.current) {
@@ -195,9 +203,24 @@ export function BetSlipProvider({ children }: { children: ReactNode }) {
     setSlipSpecials(prev => prev.filter(s => s.key !== key))
   }, [])
 
+  // Staging the identical combo again (same canonical key) toggles it out —
+  // matching how re-staging the same pick removes it from the slip.
+  const stageCombo = useCallback((combo: SlipCombo) => {
+    setSlipCombos(prev =>
+      prev.some(c => c.key === combo.key)
+        ? prev.filter(c => c.key !== combo.key)
+        : [...prev, combo]
+    )
+  }, [])
+
+  const removeSlipCombo = useCallback((key: string) => {
+    setSlipCombos(prev => prev.filter(c => c.key !== key))
+  }, [])
+
   const clearSlip = useCallback(() => {
     setSlipPicks([])
     setSlipSpecials([])
+    setSlipCombos([])
     setSlipOpen(false)
   }, [])
 
@@ -235,6 +258,7 @@ export function BetSlipProvider({ children }: { children: ReactNode }) {
     }
 
     await refreshContext()
+    setSlipCombos([])
     if (isSpecial) {
       setSlipPicks([])
       setSlipSpecials([{
@@ -266,10 +290,13 @@ export function BetSlipProvider({ children }: { children: ReactNode }) {
     setSlipOpen(true)
   }, [enabled, showToast, refreshContext])
 
-  // Places the whole slip: at most one parlay (the combined picks) plus each
-  // standalone single (singles-mode picks + every special, which carries its
-  // lineId tag). Items attach to the sole bet only (BetSlip gates the flags).
-  // Sequential; reports partial placement on failure. Lifted from SportsbookScreen.
+  // Places the whole slip: at most one parlay (the combined picks + combo
+  // specs) plus each standalone single (singles-mode picks/combos + every
+  // special, which carries its lineId tag). Combo-bearing entries route
+  // through compose_combo_bet — the combo markets are created atomically WITH
+  // the bet — everything else through bets.place. Items attach to the sole
+  // bet only (BetSlip gates the flags). Sequential; reports partial placement
+  // on failure.
   const placeSlip = useCallback(async ({ parlay, singles, insure, crutch, boost }: SlipSubmit) => {
     if (!enabled) return
     const total = (parlay?.stake ?? 0) + singles.reduce((s, e) => s + e.stake, 0)
@@ -277,21 +304,36 @@ export function BetSlipProvider({ children }: { children: ReactNode }) {
     if (singles.some(e => e.stake < 10)) { showToast('Minimum stake is 10 pins', 'error'); return }
     if (total > balance) { showToast('Total stake exceeds your balance', 'error'); return }
 
+    const comboByKey = new Map(slipCombos.map(c => [c.key, c]))
+    const toSpec = (c: SlipCombo) => ({
+      memberIds: c.memberIds, stat: c.stat, scope: c.scope, gameNumber: c.gameNumber,
+    })
+    const itemArgs = (): [string | undefined, string | undefined, string | undefined] => [
+      insure ? tickets[0] : undefined, crutch ? crutches[0] : undefined, boost ? boosts[0] : undefined,
+    ]
+
     setPlacing(true)
     let placed = 0
     const totalBets = (parlay ? 1 : 0) + singles.length
     try {
       if (parlay) {
-        const { error } = await bets.place(
-          parlay.selectionIds, parlay.stake, undefined,
-          insure ? tickets[0] : undefined, crutch ? crutches[0] : undefined, boost ? boosts[0] : undefined)
+        const parlayCombos = parlay.comboKeys
+          .map(k => comboByKey.get(k))
+          .filter((c): c is SlipCombo => !!c)
+        const { error } = parlayCombos.length > 0
+          ? await bets.composeCombo(
+              parlayCombos[0].weekId, parlayCombos.map(toSpec), parlay.stake,
+              parlay.selectionIds.length > 0 ? parlay.selectionIds : undefined,
+              ...itemArgs())
+          : await bets.place(parlay.selectionIds, parlay.stake, undefined, ...itemArgs())
         if (error) { showToast(error.message, 'error'); return }
         placed += 1
       }
       for (const e of singles) {
-        const { error } = await bets.place(
-          e.selectionIds, e.stake, e.lineId,
-          insure ? tickets[0] : undefined, crutch ? crutches[0] : undefined, boost ? boosts[0] : undefined)
+        const combo = e.comboKey ? comboByKey.get(e.comboKey) : undefined
+        const { error } = combo
+          ? await bets.composeCombo(combo.weekId, [toSpec(combo)], e.stake, undefined, ...itemArgs())
+          : await bets.place(e.selectionIds, e.stake, e.lineId, ...itemArgs())
         if (error) {
           showToast(placed > 0 ? `Placed ${placed} — then: ${error.message}` : error.message, 'error')
           return
@@ -307,23 +349,26 @@ export function BetSlipProvider({ children }: { children: ReactNode }) {
       await refreshContext()
       hostReload.current?.()
     }
-  }, [enabled, balance, tickets, crutches, boosts, showToast, clearSlip, refreshContext])
+  }, [enabled, balance, slipCombos, tickets, crutches, boosts, showToast, clearSlip, refreshContext])
 
   const value = useMemo<BetSlipContextValue>(() => ({
     enabled,
     slipPicks,
     slipSpecials,
+    slipCombos,
     stagePick,
     removeSlipPick,
     stageSpecial,
     removeSlipSpecial,
+    stageCombo,
+    removeSlipCombo,
     clearSlip,
     openSlip,
     copyBet,
     ghosts,
     reloadInventory: refreshContext,
     registerReload,
-  }), [enabled, slipPicks, slipSpecials, stagePick, removeSlipPick, stageSpecial, removeSlipSpecial, clearSlip, openSlip, copyBet, ghosts, refreshContext, registerReload])
+  }), [enabled, slipPicks, slipSpecials, slipCombos, stagePick, removeSlipPick, stageSpecial, removeSlipSpecial, stageCombo, removeSlipCombo, clearSlip, openSlip, copyBet, ghosts, refreshContext, registerReload])
 
   return (
     <BetSlipContext.Provider value={value}>
@@ -336,10 +381,12 @@ export function BetSlipProvider({ children }: { children: ReactNode }) {
           <BetSlip
             picks={slipPicks}
             specials={slipSpecials}
+            combos={slipCombos}
             open={slipOpen}
             onOpenChange={setSlipOpen}
             onRemovePick={removeSlipPick}
             onRemoveSpecial={removeSlipSpecial}
+            onRemoveCombo={removeSlipCombo}
             onClear={clearSlip}
             balance={balance}
             placing={placing}

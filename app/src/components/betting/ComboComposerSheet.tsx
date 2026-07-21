@@ -3,32 +3,28 @@ import { View, Text, StyleSheet, TouchableOpacity } from 'react-native'
 import { colors, fonts, radius } from '../../theme'
 import BottomSheet from '../ui/BottomSheet'
 import Button from '../ui/Button'
-import PinAmountInput from '../ui/PinAmountInput'
 import ToggleGroup from '../ui/ToggleGroup'
 import TermsBlock from '../ui/TermsBlock'
 import { TERMS } from '../../data/pinsinoExplainers'
 import { STAT_LABELS } from '../../hooks/usePinsinoData'
-import { useUiStore } from '../../stores/uiStore'
 import { useAuthStore } from '../../stores/authStore'
-import { betMarkets, bets } from '../../utils/supabase/db'
-import { formatPins } from '../../utils/formatting'
+import { useBetSlip } from './BetSlipProvider'
+import { betMarkets } from '../../utils/supabase/db'
 
 interface Props {
-  // Compose a combo line (member set × stat × scope) and bet it in one action.
-  // Mount conditionally.
+  // Compose a combo line (member set × stat × scope) and ADD IT TO THE BET
+  // SLIP as a staged combo spec — no market exists yet, and no bet is placed
+  // here. The slip places it (compose_combo_bet creates the market atomically
+  // with the bet), so a combo coexists with regular picks and other combos in
+  // one parlay. Mount conditionally.
   weekId: string
   seasonId: string
-  balance: number
   // The week's schedule game numbers (board-derived; [1, 2] before teams —
   // mirrors the compose RPC's pre-teams default).
   gameNumbers: number[]
   // Selectable member pool: the week's RSVP'd-in players (the RPC re-enforces).
   members: { playerId: string; name: string }[]
-  // Staged bet-slip selections, offered as parlay legs for the new combo.
-  slipSelectionIds: string[]
   onClose: () => void
-  // parlayed = the staged slip was consumed into the combo bet (clear it).
-  onDone: (parlayed: boolean) => void
 }
 
 const STAT_OPTIONS = (['strikes', 'spares', 'clean_frames', 'total_pins'] as const).map(k => ({
@@ -37,18 +33,15 @@ const STAT_OPTIONS = (['strikes', 'spares', 'clean_frames', 'total_pins'] as con
 }))
 
 export default function ComboComposerSheet({
-  weekId, seasonId, balance, gameNumbers, members, slipSelectionIds, onClose, onDone,
+  weekId, seasonId, gameNumbers, members, onClose,
 }: Props) {
-  const { showToast } = useUiStore()
   const playerId = useAuthStore(s => s.playerId)
+  const { slipCombos, stageCombo, openSlip } = useBetSlip()
 
   const [stat, setStat] = useState<string>('strikes')
   // 'night' or a schedule game number as a string.
   const [scope, setScope] = useState<string>('night')
   const [selected, setSelected] = useState<Set<string>>(new Set())
-  const [stakeText, setStakeText] = useState('')
-  const [parlayWithSlip, setParlayWithSlip] = useState(false)
-  const [saving, setSaving] = useState(false)
 
   const scopeOptions = useMemo(
     () => [
@@ -59,11 +52,17 @@ export default function ComboComposerSheet({
   )
 
   const memberIds = useMemo(() => [...selected].sort(), [selected])
-  const stake = Number(stakeText) || 0
+  const gameNumber = scope === 'night' ? null : Number(scope)
   const nGames = scope === 'night' ? Math.max(gameNumbers.length, 1) : 1
 
-  // Live line preview — the EXACT number the market will carry (combo_seed_line
-  // is the same function the compose RPC seeds with). Debounced per selection.
+  // The slip staging key = the combo's canonical identity, so staging the same
+  // combo twice toggles (and two different combos coexist).
+  const comboKey = `${stat}|${scope}|${memberIds.join(',')}`
+  const alreadyStaged = slipCombos.some(c => c.key === comboKey)
+
+  // Live line preview — the number the market will be seeded with
+  // (combo_seed_line is the same function the compose RPC uses). Display-only:
+  // the RPC re-seeds at placement. Debounced per selection.
   const [previewLine, setPreviewLine] = useState<number | null>(null)
   useEffect(() => {
     if (memberIds.length < 2) { setPreviewLine(null); return }
@@ -75,14 +74,6 @@ export default function ComboComposerSheet({
     return () => { cancelled = true; clearTimeout(t) }
   }, [memberIds.join(','), stat, seasonId, nGames])
 
-  const error = useMemo<string | null>(() => {
-    if (memberIds.length < 2) return 'Pick at least two players'
-    if (stake <= 0) return 'Enter your wager'
-    if (stake < 10) return 'Minimum wager is 10 pins'
-    if (stake > balance) return 'Wager exceeds your balance'
-    return null
-  }, [memberIds.length, stake, balance])
-
   function toggleMember(id: string) {
     setSelected(prev => {
       const next = new Set(prev)
@@ -92,28 +83,21 @@ export default function ComboComposerSheet({
     })
   }
 
-  const parlayLegs = parlayWithSlip ? slipSelectionIds : []
-  const totalOdds = 2 * Math.pow(2, parlayLegs.length)
-
-  async function submit() {
-    if (saving || error) return
-    setSaving(true)
-    try {
-      const { data, error: rpcErr } = await bets.composeCombo(
-        weekId, memberIds, stat, scope === 'night' ? 'night' : 'game',
-        scope === 'night' ? null : Number(scope), stake,
-        parlayLegs.length > 0 ? parlayLegs : undefined,
-      )
-      if (rpcErr) { showToast(rpcErr.message, 'error'); return }
-      const deduped = (data as any)?.deduped === true
-      showToast(deduped ? 'Joined the existing combo' : 'Combo placed', 'success')
-      onDone(parlayLegs.length > 0)
-      onClose()
-    } catch {
-      showToast('Failed to place the combo', 'error')
-    } finally {
-      setSaving(false)
-    }
+  function addToSlip() {
+    if (memberIds.length < 2) return
+    const nameById = new Map(members.map(m => [m.playerId, m.name]))
+    stageCombo({
+      key: comboKey,
+      weekId,
+      memberIds,
+      memberNames: memberIds.map(id => nameById.get(id) ?? '—'),
+      stat,
+      scope: scope === 'night' ? 'night' : 'game',
+      gameNumber,
+      line: previewLine,
+    })
+    onClose()
+    openSlip()
   }
 
   return (
@@ -121,19 +105,16 @@ export default function ComboComposerSheet({
       title="Build a Combo"
       subtitle="Combine players into one line — their stats sum against it"
       onClose={onClose}
-      busy={saving}
-      keyboardAvoiding
       footer={
         <>
           <Button
-            label={error ? 'Compose & Bet' : `Bet ${formatPins(stake)} on Over ${previewLine != null ? previewLine.toFixed(1) : '…'}`}
+            label={alreadyStaged ? 'Remove from Bet Slip' : 'Add to Bet Slip'}
             size="lg"
-            onPress={submit}
-            loading={saving}
-            disabled={!!error || saving}
+            onPress={addToSlip}
+            disabled={memberIds.length < 2}
             style={styles.submitBtn}
           />
-          <Button label="Cancel" variant="ghost" onPress={() => !saving && onClose()} />
+          <Button label="Cancel" variant="ghost" onPress={onClose} />
         </>
       }
     >
@@ -167,7 +148,7 @@ export default function ComboComposerSheet({
         </View>
       )}
 
-      {/* The seeded line, straight from the server. */}
+      {/* The seeded line, straight from the server (re-derived at placement). */}
       <View style={styles.previewRow}>
         <Text style={styles.previewLabel}>THE LINE</Text>
         <Text style={styles.previewValue}>
@@ -179,34 +160,12 @@ export default function ComboComposerSheet({
         </Text>
       </View>
 
-      <Text style={styles.label}>YOUR WAGER</Text>
-      <PinAmountInput variant="big" value={stakeText} onChangeText={setStakeText} placeholder="min 10" />
-
-      {/* Parlay the fresh combo with the already-staged slip picks — one atomic
-          multi-leg bet via the compose RPC's extra selections. */}
-      {slipSelectionIds.length > 0 && (
-        <TouchableOpacity
-          style={styles.parlayRow}
-          onPress={() => setParlayWithSlip(v => !v)}
-          activeOpacity={0.7}
-        >
-          <Text style={[styles.memberCheck, parlayWithSlip && styles.memberCheckOn]}>
-            {parlayWithSlip ? '✓' : '+'}
-          </Text>
-          <View style={styles.parlayTextWrap}>
-            <Text style={styles.parlayTitle}>
-              Parlay with your slip ({slipSelectionIds.length} {slipSelectionIds.length === 1 ? 'leg' : 'legs'})
-            </Text>
-            <Text style={styles.parlayHint}>
-              One ticket: this combo + your staged picks, all must hit · pays ×{totalOdds.toFixed(0)}
-            </Text>
-          </View>
-        </TouchableOpacity>
-      )}
+      <Text style={styles.slipHint}>
+        Your combo goes to the bet slip — set the stake there, and parlay it
+        with other lines or more combos if you like.
+      </Text>
 
       <TermsBlock terms={TERMS.combo} />
-
-      {error && (stake > 0 || memberIds.length > 0) && <Text style={styles.errorText}>{error}</Text>}
     </BottomSheet>
   )
 }
@@ -238,15 +197,7 @@ const styles = StyleSheet.create({
   previewLabel: { fontFamily: fonts.barlowCondensed, fontSize: 11, letterSpacing: 1.5, color: colors.muted },
   previewValue: { fontFamily: fonts.barlowCondensedHeavy, fontSize: 18, color: colors.accent },
 
-  parlayRow: {
-    flexDirection: 'row', alignItems: 'center', gap: 8,
-    backgroundColor: colors.surface2, borderRadius: radius.cardSm, borderWidth: 1, borderColor: colors.border2,
-    paddingHorizontal: 12, paddingVertical: 10, marginTop: 14,
-  },
-  parlayTextWrap: { flex: 1 },
-  parlayTitle: { fontFamily: fonts.barlow, fontSize: 14, color: colors.text },
-  parlayHint: { fontFamily: fonts.barlow, fontSize: 12, color: colors.muted, marginTop: 2 },
+  slipHint: { fontFamily: fonts.barlow, fontSize: 12, color: colors.muted, marginTop: 10, lineHeight: 17 },
 
-  errorText: { fontFamily: fonts.barlow, fontSize: 13, color: colors.danger, marginTop: 10 },
   submitBtn: { marginTop: 14 },
 })

@@ -96,7 +96,6 @@ export default function SportsbookScreen() {
     slipSpecials,
     stagePick: stageSlipPick,
     stageSpecial: stageSlipSpecial,
-    clearSlip,
     ghosts,
     reloadInventory,
   } = useBetSlip()
@@ -557,18 +556,16 @@ export default function SportsbookScreen() {
         <FeatureExplainerSheet explainer={EXPLAINERS.sportsbook} onClose={() => setHelpOpen(false)} />
       )}
 
-      {/* Combo composer — compose = bet in one action; optionally parlays the
-          staged slip picks into the same ticket (which then clears the slip). */}
+      {/* Combo composer — stages a combo SPEC into the standard bet slip (no
+          market/bet yet; the slip's placement creates the market atomically
+          with the bet), so combos parlay with picks and other combos. */}
       {composerOpen && currentWeekId != null && currentSeasonId != null && (
         <ComboComposerSheet
           weekId={currentWeekId}
           seasonId={currentSeasonId}
-          balance={balance}
           gameNumbers={comboGameNumbers}
           members={rsvpInPlayers}
-          slipSelectionIds={slipPicks.map(p => p.selectionId)}
           onClose={() => setComposerOpen(false)}
-          onDone={parlayed => { if (parlayed) clearSlip(); reload() }}
         />
       )}
     </View>

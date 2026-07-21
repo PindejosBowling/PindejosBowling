@@ -3173,12 +3173,12 @@ export type Database = {
       }
       compose_combo_bet: {
         Args: {
+          p_boost_item_id?: string
+          p_combos: Json
+          p_crutch_item_id?: string
           p_extra_selection_ids?: string[]
-          p_game_number?: number
-          p_member_ids: string[]
-          p_scope: string
-          p_stake?: number
-          p_stat: string
+          p_insurance_item_id?: string
+          p_stake: number
           p_week_id: string
         }
         Returns: Json

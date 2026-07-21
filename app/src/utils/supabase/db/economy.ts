@@ -336,17 +336,34 @@ export const bets = {
   // Admin: total undo of a placed bet (removes ledger rows + bet, re-opens market).
   cancel: (betId: string) =>
     supabase.rpc('cancel_bet', { p_bet_id: betId }),
-  // Compose a combo line and bet it in ONE transaction (SECURITY DEFINER):
-  // creates (or dedups into) the member-set market + over/under selections and
-  // places the composer's bet on the over — a combo market can never exist
-  // without a bet riding it. extraSelectionIds parlays the fresh combo leg with
-  // already-staged selections (same week; the RPC rejects the combo's own).
-  // Returns { market_id, bet_id, line, deduped }.
-  composeCombo: (weekId: string, memberIds: string[], stat: string, scope: 'game' | 'night', gameNumber: number | null, stake: number, extraSelectionIds?: string[]) =>
+  // Place a slip bet containing ≥1 combo specs in ONE transaction (SECURITY
+  // DEFINER): each spec creates (or dedups into) its member-set market +
+  // over/under selections, then ONE bet is placed across every combo's over
+  // plus any extra staged selection ids — so a ticket can parlay a combo with
+  // single lines AND with other combos. A combo market can never exist without
+  // a bet riding it (a failed placement rolls the new markets back). Item ids
+  // pass through to place_house_bet (single-bet slips only, per BetSlip's
+  // gating). Returns { bet_id, combos: [{market_id, line, deduped}] }.
+  composeCombo: (
+    weekId: string,
+    combos: { memberIds: string[]; stat: string; scope: 'game' | 'night'; gameNumber: number | null }[],
+    stake: number,
+    extraSelectionIds?: string[],
+    insuranceItemId?: string,
+    crutchItemId?: string,
+    boostItemId?: string,
+  ) =>
     supabase.rpc('compose_combo_bet', {
-      p_week_id: weekId, p_member_ids: memberIds, p_stat: stat, p_scope: scope,
-      p_game_number: gameNumber ?? undefined, p_stake: stake,
+      p_week_id: weekId,
+      p_combos: combos.map(c => ({
+        member_ids: c.memberIds, stat: c.stat, scope: c.scope,
+        ...(c.gameNumber != null ? { game_number: c.gameNumber } : {}),
+      })) as unknown as Json,
+      p_stake: stake,
       p_extra_selection_ids: extraSelectionIds,
+      p_insurance_item_id: insuranceItemId,
+      p_crutch_item_id: crutchItemId,
+      p_boost_item_id: boostItemId,
     }),
 }
 

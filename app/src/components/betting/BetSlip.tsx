@@ -43,14 +43,32 @@ export interface SlipSpecial {
   multiLeg: boolean
 }
 
+// One COMBO SPEC staged in the slip — a combo the bettor composed that does
+// NOT have a market yet. The market is created at placement, atomically with
+// the bet (compose_combo_bet), so an unbet combo market can never exist.
+// Combos behave exactly like picks in the slip: they parlay with regular
+// picks and with other combos, or place as their own single. Even money.
+export interface SlipCombo {
+  key: string          // canonical identity (stat|scope|game|members) — staging key
+  weekId: string
+  memberIds: string[]  // sorted
+  memberNames: string[]
+  stat: string
+  scope: 'game' | 'night'
+  gameNumber: number | null
+  line: number | null  // server-previewed seed line (display; the RPC re-seeds)
+}
+
 type SlipMode = 'singles' | 'parlay'
 
-// A normalized placement request: at most one parlay (the combined picks) plus a
-// list of standalone single bets (singles-mode picks and/or every special). The
-// screen just loops this over bets.place. Items attach to the sole bet only.
+// A normalized placement request: at most one parlay (the combined picks +
+// combo specs) plus a list of standalone single bets (singles-mode picks and
+// combos, and/or every special). The provider routes combo-bearing entries
+// through compose_combo_bet and the rest through bets.place. Items attach to
+// the sole bet only.
 export interface SlipSubmit {
-  parlay: { selectionIds: string[]; stake: number } | null
-  singles: { selectionIds: string[]; lineId?: string; stake: number }[]
+  parlay: { selectionIds: string[]; comboKeys: string[]; stake: number } | null
+  singles: { selectionIds: string[]; comboKey?: string; lineId?: string; stake: number }[]
   insure: boolean
   crutch: boolean
   boost: boolean
@@ -59,10 +77,12 @@ export interface SlipSubmit {
 interface BetSlipProps {
   picks: SlipPick[]
   specials: SlipSpecial[]
+  combos: SlipCombo[]
   open: boolean
   onOpenChange: (open: boolean) => void
   onRemovePick: (marketId: string) => void
   onRemoveSpecial: (key: string) => void
+  onRemoveCombo: (key: string) => void
   onClear: () => void
   balance: number
   placing: boolean
@@ -82,6 +102,14 @@ function pickLabel(p: SlipPick): string {
   )
 }
 
+function comboLabel(c: SlipCombo): string {
+  return (
+    `${c.memberNames.join(' + ')} · OVER` +
+    betLineSuffix('combo', c.line, c.stat) +
+    (c.gameNumber != null ? ` · G${c.gameNumber}` : ' · NIGHT')
+  )
+}
+
 // The unified bet slip: a persistent bar summarizing staged picks + specials
 // that expands into a placement sheet. Individual picks combine (Singles /
 // Parlay); each special always places as its own tagged bet. Presentational
@@ -90,10 +118,12 @@ function pickLabel(p: SlipPick): string {
 export default function BetSlip({
   picks,
   specials,
+  combos,
   open,
   onOpenChange,
   onRemovePick,
   onRemoveSpecial,
+  onRemoveCombo,
   onClear,
   balance,
   placing,
@@ -103,8 +133,10 @@ export default function BetSlip({
   boostPct,
   onPlace,
 }: BetSlipProps) {
-  const count = picks.length + specials.length
-  const multiPicks = picks.length > 1
+  const count = picks.length + specials.length + combos.length
+  // Combos are pick-shaped for slip math: they parlay with picks and each other.
+  const pickUnits = picks.length + combos.length
+  const multiPicks = pickUnits > 1
   const [mode, setMode] = useState<SlipMode>('parlay')
   const [parlayWager, setParlayWager] = useState('')
   const [singleWagers, setSingleWagers] = useState<Record<string, string>>({})
@@ -123,29 +155,31 @@ export default function BetSlip({
       setInsure(false)
       setCrutch(false)
       setBoost(false)
-      setMode(picks.length > 1 ? 'parlay' : 'singles')
+      setMode(pickUnits > 1 ? 'parlay' : 'singles')
     }
   }, [open]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Picks parlay only when there are 2+ and parlay is chosen; specials always
-  // stand alone. The resulting bet count drives item eligibility.
+  // Picks + combos parlay only when there are 2+ units and parlay is chosen;
+  // specials always stand alone. The resulting bet count drives item eligibility.
   const parlayPicks = multiPicks && mode === 'parlay'
-  const pickBets = parlayPicks ? (picks.length >= 2 ? 1 : 0) : picks.length
+  const pickBets = parlayPicks ? 1 : pickUnits
   const totalBets = pickBets + specials.length
 
   // Items attach to exactly ONE bet, so they're offered only when the slip
   // resolves to a single bet. A crutch additionally needs that bet to be
-  // multi-leg (a parlay of picks, or a multi-leg special).
+  // multi-leg (a parlay of picks/combos, or a multi-leg special).
   const oneBet = totalBets === 1
   const oneBetMultiLeg =
     oneBet &&
-    ((parlayPicks && specials.length === 0 && picks.length >= 2) ||
-      (specials.length === 1 && picks.length === 0 && specials[0].multiLeg))
+    ((parlayPicks && specials.length === 0 && pickUnits >= 2) ||
+      (specials.length === 1 && pickUnits === 0 && specials[0].multiLeg))
 
-  const parlayOdds = useMemo(() => Math.pow(2, picks.length), [picks.length])
+  const parlayOdds = useMemo(() => Math.pow(2, pickUnits), [pickUnits])
 
   const specialsTotal = specials.reduce((s, sp) => s + (parseInt(specialWagers[sp.key] ?? '', 10) || 0), 0)
-  const singlesPickTotal = picks.reduce((s, p) => s + (parseInt(singleWagers[p.marketId] ?? '', 10) || 0), 0)
+  const singlesPickTotal =
+    picks.reduce((s, p) => s + (parseInt(singleWagers[p.marketId] ?? '', 10) || 0), 0) +
+    combos.reduce((s, c) => s + (parseInt(singleWagers[c.key] ?? '', 10) || 0), 0)
   const parlayNum = parseInt(parlayWager, 10)
   const grandTotal = specialsTotal + (parlayPicks ? (parlayNum || 0) : singlesPickTotal)
 
@@ -155,8 +189,8 @@ export default function BetSlip({
   })
   const picksValid = parlayPicks
     ? !isNaN(parlayNum) && parlayNum >= 10
-    : picks.every(p => {
-        const n = parseInt(singleWagers[p.marketId] ?? '', 10)
+    : [...picks.map(p => p.marketId), ...combos.map(c => c.key)].every(k => {
+        const n = parseInt(singleWagers[k] ?? '', 10)
         return !isNaN(n) && n >= 10
       })
   const canPlace = count > 0 && specialsValid && picksValid && grandTotal <= balance
@@ -166,10 +200,13 @@ export default function BetSlip({
     const singles: SlipSubmit['singles'] = []
     if (!parlayPicks) {
       for (const p of picks) singles.push({ selectionIds: [p.selectionId], stake: parseInt(singleWagers[p.marketId], 10) })
+      for (const c of combos) singles.push({ selectionIds: [], comboKey: c.key, stake: parseInt(singleWagers[c.key], 10) })
     }
     for (const sp of specials) singles.push({ selectionIds: sp.selectionIds, lineId: sp.lineId, stake: parseInt(specialWagers[sp.key], 10) })
     onPlace({
-      parlay: parlayPicks ? { selectionIds: picks.map(p => p.selectionId), stake: parlayNum } : null,
+      parlay: parlayPicks
+        ? { selectionIds: picks.map(p => p.selectionId), comboKeys: combos.map(c => c.key), stake: parlayNum }
+        : null,
       singles,
       insure: oneBet && insure,
       crutch: oneBetMultiLeg && crutch,
@@ -178,14 +215,14 @@ export default function BetSlip({
   }
 
   const ctaLabel = totalBets > 1 ? `Place ${totalBets} Bets` : 'Place Bet'
-  const showZoneLabels = specials.length > 0 && picks.length > 0
+  const showZoneLabels = specials.length > 0 && pickUnits > 0
 
   const subtitle =
     totalBets > 1
       ? `${totalBets} BETS · ${grandTotal || 0} PINS`
       : parlayPicks
-        ? `${picks.length}-LEG PARLAY · ALL MUST WIN · PAYS ×${parlayOdds}`
-        : specials.length === 1
+        ? `${pickUnits}-LEG PARLAY · ALL MUST WIN · PAYS ×${parlayOdds}`
+        : specials.length === 1 && pickUnits === 0
           ? `SPECIAL · PAYS ×${specials[0].combinedOdds.toFixed(specials[0].combinedOdds % 1 === 0 ? 0 : 2)}`
           : 'SINGLE BET'
 
@@ -200,6 +237,7 @@ export default function BetSlip({
           <Text style={styles.barSub} numberOfLines={1}>
             {[
               ...specials.map(s => s.title),
+              ...combos.map(c => `COMBO ${c.memberNames.join('+')}`),
               ...picks.map(p => `${p.subjectName} ${p.selectionLabel.toUpperCase()}`),
             ].join(' · ')}
           </Text>
@@ -258,8 +296,8 @@ export default function BetSlip({
             </View>
           )}
 
-          {/* ── Picks (singles / parlay) ── */}
-          {picks.length > 0 && (
+          {/* ── Picks + combos (singles / parlay) ── */}
+          {pickUnits > 0 && (
             <View style={styles.zone}>
               {showZoneLabels && <Text style={styles.zoneLabel}>PICKS</Text>}
               {multiPicks && (
@@ -272,6 +310,30 @@ export default function BetSlip({
                   />
                 </View>
               )}
+              {combos.map(c => (
+                <View key={c.key} style={styles.row}>
+                  <View style={styles.rowMain}>
+                    <Text style={styles.comboTag}>COMBO</Text>
+                    <Text style={styles.pickText} numberOfLines={2}>{comboLabel(c)}</Text>
+                    {!parlayPicks && (
+                      <View style={styles.wager}>
+                        <WagerField
+                          wager={singleWagers[c.key] ?? ''}
+                          onChangeWager={v => setSingleWagers(s => ({ ...s, [c.key]: v }))}
+                          balance={balance}
+                          odds={2}
+                          boostPct={oneBet && boost ? boostPct : undefined}
+                          label="STAKE (pins)"
+                          compact
+                        />
+                      </View>
+                    )}
+                  </View>
+                  <TouchableOpacity onPress={() => onRemoveCombo(c.key)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                    <Text style={styles.remove}>✕</Text>
+                  </TouchableOpacity>
+                </View>
+              ))}
               {picks.map(p => (
                 <View key={p.marketId} style={styles.row}>
                   <View style={styles.rowMain}>
@@ -394,6 +456,13 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: colors.text,
     letterSpacing: 0.3,
+  },
+  comboTag: {
+    fontFamily: fonts.barlowCondensedHeavy,
+    fontSize: 10,
+    letterSpacing: 1.5,
+    color: colors.accent,
+    marginBottom: 1,
   },
   specialTitle: {
     fontFamily: fonts.barlowCondensed,

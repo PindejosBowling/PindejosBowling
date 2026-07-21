@@ -40,45 +40,56 @@ market_type='combo' AND status IN ('open','closed')`) plus a
 the existing market (`deduped: true`, same frozen line). Settled/void combos
 never block a recompose.
 
-## Compose = bet (the single write path)
+## Compose = bet (the single write path — SLIP-shaped)
 
-`compose_combo_bet(p_week_id, p_member_ids, p_stat, p_scope, p_game_number,
-p_stake, p_extra_selection_ids DEFAULT NULL) → {market_id, bet_id, line,
-deduped}` — SECURITY DEFINER, caller from `current_player_id()`, granted to
-`authenticated`.
+`compose_combo_bet(p_week_id, p_combos jsonb, p_stake,
+p_extra_selection_ids DEFAULT NULL, p_insurance_item_id?, p_crutch_item_id?,
+p_boost_item_id?) → {bet_id, combos: [{market_id, line, deduped}, …]}` —
+SECURITY DEFINER, caller from `current_player_id()`, granted to
+`authenticated`. `p_combos` = an **array** of specs
+`{member_ids: [uuid text…], stat, scope, game_number?}` (≥1).
 
-One transaction: validate → dedup-or-create market + selections → place the
-composer's bet by **calling `place_house_bet`** (which re-checks open/stake/
-balance/locked-week per leg and writes bet + legs + the `bet_stake` double
-entry). A combo market can therefore **never exist without a bet on it**, and a
-failed placement rolls the market back. Validations:
+The RPC is the bet slip's combo placement path: composing in the app only
+**stages a spec** in the slip; nothing exists in the DB until placement. One
+transaction: per spec validate → dedup-or-create market + selections; then
+place ONE bet across every combo's over **plus** any `p_extra_selection_ids`
+(regular staged picks) by **calling `place_house_bet`** (which re-checks
+open/stake/balance/locked-week per leg, applies attached items, and writes bet
++ legs + the `bet_stake` double entry). A combo market can therefore **never
+exist without a bet on it**, and a failed placement rolls every new market
+back. Per-spec validations:
 
 - week exists and is not archived (locked weeks take no composes);
 - stat ∈ the four; scope game ⇒ `game_number` on the week's schedule (defaults
   `{1,2}` pre-teams, the O/U sync convention), night ⇒ no game number;
 - ≥2 **distinct** members, every member RSVP'd `'in'` for the week, all real
-  players (the name-snapshot join proves it).
+  players (the name-snapshot join proves it);
+- the same combo may not appear twice on one ticket (specs dedup to one
+  market; `place_house_bet` needs distinct markets per leg);
+- extras may not be any of the ticket's own combo selections.
 
-**Parlays**: combo selections are ordinary selections, so board combos stage
-into the bet slip like any line. Additionally `p_extra_selection_ids` lets the
-composer parlay the **fresh** combo leg with already-staged selections in the
-same atomic bet (`place_house_bet(over ∥ extras, stake)` — parlay odds
-multiply). The RPC rejects self-referential extras (the combo's own
-selections). Note: if a combo market dies, the refund trigger deletes the
-**whole** parlay bet and refunds it — standard market-death semantics.
+**Parlays**: this is the whole point of the slip shape — one ticket can parlay
+a fresh combo with single lines AND with **other fresh combos** (parlay odds =
+2^legs). Board combos (already-placed, public) also stage into the slip as
+ordinary selections. Concurrency: one advisory xact lock per week serializes
+composes (deadlock-free for multi-spec tickets); the partial unique index is
+the backstop. Note: if any combo market dies (RSVP-out), the refund trigger
+deletes the **whole** parlay bet and refunds it — standard market-death
+semantics.
 
 **Line seeding**: `combo_seed_line(member_ids[], stat, season, n_games)` —
 `team_prop_seed_line` generalized from a roster scan to `unnest(member_ids)`.
 Granted to `authenticated` (STABLE, read-only) so the composer sheet previews
-the exact server number. The line freezes at market birth (a combo always
-carries a bet, and no sync ever reseeds combos).
+the server number (display-only; the RPC re-seeds at placement). The line
+freezes at market birth (a combo always carries a bet, and no sync ever
+reseeds combos).
 
-**Feed**: market birth publishes `sportsbook_combo_composed` (template
-`sportsbook.combo_composed`), bet-linked via `sportsbook_bet_id` — so an
-auto-void cascade removes the card with the bet. Dedup joins publish nothing
-(beyond `place_house_bet`'s own big-ticket/parlay priority events — a
-big-stake compose can emit both a compose card and a big-ticket card;
-accepted).
+**Feed**: at most ONE `sportsbook_combo_composed` card per bet (the
+`activity_feed_unique_bet_event` index is (bet, event_type)), published only
+when the ticket minted ≥1 new market — payload = the first created combo +
+`combo_count`. Bet-linked via `sportsbook_bet_id`, so an auto-void cascade
+removes the card with the bet. Dedup-only tickets publish nothing (beyond
+`place_house_bet`'s own big-ticket/parlay priority events).
 
 ## Anti-tank
 
@@ -134,19 +145,27 @@ params->>clock.eq.lanetalk)` alongside props and legacy team props.
 ## App layer
 
 - `db/economy.ts`: `betMarkets.listActiveComboByWeek`, `betMarkets.previewComboLine`
-  (rpc `combo_seed_line`), `bets.composeCombo` (rpc `compose_combo_bet`),
-  `betMarkets.setComboStatusByWeekGame` (game-start toggle; night combos ride
-  game 1), `'combo'` in `reopenOUForWeek`.
+  (rpc `combo_seed_line`), `bets.composeCombo(weekId, specs[], stake, extras?,
+  items…)` (rpc `compose_combo_bet`), `betMarkets.setComboStatusByWeekGame`
+  (game-start toggle; night combos ride game 1), `'combo'` in `reopenOUForWeek`.
 - `usePinsinoData`: `LineView.comboMemberIds/comboMemberNames`;
   `normalizeMarket` labels a combo by its joined `member_names` (no N-name
   fetch — that's why compose snapshots names); `marketGroup` routes null-game
   combos to WEEKLY; `lineCategory` gives combos their own "Combos" collapsible
   (game groups + WEEKLY); `betLineSuffix`/`selectionButtonLabel` render
   "OVER 12.5 STRIKES"; `rsvpInPlayers` (RSVP'd-in id+name) feeds the picker.
-- `ComboComposerSheet` (components/betting): stat + scope pickers, member
-  multi-select from `rsvpInPlayers` (min 2, self allowed), stake, debounced
-  live line preview, "Parlay with your slip (N legs)" toggle (passes staged
-  selection ids as extras; the screen clears the slip on success).
+- **The slip is the placement surface** (`BetSlip` + `BetSlipProvider`):
+  `ComboComposerSheet` (stat + scope pickers, member multi-select from
+  `rsvpInPlayers`, debounced live line preview) does NOT place — its "Add to
+  Bet Slip" CTA stages a `SlipCombo` **spec** (canonical key = stat|scope|
+  members, so re-staging toggles) via `stageCombo`. Combos render in the
+  slip's PICKS zone (COMBO tag), count as pick units for the Singles/Parlay
+  mode, and parlay freely with regular picks and other combos (odds 2^units).
+  `placeSlip` routes any combo-bearing entry through `bets.composeCombo`
+  (parlay → one call with all specs + the regular picks' selection ids as
+  extras; a singles-mode combo → one call with its lone spec) and everything
+  else through `bets.place`. Item toggles pass through when the slip is one
+  bet.
 - `SportsbookScreen`: one global "+ Build a Combo" CTA atop the Place view
   (hidden read-only); combos flow through the `LineView → LineRow` seam with
   zero row-component changes; BetDetail copy-bet works unchanged (`getByIds`
@@ -185,9 +204,11 @@ Migration `20260721170000_retire_team_prop_moneyline_generation`:
 ## Verification
 
 `supabase/verify/probe-combo-lines.sql` (in `run-all-probes.sh`): compose
-invariants, shuffled-dedup, 8 validation negatives, anti-tank (self blocked /
-non-member allowed), compose-into-parlay (2 legs, ×4 payout), RSVP-out erasure
+invariants, shuffled-dedup, 9 validation negatives (incl. the same combo twice
+on one ticket), anti-tank (self blocked / non-member allowed), multi-combo
+parlay (two fresh specs → one bet, 2 markets, ×4, one compose card with
+`combo_count` 2), combo+regular-line parlay (×4), RSVP-out erasure
 (market+bets+ledger+feed gone, balances restored, no resurrection), both-clock
-settlement values (strikes Σ=5, total_pins Σ=270), pending-exempt →
-void_missing delete-refund, idempotent re-settle. Run the suite before AND
-after any migration touching these RPCs.
+settlement values (strikes Σ=5, spares Σ=3, clean_frames Σ=8, total_pins
+Σ=270), pending-exempt → void_missing delete-refund, idempotent re-settle. Run
+the suite before AND after any migration touching these RPCs.

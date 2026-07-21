@@ -1,31 +1,36 @@
 -- Combo-lines probe — self-contained, assertion-grade (see
--- context/db-verification.md). Exercises compose_combo_bet + the RSVP-out
--- auto-void prune + settle_week (c''') on both clocks, with zero persistence.
+-- context/db-verification.md). Exercises the SLIP-shaped compose_combo_bet
+-- (jsonb spec array + extras), the RSVP-out auto-void prune, and settle_week
+-- (c''') on both clocks, with zero persistence.
 --
 -- Fixtures: 3 players seeded 1000 pins on the live open week; P1/P2 RSVP'd in
 -- and rostered on two probe teams with game 1 scores 150/120; later, official
 -- LaneTalk imports (P1: 3 strikes/2 spares, P2: 2/1). P3 starts un-RSVP'd.
 --
 -- Vectors:
---   C1 compose (P1, strikes night 100) → market + 2 selections (line 0.5 —
+--   C1 compose (P1, strikes night 100)  → market + 2 selections (line 0.5 —
 --      importless members clamp), sorted member_ids, canonical combo_key,
 --      pending bet, bet_stake pair nets 0, ONE compose feed card.
---   C2 dedup (P2, shuffled order)      → same market, deduped=true, no card.
---   C3 validation negatives            → <2 members, dup members, non-RSVP'd
+--   C2 dedup (P2, shuffled order)       → same market, deduped=true, no card.
+--   C2b multi-combo parlay (P1, spares night + clean_frames game 1, one call)
+--      → ONE bet, 2 legs, 2 new markets, payout ×4, one compose card
+--      (combo_count 2).
+--   C3 validation negatives             → <2 members, dup members, non-RSVP'd
 --      member, bad stat, night+game_number, off-schedule game, min stake,
---      self-referential parlay extra — all RAISE.
---   C4 anti-tank                       → member backing under RAISES;
+--      duplicate spec on one ticket, self-referential parlay extra — all RAISE.
+--   C4 anti-tank                        → member backing under RAISES;
 --      non-member backing under is allowed (mechanic preserved).
---   C5 compose-into-parlay (P1, clean_frames night + synthetic O/U leg)
+--   C5 combo + regular-line parlay (clean_frames night + synthetic O/U extra)
 --      → one bet, 2 legs, payout = stake × 4.
 --   C6 total_pins combo (archive clock; line pinned to 260.5).
 --   C7 RSVP-out auto-void → market + bet + ledger pair + feed card all gone
 --      (erasure, balances restored); flip back in does NOT resurrect;
 --      recompose mints a NEW market.
---   C8/C9 settle_week(force): strikes night = 5 → won; clean_frames parlay
---      → won at ×4; total_pins 270 > 260.5 → won; P3's under → lost; the
---      import-less recomposed combo stays PENDING (backstop-exempt), then
---      settle_week(void_missing) delete-refunds it. Re-settle idempotent.
+--   C8/C9 settle_week(force): strikes night = 5 → won; multi-combo parlay
+--      (3 + 8) → won ×4; clean_frames/O-U parlay → won ×4; total_pins 270 >
+--      260.5 → won; P3's under → lost; the import-less recomposed combo stays
+--      PENDING (backstop-exempt), then settle_week(void_missing)
+--      delete-refunds it. Re-settle idempotent.
 -- Always aborts via the final RAISE.
 DO $$
 DECLARE
@@ -41,9 +46,9 @@ DECLARE
   v_under_strikes uuid; v_bet_under uuid;
   v_mkt_ou uuid; v_sel_ou uuid;
   v_mkt_cf uuid; v_bet_cf uuid;
+  v_mkt_sp uuid; v_mkt_cfg uuid; v_bet_multi uuid;
   v_mkt_tp uuid; v_bet_tp uuid;
   v_mkt_void uuid; v_bet_void uuid; v_mkt_re uuid; v_bet_re uuid;
-  v_line numeric;
   v_expected_members jsonb;
   v_pre_void_sum bigint; v_pre_void_n bigint;
   v_set_sum bigint; v_set_n bigint;
@@ -99,14 +104,16 @@ BEGIN
   ------------------------------------------------------------------ C1 compose
   PERFORM set_config('request.jwt.claims', json_build_object(
     'sub', v_u1, 'role', 'authenticated', 'app_metadata', json_build_object('role', 'player'))::text, true);
-  v_res := public.compose_combo_bet(v_week, ARRAY[v_p1, v_p2], 'strikes', 'night', NULL, 100);
-  v_mkt_strikes := (v_res ->> 'market_id')::uuid;
+  v_res := public.compose_combo_bet(v_week, jsonb_build_array(jsonb_build_object(
+             'member_ids', jsonb_build_array(v_p1::text, v_p2::text),
+             'stat', 'strikes', 'scope', 'night')), 100);
+  v_mkt_strikes := (v_res -> 'combos' -> 0 ->> 'market_id')::uuid;
   v_bet1        := (v_res ->> 'bet_id')::uuid;
-  IF (v_res ->> 'deduped')::boolean THEN
+  IF (v_res -> 'combos' -> 0 ->> 'deduped')::boolean THEN
     RAISE EXCEPTION 'PROBE_FAIL: first compose reported deduped';
   END IF;
-  IF (v_res ->> 'line')::numeric <> 0.5 THEN
-    RAISE EXCEPTION 'PROBE_FAIL: importless-member seed line % (expected 0.5)', v_res ->> 'line';
+  IF (v_res -> 'combos' -> 0 ->> 'line')::numeric <> 0.5 THEN
+    RAISE EXCEPTION 'PROBE_FAIL: importless-member seed line % (expected 0.5)', v_res -> 'combos' -> 0 ->> 'line';
   END IF;
   IF (SELECT count(*) FROM public.bet_selections WHERE market_id = v_mkt_strikes) <> 2 THEN
     RAISE EXCEPTION 'PROBE_FAIL: combo market does not have exactly 2 selections';
@@ -134,9 +141,12 @@ BEGIN
   ------------------------------------------------------------------ C2 dedup
   PERFORM set_config('request.jwt.claims', json_build_object(
     'sub', v_u2, 'role', 'authenticated', 'app_metadata', json_build_object('role', 'player'))::text, true);
-  v_res := public.compose_combo_bet(v_week, ARRAY[v_p2, v_p1], 'strikes', 'night', NULL, 50);
+  v_res := public.compose_combo_bet(v_week, jsonb_build_array(jsonb_build_object(
+             'member_ids', jsonb_build_array(v_p2::text, v_p1::text),
+             'stat', 'strikes', 'scope', 'night')), 50);
   v_bet2 := (v_res ->> 'bet_id')::uuid;
-  IF NOT (v_res ->> 'deduped')::boolean OR (v_res ->> 'market_id')::uuid <> v_mkt_strikes THEN
+  IF NOT (v_res -> 'combos' -> 0 ->> 'deduped')::boolean
+     OR (v_res -> 'combos' -> 0 ->> 'market_id')::uuid <> v_mkt_strikes THEN
     RAISE EXCEPTION 'PROBE_FAIL: shuffled recompose did not dedup to the existing market';
   END IF;
   IF (SELECT count(*) FROM public.bet_markets
@@ -149,56 +159,98 @@ BEGIN
     RAISE EXCEPTION 'PROBE_FAIL: dedup join published a compose card';
   END IF;
 
-  ------------------------------------------------------------------ C3 negatives
+  ------------------------------------------------------------------ C2b multi-combo parlay
   PERFORM set_config('request.jwt.claims', json_build_object(
     'sub', v_u1, 'role', 'authenticated', 'app_metadata', json_build_object('role', 'player'))::text, true);
+  v_res := public.compose_combo_bet(v_week, jsonb_build_array(
+             jsonb_build_object('member_ids', jsonb_build_array(v_p1::text, v_p2::text),
+                                'stat', 'spares', 'scope', 'night'),
+             jsonb_build_object('member_ids', jsonb_build_array(v_p1::text, v_p2::text),
+                                'stat', 'clean_frames', 'scope', 'game', 'game_number', 1)), 50);
+  v_bet_multi := (v_res ->> 'bet_id')::uuid;
+  v_mkt_sp  := (v_res -> 'combos' -> 0 ->> 'market_id')::uuid;
+  v_mkt_cfg := (v_res -> 'combos' -> 1 ->> 'market_id')::uuid;
+  IF jsonb_array_length(v_res -> 'combos') <> 2 OR v_mkt_sp = v_mkt_cfg THEN
+    RAISE EXCEPTION 'PROBE_FAIL: multi-combo ticket did not mint two markets';
+  END IF;
+  IF (SELECT count(*) FROM public.bet_legs WHERE bet_id = v_bet_multi) <> 2 THEN
+    RAISE EXCEPTION 'PROBE_FAIL: multi-combo bet does not have 2 legs';
+  END IF;
+  IF (SELECT potential_payout FROM public.bets WHERE id = v_bet_multi) <> 200 THEN
+    RAISE EXCEPTION 'PROBE_FAIL: multi-combo payout % (expected 200 = 50 × 4)',
+      (SELECT potential_payout FROM public.bets WHERE id = v_bet_multi);
+  END IF;
+  IF (SELECT count(*) FROM public.activity_feed_events
+      WHERE sportsbook_bet_id = v_bet_multi AND event_type = 'sportsbook_combo_composed') <> 1
+     OR (SELECT public_payload ->> 'combo_count' FROM public.activity_feed_events
+         WHERE sportsbook_bet_id = v_bet_multi AND event_type = 'sportsbook_combo_composed') <> '2' THEN
+    RAISE EXCEPTION 'PROBE_FAIL: multi-combo ticket should post ONE card with combo_count 2';
+  END IF;
+
+  ------------------------------------------------------------------ C3 negatives
   BEGIN
-    PERFORM public.compose_combo_bet(v_week, ARRAY[v_p1], 'strikes', 'night', NULL, 100);
+    PERFORM public.compose_combo_bet(v_week, jsonb_build_array(jsonb_build_object(
+              'member_ids', jsonb_build_array(v_p1::text), 'stat', 'strikes', 'scope', 'night')), 100);
     RAISE EXCEPTION 'PROBE_FAIL: single-member combo was allowed';
   EXCEPTION WHEN OTHERS THEN
     IF position('PROBE_FAIL' in SQLERRM) > 0 THEN RAISE; END IF;
   END;
   BEGIN
-    PERFORM public.compose_combo_bet(v_week, ARRAY[v_p1, v_p1], 'strikes', 'night', NULL, 100);
+    PERFORM public.compose_combo_bet(v_week, jsonb_build_array(jsonb_build_object(
+              'member_ids', jsonb_build_array(v_p1::text, v_p1::text), 'stat', 'strikes', 'scope', 'night')), 100);
     RAISE EXCEPTION 'PROBE_FAIL: duplicate-member combo was allowed';
   EXCEPTION WHEN OTHERS THEN
     IF position('PROBE_FAIL' in SQLERRM) > 0 THEN RAISE; END IF;
   END;
   BEGIN
-    PERFORM public.compose_combo_bet(v_week, ARRAY[v_p1, v_p3], 'strikes', 'night', NULL, 100);
+    PERFORM public.compose_combo_bet(v_week, jsonb_build_array(jsonb_build_object(
+              'member_ids', jsonb_build_array(v_p1::text, v_p3::text), 'stat', 'strikes', 'scope', 'night')), 100);
     RAISE EXCEPTION 'PROBE_FAIL: non-RSVP''d member was allowed';
   EXCEPTION WHEN OTHERS THEN
     IF position('PROBE_FAIL' in SQLERRM) > 0 THEN RAISE; END IF;
   END;
   BEGIN
-    PERFORM public.compose_combo_bet(v_week, ARRAY[v_p1, v_p2], 'first_ball_avg', 'night', NULL, 100);
+    PERFORM public.compose_combo_bet(v_week, jsonb_build_array(jsonb_build_object(
+              'member_ids', jsonb_build_array(v_p1::text, v_p2::text), 'stat', 'first_ball_avg', 'scope', 'night')), 100);
     RAISE EXCEPTION 'PROBE_FAIL: bad stat was allowed';
   EXCEPTION WHEN OTHERS THEN
     IF position('PROBE_FAIL' in SQLERRM) > 0 THEN RAISE; END IF;
   END;
   BEGIN
-    PERFORM public.compose_combo_bet(v_week, ARRAY[v_p1, v_p2], 'spares', 'night', 1, 100);
+    PERFORM public.compose_combo_bet(v_week, jsonb_build_array(jsonb_build_object(
+              'member_ids', jsonb_build_array(v_p1::text, v_p2::text), 'stat', 'spares', 'scope', 'night', 'game_number', 1)), 100);
     RAISE EXCEPTION 'PROBE_FAIL: night combo with game_number was allowed';
   EXCEPTION WHEN OTHERS THEN
     IF position('PROBE_FAIL' in SQLERRM) > 0 THEN RAISE; END IF;
   END;
   BEGIN
-    PERFORM public.compose_combo_bet(v_week, ARRAY[v_p1, v_p2], 'spares', 'game', 9, 100);
+    PERFORM public.compose_combo_bet(v_week, jsonb_build_array(jsonb_build_object(
+              'member_ids', jsonb_build_array(v_p1::text, v_p2::text), 'stat', 'spares', 'scope', 'game', 'game_number', 9)), 100);
     RAISE EXCEPTION 'PROBE_FAIL: off-schedule game number was allowed';
   EXCEPTION WHEN OTHERS THEN
     IF position('PROBE_FAIL' in SQLERRM) > 0 THEN RAISE; END IF;
   END;
   BEGIN
-    PERFORM public.compose_combo_bet(v_week, ARRAY[v_p1, v_p2], 'spares', 'night', NULL, 9);
+    PERFORM public.compose_combo_bet(v_week, jsonb_build_array(jsonb_build_object(
+              'member_ids', jsonb_build_array(v_p1::text, v_p2::text), 'stat', 'spares', 'scope', 'game', 'game_number', 1)), 9);
     RAISE EXCEPTION 'PROBE_FAIL: sub-minimum stake was allowed';
+  EXCEPTION WHEN OTHERS THEN
+    IF position('PROBE_FAIL' in SQLERRM) > 0 THEN RAISE; END IF;
+  END;
+  BEGIN
+    PERFORM public.compose_combo_bet(v_week, jsonb_build_array(
+              jsonb_build_object('member_ids', jsonb_build_array(v_p1::text, v_p2::text), 'stat', 'strikes', 'scope', 'night'),
+              jsonb_build_object('member_ids', jsonb_build_array(v_p2::text, v_p1::text), 'stat', 'strikes', 'scope', 'night')), 100);
+    RAISE EXCEPTION 'PROBE_FAIL: the same combo twice on one ticket was allowed';
   EXCEPTION WHEN OTHERS THEN
     IF position('PROBE_FAIL' in SQLERRM) > 0 THEN RAISE; END IF;
   END;
   SELECT id INTO v_under_strikes FROM public.bet_selections
     WHERE market_id = v_mkt_strikes AND key = 'under';
   BEGIN
-    PERFORM public.compose_combo_bet(v_week, ARRAY[v_p1, v_p2], 'strikes', 'night', NULL, 100,
-                                     ARRAY[v_under_strikes]);
+    PERFORM public.compose_combo_bet(v_week, jsonb_build_array(jsonb_build_object(
+              'member_ids', jsonb_build_array(v_p1::text, v_p2::text), 'stat', 'strikes', 'scope', 'night')), 100,
+              ARRAY[v_under_strikes]);
     RAISE EXCEPTION 'PROBE_FAIL: self-referential parlay extra was allowed';
   EXCEPTION WHEN OTHERS THEN
     IF position('PROBE_FAIL' in SQLERRM) > 0 THEN RAISE; END IF;
@@ -215,7 +267,7 @@ BEGIN
     'sub', v_u3, 'role', 'authenticated', 'app_metadata', json_build_object('role', 'player'))::text, true);
   SELECT public.place_house_bet(ARRAY[v_under_strikes], 50) INTO v_bet_under;  -- non-member: allowed
 
-  ------------------------------------------------------------------ C5 compose-into-parlay
+  ------------------------------------------------------------------ C5 combo + regular-line parlay
   -- Use the trigger-created O/U market for P1 game 1 (a synthetic subject-less
   -- market would be pruned by the next resync). Pin its line, then the compose
   -- bet freezes it against reseeds; settle_week (b) grades it at P1's 150.
@@ -231,15 +283,17 @@ BEGIN
 
   PERFORM set_config('request.jwt.claims', json_build_object(
     'sub', v_u1, 'role', 'authenticated', 'app_metadata', json_build_object('role', 'player'))::text, true);
-  v_res := public.compose_combo_bet(v_week, ARRAY[v_p1, v_p2], 'clean_frames', 'night', NULL, 50,
-                                    ARRAY[v_sel_ou]);
-  v_mkt_cf := (v_res ->> 'market_id')::uuid;
+  v_res := public.compose_combo_bet(v_week, jsonb_build_array(jsonb_build_object(
+             'member_ids', jsonb_build_array(v_p1::text, v_p2::text),
+             'stat', 'clean_frames', 'scope', 'night')), 50,
+             ARRAY[v_sel_ou]);
+  v_mkt_cf := (v_res -> 'combos' -> 0 ->> 'market_id')::uuid;
   v_bet_cf := (v_res ->> 'bet_id')::uuid;
-  IF (v_res ->> 'deduped')::boolean OR v_mkt_cf = v_mkt_strikes THEN
+  IF (v_res -> 'combos' -> 0 ->> 'deduped')::boolean OR v_mkt_cf = v_mkt_strikes THEN
     RAISE EXCEPTION 'PROBE_FAIL: clean_frames compose did not mint its own market';
   END IF;
   IF (SELECT count(*) FROM public.bet_legs WHERE bet_id = v_bet_cf) <> 2 THEN
-    RAISE EXCEPTION 'PROBE_FAIL: compose-into-parlay bet does not have 2 legs';
+    RAISE EXCEPTION 'PROBE_FAIL: combo+line parlay bet does not have 2 legs';
   END IF;
   IF (SELECT potential_payout FROM public.bets WHERE id = v_bet_cf) <> 200 THEN
     RAISE EXCEPTION 'PROBE_FAIL: parlay payout % (expected 200 = 50 × 4)',
@@ -247,8 +301,10 @@ BEGIN
   END IF;
 
   ------------------------------------------------------------------ C6 total_pins (archive clock)
-  v_res := public.compose_combo_bet(v_week, ARRAY[v_p1, v_p2], 'total_pins', 'night', NULL, 100);
-  v_mkt_tp := (v_res ->> 'market_id')::uuid;
+  v_res := public.compose_combo_bet(v_week, jsonb_build_array(jsonb_build_object(
+             'member_ids', jsonb_build_array(v_p1::text, v_p2::text),
+             'stat', 'total_pins', 'scope', 'night')), 100);
+  v_mkt_tp := (v_res -> 'combos' -> 0 ->> 'market_id')::uuid;
   v_bet_tp := (v_res ->> 'bet_id')::uuid;
   -- Pin the line so the grading assertion is deterministic (fixture control;
   -- grading reads the selection line, not line_at_placement).
@@ -260,8 +316,10 @@ BEGIN
     'sub', v_u3, 'role', 'authenticated', 'app_metadata', json_build_object('role', 'player'))::text, true);
   SELECT COALESCE(SUM(amount), 0), count(*) INTO v_pre_void_sum, v_pre_void_n
     FROM public.pin_ledger WHERE season_id = v_season;
-  v_res := public.compose_combo_bet(v_week, ARRAY[v_p3, v_p1], 'spares', 'game', 1, 100);
-  v_mkt_void := (v_res ->> 'market_id')::uuid;
+  v_res := public.compose_combo_bet(v_week, jsonb_build_array(jsonb_build_object(
+             'member_ids', jsonb_build_array(v_p3::text, v_p1::text),
+             'stat', 'spares', 'scope', 'game', 'game_number', 1)), 100);
+  v_mkt_void := (v_res -> 'combos' -> 0 ->> 'market_id')::uuid;
   v_bet_void := (v_res ->> 'bet_id')::uuid;
 
   UPDATE public.rsvp SET status = 'out' WHERE week_id = v_week AND player_id = v_p3;
@@ -285,8 +343,10 @@ BEGIN
   IF EXISTS (SELECT 1 FROM public.bet_markets WHERE id = v_mkt_void) THEN
     RAISE EXCEPTION 'PROBE_FAIL: flip-back-in resurrected the voided market';
   END IF;
-  v_res := public.compose_combo_bet(v_week, ARRAY[v_p3, v_p1], 'spares', 'game', 1, 100);
-  v_mkt_re := (v_res ->> 'market_id')::uuid;
+  v_res := public.compose_combo_bet(v_week, jsonb_build_array(jsonb_build_object(
+             'member_ids', jsonb_build_array(v_p3::text, v_p1::text),
+             'stat', 'spares', 'scope', 'game', 'game_number', 1)), 100);
+  v_mkt_re := (v_res -> 'combos' -> 0 ->> 'market_id')::uuid;
   v_bet_re := (v_res ->> 'bet_id')::uuid;
   IF v_mkt_re = v_mkt_void THEN
     RAISE EXCEPTION 'PROBE_FAIL: recompose reused the erased market id';
@@ -326,9 +386,19 @@ BEGIN
   IF (SELECT status FROM public.bets WHERE id = v_bet_under) <> 'lost' THEN
     RAISE EXCEPTION 'PROBE_FAIL: non-member under bet not lost';
   END IF;
-  -- Clean-frames parlay: combo 5 + 3 = 8 > 0.5 AND O/U leg won → paid ×4.
+  -- Multi-combo parlay: spares night 2+1=3 AND clean_frames game 5+3=8 → won ×4.
+  IF (SELECT result_value FROM public.bet_markets WHERE id = v_mkt_sp) <> 3
+     OR (SELECT result_value FROM public.bet_markets WHERE id = v_mkt_cfg) <> 8 THEN
+    RAISE EXCEPTION 'PROBE_FAIL: multi-combo markets settled at %/% (expected 3/8)',
+      (SELECT result_value FROM public.bet_markets WHERE id = v_mkt_sp),
+      (SELECT result_value FROM public.bet_markets WHERE id = v_mkt_cfg);
+  END IF;
+  IF (SELECT status FROM public.bets WHERE id = v_bet_multi) <> 'won' THEN
+    RAISE EXCEPTION 'PROBE_FAIL: multi-combo parlay bet not won';
+  END IF;
+  -- Combo + regular-line parlay: combo 5 + 3 = 8 > 0.5 AND O/U leg won → paid ×4.
   IF (SELECT status FROM public.bets WHERE id = v_bet_cf) <> 'won' THEN
-    RAISE EXCEPTION 'PROBE_FAIL: compose-into-parlay bet not won';
+    RAISE EXCEPTION 'PROBE_FAIL: combo+line parlay bet not won';
   END IF;
   IF (SELECT COALESCE(SUM(amount), 0) FROM public.pin_ledger
       WHERE bet_id = v_bet_cf AND type = 'bet_payout' AND player_id = v_p1) <> 200 THEN
@@ -372,8 +442,9 @@ BEGIN
     'compose', 'ok',
     'strikes_value', (SELECT result_value FROM public.bet_markets WHERE id = v_mkt_strikes),
     'total_pins_value', (SELECT result_value FROM public.bet_markets WHERE id = v_mkt_tp),
-    'parlay_payout', 200,
-    'dedup', true, 'negatives_rejected', 8, 'anti_tank', true,
+    'multi_combo_parlay', 'won_x4',
+    'combo_line_parlay_payout', 200,
+    'dedup', true, 'negatives_rejected', 9, 'anti_tank', true,
     'auto_void_erased', true, 'no_resurrection', true,
     'pending_exempt', true, 'void_missing_refunded', true,
     'settle_idempotent', true);

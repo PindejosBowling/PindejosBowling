@@ -220,7 +220,8 @@ export const TERMS: Record<TermsKey, TermsCopy> = {
   combo: {
     lines: [
       'Pick two or more RSVP\'d-in players. Their combined stat is graded against one line.',
-      'Composing places your bet immediately, and your combo goes on the board — anyone can bet it too.',
+      'Your combo goes to the bet slip like any pick — set the stake there, and parlay it with other lines or more combos.',
+      'When you place the bet, the combo goes on the board — anyone can bet it too.',
       'If someone already composed the identical combo, your bet joins their line.',
       'If a member RSVPs out, the combo dies and every bet on it is refunded in full.',
       'If a member ends up with no recorded data, the bet is voided and refunded.',
