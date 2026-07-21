@@ -75,7 +75,7 @@ export default function ActiveBetsView({
       {myBets && myBets.length > 0 && (
         <View>
           <Text style={styles.gameLabel}>MY BETS</Text>
-          <View style={styles.card}>
+          <View>
             {myBets.map((bet, idx) => (
               <BetRow
                 key={bet.id}
@@ -112,7 +112,7 @@ export default function ActiveBetsView({
       {singleGroups.map(({ group, bets: groupBets }) => (
         <View key={group.key}>
           <Text style={styles.gameLabel}>{group.label}</Text>
-          <View style={styles.card}>
+          <View>
             {groupBets.map((bet, idx) => (
               <BetRow
                 key={bet.id}
@@ -132,7 +132,7 @@ export default function ActiveBetsView({
       {parlays.length > 0 && (
         <View>
           <Text style={styles.gameLabel}>PARLAYS</Text>
-          <View style={styles.card}>
+          <View>
             {parlays.map((bet, idx) => (
               <BetRow
                 key={bet.id}
@@ -194,13 +194,5 @@ const styles = StyleSheet.create({
     color: colors.accent,
     marginBottom: 6,
     marginTop: 4,
-  },
-  card: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.cardMd,
-    borderWidth: 1,
-    borderColor: colors.border,
-    marginBottom: 10,
-    overflow: 'hidden',
   },
 })

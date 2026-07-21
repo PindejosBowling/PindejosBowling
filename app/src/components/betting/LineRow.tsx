@@ -1,5 +1,6 @@
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native'
-import { colors, fonts, radius } from '../../theme'
+import { View, Text, StyleSheet } from 'react-native'
+import { colors, fonts, radius, spacing } from '../../theme'
+import PickChip from './PickChip'
 import { selectionButtonLabel, type LineView, type SelectionView } from '../../hooks/usePinsinoData'
 
 // Per-selection visual state the caller computes (it owns the betting context —
@@ -13,10 +14,12 @@ export interface SelectionUiState {
 
 interface LineRowProps {
   // One subject's markets (≥1) presented as a single row: the subject on the
-  // left, one pick button per (line, selection) on the right — e.g. a player's
+  // left, one pick chip per (line, selection) on the right — e.g. a player's
   // "142.5+ PINS · 4.5+ STRIKES · 2.5+ SPARES" set. Single-market rows
   // (moneyline) are just the one-element case.
   lines: LineView[]
+  // Vestigial since the spaced-row restyle (rows carry their own margins, no
+  // dividers) — kept so callers don't churn.
   isLast: boolean
   // The viewer's relationship to the subject ('with' = teammate this week,
   // 'against' = matchup opponent) — a subtle background tint, nothing more.
@@ -25,24 +28,23 @@ interface LineRowProps {
   inProgress?: boolean
   // Per-selection cosmetic state; defaults to all-enabled when omitted.
   selectionState?: (line: LineView, sel: SelectionView) => SelectionUiState
-  // Tapping a selection. Omit (or set `inProgress`) to render inert pills.
+  // Tapping a selection. Omit (or set `inProgress`) to render inert chips.
   onSelect?: (line: LineView, sel: SelectionView) => void
 }
 
 // Presentational, data-driven row for one betting subject. Generic over
 // market_type — new line kinds render through this same component; only the
 // caller's `selectionState` / `onSelect` change (mirrors BetRow's design).
-// Each button carries its own (line, selection), so a row can span markets.
-export default function LineRow({ lines, isLast, relation, inProgress, selectionState, onSelect }: LineRowProps) {
+// Each chip carries its own (line, selection), so a row can span markets.
+export default function LineRow({ lines, relation, inProgress, selectionState, onSelect }: LineRowProps) {
   const pressable = !inProgress && !!onSelect
   const first = lines[0]
-  // Multi-button rows (player overs + stat props, team rows spanning WIN + the
-  // team stat lines) stack: name centered on its own row, the button set
-  // wrapping evenly beneath. Only a lone-button row (a bare moneyline WIN)
-  // keeps the horizontal name-left / button-right presentation — a row of one
-  // never needs to wrap.
-  const buttonCount = lines.reduce((n, l) => n + l.selections.length, 0)
-  const stacked = first.marketType !== 'moneyline' || buttonCount > 1
+  // Multi-chip rows (player overs + stat props) stack: name centered on its
+  // own row, the chip set wrapping evenly beneath. Only a lone-chip row (a
+  // bare moneyline WIN) keeps the horizontal name-left / chip-right
+  // presentation — a row of one never needs to wrap.
+  const chipCount = lines.reduce((n, l) => n + l.selections.length, 0)
+  const stacked = first.marketType !== 'moneyline' || chipCount > 1
 
   return (
     <View
@@ -50,13 +52,12 @@ export default function LineRow({ lines, isLast, relation, inProgress, selection
         stacked ? styles.lineRowStacked : styles.lineRow,
         relation === 'with' && styles.lineRowWith,
         relation === 'against' && styles.lineRowAgainst,
-        !isLast && styles.lineRowBorder,
         inProgress && styles.lineRowInProgress,
       ]}
     >
       <View style={stacked ? styles.lineInfoStacked : styles.lineInfo}>
         {/* Just the subject's name — the bet condition itself lives in each pick
-            button ("142.5+ PINS") — selectionButtonLabel. */}
+            chip ("142.5+ PINS") — selectionButtonLabel. */}
         <Text style={styles.lineName}>{first.subjectName}</Text>
         {first.subtitle != null && (
           <Text style={[styles.lineValue, stacked && styles.centered]}>{first.subtitle}</Text>
@@ -66,24 +67,16 @@ export default function LineRow({ lines, isLast, relation, inProgress, selection
         {lines.flatMap(line =>
           line.selections.map(sel => {
             const st = selectionState?.(line, sel) ?? {}
-            const dim = inProgress || line.inProgress || st.disabled
             return (
-              <TouchableOpacity
+              <PickChip
                 key={sel.selectionId}
-                style={[
-                  styles.pickBtn,
-                  stacked && styles.pickBtnGridItem,
-                  st.selected && styles.pickBtnSelected,
-                  dim && styles.pickBtnDisabled,
-                ]}
+                label={selectionButtonLabel(line, sel)}
+                grid={stacked}
+                selected={st.selected}
+                disabled={line.inProgress || st.disabled}
+                inert={!pressable}
                 onPress={pressable ? () => onSelect!(line, sel) : undefined}
-                disabled={!pressable}
-                activeOpacity={0.7}
-              >
-                <Text style={[styles.pickBtnText, st.selected && styles.pickBtnTextSelected]}>
-                  {selectionButtonLabel(line, sel)}
-                </Text>
-              </TouchableOpacity>
+              />
             )
           })
         )}
@@ -93,28 +86,31 @@ export default function LineRow({ lines, isLast, relation, inProgress, selection
 }
 
 const styles = StyleSheet.create({
-  // Horizontal layout (moneylines): name left, button(s) right.
+  // Horizontal layout (moneylines): name left, chip(s) right. Rows are spaced
+  // tinted cards (own rounding + margin) rather than hairline-divided slices.
   lineRow: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 14,
     paddingVertical: 12,
     gap: 10,
+    borderRadius: radius.cardSm,
+    backgroundColor: colors.surfaceTint,
+    marginBottom: spacing.sm,
   },
   // Stacked layout (player overs + props): name centered on its own row, the
-  // full button set evenly spaced beneath it.
+  // full chip set evenly spaced beneath it.
   lineRowStacked: {
     paddingHorizontal: 14,
     paddingVertical: 12,
     gap: 8,
-  },
-  lineRowBorder: {
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    borderRadius: radius.cardSm,
+    backgroundColor: colors.surfaceTint,
+    marginBottom: spacing.sm,
   },
   lineRowInProgress: { opacity: 0.5 },
   // Subtle with/against tints — teammates green-cast, matchup opponents
-  // red-cast, everyone else on the plain surface (minimal clutter).
+  // red-cast, everyone else on the plain tinted row (minimal clutter).
   lineRowWith: { backgroundColor: colors.successTint },
   lineRowAgainst: { backgroundColor: colors.dangerTint },
   lineInfo: { flex: 1 },
@@ -134,7 +130,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   pickBtns: { flexDirection: 'row', gap: 8 },
-  // A subject's full button set; wraps when the conditions outgrow the row.
+  // A subject's full chip set; wraps when the conditions outgrow the row.
   pickBtnsStacked: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -142,33 +138,4 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
   },
-  // Fuller "odds cell": a filled surface tile — a clearer, larger tap target
-  // than the old thin pill. Quietly neutral at rest (soft white-alpha border +
-  // faint fill, so it reads as tappable without glare); staged picks flip to a
-  // solid accent fill so the slip contents read at a glance.
-  pickBtn: {
-    minWidth: 78,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderRadius: radius.cardSm,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.22)',
-    backgroundColor: 'rgba(255,255,255,0.04)',
-    alignItems: 'center',
-  },
-  // Stacked rows lay the buttons as a uniform two-per-line grid: every cell
-  // the same width, each line spanning the full row. Content-sized cells made
-  // wrapped lines ragged (3 wide + 1 narrow), which read as off-center; equal
-  // cells keep the set symmetric under the centered name. An odd last button
-  // stays half-width and centers via the container's justifyContent.
-  pickBtnGridItem: { flexGrow: 1, flexBasis: '40%', maxWidth: '48%' },
-  pickBtnDisabled: { borderColor: colors.border2, backgroundColor: 'transparent', opacity: 0.4 },
-  pickBtnSelected: { backgroundColor: colors.accent, borderColor: colors.accent },
-  pickBtnText: {
-    fontFamily: fonts.barlowCondensed,
-    fontSize: 13,
-    color: 'rgba(240,240,240,0.85)',
-    letterSpacing: 0.5,
-  },
-  pickBtnTextSelected: { color: colors.bg },
 })

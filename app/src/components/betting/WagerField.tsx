@@ -1,5 +1,5 @@
 import { Text, StyleSheet } from 'react-native'
-import { colors, fonts } from '../../theme'
+import { colors, fonts, type } from '../../theme'
 import PinAmountInput from '../ui/PinAmountInput'
 import { formatPins } from '../../utils/formatting'
 
@@ -54,7 +54,7 @@ export default function WagerField({
         {!compact && `Balance: ${balance} pins  ·  Min: 10`}
         {!isNaN(wagerNum) ? `${compact ? '' : '  ·  '}To win: ` : ''}
         {!isNaN(wagerNum) && (
-          <Text style={boosted ? styles.toWinBoosted : undefined}>
+          <Text style={boosted ? styles.toWinBoosted : styles.toWin}>
             {formatPins(toWin)}{boosted ? ' ⚡️' : ''}
           </Text>
         )}
@@ -70,10 +70,8 @@ export default function WagerField({
 
 const styles = StyleSheet.create({
   wagerLabel: {
-    fontFamily: fonts.barlowCondensed,
-    fontSize: 12,
+    ...type.label,
     color: colors.muted,
-    letterSpacing: 1,
     marginTop: 6,
     marginBottom: 6,
   },
@@ -84,9 +82,17 @@ const styles = StyleSheet.create({
     color: colors.muted,
     marginTop: 6,
   },
+  // The to-win amount gets the accent so the payoff reads at a glance.
+  toWin: {
+    fontFamily: fonts.barlowCondensed,
+    fontSize: 13,
+    color: colors.accent,
+    letterSpacing: 0.3,
+  },
   // Boosted "To win" — gold to flag the Energy Drink's House-funded uplift.
   toWinBoosted: {
     fontFamily: fonts.barlowCondensed,
+    fontSize: 13,
     color: colors.gold,
     letterSpacing: 0.3,
   },

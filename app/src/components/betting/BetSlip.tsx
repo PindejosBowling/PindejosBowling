@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native'
-import { colors, fonts, radius } from '../../theme'
+import { colors, fonts, radius, spacing, type } from '../../theme'
 import BottomSheet from '../ui/BottomSheet'
 import Button from '../ui/Button'
 import ToggleGroup from '../ui/ToggleGroup'
+import TicketCard from './TicketCard'
 import WagerField from './WagerField'
 import TermsBlock from '../ui/TermsBlock'
 import { TERMS } from '../../data/pinsinoExplainers'
@@ -215,16 +216,40 @@ export default function BetSlip({
   }
 
   const ctaLabel = totalBets > 1 ? `Place ${totalBets} Bets` : 'Place Bet'
-  const showZoneLabels = specials.length > 0 && pickUnits > 0
+  const fmtOdds = (n: number) => `×${n.toFixed(n % 1 === 0 ? 0 : 2)}`
+  const subtitle = `${totalBets} ${totalBets === 1 ? 'BET' : 'BETS'} · ${grandTotal || 0} PINS`
 
-  const subtitle =
-    totalBets > 1
-      ? `${totalBets} BETS · ${grandTotal || 0} PINS`
-      : parlayPicks
-        ? `${pickUnits}-LEG PARLAY · ALL MUST WIN · PAYS ×${parlayOdds}`
-        : specials.length === 1 && pickUnits === 0
-          ? `SPECIAL · PAYS ×${specials[0].combinedOdds.toFixed(specials[0].combinedOdds % 1 === 0 ? 0 : 2)}`
-          : 'SINGLE BET'
+  // Items attach to the sole resulting bet — and when oneBet holds, exactly ONE
+  // ticket card renders, so every ticket footer can carry the toggles gated on
+  // oneBet without double-rendering.
+  const itemToggles = oneBet ? (
+    <View style={styles.itemToggles}>
+      <GoldenTicketToggle ticketCount={ticketCount} enabled={insure} onToggle={setInsure} disabled={placing} />
+      {oneBetMultiLeg && (
+        <WinnersCrutchToggle crutchCount={crutchCount} enabled={crutch} onToggle={setCrutch} disabled={placing} />
+      )}
+      <EnergyDrinkToggle boostCount={boostCount} enabled={boost} onToggle={setBoost} disabled={placing} />
+    </View>
+  ) : null
+
+  // One leg line inside a ticket: label text + its ✕ remove.
+  const legLine = (key: string, text: string, onRemove: () => void, tag?: string) => (
+    <View key={key} style={styles.legRow}>
+      <View style={styles.legMain}>
+        {tag != null && <Text style={styles.comboTag}>{tag}</Text>}
+        <Text style={styles.legText} numberOfLines={2}>{text}</Text>
+      </View>
+      <TouchableOpacity onPress={onRemove} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+        <Text style={styles.remove}>✕</Text>
+      </TouchableOpacity>
+    </View>
+  )
+
+  // The condition part of a pick, sans subject (the ticket header carries it).
+  const pickCondition = (p: SlipPick) =>
+    p.selectionLabel.toUpperCase() +
+    betLineSuffix(p.marketType, p.line, p.statKey) +
+    (p.gameNumber != null ? ` · G${p.gameNumber}` : '')
 
   return (
     <>
@@ -265,125 +290,129 @@ export default function BetSlip({
             />
           }
         >
-          {/* ── Specials (each its own bet) ── */}
-          {specials.length > 0 && (
-            <View style={styles.zone}>
-              {showZoneLabels && <Text style={styles.zoneLabel}>SPECIALS</Text>}
-              {specials.map(sp => (
-                <View key={sp.key} style={styles.row}>
-                  <View style={styles.rowMain}>
-                    <Text style={[styles.specialTitle, sp.category === 'special' && styles.specialTitleGold]}>
-                      {sp.title} · ×{sp.combinedOdds.toFixed(sp.combinedOdds % 1 === 0 ? 0 : 2)}
-                    </Text>
-                    <Text style={styles.specialSummary} numberOfLines={2}>{sp.summary}</Text>
-                    <View style={styles.wager}>
+          {/* Mode toggle — merging/splitting the pick tickets below. */}
+          {multiPicks && (
+            <View style={styles.modeRow}>
+              <ToggleGroup
+                variant="bar"
+                options={[{ key: 'singles', label: 'Singles' }, { key: 'parlay', label: 'Parlay' }]}
+                value={mode}
+                onChange={(m: SlipMode) => setMode(m)}
+              />
+            </View>
+          )}
+
+          {/* ── One ticket card per resulting bet ── */}
+          {pickUnits > 0 && parlayPicks && (
+            <TicketCard
+              header={{
+                title: `${pickUnits}-LEG PARLAY`,
+                badge: { label: fmtOdds(parlayOdds), color: colors.accent },
+              }}
+              footer={
+                <>
+                  <WagerField
+                    wager={parlayWager}
+                    onChangeWager={setParlayWager}
+                    balance={balance}
+                    odds={parlayOdds}
+                    boostPct={oneBet && boost ? boostPct : undefined}
+                  />
+                  {itemToggles}
+                </>
+              }
+            >
+              <Text style={styles.allMustWin}>ALL LEGS MUST WIN</Text>
+              {combos.map(c => legLine(c.key, comboLabel(c), () => onRemoveCombo(c.key), 'COMBO'))}
+              {picks.map(p => legLine(p.marketId, pickLabel(p), () => onRemovePick(p.marketId)))}
+            </TicketCard>
+          )}
+          {pickUnits > 0 && !parlayPicks && (
+            <>
+              {combos.map(c => (
+                <TicketCard
+                  key={c.key}
+                  header={{ title: 'COMBO', badge: { label: '×2', color: colors.accent } }}
+                  footer={
+                    <>
                       <WagerField
-                        wager={specialWagers[sp.key] ?? ''}
-                        onChangeWager={v => setSpecialWagers(s => ({ ...s, [sp.key]: v }))}
+                        wager={singleWagers[c.key] ?? ''}
+                        onChangeWager={v => setSingleWagers(s => ({ ...s, [c.key]: v }))}
                         balance={balance}
-                        odds={sp.combinedOdds}
+                        odds={2}
                         boostPct={oneBet && boost ? boostPct : undefined}
                         label="STAKE (pins)"
                         compact
                       />
-                    </View>
-                  </View>
-                  <TouchableOpacity onPress={() => onRemoveSpecial(sp.key)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                    <Text style={styles.remove}>✕</Text>
-                  </TouchableOpacity>
-                </View>
-              ))}
-            </View>
-          )}
-
-          {/* ── Picks + combos (singles / parlay) ── */}
-          {pickUnits > 0 && (
-            <View style={styles.zone}>
-              {showZoneLabels && <Text style={styles.zoneLabel}>PICKS</Text>}
-              {multiPicks && (
-                <View style={styles.modeRow}>
-                  <ToggleGroup
-                    variant="bar"
-                    options={[{ key: 'singles', label: 'Singles' }, { key: 'parlay', label: 'Parlay' }]}
-                    value={mode}
-                    onChange={(m: SlipMode) => setMode(m)}
-                  />
-                </View>
-              )}
-              {combos.map(c => (
-                <View key={c.key} style={styles.row}>
-                  <View style={styles.rowMain}>
-                    <Text style={styles.comboTag}>COMBO</Text>
-                    <Text style={styles.pickText} numberOfLines={2}>{comboLabel(c)}</Text>
-                    {!parlayPicks && (
-                      <View style={styles.wager}>
-                        <WagerField
-                          wager={singleWagers[c.key] ?? ''}
-                          onChangeWager={v => setSingleWagers(s => ({ ...s, [c.key]: v }))}
-                          balance={balance}
-                          odds={2}
-                          boostPct={oneBet && boost ? boostPct : undefined}
-                          label="STAKE (pins)"
-                          compact
-                        />
-                      </View>
-                    )}
-                  </View>
-                  <TouchableOpacity onPress={() => onRemoveCombo(c.key)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                    <Text style={styles.remove}>✕</Text>
-                  </TouchableOpacity>
-                </View>
+                      {itemToggles}
+                    </>
+                  }
+                >
+                  {legLine(c.key, comboLabel(c), () => onRemoveCombo(c.key))}
+                </TicketCard>
               ))}
               {picks.map(p => (
-                <View key={p.marketId} style={styles.row}>
-                  <View style={styles.rowMain}>
-                    <Text style={styles.pickText} numberOfLines={2}>{pickLabel(p)}</Text>
-                    {!parlayPicks && (
-                      <View style={styles.wager}>
-                        <WagerField
-                          wager={singleWagers[p.marketId] ?? ''}
-                          onChangeWager={v => setSingleWagers(s => ({ ...s, [p.marketId]: v }))}
-                          balance={balance}
-                          odds={p.odds}
-                          boostPct={oneBet && boost ? boostPct : undefined}
-                          label="STAKE (pins)"
-                          compact
-                        />
-                      </View>
-                    )}
-                  </View>
-                  <TouchableOpacity onPress={() => onRemovePick(p.marketId)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                    <Text style={styles.remove}>✕</Text>
-                  </TouchableOpacity>
-                </View>
+                <TicketCard
+                  key={p.marketId}
+                  header={{ title: p.subjectName, badge: { label: fmtOdds(p.odds), color: colors.accent } }}
+                  footer={
+                    <>
+                      <WagerField
+                        wager={singleWagers[p.marketId] ?? ''}
+                        onChangeWager={v => setSingleWagers(s => ({ ...s, [p.marketId]: v }))}
+                        balance={balance}
+                        odds={p.odds}
+                        boostPct={oneBet && boost ? boostPct : undefined}
+                        label="STAKE (pins)"
+                        compact
+                      />
+                      {itemToggles}
+                    </>
+                  }
+                >
+                  {legLine(p.marketId, pickCondition(p), () => onRemovePick(p.marketId))}
+                </TicketCard>
               ))}
-              {parlayPicks && (
-                <WagerField
-                  wager={parlayWager}
-                  onChangeWager={setParlayWager}
-                  balance={balance}
-                  odds={parlayOdds}
-                  boostPct={oneBet && boost ? boostPct : undefined}
-                />
-              )}
-            </View>
+            </>
           )}
 
-          {/* Item toggles — only when the slip resolves to a single bet. */}
-          {oneBet ? (
-            <>
-              <GoldenTicketToggle ticketCount={ticketCount} enabled={insure} onToggle={setInsure} disabled={placing} />
-              {oneBetMultiLeg && (
-                <WinnersCrutchToggle crutchCount={crutchCount} enabled={crutch} onToggle={setCrutch} disabled={placing} />
-              )}
-              <EnergyDrinkToggle boostCount={boostCount} enabled={boost} onToggle={setBoost} disabled={placing} />
-            </>
-          ) : (
-            (ticketCount > 0 || boostCount > 0) && (
-              <Text style={styles.itemNote}>
-                Place a bet on its own to attach a Golden Ticket or Energy Drink.
-              </Text>
-            )
+          {/* Specials — always their own (gold-trimmed) tickets. */}
+          {specials.map(sp => (
+            <TicketCard
+              key={sp.key}
+              gold={sp.category === 'special'}
+              header={{
+                title: sp.title,
+                titleGold: sp.category === 'special',
+                badge: {
+                  label: fmtOdds(sp.combinedOdds),
+                  color: sp.category === 'special' ? colors.gold : colors.accent,
+                },
+              }}
+              footer={
+                <>
+                  <WagerField
+                    wager={specialWagers[sp.key] ?? ''}
+                    onChangeWager={v => setSpecialWagers(s => ({ ...s, [sp.key]: v }))}
+                    balance={balance}
+                    odds={sp.combinedOdds}
+                    boostPct={oneBet && boost ? boostPct : undefined}
+                    label="STAKE (pins)"
+                    compact
+                  />
+                  {itemToggles}
+                </>
+              }
+            >
+              {legLine(sp.key, sp.summary, () => onRemoveSpecial(sp.key))}
+            </TicketCard>
+          ))}
+
+          {/* Item availability note — items need a lone bet to attach to. */}
+          {!oneBet && (ticketCount > 0 || boostCount > 0) && (
+            <Text style={styles.itemNote}>
+              Place a bet on its own to attach a Golden Ticket or Energy Drink.
+            </Text>
           )}
 
           {count > 0 && grandTotal > balance && (
@@ -430,55 +459,36 @@ const styles = StyleSheet.create({
   barClear: { paddingHorizontal: 8, paddingVertical: 8 },
   barReview: { paddingHorizontal: 16, paddingVertical: 10 },
 
-  zone: { marginBottom: 6 },
-  zoneLabel: {
-    fontFamily: fonts.barlowCondensed,
-    fontSize: 12,
-    letterSpacing: 1.5,
-    color: colors.muted,
-    marginTop: 4,
-    marginBottom: 4,
-  },
   modeRow: { marginBottom: 12 },
 
-  row: {
+  // A ticket's leg line: label + its ✕ remove.
+  legRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     justifyContent: 'space-between',
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
     gap: 10,
+    marginBottom: spacing.xs,
   },
-  rowMain: { flex: 1 },
-  pickText: {
+  legMain: { flex: 1 },
+  legText: {
     fontFamily: fonts.barlowCondensed,
     fontSize: 14,
     color: colors.text,
     letterSpacing: 0.3,
   },
   comboTag: {
+    ...type.label,
     fontFamily: fonts.barlowCondensedHeavy,
     fontSize: 10,
-    letterSpacing: 1.5,
     color: colors.accent,
     marginBottom: 1,
   },
-  specialTitle: {
-    fontFamily: fonts.barlowCondensed,
-    fontSize: 14,
-    color: colors.accent,
-    letterSpacing: 0.3,
-  },
-  specialTitleGold: { color: colors.gold },
-  specialSummary: {
-    fontFamily: fonts.barlowCondensed,
-    fontSize: 12,
+  allMustWin: {
+    ...type.label,
     color: colors.muted,
-    marginTop: 2,
-    letterSpacing: 0.3,
+    marginBottom: spacing.sm,
   },
-  wager: { marginTop: 2 },
+  itemToggles: { marginTop: spacing.xs },
   remove: {
     fontFamily: fonts.barlowCondensed,
     fontSize: 15,

@@ -24,6 +24,14 @@ export const colors = {
   overlay:   'rgba(0,0,0,0.7)',
   shadow:    '#000',
 
+  // Tinted fills for the modern surface language: soft white washes for
+  // chip/row rest states (instead of hairline-divided flat lists) and an
+  // accent-cast wash for staged/parlay ticket cards.
+  surfaceTint:  'rgba(255,255,255,0.04)',
+  surfaceTint2: 'rgba(255,255,255,0.07)',
+  chipBorder:   'rgba(255,255,255,0.22)',
+  accentTint:   'rgba(232,255,71,0.06)',
+
   // Soft desaturated tints reserved for the ambient pixel-art backdrops
   // (components/pixelart/) — not for UI chrome.
   pixelArt: {
@@ -41,6 +49,7 @@ export const spacing = {
   md: 12,
   lg: 16,
   xl: 24,
+  xxl: 32,
 }
 
 export const fonts = {
@@ -56,6 +65,51 @@ export const radius = {
   cardSm: 12,
   icon:   10,
 }
+
+// The deliberate type scale for the betting surfaces — micro-labels, chip
+// text, and big ticket values. Spread into StyleSheet entries (they're plain
+// objects, not styles) so headings/numbers share one rhythm instead of
+// per-component ad-hoc sizes.
+export const type = {
+  label:  { fontFamily: fonts.barlowCondensed, fontSize: 11, letterSpacing: 1.5 },
+  chip:   { fontFamily: fonts.barlowCondensed, fontSize: 13, letterSpacing: 0.5 },
+  chipLg: { fontFamily: fonts.barlowCondensedHeavy, fontSize: 16, letterSpacing: 0.5 },
+  value:  { fontFamily: fonts.barlowCondensedHeavy, fontSize: 20 },
+} as const
+
+// The ticket-card language: one card = one bet (the slip's build tickets and
+// the placed-bet rows share this shell via TicketCard). Styles (not a
+// component) so TicketCard and one-off ticket-shaped surfaces stay in sync.
+export const ticketStyles = StyleSheet.create({
+  card: {
+    backgroundColor: colors.surface2,
+    borderRadius: radius.cardMd,
+    borderWidth: 1,
+    borderColor: colors.border2,
+    padding: spacing.lg,
+    marginBottom: spacing.md,
+    shadowColor: colors.shadow,
+    shadowOpacity: 0.35,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 3,
+  },
+  cardGold: { borderColor: colors.gold, backgroundColor: colors.goldTint },
+  // Accent top rail — the ticket's "edge".
+  rail: {
+    height: 3,
+    borderTopLeftRadius: radius.cardMd,
+    borderTopRightRadius: radius.cardMd,
+    backgroundColor: colors.accentDim,
+  },
+  // The "perforation" between a ticket's legs and its stake/footer.
+  divider: {
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+    borderStyle: 'dashed',
+    marginVertical: spacing.sm,
+  },
+})
 
 // Shared bottom-sheet form idioms — the SECTION heading, small-caps field
 // label, multiline free-text input (reasoning / admin notes), and stacked

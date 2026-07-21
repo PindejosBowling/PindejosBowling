@@ -279,7 +279,8 @@ export default function PlayerPinsinoScreen() {
               {openGameNumbers.map(gameNum => (
                 <View key={gameNum}>
                   <Text style={styles.gameLabel}>GAME {gameNum}</Text>
-                  <View style={styles.card}>
+                  {/* BetRow renders self-contained ticket cards — no wrapper card. */}
+                  <View>
                     {openBetsByGame[gameNum].map((bet, idx) => {
                       const isLast = idx === openBetsByGame[gameNum].length - 1
                       return (
@@ -323,7 +324,7 @@ export default function PlayerPinsinoScreen() {
                     </TouchableOpacity>
 
                     {isExpanded && (
-                      <View style={styles.card}>
+                      <View>
                         {betsInWeek.map((bet, idx) => {
                           const badge = resultBadge(bet.status)
                           const isLast = idx === betsInWeek.length - 1

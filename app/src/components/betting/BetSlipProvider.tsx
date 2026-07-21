@@ -52,6 +52,10 @@ interface BetSlipContextValue {
   removeSlipCombo: (key: string) => void
   clearSlip: () => void
   openSlip: () => void
+  // Presentational only: hide the collapsed slip bar while the Sportsbook's
+  // combine-mode BuilderBar occupies its footprint. Staging/placement are
+  // unaffected; the screen restores it on every combine-mode exit.
+  setSlipBarHidden: (hidden: boolean) => void
   // Copy an existing active bet into the slip, re-resolved against current live
   // markets, then raise the placement sheet. No-op/toast when not copyable.
   copyBet: (bet: BetView) => Promise<void>
@@ -77,6 +81,7 @@ const BetSlipContext = createContext<BetSlipContextValue>({
   removeSlipCombo: NOOP,
   clearSlip: NOOP,
   openSlip: NOOP,
+  setSlipBarHidden: NOOP,
   copyBet: async () => {},
   ghosts: [],
   reloadInventory: async () => {},
@@ -119,6 +124,9 @@ export function BetSlipProvider({ children }: { children: ReactNode }) {
   const [slipCombos, setSlipCombos] = useState<SlipCombo[]>([])
   const [slipOpen, setSlipOpen] = useState(false)
   const [placing, setPlacing] = useState(false)
+  // Presentational: the Sportsbook hides the collapsed bar while its
+  // combine-mode BuilderBar occupies the same footprint.
+  const [slipBarHidden, setSlipBarHidden] = useState(false)
 
   const [balance, setBalance] = useState(0)
   const [tickets, setTickets] = useState<string[]>([])
@@ -364,6 +372,7 @@ export function BetSlipProvider({ children }: { children: ReactNode }) {
     removeSlipCombo,
     clearSlip,
     openSlip,
+    setSlipBarHidden,
     copyBet,
     ghosts,
     reloadInventory: refreshContext,
@@ -375,8 +384,9 @@ export function BetSlipProvider({ children }: { children: ReactNode }) {
       {children}
       {/* Global slip overlay. box-none lets touches through everywhere except the
           bar itself; offset above the tab bar so the bar lands where the old
-          in-screen bar did. The expanded sheet is an RN Modal (self-positioning). */}
-      {enabled && count > 0 && (
+          in-screen bar did. The expanded sheet is an RN Modal (self-positioning).
+          slipBarHidden yields the footprint to the combine-mode BuilderBar. */}
+      {enabled && count > 0 && !slipBarHidden && (
         <View pointerEvents="box-none" style={[styles.overlay, { bottom: insets.bottom + TAB_BAR_HEIGHT }]}>
           <BetSlip
             picks={slipPicks}

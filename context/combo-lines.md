@@ -159,25 +159,34 @@ params->>clock.eq.lanetalk)` alongside props and legacy team props.
 - `usePinsinoData`: `LineView.comboMemberIds/comboMemberNames`;
   `normalizeMarket` labels a combo by its joined `member_names` (no N-name
   fetch — that's why compose snapshots names); `marketGroup` routes null-game
-  combos to WEEKLY; `lineCategory` gives combos their own "Combos" collapsible
-  (game groups + WEEKLY); `betLineSuffix`/`selectionButtonLabel` render
-  "OVER 12.5 STRIKES"; `rsvpInPlayers` (RSVP'd-in id+name) feeds the picker.
+  combos to WEEKLY (the board's Weekly scope); `betLineSuffix`/
+  `selectionButtonLabel` render "OVER 12.5 STRIKES"; `rsvpInPlayers`
+  (RSVP'd-in id+name) is the combine-mode member pool.
 - **The slip is the placement surface** (`BetSlip` + `BetSlipProvider`):
-  `ComboComposerSheet` (stat + scope pickers, member multi-select from
-  `rsvpInPlayers`, debounced live line preview) does NOT place — its "Add to
-  Bet Slip" CTA stages a `SlipCombo` **spec** (canonical key = stat|scope|
-  members, so re-staging toggles) via `stageCombo`. Combos render in the
-  slip's PICKS zone (COMBO tag), count as pick units for the Singles/Parlay
-  mode, and parlay freely with regular picks and other combos (odds 2^units).
-  `placeSlip` routes any combo-bearing entry through `bets.composeCombo`
-  (parlay → one call with all specs + the regular picks' selection ids as
-  extras; a singles-mode combo → one call with its lone spec) and everything
-  else through `bets.place`. Item toggles pass through when the slip is one
-  bet.
-- `SportsbookScreen`: one global "+ Build a Combo" CTA atop the Place view
-  (hidden read-only); combos flow through the `LineView → LineRow` seam with
-  zero row-component changes; BetDetail copy-bet works unchanged (`getByIds`
-  is market-type-agnostic).
+  combine mode does NOT place — its BuilderBar "Add" stages a `SlipCombo`
+  **spec** (canonical key = stat|scope|members, so re-staging toggles) via
+  `stageCombo`. Combos render in the slip as their own ticket cards (COMBO
+  header) or as tagged parlay-ticket legs, count as pick units for the
+  Singles/Parlay mode, and parlay freely with regular picks and other combos
+  (odds 2^units). `placeSlip` routes any combo-bearing entry through
+  `bets.composeCombo` (parlay → one call with all specs + the regular picks'
+  selection ids as extras; a singles-mode combo → one call with its lone
+  spec) and everything else through `bets.place`. Item toggles pass through
+  when the slip is one bet.
+- `SportsbookScreen` — **board-native combine mode** (2026-07-21, replacing
+  the ⚰️ `ComboComposerSheet` + its "+ Build a Combo" CTA): a COMBINE chip in
+  the board's filter row arms the mode (dim-and-toast under 2 RSVP'd); the
+  next stat-pill tap seeds the combo (score O/U → `total_pins`, a prop → its
+  `statKey`) and pivots the board to a member-picking list (every RSVP'd-in
+  player, viewer first, solo line shown as context); the floating `BuilderBar`
+  (slip-bar footprint; the provider's `setSlipBarHidden` yields it) shows the
+  debounced live line (`useComboLinePreview` → `betMarkets.previewComboLine`)
+  and Add/Cancel — Add flips to "Remove" when the exact key is already staged.
+  Combo scope follows the board's scope filter (Weekly → night, Game N → that
+  game; mid-build switches re-preview); an in-progress scope disables Add.
+  Placed combos still flow through the `LineView → LineRow` seam with zero
+  row-component changes; BetDetail copy-bet works unchanged (`getByIds` is
+  market-type-agnostic).
 - Feed renderer `sportsbook.combo_composed` in `activityFeedTemplates.ts`;
   explainer bullet + `TERMS.combo` in `data/pinsinoExplainers.ts`.
 

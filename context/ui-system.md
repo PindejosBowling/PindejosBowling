@@ -104,7 +104,7 @@ Central signed-URL cache for player profile pictures. `load()` fetches `players.
 
 **PinsinoLeaderboardScreen** — full leaderboard via `<PinsinoLeaderboardTable />` (no limit). Pin-balance scoreboard of active players, season balances summed from the ledger, Standings-style, with an "Upside" column = projected balance if all that player's still-pending bets win, sorted descending. Tap a row → `PlayerPinsino`.
 
-**SportsbookScreen** (`Pinsino` stack) — public betting: **Place Bets** (open markets as collapsible board — see [Betting Line Board](betting-line-board.md)), **Active Bets** (read-only `ActiveBetsView`), **Settled Bets** (read-only `SettledBetsView`) toggled via `ToggleGroup`. Single and parlay placement, sticky parlay slip, `BetDetailModal`. `<Toast />` inside each `<Modal>`.
+**SportsbookScreen** (`Pinsino` stack) — public betting: **Place Bets** (flat scope+player-filtered board with board-native combo building — see [Betting Line Board](betting-line-board.md)), **Active Bets** (read-only `ActiveBetsView`), **Settled Bets** (read-only `SettledBetsView`) toggled via `ToggleGroup`. Everything builds through the global bet slip (ticket cards — one card per resulting bet), `BetDetailModal`. `<Toast />` inside each `<Modal>`. The betting surfaces use the ticket-card token set (`ticketStyles`/`type`/tint colors in `theme.ts` — see [patterns.md](patterns.md)).
 
 **PinsinoAdminScreen** (hub) — pure tile menu: **Accounting** 📒 → `PinsinoAccounting`, **Market Moves** 👀 → `MarketMovesAdmin`, **Sportsbook** 🏟️ → `AdminSportsbook`, **PvP** ⚔️ → `PvPAdmin`, **Bounties** 🎯 → `BountyAdmin`, **Loan Shark** 🦈 → `LoanSharkAdmin`, **Auction House** 🔨 → `AuctionHouseAdmin`. No content of its own beyond the admin gate.
 

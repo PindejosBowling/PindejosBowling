@@ -9,7 +9,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useNavigation } from '@react-navigation/native'
 import { NativeStackNavigationProp } from '@react-navigation/native-stack'
-import { colors, fonts, radius } from '../theme'
+import { colors, fonts } from '../theme'
 import ScreenHeader from '../components/ui/ScreenHeader'
 import ArtworkToggle from '../components/ui/ArtworkToggle'
 import SportsbookPokerTableBackdrop from '../components/pixelart/SportsbookPokerTableBackdrop'
@@ -22,9 +22,10 @@ import BetDetailModal from '../components/betting/BetDetailModal'
 import { useBetSlip, useBetSlipReload } from '../components/betting/BetSlipProvider'
 import LineRow from '../components/betting/LineRow'
 import CustomLineRow from '../components/betting/CustomLineRow'
+import PickChip from '../components/betting/PickChip'
+import BuilderBar from '../components/betting/BuilderBar'
 import ReadOnlySeasonBanner from '../components/betting/ReadOnlySeasonBanner'
 import ConfirmActionSheet from '../components/ui/ConfirmActionSheet'
-import ComboComposerSheet from '../components/betting/ComboComposerSheet'
 import Button from '../components/ui/Button'
 import PlayerPickerModal from '../components/ui/PlayerPickerModal'
 import FeatureExplainerSheet from '../components/pinsino/FeatureExplainerSheet'
@@ -39,11 +40,13 @@ import {
   closedBettingNote,
   subjectRelation,
   withVisibleSelections,
+  STAT_LABELS,
   type BetView,
   type LineView,
   type SelectionView,
   type CustomLineView,
 } from '../hooks/usePinsinoData'
+import { useComboLinePreview } from '../hooks/useComboLinePreview'
 import { useRefresh } from '../hooks/useRefresh'
 import { useAuthStore } from '../stores/authStore'
 import { useUiStore } from '../stores/uiStore'
@@ -81,7 +84,6 @@ export default function SportsbookScreen() {
   // special as its own tagged bet; BetSlip owns the stake + item-toggle inputs.
   const [detailModal, setDetailModal] = useState<BetView | null>(null)
   const [helpOpen, setHelpOpen] = useState(false)
-  const [composerOpen, setComposerOpen] = useState(false)
 
   // Place-board filters: a scope (Weekly or one game) + a player. The board is
   // flat — it shows only the chosen player's lines for the chosen scope. The
@@ -92,6 +94,14 @@ export default function SportsbookScreen() {
   const [pickedPlayerId, setPickedPlayerId] = useState<string | null>(null)
   const [playerPickerOpen, setPlayerPickerOpen] = useState(false)
 
+  // Combine mode — board-native combo building. null = off; { stat: null } =
+  // armed (Combine chip on, waiting for a stat tap); stat set = the stat-view
+  // pivot is active (member picking). Scope follows the board's scope filter:
+  // Weekly → a night combo, Game N → that game.
+  const [combo, setCombo] = useState<{ stat: string | null; members: Set<string> } | null>(null)
+  const comboArmed = combo != null && combo.stat == null
+  const combining = combo != null && combo.stat != null
+
   // The bet slip (staged picks/specials, placement, item inventory, balance) is
   // owned by the app-level BetSlipProvider so it can also be raised from Bet
   // Details on other screens. The board feeds it staged picks and reads its
@@ -100,8 +110,12 @@ export default function SportsbookScreen() {
   const {
     slipPicks,
     slipSpecials,
+    slipCombos,
     stagePick: stageSlipPick,
     stageSpecial: stageSlipSpecial,
+    stageCombo,
+    openSlip,
+    setSlipBarHidden,
     ghosts,
     reloadInventory,
   } = useBetSlip()
@@ -128,11 +142,6 @@ export default function SportsbookScreen() {
   // The viewer's slice of the active board — their own current-week pending bets.
   // Surfaced as a MY BETS section atop Active Bets; Place Bets is purely for placing.
   const myActiveBets = useMemo(() => activeBets.filter(b => b.playerId === playerId), [activeBets, playerId])
-
-  // Schedule game numbers for the combo composer's scope picker; [1, 2] before
-  // any games/lines exist (the compose RPC's pre-teams default, so the picker
-  // never offers a game the RPC rejects).
-  const comboGameNumbers = weekGameNumbers.length > 0 ? weekGameNumbers : [1, 2]
 
   // Under-hide applied once: strip UI-hidden selections (the "under" side)
   // before a line ever reaches the board, so it can't be picked, parlayed, or
@@ -220,12 +229,105 @@ export default function SportsbookScreen() {
       playerLines,
       comboLines,
       specials,
+      // All in-scope lines — combine mode's solo-line lookups read these.
+      scopeLines,
       // A closed market anywhere in scope locks the whole scope (a started
       // game closes all its markets together), mirroring the old group lock.
       scopeInProgress: scopeLines.some(l => l.inProgress),
       firstInProgress: scopeLines.find(l => l.inProgress) ?? null,
     }
   }, [visibleLines, customLines, scope, pickedPlayerId, playerId, rsvpInPlayers])
+
+  // ── Combine mode derivations ──────────────────────────────────────────
+  // The combo stat a board line seeds: the score O/U builds a total-pins
+  // combo; a stat prop builds its own stat. Combos/specials can't seed.
+  const comboStatOf = (l: LineView): string | null =>
+    l.marketType === 'over_under' ? 'total_pins' : l.marketType === 'prop' ? l.statKey : null
+
+  const comboMemberIds = useMemo(
+    () => (combo?.stat != null ? [...combo.members].sort() : []),
+    [combo]
+  )
+  const comboScopeGame = scope === 'weekly' ? null : Number(scope.slice('game-'.length))
+  const comboNGames = scope === 'weekly' ? Math.max(weekGameNumbers.length, 1) : 1
+  const { line: comboPreviewLine } = useComboLinePreview(
+    comboMemberIds,
+    combo?.stat ?? null,
+    currentSeasonId,
+    comboNGames
+  )
+  // Canonical staging key — the same format ComboComposerSheet used, so
+  // toggle-off dedup works against anything previously staged.
+  const comboKey =
+    combo?.stat != null
+      ? `${combo.stat}|${scope === 'weekly' ? 'night' : comboScopeGame}|${comboMemberIds.join(',')}`
+      : ''
+  const comboAlreadyStaged = combining && slipCombos.some(c => c.key === comboKey)
+
+  // The BuilderBar takes over the slip bar's footprint while combining.
+  useEffect(() => {
+    setSlipBarHidden(combining)
+    return () => setSlipBarHidden(false)
+  }, [combining, setSlipBarHidden])
+
+  // Leaving the Place view (or flipping read-only) abandons any in-flight combo.
+  useEffect(() => {
+    if (effectiveView !== 'place' || readOnly) setCombo(null)
+  }, [effectiveView, readOnly])
+
+  function toggleComboMember(id: string) {
+    setCombo(prev => {
+      if (prev?.stat == null) return prev
+      const members = new Set(prev.members)
+      if (members.has(id)) members.delete(id)
+      else members.add(id)
+      return { ...prev, members }
+    })
+  }
+
+  // An armed stat tap pivots the board into member picking, seeded with the
+  // tapped subject. Combos/specials chips can't seed a combo.
+  function enterStatView(line: LineView) {
+    const stat = comboStatOf(line)
+    if (!stat) { showToast('Combos build from player stat lines', 'error'); return }
+    setCombo({ stat, members: new Set(line.subjectPlayerId ? [line.subjectPlayerId] : []) })
+  }
+
+  // Add (or, when this exact combo is already staged, remove) via the slip's
+  // canonical toggle. Adding exits combine mode and raises the slip, mirroring
+  // the old composer's add-then-open flow.
+  function addComboToSlip() {
+    if (combo?.stat == null || currentWeekId == null) return
+    const nameById = new Map(rsvpInPlayers.map(m => [m.playerId, m.name]))
+    stageCombo({
+      key: comboKey,
+      weekId: currentWeekId,
+      memberIds: comboMemberIds,
+      memberNames: comboMemberIds.map(id => nameById.get(id) ?? '—'),
+      stat: combo.stat,
+      scope: scope === 'weekly' ? 'night' : 'game',
+      gameNumber: comboScopeGame,
+      line: comboPreviewLine,
+    })
+    const wasStaged = comboAlreadyStaged
+    setCombo(null)
+    if (!wasStaged) openSlip()
+  }
+
+  // Combine-mode member pool: every RSVP'd-in player (the compose RPC's only
+  // eligibility rule — a player without an individual line still combines),
+  // viewer first, then the roster's name order.
+  const comboMemberPool = useMemo(() => {
+    const rows = [...rsvpInPlayers]
+    if (playerId) {
+      const i = rows.findIndex(r => r.playerId === playerId)
+      if (i > 0) {
+        const [me] = rows.splice(i, 1)
+        rows.unshift(me)
+      }
+    }
+    return rows
+  }, [rsvpInPlayers, playerId])
 
   // Anti-tanking, market-type-aware: backing the side that bets against your own
   // performance (the `under` on your own line, or on your own team's line) is
@@ -295,27 +397,33 @@ export default function SportsbookScreen() {
         isLast={isLast}
         relation={subjectRelation(weekTeams, lines[0].subjectPlayerId, lines[0].gameNumber)}
         inProgress={groupInProgress}
-        onSelect={stagePick}
-        selectionState={(line, sel) => ({
-          selected: slipPicks.some(p => p.selectionId === sel.selectionId),
-          disabled: balance < 10 || isSelfTank(line, sel),
-        })}
+        // Armed combine mode repurposes the stat taps: the first tap seeds the
+        // combo and pivots to member picking (no anti-tank dim — over-on-self
+        // is legal for combos).
+        onSelect={comboArmed ? line => enterStatView(line) : stagePick}
+        selectionState={
+          comboArmed
+            ? () => ({})
+            : (line, sel) => ({
+                selected: slipPicks.some(p => p.selectionId === sel.selectionId),
+                disabled: balance < 10 || isSelfTank(line, sel),
+              })
+        }
       />
     )
   }
 
-  // One card of custom-line rows, shared by the week-wide slot (top of the
-  // board) and the per-game slot (top of each game group). No section header —
-  // the rows' styling (gold for 'special') is the distinguishing mark.
-  // Disabled (dim, still pressable → toast) mirrors LineRow.
+  // The scope's custom lines as a stack of ticket cards leading the board. No
+  // section header — the tickets' styling (gold for 'special') is the
+  // distinguishing mark. Disabled (dim, still pressable → toast) mirrors LineRow.
   function renderSpecialsCard(lines: CustomLineView[], gameInProgress: boolean) {
     return (
-      <View style={styles.card}>
-        {lines.map((cl, idx) => (
+      <View>
+        {lines.map(cl => (
           <CustomLineRow
             key={cl.id}
             line={cl}
-            isLast={idx === lines.length - 1}
+            isLast={false}
             inProgress={gameInProgress || cl.inProgress}
             disabled={balance < 10 || customLineSelfTank(cl, playerId)}
             selected={slipSpecials.some(s => s.key === cl.id)}
@@ -336,7 +444,9 @@ export default function SportsbookScreen() {
         contentContainerStyle={[
           styles.content,
           { paddingTop: insets.top },
-          effectiveView === 'place' && (slipPicks.length > 0 || slipSpecials.length > 0) && { paddingBottom: 96 },
+          effectiveView === 'place' &&
+            (slipPicks.length > 0 || slipSpecials.length > 0 || slipCombos.length > 0 || combining) &&
+            { paddingBottom: 96 },
         ]}
         refreshControl={
           loading ? undefined : (
@@ -381,73 +491,131 @@ export default function SportsbookScreen() {
 
         {/* ── Place Bets ──────────────────────────────────────── */}
         {effectiveView === 'place' && <>
-        {/* Build a Combo — the one global entry to the composer (scope, stat,
-            members, stake all live inside the sheet). */}
-        {currentWeekId != null && currentSeasonId != null && (
-          <Button
-            label="+ Build a Combo"
-            variant="secondary"
-            onPress={() => setComposerOpen(true)}
-            style={styles.comboCta}
-          />
-        )}
-        {/* The flat board: scope pills + player select, then the chosen
-            player's available lines for that scope. The two filters ARE the
-            navigation — no collapsible sections. Staged picks live in the
-            global slip bar, so building a parlay across players/scopes is just
-            switching the filters. */}
+        {/* The flat board: scope pills + Combine chip + player select, then
+            the chosen player's available lines for that scope. The filters
+            ARE the navigation — no collapsible sections. Staged picks live in
+            the global slip bar, so building a parlay across players/scopes is
+            just switching the filters. */}
         {visibleLines.length > 0 || customLines.length > 0 ? (
           <View style={styles.board}>
-            <ToggleGroup
-              variant="pill"
-              options={scopeOptions}
-              value={scope}
-              onChange={setScope}
-              style={styles.scopeRow}
-            />
-            <Button
-              selectable
-              value={
-                board.selectedPlayerId != null
-                  ? `${board.players.find(p => p.id === board.selectedPlayerId)?.name ?? '—'}${board.selectedPlayerId === playerId ? ' (you)' : ''}`
-                  : null
-              }
-              placeholder="Select player"
-              onPress={() => setPlayerPickerOpen(true)}
-              disabled={board.players.length === 0}
-              style={styles.playerSelect}
-            />
-            {board.selectedPlayerId == null ? (
-              // Nobody has lines in this scope (they may in another — the
-              // pills stay tappable above).
-              <EmptyCard
-                text={`No ${scopeOptions.find(o => o.key === scope)?.label ?? ''} lines are open yet`}
+            <View style={styles.filterRow}>
+              <ToggleGroup
+                variant="pill"
+                options={scopeOptions}
+                value={scope}
+                onChange={setScope}
+                style={styles.scopePills}
               />
-            ) : (
+              {/* Combine — board-native combo building. Dim-but-pressable
+                  below 2 RSVP'd players (house convention: still toasts). */}
+              {currentWeekId != null && currentSeasonId != null && (
+                <PickChip
+                  label="COMBINE"
+                  selected={combo != null}
+                  disabled={rsvpInPlayers.length < 2}
+                  onPress={() => {
+                    if (rsvpInPlayers.length < 2) {
+                      showToast("Not enough players RSVP'd in yet", 'error')
+                      return
+                    }
+                    setCombo(prev => (prev ? null : { stat: null, members: new Set() }))
+                  }}
+                />
+              )}
+            </View>
+            {combining && combo?.stat != null ? (
+              // ── Stat-view pivot: pick the combo's members ──────────────
+              // Pool = every RSVP'd-in player (combos need only RSVP); a
+              // member's own line for this stat shows as context when one
+              // exists. Scope pills stay live — switching re-previews the line.
               <>
+                <Text style={styles.combineHint}>
+                  TAP PLAYERS TO COMBINE · {(STAT_LABELS[combo.stat] ?? combo.stat).toUpperCase()}
+                </Text>
                 {board.scopeInProgress && board.firstInProgress && (
                   <Text style={styles.inProgressNote}>
                     {closedBettingNote(board.firstInProgress)}
                   </Text>
                 )}
-                {/* Specials lead (their styling is the distinguishing mark),
-                    then the player's consolidated row, then their combos. */}
-                {board.specials.length > 0 && renderSpecialsCard(board.specials, board.scopeInProgress)}
-                {(board.playerLines.length > 0 || board.comboLines.length > 0) && (
-                  <View style={styles.card}>
-                    {[
-                      ...(board.playerLines.length > 0 ? [board.playerLines] : []),
-                      ...board.comboLines.map(c => [c]),
-                    ].map((lines, idx, sets) => (
-                      <View key={lines[0].subjectPlayerId ?? lines[0].marketId}>
-                        {renderLineSet(
-                          lines,
-                          idx === sets.length - 1,
-                          board.scopeInProgress || lines.some(l => l.inProgress),
-                        )}
+                <View>
+                  {comboMemberPool.map(m => {
+                    const on = combo.members.has(m.playerId)
+                    const solo = board.scopeLines.find(
+                      l => l.subjectPlayerId === m.playerId && comboStatOf(l) === combo.stat
+                    )
+                    return (
+                      <View key={m.playerId} style={styles.memberRow}>
+                        <View style={styles.memberInfo}>
+                          <Text style={styles.memberName}>
+                            {m.name}{m.playerId === playerId ? ' (you)' : ''}
+                          </Text>
+                          {solo?.line != null && (
+                            <Text style={styles.memberSolo}>solo line {solo.line.toFixed(1)}</Text>
+                          )}
+                        </View>
+                        <PickChip
+                          label={on ? '✓' : '+'}
+                          selected={on}
+                          onPress={() => toggleComboMember(m.playerId)}
+                        />
                       </View>
-                    ))}
-                  </View>
+                    )
+                  })}
+                </View>
+              </>
+            ) : (
+              // ── The player-filtered board ──────────────────────────────
+              <>
+                <Button
+                  selectable
+                  value={
+                    board.selectedPlayerId != null
+                      ? `${board.players.find(p => p.id === board.selectedPlayerId)?.name ?? '—'}${board.selectedPlayerId === playerId ? ' (you)' : ''}`
+                      : null
+                  }
+                  placeholder="Select player"
+                  onPress={() => setPlayerPickerOpen(true)}
+                  disabled={board.players.length === 0}
+                  style={styles.playerSelect}
+                />
+                {comboArmed && (
+                  <Text style={styles.combineHint}>
+                    TAP ANY STAT LINE TO START A COMBO — OR SWITCH PLAYER/SCOPE
+                  </Text>
+                )}
+                {board.selectedPlayerId == null ? (
+                  // Nobody has lines in this scope (they may in another — the
+                  // pills stay tappable above).
+                  <EmptyCard
+                    text={`No ${scopeOptions.find(o => o.key === scope)?.label ?? ''} lines are open yet`}
+                  />
+                ) : (
+                  <>
+                    {board.scopeInProgress && board.firstInProgress && (
+                      <Text style={styles.inProgressNote}>
+                        {closedBettingNote(board.firstInProgress)}
+                      </Text>
+                    )}
+                    {/* Specials lead (their styling is the distinguishing mark),
+                        then the player's consolidated row, then their combos. */}
+                    {board.specials.length > 0 && renderSpecialsCard(board.specials, board.scopeInProgress)}
+                    {(board.playerLines.length > 0 || board.comboLines.length > 0) && (
+                      <View>
+                        {[
+                          ...(board.playerLines.length > 0 ? [board.playerLines] : []),
+                          ...board.comboLines.map(c => [c]),
+                        ].map((lines, idx, sets) => (
+                          <View key={lines[0].subjectPlayerId ?? lines[0].marketId}>
+                            {renderLineSet(
+                              lines,
+                              idx === sets.length - 1,
+                              board.scopeInProgress || lines.some(l => l.inProgress),
+                            )}
+                          </View>
+                        ))}
+                      </View>
+                    )}
+                  </>
                 )}
               </>
             )}
@@ -468,6 +636,24 @@ export default function SportsbookScreen() {
       {/* The unified bet slip (persistent bar → placement sheet) is rendered by
           the app-level BetSlipProvider, so it can be raised from Bet Details on
           any screen. The board just feeds/reads it. */}
+
+      {/* Combine-mode builder bar — takes the slip bar's footprint while a
+          combo is being built (the provider hides the slip bar meanwhile). */}
+      {combining && combo?.stat != null && (
+        <BuilderBar
+          memberNames={comboMemberIds.map(
+            id => rsvpInPlayers.find(m => m.playerId === id)?.name ?? '—'
+          )}
+          statLabel={(STAT_LABELS[combo.stat] ?? combo.stat).toUpperCase()}
+          scopeLabel={scope === 'weekly' ? 'NIGHT' : `GAME ${comboScopeGame}`}
+          line={comboPreviewLine}
+          minMembers={comboMemberIds.length >= 2}
+          alreadyStaged={comboAlreadyStaged}
+          blocked={board.scopeInProgress}
+          onAdd={addComboToSlip}
+          onCancel={() => setCombo(null)}
+        />
+      )}
 
       {/* Bet details modal */}
       <BetDetailModal
@@ -517,18 +703,6 @@ export default function SportsbookScreen() {
         onClose={() => setPlayerPickerOpen(false)}
       />
 
-      {/* Combo composer — stages a combo SPEC into the standard bet slip (no
-          market/bet yet; the slip's placement creates the market atomically
-          with the bet), so combos parlay with picks and other combos. */}
-      {composerOpen && currentWeekId != null && currentSeasonId != null && (
-        <ComboComposerSheet
-          weekId={currentWeekId}
-          seasonId={currentSeasonId}
-          gameNumbers={comboGameNumbers}
-          members={rsvpInPlayers}
-          onClose={() => setComposerOpen(false)}
-        />
-      )}
     </View>
   )
 }
@@ -543,23 +717,53 @@ const styles = StyleSheet.create({
 
   viewToggle: { marginBottom: 20 },
 
-  // The composer entry — sits between the view toggle and the board.
-  comboCta: { marginBottom: 4 },
-
-  card: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.cardMd,
-    borderWidth: 1,
-    borderColor: colors.border,
-    marginBottom: 10,
-    overflow: 'hidden',
-  },
   // Separates the board from the mode toggle above it — the filters lead
   // directly (no section header of its own).
   board: { marginTop: 16 },
-  // The two board filters: scope pills over the player select field.
-  scopeRow: { marginBottom: 10 },
+  // The board filters: scope pills + the trailing Combine chip, then the
+  // player select field beneath.
+  filterRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 10,
+  },
+  scopePills: { flex: 1, justifyContent: 'flex-start' },
   playerSelect: { marginBottom: 12 },
+  // Combine-mode helper line (armed hint / stat-view heading).
+  combineHint: {
+    fontFamily: fonts.barlowCondensed,
+    fontSize: 11,
+    letterSpacing: 1.5,
+    color: colors.accent,
+    marginBottom: 10,
+  },
+  // Stat-view member rows — same tinted-row language as the board's LineRow.
+  memberRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 12,
+    backgroundColor: colors.surfaceTint,
+    marginBottom: 8,
+  },
+  memberInfo: { flex: 1 },
+  memberName: {
+    fontFamily: fonts.barlowCondensed,
+    fontSize: 15,
+    color: colors.text,
+    letterSpacing: 0.3,
+  },
+  memberSolo: {
+    fontFamily: fonts.barlowCondensed,
+    fontSize: 12,
+    color: colors.muted,
+    marginTop: 1,
+    letterSpacing: 0.5,
+  },
   // Scope-level in-progress warning — shown above the rows when any in-scope
   // market is closed for betting.
   inProgressNote: {

@@ -84,3 +84,14 @@ radius.cardMd // 14 — medium cards
 radius.cardSm // 12 — buttons, inputs
 radius.icon   // 10 — avatar/icon boxes
 ```
+
+Betting-surface tokens (2026-07 Sportsbook modernization — additive):
+```ts
+colors.surfaceTint   // rgba(255,255,255,0.04) — chip/row rest fill (spaced tinted rows, not hairline lists)
+colors.surfaceTint2  // rgba(255,255,255,0.07) — raised tinted fill
+colors.chipBorder    // rgba(255,255,255,0.22) — chip rest border
+colors.accentTint    // rgba(232,255,71,0.06)  — accent-cast card wash
+spacing.xxl          // 32
+type                 // the deliberate type scale: label / chip / chipLg / value (spread into styles)
+ticketStyles         // the ticket-card shell: card / cardGold / rail / divider (TicketCard + one-off ticket surfaces)
+```
