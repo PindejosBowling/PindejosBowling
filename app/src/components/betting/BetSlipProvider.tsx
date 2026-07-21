@@ -234,6 +234,14 @@ export function BetSlipProvider({ children }: { children: ReactNode }) {
 
   const openSlip = useCallback(() => setSlipOpen(true), [])
 
+  // An emptied slip closes the sheet state too. Without this, removing the
+  // last item from inside the open sheet unmounts the overlay with slipOpen
+  // stranded true — and the next staged pick would remount it sheet-open
+  // (staging must only ever populate the bar, never raise the sheet).
+  useEffect(() => {
+    if (count === 0) setSlipOpen(false)
+  }, [count])
+
   // Re-resolve an existing active bet's legs against the CURRENT live markets
   // (odds/lines may have moved since placement) and stage it, then raise the
   // sheet. A Special (custom_line_id set) re-stages as its tagged bundle — the

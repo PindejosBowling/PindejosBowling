@@ -26,8 +26,7 @@ import PickChip from '../components/betting/PickChip'
 import BuilderBar from '../components/betting/BuilderBar'
 import ReadOnlySeasonBanner from '../components/betting/ReadOnlySeasonBanner'
 import ConfirmActionSheet from '../components/ui/ConfirmActionSheet'
-import Button from '../components/ui/Button'
-import PlayerPickerModal from '../components/ui/PlayerPickerModal'
+import Dropdown from '../components/ui/Dropdown'
 import FeatureExplainerSheet from '../components/pinsino/FeatureExplainerSheet'
 import TermsBlock from '../components/ui/TermsBlock'
 import { EXPLAINERS, TERMS } from '../data/pinsinoExplainers'
@@ -92,7 +91,6 @@ export default function SportsbookScreen() {
   // available), so scope switches and reloads never need a reconciling effect.
   const [scope, setScope] = useState<string>('weekly')
   const [pickedPlayerId, setPickedPlayerId] = useState<string | null>(null)
-  const [playerPickerOpen, setPlayerPickerOpen] = useState(false)
 
   // Combine mode — board-native combo building. null = off; { stat: null } =
   // armed (Combine chip on, waiting for a stat tap); stat set = the stat-view
@@ -114,7 +112,6 @@ export default function SportsbookScreen() {
     stagePick: stageSlipPick,
     stageSpecial: stageSlipSpecial,
     stageCombo,
-    openSlip,
     setSlipBarHidden,
     ghosts,
     reloadInventory,
@@ -294,8 +291,8 @@ export default function SportsbookScreen() {
   }
 
   // Add (or, when this exact combo is already staged, remove) via the slip's
-  // canonical toggle. Adding exits combine mode and raises the slip, mirroring
-  // the old composer's add-then-open flow.
+  // canonical toggle. Adding exits combine mode; the combo just lands in the
+  // slip bar like any staged pick (no auto-raise of the placement sheet).
   function addComboToSlip() {
     if (combo?.stat == null || currentWeekId == null) return
     const nameById = new Map(rsvpInPlayers.map(m => [m.playerId, m.name]))
@@ -309,9 +306,7 @@ export default function SportsbookScreen() {
       gameNumber: comboScopeGame,
       line: comboPreviewLine,
     })
-    const wasStaged = comboAlreadyStaged
     setCombo(null)
-    if (!wasStaged) openSlip()
   }
 
   // Combine-mode member pool: every RSVP'd-in player (the compose RPC's only
@@ -566,18 +561,19 @@ export default function SportsbookScreen() {
             ) : (
               // ── The player-filtered board ──────────────────────────────
               <>
-                <Button
-                  selectable
-                  value={
-                    board.selectedPlayerId != null
-                      ? `${board.players.find(p => p.id === board.selectedPlayerId)?.name ?? '—'}${board.selectedPlayerId === playerId ? ' (you)' : ''}`
-                      : null
-                  }
-                  placeholder="Select player"
-                  onPress={() => setPlayerPickerOpen(true)}
-                  disabled={board.players.length === 0}
-                  style={styles.playerSelect}
-                />
+                {/* Player filter — a full-width anchored dropdown of the
+                    players with in-scope availability. */}
+                {board.selectedPlayerId != null && (
+                  <Dropdown
+                    options={board.players.map(p => ({
+                      key: p.id,
+                      label: `${p.name}${p.id === playerId ? ' (you)' : ''}`,
+                    }))}
+                    value={board.selectedPlayerId}
+                    onChange={setPickedPlayerId}
+                    style={styles.playerSelect}
+                  />
+                )}
                 {comboArmed && (
                   <Text style={styles.combineHint}>
                     TAP ANY STAT LINE TO START A COMBO — OR SWITCH PLAYER/SCOPE
@@ -694,14 +690,6 @@ export default function SportsbookScreen() {
         <FeatureExplainerSheet explainer={EXPLAINERS.sportsbook} onClose={() => setHelpOpen(false)} />
       )}
 
-      {/* Player filter picker — only players with in-scope availability. */}
-      <PlayerPickerModal
-        visible={playerPickerOpen}
-        title="Show lines for"
-        items={board.players}
-        onSelectItem={it => { setPickedPlayerId(it.id); setPlayerPickerOpen(false) }}
-        onClose={() => setPlayerPickerOpen(false)}
-      />
 
     </View>
   )
@@ -729,7 +717,12 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   scopePills: { flex: 1, justifyContent: 'flex-start' },
-  playerSelect: { marginBottom: 12 },
+  // Full-width dropdown trigger (SeasonDropdown's spacing idiom).
+  playerSelect: {
+    justifyContent: 'space-between',
+    paddingVertical: 10,
+    marginBottom: 12,
+  },
   // Combine-mode helper line (armed hint / stat-view heading).
   combineHint: {
     fontFamily: fonts.barlowCondensed,
