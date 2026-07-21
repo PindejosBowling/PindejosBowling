@@ -177,57 +177,6 @@ export function lineGroup(line: LineView): LineGroup {
   return marketGroup(line.gameNumber, line.marketType)
 }
 
-// The line *category* within a group — one collapsible LineRowContainer. A single
-// game can surface several categories (player over/unders, team totals, …), each
-// independently collapsible; the label summarizes what's inside on the collapsed
-// bar. Market-type aware so new line kinds name their own section.
-export interface LineCategory {
-  key: string
-  label: string
-  sortOrder: number
-}
-
-export function lineCategory(line: LineView): LineCategory {
-  switch (line.marketType) {
-    case 'moneyline':
-      return { key: 'player_ou', label: 'Player Overs', sortOrder: 1 }
-    case 'team_prop':
-      // Team lines live INSIDE the game listing alongside the player rows: a
-      // team's moneyline (viewer's team only — toYourTeamMoneyline) and its
-      // team_prop stat lines consolidate into ONE row (rowKey = teamId) shown
-      // above that team's player rows (the screen's team-block sorting).
-      // Night team props (no game number) join the WEEKLY group's night
-      // section instead, consolidating per team the same way.
-      return line.gameNumber != null
-        ? { key: 'player_ou', label: 'Player Overs', sortOrder: 1 }
-        : { key: 'night_props', label: 'Night Props', sortOrder: 0 }
-    case 'over_under':
-      // Only the "over" side is bettable in the UI (the "under" is hidden — see
-      // SportsbookScreen / context/betting-line-board.md), so the section reads
-      // "Player Overs" rather than "Player Over/Unders". The night total-pins
-      // O/U (no game number) joins the WEEKLY group's night section, leading
-      // its player's consolidated night row.
-      return line.gameNumber != null
-        ? { key: 'player_ou', label: 'Player Overs', sortOrder: 1 }
-        : { key: 'night_props', label: 'Night Props', sortOrder: 0 }
-    case 'prop':
-      // LaneTalk stat lines: per-game strike/spare props share the score O/U's
-      // "Player Overs" section (one collapsible menu per game); night-level
-      // clean% / first-ball props get their own section under WEEKLY.
-      return line.gameNumber != null
-        ? { key: 'player_ou', label: 'Player Overs', sortOrder: 1 }
-        : { key: 'night_props', label: 'Night Props', sortOrder: 0 }
-    case 'combo':
-      // Player-composed member-set lines get their own collapsible: after the
-      // player rows inside a game group, after Night Props under WEEKLY.
-      return line.gameNumber != null
-        ? { key: 'combos', label: 'Combos', sortOrder: 2 }
-        : { key: 'combos', label: 'Combos', sortOrder: 1 }
-    default:
-      return { key: line.marketType, label: line.title || line.marketType, sortOrder: 99 }
-  }
-}
-
 // Copy shown when a group's betting is closed (the market is in progress).
 // Market-type aware so non-game markets read sensibly.
 export function closedBettingNote(line: LineView): string {
@@ -686,6 +635,9 @@ interface PinsinoPayload {
   // The week's RSVP'd-in players — the combo composer's selectable member pool
   // (mirrors the compose RPC's eligibility rule).
   rsvpInPlayers: { playerId: string; name: string }[]
+  // The week's game numbers (schedule ∪ any per-game lines), ascending — drives
+  // the board's scope selector and the combo composer's game picker.
+  weekGameNumbers: number[]
   // Auction House admin kill-switch for the live season. Drives the "closed"
   // status overlay + entry gate on the Pinsino tile (live mode only).
   auctionHouseClosed: boolean
@@ -710,6 +662,7 @@ const EMPTY: PinsinoPayload = {
   activeLoan: null,
   weekTeams: EMPTY_WEEK_TEAMS,
   rsvpInPlayers: [],
+  weekGameNumbers: [],
   auctionHouseClosed: false,
   auctionHouseClosedMessage: null,
 }
@@ -900,9 +853,10 @@ export function usePinsinoData(playerId: string | null, viewSeasonId?: string | 
       // Resolve a row into board instances for one taker: lines with a null-game
       // ("every game") leg materialize once per game on this week's schedule;
       // fixed-game lines resolve once. Self-referential legs bind to the taker.
-      const weekGameNumbers = [...new Set(
-        rawLineViews.map(l => l.gameNumber).filter((g): g is number => g != null)
-      )].sort((a, b) => a - b)
+      const weekGameNumbers = [...new Set([
+        ...weekGamesData.map((g: any) => g.game_number as number),
+        ...rawLineViews.map(l => l.gameNumber).filter((g): g is number => g != null),
+      ])].sort((a, b) => a - b)
       const resolveInstances = (cl: any, taker: string | null): CustomLineView[] => {
         // Only game-scope null-game legs mean EACH; night legs also carry a
         // null game_number but resolve once (against the night market).
@@ -1127,6 +1081,7 @@ export function usePinsinoData(playerId: string | null, viewSeasonId?: string | 
           : null,
         weekTeams: { myTeamId, teamByPlayer, opponentTeamByGame },
         rsvpInPlayers,
+        weekGameNumbers,
         auctionHouseClosed: auctionStateData?.is_closed ?? false,
         auctionHouseClosedMessage: auctionStateData?.closed_message ?? null,
       }
