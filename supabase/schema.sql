@@ -2668,20 +2668,31 @@ BEGIN
   DELETE FROM public.pin_ledger WHERE bet_id = p_bet_id;
   DELETE FROM public.bets WHERE id = p_bet_id;
 
-  -- Re-open any settled market that now has no bets at all.
+  -- Sweep the touched markets now that the bet is gone:
+  --  • a betless COMBO is deleted outright (compose = bet: a combo market
+  --    never exists without a bet riding it — off the board, recompose mints
+  --    a new one);
+  --  • any other betless SETTLED market re-opens (its result derived from a
+  --    bet that no longer exists).
   IF v_market_ids IS NOT NULL THEN
     FOREACH v_mid IN ARRAY v_market_ids LOOP
       IF NOT EXISTS (
         SELECT 1 FROM public.bet_legs l
         JOIN public.bet_selections s ON s.id = l.selection_id
         WHERE s.market_id = v_mid
-      ) AND EXISTS (
-        SELECT 1 FROM public.bet_markets WHERE id = v_mid AND status = 'settled'
       ) THEN
-        UPDATE public.bet_markets
-          SET status = 'open', result_value = NULL, settled_at = NULL
-          WHERE id = v_mid;
-        UPDATE public.bet_selections SET result = NULL WHERE market_id = v_mid;
+        IF EXISTS (
+          SELECT 1 FROM public.bet_markets WHERE id = v_mid AND market_type = 'combo'
+        ) THEN
+          DELETE FROM public.bet_markets WHERE id = v_mid;
+        ELSIF EXISTS (
+          SELECT 1 FROM public.bet_markets WHERE id = v_mid AND status = 'settled'
+        ) THEN
+          UPDATE public.bet_markets
+            SET status = 'open', result_value = NULL, settled_at = NULL
+            WHERE id = v_mid;
+          UPDATE public.bet_selections SET result = NULL WHERE market_id = v_mid;
+        END IF;
       END IF;
     END LOOP;
   END IF;

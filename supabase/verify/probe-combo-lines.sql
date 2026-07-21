@@ -26,6 +26,9 @@
 --   C7 RSVP-out auto-void → market + bet + ledger pair + feed card all gone
 --      (erasure, balances restored); flip back in does NOT resurrect;
 --      recompose mints a NEW market.
+--   C7b admin cancel_bet → cancelling one of two bets on a combo leaves the
+--      market; cancelling the LAST bet prunes the orphaned combo whole
+--      (market + selections + ledger + feed card).
 --   C8/C9 settle_week(force): strikes night = 5 → won; multi-combo parlay
 --      (3 + 8) → won ×4; clean_frames/O-U parlay → won ×4; total_pins 270 >
 --      260.5 → won; P3's under → lost; the import-less recomposed combo stays
@@ -49,6 +52,7 @@ DECLARE
   v_mkt_sp uuid; v_mkt_cfg uuid; v_bet_multi uuid;
   v_mkt_tp uuid; v_bet_tp uuid;
   v_mkt_void uuid; v_bet_void uuid; v_mkt_re uuid; v_bet_re uuid;
+  v_mkt_ca uuid; v_bet_ca uuid; v_bet_cb uuid;
   v_expected_members jsonb;
   v_pre_void_sum bigint; v_pre_void_n bigint;
   v_set_sum bigint; v_set_n bigint;
@@ -352,6 +356,38 @@ BEGIN
     RAISE EXCEPTION 'PROBE_FAIL: recompose reused the erased market id';
   END IF;
 
+  ------------------------------------------------------------------ C7b admin cancel prunes orphan combos
+  -- P1 composes total_pins game 1; P2 dedup-joins → 2 bets on one market.
+  PERFORM set_config('request.jwt.claims', json_build_object(
+    'sub', v_u1, 'role', 'authenticated', 'app_metadata', json_build_object('role', 'player'))::text, true);
+  v_res := public.compose_combo_bet(v_week, jsonb_build_array(jsonb_build_object(
+             'member_ids', jsonb_build_array(v_p1::text, v_p2::text),
+             'stat', 'total_pins', 'scope', 'game', 'game_number', 1)), 50);
+  v_mkt_ca := (v_res -> 'combos' -> 0 ->> 'market_id')::uuid;
+  v_bet_ca := (v_res ->> 'bet_id')::uuid;
+  PERFORM set_config('request.jwt.claims', json_build_object(
+    'sub', v_u2, 'role', 'authenticated', 'app_metadata', json_build_object('role', 'player'))::text, true);
+  v_res := public.compose_combo_bet(v_week, jsonb_build_array(jsonb_build_object(
+             'member_ids', jsonb_build_array(v_p1::text, v_p2::text),
+             'stat', 'total_pins', 'scope', 'game', 'game_number', 1)), 50);
+  v_bet_cb := (v_res ->> 'bet_id')::uuid;
+
+  PERFORM set_config('request.jwt.claims', json_build_object(
+    'sub', v_u1, 'role', 'authenticated', 'app_metadata', json_build_object('role', 'admin'))::text, true);
+  -- Cancel one of two: the market must SURVIVE (a bet still rides it).
+  PERFORM public.cancel_bet(v_bet_ca);
+  IF NOT EXISTS (SELECT 1 FROM public.bet_markets WHERE id = v_mkt_ca) THEN
+    RAISE EXCEPTION 'PROBE_FAIL: cancel of one bet deleted a combo still carrying another';
+  END IF;
+  -- Cancel the last: the orphaned combo must be pruned whole.
+  PERFORM public.cancel_bet(v_bet_cb);
+  IF EXISTS (SELECT 1 FROM public.bet_markets WHERE id = v_mkt_ca)
+     OR EXISTS (SELECT 1 FROM public.bets WHERE id IN (v_bet_ca, v_bet_cb))
+     OR EXISTS (SELECT 1 FROM public.pin_ledger WHERE bet_id IN (v_bet_ca, v_bet_cb))
+     OR EXISTS (SELECT 1 FROM public.activity_feed_events WHERE sportsbook_bet_id IN (v_bet_ca, v_bet_cb)) THEN
+    RAISE EXCEPTION 'PROBE_FAIL: cancelling the last combo bet did not prune the orphaned market clean';
+  END IF;
+
   ------------------------------------------------------------------ C8 imports + settle prep
   INSERT INTO public.lanetalk_game_imports
       (source_url, game_number, classification, player_id, week_id, payload)
@@ -446,6 +482,7 @@ BEGIN
     'combo_line_parlay_payout', 200,
     'dedup', true, 'negatives_rejected', 9, 'anti_tank', true,
     'auto_void_erased', true, 'no_resurrection', true,
+    'cancel_prunes_orphans', true,
     'pending_exempt', true, 'void_missing_refunded', true,
     'settle_idempotent', true);
 END $$;

@@ -114,6 +114,14 @@ market — someone recomposes (30 seconds in the composer). The fan-out's
 archived-week guard means no pruning after week lock; from there the
 settle-time guard takes over.
 
+**Admin cancel prunes orphans**: `cancel_bet`'s post-delete sweep deletes a
+now-betless COMBO market outright (any status; cascade removes selections, the
+refund trigger no-ops, the bet-linked feed card already cascaded with the
+bet) — cancelling the only bet on a combo removes the line from the board,
+preserving the compose=bet invariant. A combo still carrying other bets is
+untouched; non-combo markets keep the reopen-settled behavior
+(`…200000_cancel_bet_prunes_orphan_combos`).
+
 ## Settlement — settle_week step (c‴), both clocks
 
 Loop over the week's open/closed combos, per-member **complete-data guard**
