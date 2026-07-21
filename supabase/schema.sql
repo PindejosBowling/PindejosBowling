@@ -829,7 +829,7 @@ ALTER TABLE bet_markets ADD CONSTRAINT bet_markets_created_by_player_id_fkey FOR
 
 ALTER TABLE bet_markets ADD CONSTRAINT bet_markets_game_number_check CHECK (((game_number IS NULL) OR (game_number >= 1)));
 
-ALTER TABLE bet_markets ADD CONSTRAINT bet_markets_market_type_check CHECK ((market_type = ANY (ARRAY['over_under'::text, 'moneyline'::text, 'prop'::text, 'team_prop'::text])));
+ALTER TABLE bet_markets ADD CONSTRAINT bet_markets_market_type_check CHECK ((market_type = ANY (ARRAY['over_under'::text, 'moneyline'::text, 'prop'::text, 'team_prop'::text, 'combo'::text])));
 
 ALTER TABLE bet_markets ADD CONSTRAINT bet_markets_pkey PRIMARY KEY (id);
 
@@ -1391,6 +1391,8 @@ CREATE INDEX bet_haunts_bet_idx ON public.bet_haunts USING btree (bet_id);
 CREATE INDEX bet_haunts_haunter_idx ON public.bet_haunts USING btree (haunter_player_id);
 
 CREATE INDEX bet_haunts_season_idx ON public.bet_haunts USING btree (season_id);
+
+CREATE UNIQUE INDEX bet_markets_combo_dedup ON public.bet_markets USING btree (week_id, ((params ->> 'combo_key'::text))) WHERE ((market_type = 'combo'::text) AND (status = ANY (ARRAY['open'::text, 'closed'::text])));
 
 CREATE INDEX bets_custom_line_idx ON public.bets USING btree (custom_line_id);
 
@@ -2839,6 +2841,237 @@ BEGIN
     WHERE c.week_id = p_week_id
       AND c.status IN ('pending', 'countered')
       AND (p_game_number IS NULL OR c.game_number = p_game_number);
+END;
+$function$
+;
+
+CREATE OR REPLACE FUNCTION public.combo_seed_line(p_member_ids uuid[], p_stat text, p_season_id uuid, p_n_games integer DEFAULT 1)
+ RETURNS numeric
+ LANGUAGE plpgsql
+ STABLE SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+DECLARE
+  v_n_members integer;
+  v_sum       numeric;
+BEGIN
+  SELECT count(DISTINCT m) INTO v_n_members FROM unnest(p_member_ids) m;
+  IF v_n_members = 0 THEN v_n_members := 1; END IF;
+
+  IF p_stat IN ('clean_frames', 'strikes', 'spares') THEN
+    SELECT COALESCE(SUM(pl.avg_stat), 0) INTO v_sum
+    FROM (SELECT DISTINCT m AS player_id FROM unnest(p_member_ids) m) mem
+    CROSS JOIN LATERAL (
+      SELECT CASE p_stat
+               WHEN 'strikes' THEN avg(i.strikes)
+               WHEN 'spares'  THEN avg(i.spares)
+               ELSE avg(i.strikes + i.spares)
+             END AS avg_stat
+      FROM public.lanetalk_game_imports i
+      WHERE i.player_id = mem.player_id AND i.classification = 'official' AND i.frames > 0
+    ) pl;
+    -- Half-point, floored once; clamp to [0.5, 10 frames/game × games × members − 0.5].
+    RETURN LEAST(10 * p_n_games * v_n_members - 0.5,
+                 GREATEST(0.5, floor(COALESCE(v_sum, 0) * p_n_games) + 0.5));
+
+  ELSIF p_stat = 'total_pins' THEN
+    SELECT COALESCE(SUM(public.player_raw_avg_score(mem.player_id, p_season_id)), 0) INTO v_sum
+    FROM (SELECT DISTINCT m AS player_id FROM unnest(p_member_ids) m) mem;
+    RETURN GREATEST(0.5, floor(COALESCE(v_sum, 0) * p_n_games) + 0.5);
+
+  ELSE
+    RAISE EXCEPTION 'Unknown combo stat %', p_stat;
+  END IF;
+END;
+$function$
+;
+
+CREATE OR REPLACE FUNCTION public.compose_combo_bet(p_week_id uuid, p_member_ids uuid[], p_stat text, p_scope text, p_game_number integer DEFAULT NULL::integer, p_stake integer DEFAULT NULL::integer, p_extra_selection_ids uuid[] DEFAULT NULL::uuid[])
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+DECLARE
+  v_player_id    uuid;
+  v_season_id    uuid;
+  v_archived     boolean;
+  v_members      uuid[];
+  v_member_texts text[];
+  v_member_names text[];
+  v_n_named      integer;
+  v_target_games integer[];
+  v_n_games      integer;
+  v_combo_key    text;
+  v_existing     record;
+  v_clock        text;
+  v_label        text;
+  v_line         numeric;
+  v_market_id    uuid;
+  v_over_id      uuid;
+  v_bet_id       uuid;
+  v_deduped      boolean := false;
+BEGIN
+  v_player_id := public.current_player_id();
+
+  SELECT w.season_id, w.is_archived INTO v_season_id, v_archived
+    FROM public.weeks w WHERE w.id = p_week_id;
+  IF v_season_id IS NULL THEN
+    RAISE EXCEPTION 'Week not found';
+  END IF;
+  IF v_archived THEN
+    RAISE EXCEPTION 'This week is locked — no new bets can be placed';
+  END IF;
+
+  IF p_stat IS NULL OR p_stat NOT IN ('clean_frames', 'strikes', 'spares', 'total_pins') THEN
+    RAISE EXCEPTION 'Unknown combo stat %', COALESCE(p_stat, '(null)');
+  END IF;
+  IF p_scope IS NULL OR p_scope NOT IN ('game', 'night') THEN
+    RAISE EXCEPTION 'Combo scope must be game or night';
+  END IF;
+
+  -- Schedule games: the games table is authoritative once a schedule exists;
+  -- before teams, default {1, 2} (the O/U sync's pre-teams convention).
+  SELECT ARRAY(
+    SELECT DISTINCT g.game_number FROM public.games g
+    JOIN public.teams t ON t.id = g.team_a_id
+    WHERE t.week_id = p_week_id
+    ORDER BY 1
+  ) INTO v_target_games;
+  IF v_target_games IS NULL OR array_length(v_target_games, 1) IS NULL THEN
+    v_target_games := ARRAY[1, 2];
+  END IF;
+  v_n_games := COALESCE(array_length(v_target_games, 1), 2);
+
+  IF p_scope = 'game' THEN
+    IF p_game_number IS NULL OR NOT (p_game_number = ANY (v_target_games)) THEN
+      RAISE EXCEPTION 'Game % is not on this week''s schedule', COALESCE(p_game_number::text, '(null)');
+    END IF;
+  ELSIF p_game_number IS NOT NULL THEN
+    RAISE EXCEPTION 'A night combo cannot carry a game number';
+  END IF;
+
+  -- Members: sorted + deduped; at least two; every member RSVP''d in.
+  SELECT array_agg(m ORDER BY m) INTO v_members
+    FROM (SELECT DISTINCT m FROM unnest(p_member_ids) m WHERE m IS NOT NULL) d;
+  IF v_members IS NULL OR array_length(v_members, 1) < 2 THEN
+    RAISE EXCEPTION 'A combo needs at least two distinct players';
+  END IF;
+  IF EXISTS (
+    SELECT 1 FROM unnest(v_members) mem
+    WHERE NOT EXISTS (
+      SELECT 1 FROM public.rsvp r
+      WHERE r.week_id = p_week_id AND r.player_id = mem AND r.status = 'in')
+  ) THEN
+    RAISE EXCEPTION 'Every combo member must be RSVP''d in for this week';
+  END IF;
+
+  -- Display-name snapshot (also proves every id is a real player).
+  SELECT array_agg(p.name ORDER BY mem.ord), count(p.id)
+    INTO v_member_names, v_n_named
+    FROM unnest(v_members) WITH ORDINALITY mem(id, ord)
+    JOIN public.players p ON p.id = mem.id;
+  IF v_n_named <> array_length(v_members, 1) THEN
+    RAISE EXCEPTION 'Unknown player in combo';
+  END IF;
+
+  SELECT array_agg(m::text ORDER BY m) INTO v_member_texts FROM unnest(v_members) m;
+  v_combo_key := p_stat || '|' || p_scope || '|' || COALESCE(p_game_number::text, 'n')
+                 || '|' || array_to_string(v_member_texts, ',');
+
+  -- Serialize identical composes; the partial unique index is the backstop.
+  PERFORM pg_advisory_xact_lock(hashtextextended(p_week_id::text || '|' || v_combo_key, 0));
+
+  SELECT m.id, m.status INTO v_existing
+    FROM public.bet_markets m
+    WHERE m.week_id = p_week_id AND m.market_type = 'combo'
+      AND m.status IN ('open', 'closed')
+      AND m.params ->> 'combo_key' = v_combo_key;
+
+  IF v_existing.id IS NOT NULL THEN
+    IF v_existing.status <> 'open' THEN
+      RAISE EXCEPTION 'This combo is in progress — betting is closed';
+    END IF;
+    v_market_id := v_existing.id;
+    v_deduped := true;
+    SELECT s.id, s.line INTO v_over_id, v_line
+      FROM public.bet_selections s
+      WHERE s.market_id = v_market_id AND s.key = 'over';
+  ELSE
+    v_clock := CASE WHEN p_stat = 'total_pins' THEN 'archive' ELSE 'lanetalk' END;
+    v_label := CASE p_stat
+                 WHEN 'clean_frames' THEN 'Clean Frames'
+                 WHEN 'strikes'      THEN 'Strikes'
+                 WHEN 'spares'       THEN 'Spares'
+                 ELSE 'Total Pins' END;
+    v_line := public.combo_seed_line(v_members, p_stat, v_season_id,
+                CASE WHEN p_scope = 'game' THEN 1 ELSE v_n_games END);
+
+    INSERT INTO public.bet_markets
+        (market_type, title, week_id, game_number, subject_game_id, params, status, created_by_player_id)
+      VALUES ('combo',
+              array_to_string(v_member_names, ' + ') || ' ' || v_label
+                || ' — ' || CASE WHEN p_scope = 'game' THEN 'Game ' || p_game_number ELSE 'Night' END,
+              p_week_id,
+              CASE WHEN p_scope = 'game' THEN p_game_number ELSE NULL END,
+              NULL,
+              jsonb_build_object(
+                'family', 'combo',
+                'stat', p_stat,
+                'scope', p_scope,
+                'clock', v_clock,
+                'member_ids', to_jsonb(v_member_texts),
+                'member_names', to_jsonb(v_member_names),
+                'combo_key', v_combo_key),
+              'open',
+              v_player_id)
+      RETURNING id INTO v_market_id;
+
+    INSERT INTO public.bet_selections (market_id, key, label, odds, line, sort_order) VALUES
+      (v_market_id, 'over',  'Over',  2.000, v_line, 0),
+      (v_market_id, 'under', 'Under', 2.000, v_line, 1);
+
+    SELECT s.id INTO v_over_id
+      FROM public.bet_selections s
+      WHERE s.market_id = v_market_id AND s.key = 'over';
+  END IF;
+
+  -- Parlay extras must be OTHER markets' selections (no self-referential legs).
+  IF p_extra_selection_ids IS NOT NULL AND EXISTS (
+    SELECT 1 FROM public.bet_selections s
+    WHERE s.id = ANY (p_extra_selection_ids) AND s.market_id = v_market_id
+  ) THEN
+    RAISE EXCEPTION 'A combo cannot parlay with its own selections';
+  END IF;
+
+  -- Compose = bet: place_house_bet re-validates every leg (open market, same
+  -- season/week, min stake, balance, anti-tank) and writes the bet + legs +
+  -- the bet_stake double entry. Any failure rolls the new market back too.
+  v_bet_id := public.place_house_bet(
+    ARRAY[v_over_id] || COALESCE(p_extra_selection_ids, '{}'::uuid[]),
+    p_stake);
+
+  -- Feed: one compose card per market birth (dedup joins post no card beyond
+  -- place_house_bet's own big-ticket/parlay priority events).
+  IF NOT v_deduped THEN
+    PERFORM public.publish_activity_event(
+      'sportsbook', 'sportsbook_combo_composed',
+      v_season_id, p_week_id, v_player_id, NULL, NULL,
+      v_bet_id, NULL,
+      'sportsbook.combo_composed',
+      jsonb_build_object(
+        'stat', p_stat, 'scope', p_scope, 'game_number', p_game_number,
+        'member_count', array_length(v_members, 1),
+        'member_names', to_jsonb(v_member_names),
+        'line', v_line, 'stake', p_stake),
+      jsonb_build_object('market_id', v_market_id, 'bet_id', v_bet_id,
+                         'member_ids', to_jsonb(v_member_texts)),
+      NULL, now());
+  END IF;
+
+  RETURN jsonb_build_object(
+    'market_id', v_market_id, 'bet_id', v_bet_id,
+    'line', v_line, 'deduped', v_deduped);
 END;
 $function$
 ;
@@ -5265,6 +5498,14 @@ BEGIN
     END IF;
   END IF;
 
+  -- Combo markets: no backing the under (or laying the over) on a combo whose
+  -- member set contains the bettor. Backing your own over stays allowed.
+  IF v_market_type = 'combo'
+     AND ((NEW.side = 'back' AND v_key = 'under') OR (NEW.side = 'lay' AND v_key = 'over'))
+     AND (v_params -> 'member_ids') ? v_bettor::text THEN
+    RAISE EXCEPTION 'A player cannot bet against a combo containing themselves (anti-tanking)';
+  END IF;
+
   RETURN NEW;
 END;
 $function$
@@ -5399,6 +5640,65 @@ BEGIN
           WHERE t.week_id = p_week_id AND ts.player_id = v_mkt.subject_player_id
             AND ts.is_fill = false AND s.score IS NOT NULL;
           v_has := (v_official_n > 0 AND v_official_n >= v_scored_n);
+        END IF;
+      END IF;
+
+    ELSIF v_mkt.market_type = 'combo' THEN
+      -- Mirrors settle_week (c'''): complete only when EVERY member has data
+      -- for the combo's scope and clock.
+      v_stat := v_mkt.params ->> 'stat';
+
+      IF v_stat = 'total_pins' THEN
+        v_reason := 'a combo member has no recorded score';
+        IF v_mkt.game_number IS NOT NULL THEN
+          SELECT NOT EXISTS (
+            SELECT 1 FROM jsonb_array_elements_text(v_mkt.params -> 'member_ids') mem(pid)
+            WHERE NOT EXISTS (
+              SELECT 1 FROM public.scores s
+              JOIN public.team_slots ts ON ts.id = s.team_slot_id
+              JOIN public.teams t       ON t.id = ts.team_id
+              JOIN public.games g       ON g.id = s.game_id
+              WHERE t.week_id = p_week_id AND ts.player_id = mem.pid::uuid
+                AND ts.is_fill = false AND g.game_number = v_mkt.game_number
+                AND s.score IS NOT NULL)
+          ) INTO v_has;
+        ELSE
+          SELECT NOT EXISTS (
+            SELECT 1 FROM jsonb_array_elements_text(v_mkt.params -> 'member_ids') mem(pid)
+            WHERE NOT EXISTS (
+              SELECT 1 FROM public.scores s
+              JOIN public.team_slots ts ON ts.id = s.team_slot_id
+              JOIN public.teams t       ON t.id = ts.team_id
+              WHERE t.week_id = p_week_id AND ts.player_id = mem.pid::uuid
+                AND ts.is_fill = false AND s.score IS NOT NULL)
+          ) INTO v_has;
+        END IF;
+      ELSE
+        v_reason := 'a combo member is awaiting LaneTalk import';
+        IF v_mkt.game_number IS NOT NULL THEN
+          SELECT NOT EXISTS (
+            SELECT 1 FROM jsonb_array_elements_text(v_mkt.params -> 'member_ids') mem(pid)
+            WHERE NOT EXISTS (
+              SELECT 1 FROM public.lanetalk_game_imports i
+              WHERE i.week_id = p_week_id AND i.player_id = mem.pid::uuid
+                AND i.game_number = v_mkt.game_number AND i.classification = 'official')
+          ) INTO v_has;
+        ELSE
+          SELECT NOT EXISTS (
+            SELECT 1 FROM jsonb_array_elements_text(v_mkt.params -> 'member_ids') mem(pid)
+            WHERE (SELECT count(*) FROM public.lanetalk_game_imports i
+                   WHERE i.week_id = p_week_id AND i.player_id = mem.pid::uuid
+                     AND i.classification = 'official') = 0
+               OR (SELECT count(*) FROM public.lanetalk_game_imports i
+                   WHERE i.week_id = p_week_id AND i.player_id = mem.pid::uuid
+                     AND i.classification = 'official')
+                < (SELECT count(*) FROM public.scores s
+                   JOIN public.games g       ON g.id = s.game_id
+                   JOIN public.team_slots ts ON ts.id = s.team_slot_id
+                   JOIN public.teams t       ON t.id = ts.team_id
+                   WHERE t.week_id = p_week_id AND ts.player_id = mem.pid::uuid
+                     AND ts.is_fill = false AND s.score IS NOT NULL)
+          ) INTO v_has;
         END IF;
       END IF;
 
@@ -5933,10 +6233,9 @@ BEGIN
   END IF;
   PERFORM public.sync_over_under_markets_for_week(p_week_id);
   PERFORM public.sync_lanetalk_prop_markets_for_week(p_week_id);
-  PERFORM public.sync_team_prop_markets_for_week(p_week_id);
-  IF p_moneyline THEN
-    PERFORM public.sync_moneyline_markets_for_week(p_week_id);
-  END IF;
+  PERFORM public.sync_combo_markets_for_week(p_week_id);
+  -- team_prop + moneyline generation retired (combos replaced them);
+  -- p_moneyline is kept in the signature for the games trigger but is inert.
 END;
 $function$
 ;
@@ -6425,6 +6724,7 @@ BEGIN
       JOIN public.bet_markets m2    ON m2.id = s2.market_id
       WHERE l2.bet_id = b.id AND m2.status <> 'settled'
         AND (m2.market_type = 'prop'
+             OR m2.market_type = 'combo'
              OR (m2.market_type = 'team_prop' AND m2.params ->> 'clock' = 'lanetalk'))
     );
 
@@ -6437,6 +6737,7 @@ BEGIN
       JOIN public.bet_markets m    ON m.id = s.market_id
       WHERE b.week_id = p_week_id AND b.status = 'pending' AND m.status <> 'settled'
         AND NOT (m.market_type = 'prop'
+                 OR m.market_type = 'combo'
                  OR (m.market_type = 'team_prop' AND m.params ->> 'clock' = 'lanetalk'))
         AND NOT EXISTS (
           SELECT 1 FROM public.bet_legs l2
@@ -6444,6 +6745,7 @@ BEGIN
           JOIN public.bet_markets m2    ON m2.id = s2.market_id
           WHERE l2.bet_id = b.id AND m2.status <> 'settled'
             AND (m2.market_type = 'prop'
+                 OR m2.market_type = 'combo'
                  OR (m2.market_type = 'team_prop' AND m2.params ->> 'clock' = 'lanetalk'))
         );
 
@@ -6461,6 +6763,7 @@ BEGIN
           JOIN public.bet_markets m2    ON m2.id = s2.market_id
           WHERE l2.bet_id = b.id AND m2.status <> 'settled'
             AND (m2.market_type = 'prop'
+                 OR m2.market_type = 'combo'
                  OR (m2.market_type = 'team_prop' AND m2.params ->> 'clock' = 'lanetalk'))
         )
     LOOP
@@ -6754,8 +7057,8 @@ BEGIN
   IF v_market.id IS NULL THEN
     RAISE EXCEPTION 'Market not found';
   END IF;
-  IF v_market.market_type NOT IN ('over_under', 'prop', 'team_prop') THEN
-    RAISE EXCEPTION 'settle_market_internal only handles over_under/prop/team_prop markets';
+  IF v_market.market_type NOT IN ('over_under', 'prop', 'team_prop', 'combo') THEN
+    RAISE EXCEPTION 'settle_market_internal only handles over_under/prop/team_prop/combo markets';
   END IF;
   IF v_market.status = 'settled' THEN
     RETURN;  -- idempotent
@@ -7515,6 +7818,152 @@ BEGIN
     END IF;
   END LOOP;
 
+  -- (c''') Combo markets (BOTH clocks): Σ member stats vs the line. A combo
+  --        settles only when EVERY member has complete data for its scope —
+  --        an absent member never silently settles the sum low. Missing data
+  --        ⇒ delete-refund when p_void_missing (the refund-trigger rail),
+  --        else left pending (exempt from the backstop below, both clocks:
+  --        an archive-clock combo missing a member score will never
+  --        self-heal, but preview flags it and voidMissing resolves it).
+  FOR v_mkt IN
+    SELECT id, game_number, params
+    FROM public.bet_markets
+    WHERE week_id = p_week_id AND market_type = 'combo'
+      AND status IN ('open', 'closed')
+  LOOP
+    v_stat  := v_mkt.params ->> 'stat';
+    v_value := NULL;
+
+    IF v_stat = 'total_pins' THEN
+      -- Archive clock: settle from scores.
+      IF v_mkt.game_number IS NOT NULL THEN
+        SELECT NOT EXISTS (
+          SELECT 1 FROM jsonb_array_elements_text(v_mkt.params -> 'member_ids') mem(pid)
+          WHERE NOT EXISTS (
+            SELECT 1 FROM public.scores s
+            JOIN public.team_slots ts ON ts.id = s.team_slot_id
+            JOIN public.teams t       ON t.id = ts.team_id
+            JOIN public.games g       ON g.id = s.game_id
+            WHERE t.week_id = p_week_id
+              AND ts.player_id = mem.pid::uuid
+              AND ts.is_fill = false
+              AND g.game_number = v_mkt.game_number
+              AND s.score IS NOT NULL)
+        ) INTO v_complete;
+
+        IF v_complete THEN
+          SELECT SUM(s.score)::numeric INTO v_value
+          FROM jsonb_array_elements_text(v_mkt.params -> 'member_ids') mem(pid)
+          JOIN public.team_slots ts ON ts.player_id = mem.pid::uuid AND ts.is_fill = false
+          JOIN public.teams t       ON t.id = ts.team_id AND t.week_id = p_week_id
+          JOIN public.scores s      ON s.team_slot_id = ts.id
+          JOIN public.games g       ON g.id = s.game_id AND g.game_number = v_mkt.game_number
+          WHERE s.score IS NOT NULL;
+        END IF;
+      ELSE
+        SELECT NOT EXISTS (
+          SELECT 1 FROM jsonb_array_elements_text(v_mkt.params -> 'member_ids') mem(pid)
+          WHERE NOT EXISTS (
+            SELECT 1 FROM public.scores s
+            JOIN public.team_slots ts ON ts.id = s.team_slot_id
+            JOIN public.teams t       ON t.id = ts.team_id
+            WHERE t.week_id = p_week_id
+              AND ts.player_id = mem.pid::uuid
+              AND ts.is_fill = false
+              AND s.score IS NOT NULL)
+        ) INTO v_complete;
+
+        IF v_complete THEN
+          SELECT SUM(s.score)::numeric INTO v_value
+          FROM jsonb_array_elements_text(v_mkt.params -> 'member_ids') mem(pid)
+          JOIN public.team_slots ts ON ts.player_id = mem.pid::uuid AND ts.is_fill = false
+          JOIN public.teams t       ON t.id = ts.team_id AND t.week_id = p_week_id
+          JOIN public.scores s      ON s.team_slot_id = ts.id
+          WHERE s.score IS NOT NULL;
+        END IF;
+      END IF;
+
+    ELSIF v_stat IN ('strikes', 'spares', 'clean_frames') THEN
+      -- LaneTalk clock: settle from official imports.
+      IF v_mkt.game_number IS NOT NULL THEN
+        SELECT NOT EXISTS (
+          SELECT 1 FROM jsonb_array_elements_text(v_mkt.params -> 'member_ids') mem(pid)
+          WHERE NOT EXISTS (
+            SELECT 1 FROM public.lanetalk_game_imports i
+            WHERE i.week_id = p_week_id
+              AND i.player_id = mem.pid::uuid
+              AND i.game_number = v_mkt.game_number
+              AND i.classification = 'official')
+        ) INTO v_complete;
+
+        IF v_complete THEN
+          SELECT SUM(CASE v_stat
+                       WHEN 'strikes' THEN i.strikes
+                       WHEN 'spares'  THEN i.spares
+                       ELSE i.strikes + i.spares
+                     END)::numeric
+            INTO v_value
+          FROM jsonb_array_elements_text(v_mkt.params -> 'member_ids') mem(pid)
+          JOIN public.lanetalk_game_imports i
+            ON i.player_id = mem.pid::uuid
+          WHERE i.week_id = p_week_id
+            AND i.game_number = v_mkt.game_number
+            AND i.classification = 'official';
+        END IF;
+      ELSE
+        -- Night: per member, official imports must cover every recorded score
+        -- and exist at all (the c'' player-night predicate, applied per member).
+        SELECT NOT EXISTS (
+          SELECT 1 FROM jsonb_array_elements_text(v_mkt.params -> 'member_ids') mem(pid)
+          WHERE (SELECT count(*) FROM public.lanetalk_game_imports i
+                 WHERE i.week_id = p_week_id
+                   AND i.player_id = mem.pid::uuid
+                   AND i.classification = 'official') = 0
+             OR (SELECT count(*) FROM public.lanetalk_game_imports i
+                 WHERE i.week_id = p_week_id
+                   AND i.player_id = mem.pid::uuid
+                   AND i.classification = 'official')
+              < (SELECT count(*) FROM public.scores s
+                 JOIN public.games g       ON g.id = s.game_id
+                 JOIN public.team_slots ts ON ts.id = s.team_slot_id
+                 JOIN public.teams t       ON t.id = ts.team_id
+                 WHERE t.week_id = p_week_id
+                   AND ts.player_id = mem.pid::uuid
+                   AND ts.is_fill = false
+                   AND s.score IS NOT NULL)
+        ) INTO v_complete;
+
+        IF v_complete THEN
+          SELECT SUM(CASE v_stat
+                       WHEN 'strikes' THEN i.strikes
+                       WHEN 'spares'  THEN i.spares
+                       ELSE i.strikes + i.spares
+                     END)::numeric
+            INTO v_value
+          FROM jsonb_array_elements_text(v_mkt.params -> 'member_ids') mem(pid)
+          JOIN public.lanetalk_game_imports i
+            ON i.player_id = mem.pid::uuid
+          WHERE i.week_id = p_week_id
+            AND i.classification = 'official'
+            AND i.frames > 0;
+        END IF;
+      END IF;
+
+    ELSE
+      RAISE EXCEPTION 'Unknown combo stat % on market %', v_stat, v_mkt.id;
+    END IF;
+
+    IF v_value IS NOT NULL THEN
+      PERFORM public.settle_market_internal(v_mkt.id, v_value);
+      v_settled := v_settled + 1;
+    ELSIF p_void_missing THEN
+      DELETE FROM public.bet_markets WHERE id = v_mkt.id;
+      v_voided := v_voided + 1;
+    ELSE
+      v_pending := v_pending + 1;
+    END IF;
+  END LOOP;
+
   -- (d) Loan garnishment + interest.
   PERFORM public.process_weekly_loans(p_week_id);
 
@@ -7539,6 +7988,7 @@ BEGIN
       JOIN public.bet_markets m2    ON m2.id = s2.market_id
       WHERE l2.bet_id = b.id AND m2.status <> 'settled'
         AND (m2.market_type = 'prop'
+             OR m2.market_type = 'combo'
              OR (m2.market_type = 'team_prop' AND m2.params ->> 'clock' = 'lanetalk'))
     ));
 
@@ -7556,6 +8006,7 @@ BEGIN
           JOIN public.bet_markets m2    ON m2.id = s2.market_id
           WHERE l2.bet_id = b.id AND m2.status <> 'settled'
             AND (m2.market_type = 'prop'
+                 OR m2.market_type = 'combo'
                  OR (m2.market_type = 'team_prop' AND m2.params ->> 'clock' = 'lanetalk'))
         ));
 
@@ -7573,6 +8024,7 @@ BEGIN
           JOIN public.bet_markets m2    ON m2.id = s2.market_id
           WHERE l2.bet_id = b.id AND m2.status <> 'settled'
             AND (m2.market_type = 'prop'
+                 OR m2.market_type = 'combo'
                  OR (m2.market_type = 'team_prop' AND m2.params ->> 'clock' = 'lanetalk'))
         ))
     LOOP
@@ -7786,6 +8238,28 @@ BEGIN
       RAISE WARNING 'sweep_auctions: settle failed for %: %', v_id, SQLERRM;
     END;
   END LOOP;
+END;
+$function$
+;
+
+CREATE OR REPLACE FUNCTION public.sync_combo_markets_for_week(p_week_id uuid)
+ RETURNS void
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+BEGIN
+  DELETE FROM public.bet_markets m
+   WHERE m.week_id = p_week_id
+     AND m.market_type = 'combo'
+     AND m.status IN ('open', 'closed')
+     AND EXISTS (
+       SELECT 1 FROM jsonb_array_elements_text(m.params -> 'member_ids') mem(pid)
+       WHERE NOT EXISTS (
+         SELECT 1 FROM public.rsvp r
+         WHERE r.week_id = m.week_id
+           AND r.player_id = mem.pid::uuid
+           AND r.status = 'in'));
 END;
 $function$
 ;
@@ -8105,41 +8579,11 @@ CREATE OR REPLACE FUNCTION public.sync_moneyline_markets_for_week(p_week_id uuid
  SECURITY DEFINER
  SET search_path TO ''
 AS $function$
-DECLARE
-  v_season_id uuid;
-  v_market_id uuid;
-  v_rec       record;
 BEGIN
-  SELECT season_id INTO v_season_id FROM public.weeks WHERE id = p_week_id;
-  IF v_season_id IS NULL THEN
-    RAISE EXCEPTION 'Week not found';
-  END IF;
-
-  FOR v_rec IN
-    SELECT g.id AS game_id, g.game_number,
-           g.team_a_id, g.team_b_id,
-           ta.team_number AS team_a_number,
-           tb.team_number AS team_b_number
-    FROM public.games g
-    JOIN public.teams ta ON ta.id = g.team_a_id
-    JOIN public.teams tb ON tb.id = g.team_b_id
-    WHERE ta.week_id = p_week_id
-      AND g.team_a_id IS NOT NULL AND g.team_b_id IS NOT NULL
-      AND NOT EXISTS (
-        SELECT 1 FROM public.bet_markets m
-        WHERE m.market_type = 'moneyline' AND m.subject_game_id = g.id
-      )
-  LOOP
-    INSERT INTO public.bet_markets (market_type, title, week_id, game_number, subject_game_id, status)
-      VALUES ('moneyline',
-              'Team ' || v_rec.team_a_number || ' vs Team ' || v_rec.team_b_number,
-              p_week_id, v_rec.game_number, v_rec.game_id, 'open')
-      RETURNING id INTO v_market_id;
-
-    INSERT INTO public.bet_selections (market_id, key, label, odds, line, sort_order) VALUES
-      (v_market_id, v_rec.team_a_id::text, 'Team ' || v_rec.team_a_number, 2.000, NULL, 0),
-      (v_market_id, v_rec.team_b_id::text, 'Team ' || v_rec.team_b_number, 2.000, NULL, 1);
-  END LOOP;
+  -- Retired: moneyline markets are no longer generated. Kept as a no-op so
+  -- app builds that still call it (team gen / add game / playoffs) don't
+  -- error. Safe to DROP once every client is past the combo-lines release.
+  NULL;
 END;
 $function$
 ;
@@ -8348,176 +8792,6 @@ BEGIN
       (v_market_id, 'over',  'Over',  2.000, v_line, 0),
       (v_market_id, 'under', 'Under', 2.000, v_line, 1);
   END LOOP;
-END;
-$function$
-;
-
-CREATE OR REPLACE FUNCTION public.sync_team_prop_markets_for_week(p_week_id uuid)
- RETURNS void
- LANGUAGE plpgsql
- SECURITY DEFINER
- SET search_path TO ''
-AS $function$
-DECLARE
-  v_season_id uuid;
-  v_n_games   integer;
-  v_rec       record;
-  v_stat      text;
-  v_clock     text;
-  v_line      numeric;
-  v_market_id uuid;
-  v_label     text;
-BEGIN
-  SELECT season_id INTO v_season_id FROM public.weeks WHERE id = p_week_id;
-  IF v_season_id IS NULL THEN
-    RAISE EXCEPTION 'Week not found';
-  END IF;
-
-  SELECT count(DISTINCT g.game_number) INTO v_n_games
-  FROM public.games g
-  JOIN public.teams t ON t.id = g.team_a_id
-  WHERE t.week_id = p_week_id;
-
-  -- Prune open/closed team_props whose anchor died or whose stat left the
-  -- catalog. Game-scope: game/team-pairing gone (game deletion already
-  -- cascades + refunds; this also covers team reassignment). Night-scope: the
-  -- team left the week, or the week's schedule emptied. Settled/void immutable.
-  DELETE FROM public.bet_markets m
-   WHERE m.week_id = p_week_id
-     AND m.market_type = 'team_prop'
-     AND m.status IN ('open', 'closed')
-     AND (
-       (m.params ->> 'stat') NOT IN ('clean_frames', 'strikes', 'spares', 'total_pins')
-       OR (m.subject_game_id IS NOT NULL AND (
-             NOT EXISTS (SELECT 1 FROM public.games g WHERE g.id = m.subject_game_id)
-             OR NOT EXISTS (
-                  SELECT 1 FROM public.games g
-                  WHERE g.id = m.subject_game_id
-                    AND (m.params ->> 'team_id')::uuid IN (g.team_a_id, g.team_b_id))))
-       OR (m.subject_game_id IS NULL AND (
-             v_n_games = 0
-             OR NOT EXISTS (
-                  SELECT 1 FROM public.teams t
-                  WHERE t.id = (m.params ->> 'team_id')::uuid
-                    AND t.week_id = p_week_id)))
-     );
-
-  -- Create: one market per (game, team∈{a,b}, stat) not already present.
-  FOR v_rec IN
-    SELECT g.id AS game_id, g.game_number, t.id AS team_id, t.team_number
-    FROM public.games g
-    JOIN public.teams ta ON ta.id = g.team_a_id AND ta.week_id = p_week_id
-    JOIN public.teams t  ON t.id IN (g.team_a_id, g.team_b_id)
-    WHERE g.team_a_id IS NOT NULL AND g.team_b_id IS NOT NULL
-  LOOP
-    FOREACH v_stat IN ARRAY ARRAY['clean_frames', 'strikes', 'spares', 'total_pins'] LOOP
-      IF EXISTS (
-        SELECT 1 FROM public.bet_markets m
-        WHERE m.market_type = 'team_prop'
-          AND m.subject_game_id = v_rec.game_id
-          AND m.params ->> 'team_id' = v_rec.team_id::text
-          AND m.params ->> 'stat' = v_stat
-      ) THEN
-        CONTINUE;
-      END IF;
-
-      v_clock := CASE WHEN v_stat = 'total_pins' THEN 'archive' ELSE 'lanetalk' END;
-      v_label := CASE v_stat
-                   WHEN 'clean_frames' THEN 'Clean Frames'
-                   WHEN 'strikes'      THEN 'Strikes'
-                   WHEN 'spares'       THEN 'Spares'
-                   ELSE 'Total Pins' END;
-      v_line := public.team_prop_seed_line(v_rec.team_id, v_stat, v_season_id);
-
-      INSERT INTO public.bet_markets (market_type, title, week_id, game_number, subject_game_id, params, status)
-        VALUES ('team_prop',
-                'Team ' || v_rec.team_number || ' ' || v_label || ' — Game ' || v_rec.game_number,
-                p_week_id, v_rec.game_number, v_rec.game_id,
-                jsonb_build_object(
-                  'family', 'team_aggregate',
-                  'stat', v_stat,
-                  'scope', 'game',
-                  'team_id', v_rec.team_id::text,
-                  'team_number', v_rec.team_number,
-                  'clock', v_clock),
-                'open')
-        RETURNING id INTO v_market_id;
-
-      INSERT INTO public.bet_selections (market_id, key, label, odds, line, sort_order) VALUES
-        (v_market_id, 'over',  'Over',  2.000, v_line, 0),
-        (v_market_id, 'under', 'Under', 2.000, v_line, 1);
-    END LOOP;
-  END LOOP;
-
-  -- Create: one NIGHT market per (team × stat) not already present — the same
-  -- stats aggregated across every game of the night. Only once a schedule
-  -- exists (night lines scale by the game count).
-  IF v_n_games > 0 THEN
-    FOR v_rec IN
-      SELECT DISTINCT t.id AS team_id, t.team_number
-      FROM public.games g
-      JOIN public.teams ta ON ta.id = g.team_a_id AND ta.week_id = p_week_id
-      JOIN public.teams t  ON t.id IN (g.team_a_id, g.team_b_id)
-      WHERE g.team_a_id IS NOT NULL AND g.team_b_id IS NOT NULL
-    LOOP
-      FOREACH v_stat IN ARRAY ARRAY['clean_frames', 'strikes', 'spares', 'total_pins'] LOOP
-        IF EXISTS (
-          SELECT 1 FROM public.bet_markets m
-          WHERE m.market_type = 'team_prop'
-            AND m.week_id = p_week_id
-            AND m.subject_game_id IS NULL
-            AND m.params ->> 'team_id' = v_rec.team_id::text
-            AND m.params ->> 'stat' = v_stat
-        ) THEN
-          CONTINUE;
-        END IF;
-
-        v_clock := CASE WHEN v_stat = 'total_pins' THEN 'archive' ELSE 'lanetalk' END;
-        v_label := CASE v_stat
-                     WHEN 'clean_frames' THEN 'Clean Frames'
-                     WHEN 'strikes'      THEN 'Strikes'
-                     WHEN 'spares'       THEN 'Spares'
-                     ELSE 'Total Pins' END;
-        v_line := public.team_prop_seed_line(v_rec.team_id, v_stat, v_season_id, v_n_games);
-
-        INSERT INTO public.bet_markets (market_type, title, week_id, game_number, subject_game_id, params, status)
-          VALUES ('team_prop',
-                  'Team ' || v_rec.team_number || ' ' || v_label || ' — Night',
-                  p_week_id, NULL, NULL,
-                  jsonb_build_object(
-                    'family', 'team_aggregate',
-                    'stat', v_stat,
-                    'scope', 'night',
-                    'team_id', v_rec.team_id::text,
-                    'team_number', v_rec.team_number,
-                    'clock', v_clock),
-                  'open')
-          RETURNING id INTO v_market_id;
-
-        INSERT INTO public.bet_selections (market_id, key, label, odds, line, sort_order) VALUES
-          (v_market_id, 'over',  'Over',  2.000, v_line, 0),
-          (v_market_id, 'under', 'Under', 2.000, v_line, 1);
-      END LOOP;
-    END LOOP;
-  END IF;
-
-  -- Reseed: refresh the line on every open team_prop market that has NO bets yet
-  -- (self-heals stale lines after roster/import changes). Never touches a market
-  -- carrying a placed bet. Night markets reseed at the night scale.
-  UPDATE public.bet_selections s
-     SET line = public.team_prop_seed_line(
-                  (m.params ->> 'team_id')::uuid, m.params ->> 'stat', v_season_id,
-                  CASE WHEN m.subject_game_id IS NULL THEN GREATEST(v_n_games, 1) ELSE 1 END)
-    FROM public.bet_markets m
-   WHERE s.market_id = m.id
-     AND m.week_id = p_week_id
-     AND m.market_type = 'team_prop'
-     AND m.status = 'open'
-     AND NOT EXISTS (
-       SELECT 1 FROM public.bet_legs l
-       JOIN public.bet_selections s2 ON s2.id = l.selection_id
-       WHERE s2.market_id = m.id
-     );
 END;
 $function$
 ;

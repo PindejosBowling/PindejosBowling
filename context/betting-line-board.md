@@ -66,9 +66,19 @@ The **"under" side of player O/U lines is intentionally not bettable** from the 
 - **What is *not* touched:** the `under` `bet_selections` row, `normalizeMarket`, `selectionBetsAgainstSubject` (anti-tank still encodes `under` as the against-subject side), and the DB/RPC layer (`place_house_bet`, settlement) all handle `under` exactly as before. The mechanic is fully preserved server-side.
 - **Re-enabling:** delete `isSelectionHiddenInUI` / `withVisibleSelections` and restore the plain `for (const line of openLines)` loop in `lineGroups`. No DB or migration work needed. To hide a *different* side (or a side on a future market type) instead, extend `isSelectionHiddenInUI`.
 
-### Game moneylines (the second consumer)
+### Game moneylines (the second consumer) — ⚰️ RETIRED for generation (2026-07-21)
 
-**Moneylines** ("which team wins this game?") are live alongside O/U, proving the seam — they reuse `LineRow` / `LineRowContainer` / the grouping unchanged. Key differences from O/U, all absorbed by the existing shapes:
+> **Moneyline generation is retired** with the combo-lines cutover
+> ([combo-lines.md](combo-lines.md)): `sync_moneyline_markets_for_week` is a
+> no-op stub, the board no longer fetches moneylines, and
+> `toYourTeamMoneyline` was removed from the hook. The section below is kept
+> as the **historical rendering contract** — settled moneyline bets still
+> render via `normalizeMarket`/`betLineSuffix`, the settle path
+> (`settle_moneyline_market[_internal]`) survives for historical
+> unarchive/resettle, and the status toggles remain for any bets open at
+> cutover. Head-to-head has no replacement (accepted gap; PvP covers it).
+
+**Moneylines** ("which team wins this game?") were live alongside O/U, proving the seam — they reused `LineRow` / `LineRowContainer` / the grouping unchanged. Key differences from O/U, all absorbed by the existing shapes:
 
 - **Subject = a game, not a player.** A new `bet_markets.subject_game_id` (uuid → `games.id`) points at the matchup; `subject_player_id` is null. In the DB a moneyline market has **two** selections (`bet_selections.key = team_id`, `label = "Team N"`, `line = null`, even-money). The *board* reshapes this — see the next bullet.
 - **"Your Team" only (social policy), shaped like a player prop.** A player may bet **only their own team to win**. The hook ([usePinsinoData.ts](../app/src/hooks/usePinsinoData.ts) `toYourTeamMoneyline`) reduces each moneyline `LineView` to the single selection whose `key` matches the player's week team (`teamSlots.getTeamForPlayerWeek`) and reshapes the row to mirror an O/U prop: `subjectName = "Your Team"`, `teamId` stamped with the viewer's team (so the board consolidates it with the team's team_prop lines — see the team-props section), `subtitle = "vs <opponent>"` (the opponent's label, captured before its selection is dropped), and the surviving selection relabeled `"Win"` (→ a `WIN` button leading the team row). Matchups the player isn't in **drop out**, so per game a player sees exactly one moneyline. The opponent side is hidden from the UI but still exists in the DB (settlement needs both). *This is a player-board policy; the house/admin views (`useHousePinsinoData`) and placed-bet history show the real team.*
@@ -90,15 +100,24 @@ The **"under" side of player O/U lines is intentionally not bettable** from the 
 - **Open/close:** props ride the game toggles (`setPropStatusByWeekGame`); closing game 1 also closes the night markets (incl. the night total-pins O/U via `setOUStatusByWeekGame`'s null-game branch); `reopenOUForWeek` reopens props too.
 - **Placed-bet surfaces** (`BetRow`, `BetDetailModal`, `SettleBetModal`, `LedgerRow`) render the shared `betLineSuffix` helper ("OVER 4.5 STRIKES"); `LegView`/`BetView` carry `statKey`.
 
-### Team-aggregate props (the fourth consumer)
+### Team-aggregate props (the fourth consumer) — ⚰️ RETIRED for generation (2026-07-21)
+
+> **Team-prop generation is retired** — **combo lines replaced them**
+> ([combo-lines.md](combo-lines.md)): `sync_team_prop_markets_for_week` is
+> dropped from the resync fan-out, the board no longer fetches team props, and
+> the "Your Team" relabel is gone from the hook. Kept for history + cutover:
+> the settle branches (c′/c″), `team_prop_seed_line`, the `prevent_self_tank`
+> team branch, `setTeamPropStatusByWeekGame`, and `normalizeMarket`'s `Team N`
+> labeling (settled team bets still render). The section below is the
+> historical contract.
 
 **Team props** (team total pins / clean frames / strikes / spares — per game
 AND per night since the 2026-07-01 standardization;
 `market_type='team_prop'`, `params={stat, scope, team_id, team_number, clock}`)
-render through the stack with zero new row components. Night team markets have
+rendered through the stack with zero new row components. Night team markets have
 `game_number` and `subject_game_id` **null** (the first team_props with no game
-anchor — `sync_team_prop_markets_for_week` prunes them by week-team membership
-instead of the games cascade). Board specifics:
+anchor — pruned by week-team membership instead of the games cascade). Board
+specifics:
 
 - **Fetch:** `betMarkets.listActiveTeamPropByWeek` merged into `openLines` alongside O/U + moneyline + props.
 - **Subject = a team.** `subject_game_id` anchors the matchup (like moneyline) and `params.team_id` picks the side; `subject_player_id` is null, so `normalizeMarket` labels the row `Team N` from `params.team_number` — relabeled **"Your Team"** in the hook's board-build loop when `params.team_id` is the viewer's week team. Every team's lines are shown (not just the viewer's — unlike the moneyline reduction).
@@ -107,6 +126,22 @@ instead of the games cascade). Board specifics:
 - **Placed-bet surfaces** reuse `betLineSuffix` (`OVER 612.5 TOTAL PINS`) — `team_prop` is in its market-type gate alongside `prop`.
 - **Open/close:** team props ride the game toggles (`setTeamPropStatusByWeekGame`, called alongside the O/U/moneyline/prop toggles); closing game 1 also closes the night team markets; `reopenOUForWeek` reopens team props too.
 - **Two settlement clocks** (DB concern, invisible to the board): `total_pins` settles at archive (night total_pins = Σ the team's scores across the whole night); the frame stats settle on the LaneTalk clock via `settle_lanetalk_props_for_week` (game + night scope). See [archive-and-settlement.md](archive-and-settlement.md) §3 and [lanetalk-stat-bets.md](lanetalk-stat-bets.md).
+
+### Combo lines (the fifth consumer — the team-prop replacement)
+
+**Combos** (player-composed aggregate over/unders on an explicit member set;
+`market_type='combo'`, `params={stat, scope, clock, member_ids, member_names,
+combo_key}`) render through the stack with zero new row components — full
+feature doc: [combo-lines.md](combo-lines.md). Board specifics:
+
+- **Fetch:** `betMarkets.listActiveComboByWeek` merged into `openLines` alongside O/U + props.
+- **Subject = a member set.** `subject_player_id`/`subject_game_id`/`teamId` all null; `normalizeMarket` labels the row by joining `params.member_names` (`Alice + Bob + Carl`) and stamps `LineView.comboMemberIds`/`comboMemberNames`. `rowKey` falls through to `marketId` — one row per combo, plain tint (`subjectRelation` null).
+- **Grouping:** game-scope combos get their own `Combos` category inside their game group (after Player Overs); night-scope combos a `Combos` category under WEEKLY (after Night Props). `marketGroup` routes null-game combos to WEEKLY.
+- **Composer:** the one global **"+ Build a Combo"** CTA atop the Place view opens `ComboComposerSheet` (stat, scope, member multi-select from `rsvpInPlayers`, stake, live server line via `betMarkets.previewComboLine`, and a "Parlay with your slip" toggle passing staged selection ids as `p_extra_selection_ids`). Compose = bet, atomically (`bets.composeCombo` → `compose_combo_bet`); a dedup join toasts "Joined the existing combo".
+- **Anti-tank + under-hide:** `selectionBetsAgainstSubject('combo','under') → true`; `isSelectionHiddenInUI` hides the combo under; `isSelfTank` blocks the under on any combo whose `comboMemberIds` contains the viewer (over-on-self allowed); the `prevent_self_tank` combo branch is authoritative.
+- **Placed-bet surfaces** reuse `betLineSuffix` (`OVER 12.5 STRIKES`) — `combo` is in its gate alongside `prop`/`team_prop`; copy-bet via BetDetail works unchanged (`getByIds` is market-type-agnostic).
+- **Open/close:** combos ride the game toggles (`setComboStatusByWeekGame`; night combos ride game 1); `reopenOUForWeek` reopens them.
+- **Lifecycle (DB concern):** RSVP-out of any member **erases** the market (delete-refund, final); both settlement clocks with a per-member complete-data guard. See [combo-lines.md](combo-lines.md).
 
 ### Recipe — adding a new market type to the board
 

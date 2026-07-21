@@ -72,7 +72,9 @@ export default function CustomLineCreateModal({ currentWeekId, seasonId, initial
   // family needs (stat chips, scope, game, subject). Subject is either a
   // specific player or THE BETTOR (self-referential: "whoever takes this bet"
   // — resolves per-taker, e.g. "you beat your over" / "your team wins").
-  const [legFamily, setLegFamily] = useState<LegFamily>('player')
+  // Only the player family is authorable now (team legs retired — see the
+  // add-leg card note); the type survives for legacy leg rendering.
+  const legFamily: LegFamily = 'player'
   const [legStat, setLegStat] = useState<string>('score')
   // Game legs bind to a game; night legs settle over the whole night (one
   // null-game market). Team Win is per-game only.
@@ -89,11 +91,6 @@ export default function CustomLineCreateModal({ currentWeekId, seasonId, initial
 
   const legKind = kindOf(legFamily, legStat)
   const effScope = legKind === 'moneyline' ? 'game' : legScope
-
-  function changeFamily(f: LegFamily) {
-    setLegFamily(f)
-    setLegStat(FAMILY_STATS[f][0])
-  }
 
   // Season roster (leg subjects/anchors) + season weeks (the Pick Weeks chips).
   const [seasonPlayers, setSeasonPlayers] = useState<PlayerPickerItem[]>([])
@@ -301,14 +298,12 @@ export default function CustomLineCreateModal({ currentWeekId, seasonId, initial
         </View>
       ))}
 
-      {/* Add-leg sub-form: family first (who it's about), then that family's
-          stat chips — the score/win kinds live as the first chip. */}
+      {/* Add-leg sub-form: player-stat chips — the score kind lives as the
+          first chip. (The Team Stat / Win family is retired with team-anchored
+          market generation — combos replaced it. Legacy team legs still render
+          in the list above but new ones can't be authored: they'd never
+          resolve once team_prop/moneyline markets stop generating.) */}
       <View style={styles.addLegCard}>
-        <ToggleGroup
-          options={[{ key: 'player', label: 'Player Stat' }, { key: 'team', label: 'Team Stat' }]}
-          value={legFamily}
-          onChange={changeFamily}
-        />
         <View style={styles.chipWrapForm}>
           {FAMILY_STATS[legFamily].map(s => (
             <TouchableOpacity key={s} style={[styles.chip, legStat === s && styles.chipOn]} onPress={() => setLegStat(s)} activeOpacity={0.7}>
@@ -388,7 +383,7 @@ export default function CustomLineCreateModal({ currentWeekId, seasonId, initial
         items={seasonPlayers}
         onSelectItem={p => { setLegPlayer(p); setPickerOpen(false) }}
         onClose={() => setPickerOpen(false)}
-        title={legFamily === 'team' ? 'Anchor Player' : 'Select Player'}
+        title="Select Player"
       />
     </BottomSheet>
   )

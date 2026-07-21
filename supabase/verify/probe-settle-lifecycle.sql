@@ -78,13 +78,18 @@ BEGIN
     JOIN public.teams t       ON t.id = ts.team_id
    WHERE t.week_id = v_week AND ts.is_fill AND s.score IS NULL;
 
-  SELECT id INTO v_mkt_tp FROM public.bet_markets
-    WHERE market_type = 'team_prop' AND subject_game_id = v_game
-      AND params ->> 'team_id' = v_t1::text AND params ->> 'stat' = 'total_pins';
-  IF v_mkt_tp IS NULL THEN
-    RAISE EXCEPTION 'PROBE_SETUP_FAILED: team_prop market not created by the resync trigger';
-  END IF;
-  UPDATE public.bet_selections SET line = 260.5 WHERE market_id = v_mkt_tp;
+  -- team_prop generation is RETIRED (combos replaced team props) — synthesize
+  -- the market directly in the as-generated shape; the KEPT settle branches
+  -- grade it (the "open team bet at cutover / historical week" case).
+  INSERT INTO public.bet_markets (market_type, title, week_id, game_number, subject_game_id, params, status)
+    VALUES ('team_prop', 'PROBE Team 998 Total Pins — Game 1', v_week, 1, v_game,
+            jsonb_build_object('family', 'team_aggregate', 'stat', 'total_pins', 'scope', 'game',
+                               'team_id', v_t1::text, 'team_number', 998, 'clock', 'archive'),
+            'open')
+    RETURNING id INTO v_mkt_tp;
+  INSERT INTO public.bet_selections (market_id, key, label, odds, line, sort_order) VALUES
+    (v_mkt_tp, 'over',  'Over',  2.000, 260.5, 0),
+    (v_mkt_tp, 'under', 'Under', 2.000, 260.5, 1);
   SELECT id INTO v_sel_tp_over FROM public.bet_selections WHERE market_id = v_mkt_tp AND key = 'over';
 
   INSERT INTO public.bet_markets (market_type, title, week_id, game_number, status)

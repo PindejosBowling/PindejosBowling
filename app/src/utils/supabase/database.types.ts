@@ -3162,6 +3162,27 @@ export type Database = {
         Args: { p_game_number: number; p_week_id: string }
         Returns: undefined
       }
+      combo_seed_line: {
+        Args: {
+          p_member_ids: string[]
+          p_n_games?: number
+          p_season_id: string
+          p_stat: string
+        }
+        Returns: number
+      }
+      compose_combo_bet: {
+        Args: {
+          p_extra_selection_ids?: string[]
+          p_game_number?: number
+          p_member_ids: string[]
+          p_scope: string
+          p_stake?: number
+          p_stat: string
+          p_week_id: string
+        }
+        Returns: Json
+      }
       counter_pvp_challenge: {
         Args: {
           p_challenge_id: string
@@ -3507,6 +3528,10 @@ export type Database = {
         Returns: undefined
       }
       sweep_auctions: { Args: never; Returns: undefined }
+      sync_combo_markets_for_week: {
+        Args: { p_week_id: string }
+        Returns: undefined
+      }
       sync_lanetalk_prop_markets_for_week: {
         Args: { p_week_id: string }
         Returns: undefined
@@ -3517,10 +3542,6 @@ export type Database = {
       }
       sync_over_under_markets_for_week: {
         Args: { p_extra_games?: number[]; p_week_id: string }
-        Returns: undefined
-      }
-      sync_team_prop_markets_for_week: {
-        Args: { p_week_id: string }
         Returns: undefined
       }
       take_loan: { Args: { p_loan_product_id: string }; Returns: string }

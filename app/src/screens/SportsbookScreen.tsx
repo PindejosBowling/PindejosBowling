@@ -25,6 +25,8 @@ import LineRowContainer from '../components/betting/LineRowContainer'
 import CustomLineRow from '../components/betting/CustomLineRow'
 import ReadOnlySeasonBanner from '../components/betting/ReadOnlySeasonBanner'
 import ConfirmActionSheet from '../components/ui/ConfirmActionSheet'
+import ComboComposerSheet from '../components/betting/ComboComposerSheet'
+import Button from '../components/ui/Button'
 import FeatureExplainerSheet from '../components/pinsino/FeatureExplainerSheet'
 import TermsBlock from '../components/ui/TermsBlock'
 import { EXPLAINERS, TERMS } from '../data/pinsinoExplainers'
@@ -69,7 +71,7 @@ export default function SportsbookScreen() {
   const pinsinoViewSeasonId = useUiStore(s => s.pinsinoViewSeasonId)
   const navigation = useNavigation<PinsinoNav>()
 
-  const { loading, balance, openLines, weekTeams, customLines, weekBets, settledBets, seasonNumber, readOnly, reload } = usePinsinoData(playerId, pinsinoViewSeasonId)
+  const { loading, balance, openLines, weekTeams, customLines, weekBets, settledBets, seasonNumber, readOnly, reload, currentWeekId, currentSeasonId, rsvpInPlayers } = usePinsinoData(playerId, pinsinoViewSeasonId)
   const { refreshing, onRefresh } = useRefresh(reload)
   const insets = useSafeAreaInsets()
 
@@ -82,6 +84,7 @@ export default function SportsbookScreen() {
   // special as its own tagged bet; BetSlip owns the stake + item-toggle inputs.
   const [detailModal, setDetailModal] = useState<BetView | null>(null)
   const [helpOpen, setHelpOpen] = useState(false)
+  const [composerOpen, setComposerOpen] = useState(false)
 
   // The bet slip (staged picks/specials, placement, item inventory, balance) is
   // owned by the app-level BetSlipProvider so it can also be raised from Bet
@@ -93,6 +96,7 @@ export default function SportsbookScreen() {
     slipSpecials,
     stagePick: stageSlipPick,
     stageSpecial: stageSlipSpecial,
+    clearSlip,
     ghosts,
     reloadInventory,
   } = useBetSlip()
@@ -119,6 +123,15 @@ export default function SportsbookScreen() {
   // The viewer's slice of the active board — their own current-week pending bets.
   // Surfaced as a MY BETS section atop Active Bets; Place Bets is purely for placing.
   const myActiveBets = useMemo(() => activeBets.filter(b => b.playerId === playerId), [activeBets, playerId])
+
+  // Schedule game numbers for the combo composer's scope picker, derived from
+  // the board; [1, 2] before any per-game lines exist (the compose RPC's
+  // pre-teams default, so the picker never offers a game the RPC rejects).
+  const comboGameNumbers = useMemo(() => {
+    const nums = [...new Set(openLines.map(l => l.gameNumber).filter((n): n is number => n != null))]
+      .sort((a, b) => a - b)
+    return nums.length > 0 ? nums : [1, 2]
+  }, [openLines])
 
   // Two-level grouping for the board: game group (GAME 1, …, SEASON) → line
   // category (Player Over/Unders, …). Each category renders one collapsible
@@ -232,6 +245,9 @@ export default function SportsbookScreen() {
     if (!selectionBetsAgainstSubject(line.marketType, sel.key)) return false
     if (line.marketType === 'team_prop') {
       return line.teamId != null && line.teamId === weekTeams.myTeamId
+    }
+    if (line.marketType === 'combo') {
+      return !!playerId && (line.comboMemberIds ?? []).includes(playerId)
     }
     return line.subjectPlayerId === playerId
   }
@@ -391,6 +407,16 @@ export default function SportsbookScreen() {
 
         {/* ── Place Bets ──────────────────────────────────────── */}
         {effectiveView === 'place' && <>
+        {/* Build a Combo — the one global entry to the composer (scope, stat,
+            members, stake all live inside the sheet). */}
+        {currentWeekId != null && currentSeasonId != null && (
+          <Button
+            label="+ Build a Combo"
+            variant="secondary"
+            onPress={() => setComposerOpen(true)}
+            style={styles.comboCta}
+          />
+        )}
         {/* Open lines — the board starts straight at its WEEKLY/GAME labels
             (no "this week" section header; that's implicit in the Sportsbook). */}
         {lineGroups.length > 0 || topSpecials.length > 0 ? (
@@ -530,6 +556,21 @@ export default function SportsbookScreen() {
       {helpOpen && (
         <FeatureExplainerSheet explainer={EXPLAINERS.sportsbook} onClose={() => setHelpOpen(false)} />
       )}
+
+      {/* Combo composer — compose = bet in one action; optionally parlays the
+          staged slip picks into the same ticket (which then clears the slip). */}
+      {composerOpen && currentWeekId != null && currentSeasonId != null && (
+        <ComboComposerSheet
+          weekId={currentWeekId}
+          seasonId={currentSeasonId}
+          balance={balance}
+          gameNumbers={comboGameNumbers}
+          members={rsvpInPlayers}
+          slipSelectionIds={slipPicks.map(p => p.selectionId)}
+          onClose={() => setComposerOpen(false)}
+          onDone={parlayed => { if (parlayed) clearSlip(); reload() }}
+        />
+      )}
     </View>
   )
 }
@@ -543,6 +584,9 @@ const styles = StyleSheet.create({
   content: { paddingHorizontal: 16, paddingBottom: 40, flexGrow: 1 },
 
   viewToggle: { marginBottom: 20 },
+
+  // The composer entry — sits between the view toggle and the board.
+  comboCta: { marginBottom: 4 },
 
   card: {
     backgroundColor: colors.surface,

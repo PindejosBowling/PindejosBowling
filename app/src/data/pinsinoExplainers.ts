@@ -39,8 +39,9 @@ export const EXPLAINERS: Record<PinsinoFeatureKey, FeatureExplainer> = {
     hook: 'Bet on the bowling.',
     tileHook: 'Bet your pins on the weekly lines',
     bullets: [
-      'Back a player to beat their projected line for the week, or back your own team to win its matchup.',
-      'Stack multiple picks into a parlay — every leg has to hit, but the payout multiplies.',
+      'Back a player to beat their projected line for the week.',
+      'Build a combo: pick two or more players and bet their combined stat against one line. Your combo goes on the board for everyone to bet.',
+      'Stack multiple picks into a parlay — every leg has to hit, but the payout multiplies. Combos parlay like any other line.',
       'Pins leave your balance when you place a bet. Tickets settle automatically when the week is finalized.',
     ],
     caveat:
@@ -157,6 +158,7 @@ export type TermsKey =
   | 'auctionBid'
   | 'haunt'
   | 'betSlip'
+  | 'combo'
 
 export const TERMS: Record<TermsKey, TermsCopy> = {
   loanBorrow: {
@@ -213,5 +215,16 @@ export const TERMS: Record<TermsKey, TermsCopy> = {
 
   betSlip: {
     lines: ['Pins come out of your balance now. Tickets settle when the week is archived.'],
+  },
+
+  combo: {
+    lines: [
+      'Pick two or more RSVP\'d-in players. Their combined stat is graded against one line.',
+      'Composing places your bet immediately, and your combo goes on the board — anyone can bet it too.',
+      'If someone already composed the identical combo, your bet joins their line.',
+      'If a member RSVPs out, the combo dies and every bet on it is refunded in full.',
+      'If a member ends up with no recorded data, the bet is voided and refunded.',
+    ],
+    caution: 'You can put yourself in a combo — but you can never bet against one you\'re in.',
   },
 }

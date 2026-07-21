@@ -198,9 +198,11 @@ export default function MatchupsScreen() {
     try {
       await betMarkets.setOUStatusByWeekGame(weekId, gameNum, started ? 'closed' : 'open')
       await betMarkets.setMoneylineStatusByWeekGame(weekId, gameNum, started ? 'closed' : 'open')
-      // Stat props suspend with the game too (game 1 also flips the night-scoped props).
+      // Stat props + combos suspend with the game too (game 1 also flips the
+      // night-scoped markets).
       await betMarkets.setPropStatusByWeekGame(weekId, gameNum, started ? 'closed' : 'open')
       await betMarkets.setTeamPropStatusByWeekGame(weekId, gameNum, started ? 'closed' : 'open')
+      await betMarkets.setComboStatusByWeekGame(weekId, gameNum, started ? 'closed' : 'open')
       if (started) {
         await pvpChallenges.closeOpenForGame(weekId, gameNum)
         setOpenGames(prev => ({ ...prev, [gameNum]: true }))
@@ -262,8 +264,7 @@ export default function MatchupsScreen() {
       // team-gen makes for game 3). Idempotent.
       await betMarkets.syncOUForWeek(weekId, [nextGameNum])
       await betMarkets.syncLanetalkPropsForWeek(weekId)
-      // Moneylines do derive from the new games rows — sync them too. Idempotent.
-      await betMarkets.syncMoneylineForWeek(weekId)
+      // (Moneyline generation is retired — combos replaced team-anchored markets.)
       await reload()
     } finally {
       setAddingGame(false)
@@ -322,6 +323,7 @@ export default function MatchupsScreen() {
           await betMarkets.setMoneylineStatusByWeekGame(weekId, num, 'closed')
           await betMarkets.setPropStatusByWeekGame(weekId, num, 'closed')
           await betMarkets.setTeamPropStatusByWeekGame(weekId, num, 'closed')
+          await betMarkets.setComboStatusByWeekGame(weekId, num, 'closed')
           await pvpChallenges.closeOpenForGame(weekId, num)
         }
       }

@@ -9,9 +9,11 @@
 --   bounty #2 (house): p2 enters → sponsor_win (house keeps stake)
 --   bet #1: p1 stakes 50 on over @2.0, market settles over  → won (+50 net)
 --   bet #2: p2 stakes 50 on over @2.0, market settles under → lost (−50 net)
---   team_prop: two 1-man teams + a game (the INSERT fires the resync trigger →
---     sync_team_prop_markets_for_week creates the 8 team×stat markets) + scores
---     (T1=150, T2=120). Lines pinned to 140.5/130.5 for deterministic grading.
+--   team_prop: two 1-man teams + a game + scores (T1=150, T2=120). Generation
+--     is RETIRED (combos replaced team props), so the three markets used are
+--     synthesized directly in the as-generated shape — the "open team bet at
+--     cutover / historical week" case the KEPT settle branches exist for.
+--     Lines pinned to 140.5/130.5 for deterministic grading.
 --     · anti-tank: p1 backing his OWN team's under must RAISE (trigger)
 --     · p2 over on T1 total_pins → won at the sweep (archive clock, Σ=150)
 --     · p1 over on T2 total_pins → lost at the sweep (Σ=120)
@@ -134,50 +136,43 @@ BEGIN
   END IF;
 
   ------------------------------------------------------------------ team props
-  -- Two 1-man teams + a game. The game INSERT fires trg_resync_markets_games →
-  -- sync_team_prop_markets_for_week, so the team_prop markets are created by the
-  -- LIVE coupling path, not by hand.
+  -- Two 1-man teams + a game, then the three markets synthesized by hand in
+  -- the exact shape the retired sync used to generate (see header).
   INSERT INTO public.teams (week_id, team_number) VALUES (v_week, 998) RETURNING id INTO v_t1;
   INSERT INTO public.teams (week_id, team_number) VALUES (v_week, 999) RETURNING id INTO v_t2;
   INSERT INTO public.team_slots (team_id, slot, player_id) VALUES (v_t1, 1, v_p1) RETURNING id INTO v_slot1;
   INSERT INTO public.team_slots (team_id, slot, player_id) VALUES (v_t2, 1, v_p2) RETURNING id INTO v_slot2;
   INSERT INTO public.games (game_number, team_a_id, team_b_id) VALUES (1, v_t1, v_t2) RETURNING id INTO v_game;
 
-  IF (SELECT count(*) FROM public.bet_markets
-      WHERE market_type = 'team_prop' AND subject_game_id = v_game) <> 8 THEN
-    RAISE EXCEPTION 'PROBE_FAIL: expected 8 team_prop markets for the fixture game, got %',
-      (SELECT count(*) FROM public.bet_markets
-       WHERE market_type = 'team_prop' AND subject_game_id = v_game);
-  END IF;
-  IF EXISTS (
-    SELECT 1 FROM public.bet_markets
-    WHERE market_type = 'team_prop' AND subject_game_id = v_game
-      AND (params ->> 'clock') <> CASE WHEN params ->> 'stat' = 'total_pins'
-                                       THEN 'archive' ELSE 'lanetalk' END
-  ) THEN
-    RAISE EXCEPTION 'PROBE_FAIL: team_prop clock params wrong';
-  END IF;
-
   -- Score rows are auto-seeded blank at game creation — fill them in.
   UPDATE public.scores SET score = 150 WHERE team_slot_id = v_slot1 AND game_id = v_game;
   UPDATE public.scores SET score = 120 WHERE team_slot_id = v_slot2 AND game_id = v_game;
 
-  SELECT id INTO v_mkt_tp1 FROM public.bet_markets
-    WHERE market_type = 'team_prop' AND subject_game_id = v_game
-      AND params ->> 'team_id' = v_t1::text AND params ->> 'stat' = 'total_pins';
-  SELECT id INTO v_mkt_tp2 FROM public.bet_markets
-    WHERE market_type = 'team_prop' AND subject_game_id = v_game
-      AND params ->> 'team_id' = v_t2::text AND params ->> 'stat' = 'total_pins';
-  SELECT id INTO v_mkt_lt FROM public.bet_markets
-    WHERE market_type = 'team_prop' AND subject_game_id = v_game
-      AND params ->> 'team_id' = v_t1::text AND params ->> 'stat' = 'strikes';
+  INSERT INTO public.bet_markets (market_type, title, week_id, game_number, subject_game_id, params, status)
+    VALUES ('team_prop', 'PROBE Team 998 Total Pins — Game 1', v_week, 1, v_game,
+            jsonb_build_object('family', 'team_aggregate', 'stat', 'total_pins', 'scope', 'game',
+                               'team_id', v_t1::text, 'team_number', 998, 'clock', 'archive'),
+            'open')
+    RETURNING id INTO v_mkt_tp1;
+  INSERT INTO public.bet_markets (market_type, title, week_id, game_number, subject_game_id, params, status)
+    VALUES ('team_prop', 'PROBE Team 999 Total Pins — Game 1', v_week, 1, v_game,
+            jsonb_build_object('family', 'team_aggregate', 'stat', 'total_pins', 'scope', 'game',
+                               'team_id', v_t2::text, 'team_number', 999, 'clock', 'archive'),
+            'open')
+    RETURNING id INTO v_mkt_tp2;
+  INSERT INTO public.bet_markets (market_type, title, week_id, game_number, subject_game_id, params, status)
+    VALUES ('team_prop', 'PROBE Team 998 Strikes — Game 1', v_week, 1, v_game,
+            jsonb_build_object('family', 'team_aggregate', 'stat', 'strikes', 'scope', 'game',
+                               'team_id', v_t1::text, 'team_number', 998, 'clock', 'lanetalk'),
+            'open')
+    RETURNING id INTO v_mkt_lt;
+  INSERT INTO public.bet_selections (market_id, key, label, odds, line, sort_order) VALUES
+    (v_mkt_tp1, 'over', 'Over', 2.000, 140.5, 0), (v_mkt_tp1, 'under', 'Under', 2.000, 140.5, 1),
+    (v_mkt_tp2, 'over', 'Over', 2.000, 130.5, 0), (v_mkt_tp2, 'under', 'Under', 2.000, 130.5, 1),
+    (v_mkt_lt,  'over', 'Over', 2.000,   4.5, 0), (v_mkt_lt,  'under', 'Under', 2.000,   4.5, 1);
 
-  -- Pin the lines for deterministic grading (the seeded line floats with live
-  -- league averages). Nothing reseeds between here and the sweep, and a placed
-  -- bet freezes the line anyway.
-  UPDATE public.bet_selections SET line = 140.5 WHERE market_id = v_mkt_tp1;  -- T1 Σ=150 → over wins
-  UPDATE public.bet_selections SET line = 130.5 WHERE market_id = v_mkt_tp2;  -- T2 Σ=120 → over loses
-
+  -- Lines are deterministic by construction: 140.5 (T1 Σ=150 → over wins),
+  -- 130.5 (T2 Σ=120 → over loses).
   SELECT id INTO v_sel_tp1_over  FROM public.bet_selections WHERE market_id = v_mkt_tp1 AND key = 'over';
   SELECT id INTO v_sel_tp1_under FROM public.bet_selections WHERE market_id = v_mkt_tp1 AND key = 'under';
   SELECT id INTO v_sel_tp2_over  FROM public.bet_selections WHERE market_id = v_mkt_tp2 AND key = 'over';

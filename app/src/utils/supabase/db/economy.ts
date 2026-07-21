@@ -81,6 +81,19 @@ export const betMarkets = {
       .in('status', ['open', 'closed'])
       .order('game_number')
       .order('title'),
+  // Active (open + closed-for-betting) combo markets for a week — player-composed
+  // aggregate lines over an explicit member set (params.member_ids/member_names),
+  // with no team/game anchor. The player-subject embed resolves null; the row
+  // label comes from params.member_names.
+  listActiveComboByWeek: (weekId: string) =>
+    supabase
+      .from('bet_markets')
+      .select(MARKET_GRAPH)
+      .eq('week_id', weekId)
+      .eq('market_type', 'combo')
+      .in('status', ['open', 'closed'])
+      .order('game_number', { nullsFirst: false })
+      .order('title'),
   // Active (open + closed-for-betting) markets by id, with selections + subject —
   // any market_type. Used by the "Copy this bet" flow to re-resolve a bet's legs
   // against the CURRENT live markets/selections (odds/lines may have moved since
@@ -101,7 +114,7 @@ export const betMarkets = {
     supabase
       .from('bet_markets')
       .select('id, week_id, game_number, subject_player_id, params, status, title')
-      .or('and(market_type.eq.prop,params->>source.eq.lanetalk),and(market_type.eq.team_prop,params->>clock.eq.lanetalk)')
+      .or('and(market_type.eq.prop,params->>source.eq.lanetalk),and(market_type.eq.team_prop,params->>clock.eq.lanetalk),and(market_type.eq.combo,params->>clock.eq.lanetalk)')
       .in('status', ['open', 'closed']),
   // Week ids that have settled LaneTalk-clock markets — pairs with
   // listUnsettledLanetalkProps so the import screen can mark a week Confirmed
@@ -110,7 +123,7 @@ export const betMarkets = {
     supabase
       .from('bet_markets')
       .select('week_id')
-      .or('and(market_type.eq.prop,params->>source.eq.lanetalk),and(market_type.eq.team_prop,params->>clock.eq.lanetalk)')
+      .or('and(market_type.eq.prop,params->>source.eq.lanetalk),and(market_type.eq.team_prop,params->>clock.eq.lanetalk),and(market_type.eq.combo,params->>clock.eq.lanetalk)')
       .eq('status', 'settled'),
   // Start/reopen a game's betting: flip every O/U market for a week+game between
   // 'open' and 'closed' in one admin write. Closing blocks new bets (place_house_bet
@@ -189,18 +202,39 @@ export const betMarkets = {
       .is('game_number', null)
       .eq('status', from)
   },
+  // Same open/close toggle for a week+game's combo markets (run alongside the
+  // other toggles when a game starts/reopens). Night-scoped combos
+  // (game_number null) ride game 1's toggle, like the night player props.
+  setComboStatusByWeekGame: async (weekId: string, gameNumber: number, status: 'open' | 'closed') => {
+    const from = status === 'closed' ? 'open' : 'closed'
+    const res = await supabase
+      .from('bet_markets')
+      .update({ status })
+      .eq('week_id', weekId)
+      .eq('market_type', 'combo')
+      .eq('game_number', gameNumber)
+      .eq('status', from)
+    if (res.error || gameNumber !== 1) return res
+    return supabase
+      .from('bet_markets')
+      .update({ status })
+      .eq('week_id', weekId)
+      .eq('market_type', 'combo')
+      .is('game_number', null)
+      .eq('status', from)
+  },
   // Reopen every closed O/U line for a week. Clear Matchups returns the week to a
   // pre-game state, so Start Game's betting suspension must not survive the reset —
   // surviving lines (both players still RSVP'd in) would otherwise be stranded
   // unbettable with no games row left to expose the reopen toggle.
-  // Covers stat props and team props too — they suspend with the games, so the
-  // reset must reopen them alongside the O/U lines.
+  // Covers stat props, team props and combos too — they suspend with the games,
+  // so the reset must reopen them alongside the O/U lines.
   reopenOUForWeek: (weekId: string) =>
     supabase
       .from('bet_markets')
       .update({ status: 'open' })
       .eq('week_id', weekId)
-      .in('market_type', ['over_under', 'prop', 'team_prop'])
+      .in('market_type', ['over_under', 'prop', 'team_prop', 'combo'])
       .eq('status', 'closed'),
   // Create/refund of O/U markets (SECURITY DEFINER, server-side). Line ownership:
   // RSVP owns the lines until the week has teams; the roster (team_slots) owns
@@ -242,6 +276,10 @@ export const betMarkets = {
   // Returns one summary row { settled, voided, left_pending } for the toast.
   settleLanetalkProps: (weekId: string, voidMissing = false) =>
     supabase.rpc('settle_lanetalk_props_for_week', { p_week_id: weekId, p_void_missing: voidMissing }),
+  // The exact line a combo would be seeded with (STABLE, read-only) — the
+  // composer sheet previews the server's number rather than re-deriving it.
+  previewComboLine: (memberIds: string[], stat: string, seasonId: string, nGames = 1) =>
+    supabase.rpc('combo_seed_line', { p_member_ids: memberIds, p_stat: stat, p_season_id: seasonId, p_n_games: nGames }),
 }
 
 export const bets = {
@@ -298,6 +336,18 @@ export const bets = {
   // Admin: total undo of a placed bet (removes ledger rows + bet, re-opens market).
   cancel: (betId: string) =>
     supabase.rpc('cancel_bet', { p_bet_id: betId }),
+  // Compose a combo line and bet it in ONE transaction (SECURITY DEFINER):
+  // creates (or dedups into) the member-set market + over/under selections and
+  // places the composer's bet on the over — a combo market can never exist
+  // without a bet riding it. extraSelectionIds parlays the fresh combo leg with
+  // already-staged selections (same week; the RPC rejects the combo's own).
+  // Returns { market_id, bet_id, line, deduped }.
+  composeCombo: (weekId: string, memberIds: string[], stat: string, scope: 'game' | 'night', gameNumber: number | null, stake: number, extraSelectionIds?: string[]) =>
+    supabase.rpc('compose_combo_bet', {
+      p_week_id: weekId, p_member_ids: memberIds, p_stat: stat, p_scope: scope,
+      p_game_number: gameNumber ?? undefined, p_stake: stake,
+      p_extra_selection_ids: extraSelectionIds,
+    }),
 }
 
 // ── Ghost in the Slip (bet_haunts) ──────────────────────────────────────────

@@ -181,8 +181,7 @@ export default function PlayoffsScreen() {
     const { error: ouErr } = await betMarkets.syncOUForWeek(draft.weekId, scheduleGames)
     if (ouErr) console.warn('Failed to sync O/U markets:', ouErr.message)
     await betMarkets.syncLanetalkPropsForWeek(draft.weekId)
-    const { error: mlErr } = await betMarkets.syncMoneylineForWeek(draft.weekId)
-    if (mlErr) console.warn('Failed to sync moneyline markets:', mlErr.message)
+    // (Moneyline generation is retired — combos replaced team-anchored markets.)
 
     return { error: null }
   }

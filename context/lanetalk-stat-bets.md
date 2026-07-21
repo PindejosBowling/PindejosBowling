@@ -6,10 +6,17 @@ full stat range; **first-ball avg is retired as a bettable line**, kept only
 for settled history) — generated from imported **official** LaneTalk games and
 settled when the admin taps **"Confirm LaneTalk Data"** on the import screen.
 The same Confirm also settles **LaneTalk-clock team props**
-(`market_type='team_prop'`, `params.clock='lanetalk'` — game AND night scope);
-see the team-prop section below. Archive runs night-of; LaneTalk data often
+(`market_type='team_prop'`, `params.clock='lanetalk'` — game AND night scope;
+**generation retired 2026-07-21**, settle path kept for cutover/history) and
+**LaneTalk-clock combo lines** (`market_type='combo'`,
+`params.clock='lanetalk'` — the team-prop replacement, settled in `settle_week`
+step (c‴) with a per-member complete-data guard; see
+[combo-lines.md](combo-lines.md)). Archive runs night-of; LaneTalk data often
 lands the next day, so these bets ride a **separate settlement clock** from
-`archive_week`.
+`archive_week`. The Confirm badge queries (`listUnsettledLanetalkProps` /
+`listSettledLanetalkPropWeeks` in `db/economy.ts`) therefore match **three**
+market shapes: lanetalk props, lanetalk-clock team props, and lanetalk-clock
+combos.
 
 **Zero schema additions.** Every persisted record is an ordinary row in the
 existing betting architecture:

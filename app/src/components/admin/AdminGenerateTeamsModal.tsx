@@ -283,10 +283,7 @@ export default function AdminGenerateTeamsModal({ onClose }: Props) {
       await betMarkets.syncLanetalkPropsForWeek(weekId)
       if (eSync) console.warn('Failed to sync O/U markets:', eSync.message)
 
-      // Moneylines derive from the matchups (games rows) just written, so sync
-      // them now too (one even-money market per game). Idempotent.
-      const { error: eMl } = await betMarkets.syncMoneylineForWeek(weekId)
-      if (eMl) console.warn('Failed to sync moneyline markets:', eMl.message)
+      // (Moneyline generation is retired — combos replaced team-anchored markets.)
 
       // Fresh matchups put the week back in a pre-game state: lines closed by
       // Start Game before the regen must reopen (survivors keep their status
