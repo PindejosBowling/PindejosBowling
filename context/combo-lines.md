@@ -8,6 +8,13 @@ combo bet. Shipped 2026-07-21 (migrations `20260721150000_combo_lines_core`,
 `20260721151000_combo_lines_settlement`,
 `20260721170000_retire_team_prop_moneyline_generation`).
 
+> **One stat per combo — deliberate.** Mixed-stat legs ("A's total pins + B's
+> spares" summed against one line) were shipped and **reverted the same day**
+> (2026-07-22, migrations `…000344_combo_mixed_stat_legs` +
+> `…002545_revert_combo_mixed_stat_legs` — a no-op pair in history; zero
+> markets composed between them): the owner judged summing different stat
+> kinds into one value awkward. Don't re-propose without new grilling.
+
 ## The market shape
 
 A combo is a `bet_markets` row, `market_type='combo'`, with ordinary
