@@ -50,6 +50,7 @@ import { useRefresh } from '../hooks/useRefresh'
 import { useAuthStore } from '../stores/authStore'
 import { useUiStore } from '../stores/uiStore'
 import { haunts } from '../utils/supabase/db'
+import { shortName } from '../utils/helpers'
 import { PinsinoStackParamList } from '../navigation/types'
 import EmptyCard from '../components/ui/EmptyCard'
 
@@ -193,8 +194,9 @@ export default function SportsbookScreen() {
       if (nameById.has(id)) available.add(id)
     }
     for (const l of scopeLines) {
-      add(l.subjectPlayerId, l.subjectName)
-      l.comboMemberIds?.forEach((id, i) => add(id, l.comboMemberNames?.[i]))
+      // Full-name forms — the player dropdown is a full-name surface.
+      add(l.subjectPlayerId, l.subjectFullName)
+      l.comboMemberIds?.forEach((id, i) => add(id, l.comboMemberFullNames?.[i]))
     }
     for (const cl of scopeSpecials) for (const leg of cl.legs) add(leg.subjectPlayerId)
     const players = [...available]
@@ -247,7 +249,7 @@ export default function SportsbookScreen() {
   )
   const comboScopeGame = scope === 'weekly' ? null : Number(scope.slice('game-'.length))
   const comboNGames = scope === 'weekly' ? Math.max(weekGameNumbers.length, 1) : 1
-  const { line: comboPreviewLine } = useComboLinePreview(
+  const { line: comboPreviewLine, loading: comboLineLoading } = useComboLinePreview(
     comboMemberIds,
     combo?.stat ?? null,
     currentSeasonId,
@@ -300,7 +302,7 @@ export default function SportsbookScreen() {
       key: comboKey,
       weekId: currentWeekId,
       memberIds: comboMemberIds,
-      memberNames: comboMemberIds.map(id => nameById.get(id) ?? '—'),
+      memberNames: comboMemberIds.map(id => shortName(nameById.get(id))),
       stat: combo.stat,
       scope: scope === 'weekly' ? 'night' : 'game',
       gameNumber: comboScopeGame,
@@ -505,7 +507,7 @@ export default function SportsbookScreen() {
                   below 2 RSVP'd players (house convention: still toasts). */}
               {currentWeekId != null && currentSeasonId != null && (
                 <PickChip
-                  label="COMBINE"
+                  label="COMBO"
                   selected={combo != null}
                   disabled={rsvpInPlayers.length < 2}
                   onPress={() => {
@@ -641,11 +643,12 @@ export default function SportsbookScreen() {
       {combining && combo?.stat != null && (
         <BuilderBar
           memberNames={comboMemberIds.map(
-            id => rsvpInPlayers.find(m => m.playerId === id)?.name ?? '—'
+            id => shortName(rsvpInPlayers.find(m => m.playerId === id)?.name)
           )}
           statLabel={(STAT_LABELS[combo.stat] ?? combo.stat).toUpperCase()}
           scopeLabel={scope === 'weekly' ? 'NIGHT' : `GAME ${comboScopeGame}`}
           line={comboPreviewLine}
+          lineLoading={comboLineLoading}
           minMembers={comboMemberIds.length >= 2}
           alreadyStaged={comboAlreadyStaged}
           blocked={board.scopeInProgress}

@@ -56,9 +56,10 @@ export default function LineRow({ lines, relation, inProgress, selectionState, o
       ]}
     >
       <View style={stacked ? styles.lineInfoStacked : styles.lineInfo}>
-        {/* Just the subject's name — the bet condition itself lives in each pick
+        {/* Just the subject's name (full form — the row header is one of the two
+            full-name surfaces) — the bet condition itself lives in each pick
             chip ("142.5+ PINS") — selectionButtonLabel. */}
-        <Text style={styles.lineName}>{first.subjectName}</Text>
+        <Text style={styles.lineName}>{first.subjectFullName}</Text>
         {first.subtitle != null && (
           <Text style={[styles.lineValue, stacked && styles.centered]}>{first.subtitle}</Text>
         )}

@@ -1,5 +1,6 @@
 import { weeks, seasons, betMarkets, bets, pinLedger, loanLedger, loans, pvpChallenges, bountyPosts, teamSlots, customLines, games, players, rsvp, auctionHouseState } from '../utils/supabase/db'
 import { computeBalance } from '../utils/ledger'
+import { shortName } from '../utils/helpers'
 import { betPayout } from '../utils/bets'
 import { useAsyncData } from './useAsyncData'
 
@@ -22,7 +23,11 @@ export interface LineView {
   marketType: string         // 'over_under' | 'moneyline' | 'prop'
   title: string
   subjectPlayerId: string | null
+  // Sportsbook name convention: subjectName is the "First L." display form
+  // (what slips/tickets/bet rows show); subjectFullName keeps the full name
+  // for the two full-name surfaces — the board row header + player dropdown.
   subjectName: string
+  subjectFullName: string
   gameNumber: number | null
   line: number | null        // shared line when every selection shares one (O/U); else null
   // Stat key (bet_markets.params.stat) for prop/team_prop markets; null otherwise.
@@ -34,7 +39,10 @@ export interface LineView {
   // arrays snapshotted at compose) for combo markets; null otherwise. Drives
   // the member label + the contains-me anti-tank pre-check.
   comboMemberIds: string[] | null
+  // Aligned with comboMemberIds: shortened "First L." forms for display, full
+  // forms for the player dropdown's name resolution.
   comboMemberNames: string[] | null
+  comboMemberFullNames: string[] | null
   // Optional left-column metadata line, shown where O/U renders "LINE 142.5".
   // Lets lineless markets (moneyline → "MONEYLINE · vs Team 3") carry context.
   subtitle?: string
@@ -314,7 +322,13 @@ export function normalizeBet(b: any): BetView {
       selectionId: sel?.id ?? '',
       marketId: mkt?.id ?? '',
       marketType: mkt?.market_type ?? '',
-      subjectName: mkt?.subject?.name ?? mkt?.title ?? '—',
+      // Sportsbook convention: player names render as "First L." (shortName);
+      // combo titles embed full names, so rebuild from the member snapshot.
+      subjectName:
+        mkt?.subject?.name != null ? shortName(mkt.subject.name)
+          : Array.isArray(mkt?.params?.member_names) && mkt.params.member_names.length
+            ? mkt.params.member_names.map(shortName).join(' + ')
+            : mkt?.title ?? '—',
       // Prefer the selection label (readable for every market type — a team name
       // for moneylines, whose `key` is a team uuid) over the raw key.
       pick: sel?.label ?? sel?.key ?? '',
@@ -332,7 +346,7 @@ export function normalizeBet(b: any): BetView {
   return {
     id: b.id,
     playerId: b.player_id,
-    bettorName: b.players?.name ?? '—',
+    bettorName: shortName(b.players?.name),
     stake: b.stake,
     status: b.status,
     settledAt: b.settled_at,
@@ -341,7 +355,11 @@ export function normalizeBet(b: any): BetView {
     line: Number(firstLeg?.line_at_placement ?? firstSel?.line ?? 0),
     statKey: firstMkt?.params?.stat ?? null,
     gameNumber: firstMkt?.game_number ?? null,
-    subjectName: firstMkt?.subject?.name ?? firstMkt?.title ?? '—',
+    subjectName:
+      firstMkt?.subject?.name != null ? shortName(firstMkt.subject.name)
+        : Array.isArray(firstMkt?.params?.member_names) && firstMkt.params.member_names.length
+          ? firstMkt.params.member_names.map(shortName).join(' + ')
+          : firstMkt?.title ?? '—',
     marketId: firstMkt?.id ?? '',
     marketType: firstMkt?.market_type ?? '',
     marketStatus: firstMkt?.status ?? '',
@@ -394,8 +412,12 @@ export function normalizeMarket(m: any): LineView {
   // (anti-tank self-inclusion checks) + the names snapshot (display label).
   const comboMemberIds: string[] | null =
     m.market_type === 'combo' && Array.isArray(m.params?.member_ids) ? m.params.member_ids : null
-  const comboMemberNames: string[] | null =
-    m.market_type === 'combo' && Array.isArray(m.params?.member_names) ? m.params.member_names : null
+  // Snapshot names kept in both forms: full for the dropdown/row header,
+  // shortened "First L." for every other display.
+  const comboMemberFullNames: string[] | null =
+    m.market_type === 'combo' && Array.isArray(m.params?.member_names)
+      ? m.params.member_names : null
+  const comboMemberNames: string[] | null = comboMemberFullNames?.map(shortName) ?? null
 
   return {
     marketId: m.id,
@@ -406,8 +428,12 @@ export function normalizeMarket(m: any): LineView {
     // name their member set; moneylines name a matchup via the market title
     // (subject is a game, so the player embed resolves null).
     subjectName:
+      m.subject?.name != null ? shortName(m.subject.name)
+        : comboMemberNames?.length ? comboMemberNames.join(' + ')
+          : teamNumber != null ? `Team ${teamNumber}` : m.title ?? '—',
+    subjectFullName:
       m.subject?.name ??
-      (comboMemberNames?.length ? comboMemberNames.join(' + ')
+      (comboMemberFullNames?.length ? comboMemberFullNames.join(' + ')
         : teamNumber != null ? `Team ${teamNumber}` : m.title ?? '—'),
     gameNumber: m.game_number ?? null,
     line: sharedLine,
@@ -415,6 +441,7 @@ export function normalizeMarket(m: any): LineView {
     teamId,
     comboMemberIds,
     comboMemberNames,
+    comboMemberFullNames,
     selections,
     inProgress: m.status === 'closed',
   }
@@ -834,7 +861,7 @@ export function usePinsinoData(playerId: string | null, viewSeasonId?: string | 
       const rawLineViews = [...marketsData, ...propData, ...comboData].map(normalizeMarket)
       const slotByPlayer = new Map<string, { teamId: string; playerName: string }>()
       for (const s of weekSlotsData) {
-        if (s.player_id) slotByPlayer.set(s.player_id, { teamId: s.team_id, playerName: s.players?.name ?? '—' })
+        if (s.player_id) slotByPlayer.set(s.player_id, { teamId: s.team_id, playerName: shortName(s.players?.name) })
       }
 
       // Week team topology for the board's with/against tinting.

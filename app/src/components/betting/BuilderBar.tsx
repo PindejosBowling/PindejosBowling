@@ -9,8 +9,11 @@ interface BuilderBarProps {
   statLabel: string
   // 'NIGHT' | 'GAME 2' — follows the board's scope filter.
   scopeLabel: string
-  // Server-previewed line; null = loading / not enough members.
+  // Server-previewed line; null = loading / fetch failed / not enough members.
   line: number | null
+  // The preview RPC is in flight (debounce included) — shows the calculating
+  // state instead of the fetch-failed one while line is still null.
+  lineLoading?: boolean
   // 2+ members picked (the compose RPC's minimum).
   minMembers: boolean
   // This exact combo is already staged — the CTA flips to remove it instead
@@ -30,26 +33,33 @@ export default function BuilderBar({
   statLabel,
   scopeLabel,
   line,
+  lineLoading,
   minMembers,
   alreadyStaged,
   blocked,
   onAdd,
   onCancel,
 }: BuilderBarProps) {
+  // Every pre-line state keeps the stat/scope the bettor committed to visible —
+  // once a member is picked the title becomes names only, so this is the one
+  // place that context lives.
+  const lineFailed = minMembers && line == null && !lineLoading && !blocked
   const sub = blocked
     ? 'This scope is closed for betting'
     : !minMembers
-      ? 'Pick 2+ players'
+      ? `Pick 2+ players · ${statLabel} · ${scopeLabel}`
       : line != null
         ? `OVER ${line.toFixed(1)} ${statLabel} · ${scopeLabel}`
-        : '…'
+        : lineLoading
+          ? `Calculating line… · ${statLabel} · ${scopeLabel}`
+          : `Line unavailable — tap a player to retry · ${statLabel}`
   return (
     <View style={styles.bar}>
       <View style={styles.info}>
         <Text style={styles.title} numberOfLines={1}>
           {memberNames.length > 0 ? memberNames.join(' + ') : `COMBO · ${statLabel}`}
         </Text>
-        <Text style={[styles.sub, blocked && styles.subBlocked]} numberOfLines={1}>{sub}</Text>
+        <Text style={[styles.sub, (blocked || lineFailed) && styles.subBlocked]} numberOfLines={1}>{sub}</Text>
       </View>
       <Button variant="ghost" label="Cancel" onPress={onCancel} style={styles.cancel} />
       <Button
@@ -89,7 +99,7 @@ const styles = StyleSheet.create({
   sub: {
     fontFamily: fonts.barlowCondensed,
     fontSize: 12,
-    color: colors.muted,
+    color: colors.text,
     marginTop: 1,
   },
   subBlocked: { color: colors.gold },
