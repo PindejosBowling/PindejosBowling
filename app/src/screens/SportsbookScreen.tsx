@@ -504,7 +504,11 @@ export default function SportsbookScreen() {
                 style={styles.scopePills}
               />
               {/* Combine — board-native combo building. Dim-but-pressable
-                  below 2 RSVP'd players (house convention: still toasts). */}
+                  below 2 RSVP'd players (house convention: still toasts).
+                  A stat pick already staged in the slip pre-seeds the combo:
+                  the chip skips the armed state and jumps straight to member
+                  picking on that line's stat + subject (most recent staged
+                  pick wins when several qualify). */}
               {currentWeekId != null && currentSeasonId != null && (
                 <PickChip
                   label="COMBO"
@@ -515,7 +519,19 @@ export default function SportsbookScreen() {
                       showToast("Not enough players RSVP'd in yet", 'error')
                       return
                     }
-                    setCombo(prev => (prev ? null : { stat: null, members: new Set() }))
+                    setCombo(prev => {
+                      if (prev) return null
+                      const seed = [...slipPicks].reverse().find(
+                        p => p.marketType === 'over_under' || (p.marketType === 'prop' && p.statKey != null)
+                      )
+                      if (seed) {
+                        return {
+                          stat: seed.marketType === 'over_under' ? 'total_pins' : seed.statKey!,
+                          members: new Set(seed.subjectPlayerId ? [seed.subjectPlayerId] : []),
+                        }
+                      }
+                      return { stat: null, members: new Set() }
+                    })
                   }}
                 />
               )}
@@ -581,7 +597,7 @@ export default function SportsbookScreen() {
                 )}
                 {comboArmed && (
                   <Text style={styles.combineHint}>
-                    TAP ANY STAT LINE TO START A COMBO — OR SWITCH PLAYER/SCOPE
+                    TAP ANY STAT LINE TO START A COMBO
                   </Text>
                 )}
                 {board.selectedPlayerId == null ? (
@@ -736,6 +752,7 @@ const styles = StyleSheet.create({
     letterSpacing: 1.5,
     color: colors.accent,
     marginBottom: 10,
+    textAlign: 'center',
   },
   // Stat-view member rows — same tinted-row language as the board's LineRow.
   memberRow: {
