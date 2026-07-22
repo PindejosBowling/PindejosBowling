@@ -293,6 +293,29 @@ export const betMarkets = {
       p_member_ids: memberIds, p_stat: stat, p_season_id: seasonId, p_n_games: nGames,
       p_week_id: weekId ?? undefined, p_game_number: gameNumber ?? undefined,
     }),
+  // Value-first pricing: quote ANY half-point line on one market (STABLE,
+  // read-only). NULL line → the seed rung (the pill's anchor). Posted rungs
+  // echo their posted odds verbatim; unposted lines price fresh inside the
+  // custom band. Returns { line, odds, posted, seed_line, seed_odds,
+  // min_line, max_line } — odds null = "line unavailable". The distribution
+  // itself never leaves the server.
+  priceMarketLine: (marketId: string, line?: number | null) =>
+    supabase.rpc('market_price_line', {
+      p_market_id: marketId,
+      ...(line != null ? { p_line: line } : {}),
+    }),
+  // The same quote for a combo member set (BuilderBar's value editor). An
+  // existing open market's posted rungs echo verbatim and its seed anchors
+  // the editor; unposted lines price fresh (the rung mints at compose time).
+  priceComboLine: (
+    memberIds: string[], stat: string, seasonId: string, nGames = 1,
+    weekId?: string | null, gameNumber?: number | null, line?: number | null,
+  ) =>
+    supabase.rpc('combo_price_line', {
+      p_member_ids: memberIds, p_stat: stat, p_season_id: seasonId, p_n_games: nGames,
+      p_week_id: weekId ?? undefined, p_game_number: gameNumber ?? undefined,
+      ...(line != null ? { p_line: line } : {}),
+    }),
 }
 
 export const bets = {
@@ -346,6 +369,26 @@ export const bets = {
   place: (selectionIds: string[], stake: number, customLineId?: string, insuranceItemId?: string, crutchItemId?: string, boostItemId?: string) =>
     // undefined is dropped from the RPC payload → the param's NULL default applies.
     supabase.rpc('place_house_bet', { p_selection_ids: selectionIds, p_stake: stake, p_custom_line_id: customLineId, p_insurance_item_id: insuranceItemId, p_crutch_item_id: crutchItemId, p_boost_item_id: boostItemId }),
+  // Value-first placement (SECURITY DEFINER): picks are line-shaped —
+  // { marketId, line, quotedOdds } — the server prices each line
+  // authoritatively, mints the over/under rung pair if absent, and routes
+  // into place_house_bet. A quote drifted beyond quote_tolerance rejects
+  // with 'ODDS_MOVED|<market_id>|<quoted>|<fresh>' (parse for the confirm
+  // sheet); items pass through exactly like bets.place.
+  placeAtLines: (
+    picks: { marketId: string; line: number; quotedOdds: number }[],
+    stake: number,
+    insuranceItemId?: string, crutchItemId?: string, boostItemId?: string,
+  ) =>
+    supabase.rpc('place_bet_at_lines', {
+      p_picks: picks.map(p => ({
+        market_id: p.marketId, line: p.line, quoted_odds: p.quotedOdds,
+      })) as unknown as Json,
+      p_stake: stake,
+      p_insurance_item_id: insuranceItemId,
+      p_crutch_item_id: crutchItemId,
+      p_boost_item_id: boostItemId,
+    }),
   // Admin: total undo of a placed bet (removes ledger rows + bet, re-opens market).
   cancel: (betId: string) =>
     supabase.rpc('cancel_bet', { p_bet_id: betId }),
@@ -359,26 +402,37 @@ export const bets = {
   // gating). Returns { bet_id, combos: [{market_id, line, deduped}] }.
   composeCombo: (
     weekId: string,
-    combos: { memberIds: string[]; stat: string; scope: 'game' | 'night'; gameNumber: number | null; line?: number | null }[],
+    combos: { memberIds: string[]; stat: string; scope: 'game' | 'night'; gameNumber: number | null; line?: number | null; quotedOdds?: number | null }[],
     stake: number,
     extraSelectionIds?: string[],
     insuranceItemId?: string,
     crutchItemId?: string,
     boostItemId?: string,
+    extraPicks?: { marketId: string; line: number; quotedOdds: number }[],
   ) =>
     supabase.rpc('compose_combo_bet', {
       p_week_id: weekId,
       p_combos: combos.map(c => ({
         member_ids: c.memberIds, stat: c.stat, scope: c.scope,
         ...(c.gameNumber != null ? { game_number: c.gameNumber } : {}),
-        // Chosen ladder rung (BuilderBar stepper); omitted = the seed rung.
+        // Chosen value (the BuilderBar's editor); omitted = the seed rung.
+        // With quoted_odds attached, an unposted line MINTS on demand
+        // (tolerance-checked); without it, posted rungs only.
         ...(c.line != null ? { line: c.line } : {}),
+        ...(c.line != null && c.quotedOdds != null ? { quoted_odds: c.quotedOdds } : {}),
       })) as unknown as Json,
       p_stake: stake,
       p_extra_selection_ids: extraSelectionIds,
       p_insurance_item_id: insuranceItemId,
       p_crutch_item_id: crutchItemId,
       p_boost_item_id: boostItemId,
+      // Line-shaped regular legs riding the same ticket (minted via the same
+      // helper) — a combo + custom-line single stays ONE bet.
+      ...(extraPicks && extraPicks.length
+        ? { p_extra_picks: extraPicks.map(p => ({
+              market_id: p.marketId, line: p.line, quoted_odds: p.quotedOdds,
+            })) as unknown as Json }
+        : {}),
     }),
 }
 

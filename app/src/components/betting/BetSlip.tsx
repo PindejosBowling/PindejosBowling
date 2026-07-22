@@ -14,10 +14,14 @@ import EnergyDrinkToggle from '../auction/EnergyDrinkToggle'
 import { betLineSuffix } from '../../hooks/usePinsinoData'
 import { fmtOdds } from '../../utils/bets'
 
-// One individual pick staged in the slip — a chosen selection on a market.
-// Combines with other picks into a parlay, or places as its own single.
+// One individual pick staged in the slip — a chosen VALUE on a market (the
+// line the bettor intends to beat, with its quoted price). Combines with
+// other picks into a parlay, or places as its own single. Placement is
+// line-shaped (place_bet_at_lines): selectionId is set only when the value
+// sits on a posted rung (display/dedup convenience) — a custom value carries
+// null and the server mints the rung at placement.
 export interface SlipPick {
-  selectionId: string
+  selectionId: string | null
   selectionKey: string
   selectionLabel: string
   marketId: string
@@ -69,12 +73,13 @@ type SlipMode = 'singles' | 'parlay'
 
 // A normalized placement request: at most one parlay (the combined picks +
 // combo specs) plus a list of standalone single bets (singles-mode picks and
-// combos, and/or every special). The provider routes combo-bearing entries
-// through compose_combo_bet and the rest through bets.place. Items attach to
-// the sole bet only.
+// combos, and/or every special). Regular picks are referenced by MARKET id —
+// the provider resolves them to line-shaped {market_id, line, quoted_odds}
+// legs (place_bet_at_lines / compose extra_picks); specials keep resolved
+// selection ids (bets.place). Items attach to the sole bet only.
 export interface SlipSubmit {
-  parlay: { selectionIds: string[]; comboKeys: string[]; stake: number } | null
-  singles: { selectionIds: string[]; comboKey?: string; lineId?: string; stake: number }[]
+  parlay: { pickMarketIds: string[]; comboKeys: string[]; stake: number } | null
+  singles: { pickMarketIds?: string[]; selectionIds?: string[]; comboKey?: string; lineId?: string; stake: number }[]
   insure: boolean
   crutch: boolean
   boost: boolean
@@ -212,13 +217,13 @@ export default function BetSlip({
     if (!canPlace) return
     const singles: SlipSubmit['singles'] = []
     if (!parlayPicks) {
-      for (const p of picks) singles.push({ selectionIds: [p.selectionId], stake: parseInt(singleWagers[p.marketId], 10) })
-      for (const c of combos) singles.push({ selectionIds: [], comboKey: c.key, stake: parseInt(singleWagers[c.key], 10) })
+      for (const p of picks) singles.push({ pickMarketIds: [p.marketId], stake: parseInt(singleWagers[p.marketId], 10) })
+      for (const c of combos) singles.push({ comboKey: c.key, stake: parseInt(singleWagers[c.key], 10) })
     }
     for (const sp of specials) singles.push({ selectionIds: sp.selectionIds, lineId: sp.lineId, stake: parseInt(specialWagers[sp.key], 10) })
     onPlace({
       parlay: parlayPicks
-        ? { selectionIds: picks.map(p => p.selectionId), comboKeys: combos.map(c => c.key), stake: parlayNum }
+        ? { pickMarketIds: picks.map(p => p.marketId), comboKeys: combos.map(c => c.key), stake: parlayNum }
         : null,
       singles,
       insure: oneBet && insure,

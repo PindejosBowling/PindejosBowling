@@ -1724,12 +1724,15 @@ export type Database = {
       odds_engine_config: {
         Row: {
           created_at: string
+          custom_odds_max: number | null
+          custom_odds_min: number | null
           half_life_games: number
           id: string
           is_enabled: boolean
           odds_max: number
           odds_min: number
           prior_weight_games: number
+          quote_tolerance: number
           rungs_per_side: number
           season_id: string | null
           spacing_count: number
@@ -1742,12 +1745,15 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          custom_odds_max?: number | null
+          custom_odds_min?: number | null
           half_life_games?: number
           id?: string
           is_enabled?: boolean
           odds_max?: number
           odds_min?: number
           prior_weight_games?: number
+          quote_tolerance?: number
           rungs_per_side?: number
           season_id?: string | null
           spacing_count?: number
@@ -1760,12 +1766,15 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          custom_odds_max?: number | null
+          custom_odds_min?: number | null
           half_life_games?: number
           id?: string
           is_enabled?: boolean
           odds_max?: number
           odds_min?: number
           prior_weight_games?: number
+          quote_tolerance?: number
           rungs_per_side?: number
           season_id?: string | null
           spacing_count?: number
@@ -3209,6 +3218,10 @@ export type Database = {
           player_name: string
         }[]
       }
+      bet_mint_rung_internal: {
+        Args: { p_line: number; p_market_id: string; p_quoted_odds: number }
+        Returns: string
+      }
       broadcast_cancel: { Args: { p_id: string }; Returns: undefined }
       broadcast_reach: {
         Args: { p_category_id: string; p_target_player_ids?: string[] }
@@ -3248,6 +3261,18 @@ export type Database = {
         }
         Returns: Json
       }
+      combo_price_line: {
+        Args: {
+          p_game_number?: number
+          p_line?: number
+          p_member_ids: string[]
+          p_n_games?: number
+          p_season_id: string
+          p_stat: string
+          p_week_id?: string
+        }
+        Returns: Json
+      }
       combo_seed_line: {
         Args: {
           p_member_ids: string[]
@@ -3262,6 +3287,7 @@ export type Database = {
           p_boost_item_id?: string
           p_combos: Json
           p_crutch_item_id?: string
+          p_extra_picks?: Json
           p_extra_selection_ids?: string[]
           p_insurance_item_id?: string
           p_stake: number
@@ -3413,6 +3439,10 @@ export type Database = {
           strikes_per_game: number
         }[]
       }
+      market_price_line: {
+        Args: { p_line?: number; p_market_id: string }
+        Returns: Json
+      }
       materialize_due_recurring_broadcasts: { Args: never; Returns: undefined }
       my_bid_amount: { Args: { p_auction_id: string }; Returns: number }
       odds_engine_build_ladder: {
@@ -3439,12 +3469,15 @@ export type Database = {
         Args: { p_season_id: string }
         Returns: {
           created_at: string
+          custom_odds_max: number | null
+          custom_odds_min: number | null
           half_life_games: number
           id: string
           is_enabled: boolean
           odds_max: number
           odds_min: number
           prior_weight_games: number
+          quote_tolerance: number
           rungs_per_side: number
           season_id: string | null
           spacing_count: number
@@ -3466,6 +3499,10 @@ export type Database = {
         Args: { p_season_id: string; p_stat: string }
         Returns: Record<string, unknown>
       }
+      odds_engine_market_distribution: {
+        Args: { p_market_id: string }
+        Returns: Record<string, unknown>
+      }
       odds_engine_mint_ladder: {
         Args: {
           p_market_id: string
@@ -3481,6 +3518,7 @@ export type Database = {
         Returns: undefined
       }
       odds_engine_norm_cdf: { Args: { z: number }; Returns: number }
+      odds_engine_norm_ppf: { Args: { p: number }; Returns: number }
       odds_engine_player_stat: {
         Args: { p_player_id: string; p_season_id: string; p_stat: string }
         Returns: Record<string, unknown>
@@ -3496,6 +3534,23 @@ export type Database = {
           p_variance: number
         }
         Returns: Record<string, unknown>
+      }
+      odds_engine_quote_internal: {
+        Args: {
+          p_enabled: boolean
+          p_line: number
+          p_mean: number
+          p_n_games: number
+          p_odds_max: number
+          p_odds_min: number
+          p_posted_odds: number
+          p_range_hi: number
+          p_range_lo: number
+          p_seed_line: number
+          p_seed_odds: number
+          p_variance: number
+        }
+        Returns: Json
       }
       odds_engine_reladder_if_changed: {
         Args: {
@@ -3541,6 +3596,16 @@ export type Database = {
       place_auction_bid: {
         Args: { p_amount: number; p_auction_id: string }
         Returns: undefined
+      }
+      place_bet_at_lines: {
+        Args: {
+          p_boost_item_id?: string
+          p_crutch_item_id?: string
+          p_insurance_item_id?: string
+          p_picks: Json
+          p_stake: number
+        }
+        Returns: string
       }
       place_house_bet: {
         Args: {

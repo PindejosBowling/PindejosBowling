@@ -1,10 +1,14 @@
 # Combo Lines — player-composed member-set aggregate markets
 
-> **OddsEngine (2026-07-22):** combos are fair-priced ladders now.
-> `combo_preview_ladder` feeds the BuilderBar's ‹ › line stepper (posted rungs
-> verbatim when the combo_key already has an open market); `compose_combo_bet`
-> specs take an optional `"line"` (chosen rung, NULL = seed) and mint the full
-> ladder on new markets. `combo_seed_line` is unchanged as the ladder center.
+> **OddsEngine + value-first lines (2026-07-22):** combos are fair-priced and
+> **value-first** — the BuilderBar carries the shared `◀ value ▶` editor
+> (`LineStepper`), priced live by `combo_price_line` (posted rungs verbatim
+> when the combo_key already has an open market; ANY other half-point line
+> fresh). `compose_combo_bet` specs take optional `"line"` (NULL = seed) and
+> `"quoted_odds"` — a quoted unposted line MINTS on demand (fresh and dedup
+> paths); new `p_extra_picks` parlays line-shaped regular legs on the same
+> bet. `combo_seed_line` is unchanged as the anchor; ⚰️ `combo_preview_ladder`
+> + `LineValueSheet` + `useComboLinePreview` retired (RPC kept one release).
 > See [odds-engine.md](odds-engine.md).
 
 The replacement for team props (and the reason moneyline generation retired with
@@ -119,8 +123,9 @@ removes the card with the bet. Dedup-only tickets publish nothing (beyond
 `member_ids` contains the bettor → RAISE. Backing the over on a combo
 containing yourself is allowed (incentive-aligned, like self-over on a player
 prop). The board's under-hidden UI policy applies to combos
-(`isSelectionHiddenInUI`), and `SportsbookScreen.isSelfTank` pre-checks via
-`LineView.comboMemberIds` — the trigger is authoritative.
+(`isSelectionHiddenInUI`) — since the value-first board offers ONLY overs, no
+board tap can bet against a subject and the screen's client pre-check is
+gone; the trigger is authoritative.
 
 ## RSVP-out auto-void — erasure, not void (decision: final)
 
@@ -190,20 +195,24 @@ params->>clock.eq.lanetalk)` alongside props and legacy team props.
   `stageCombo`. Combos render in the slip as their own ticket cards (COMBO
   header) or as tagged parlay-ticket legs, count as pick units for the
   Singles/Parlay mode, and parlay freely with regular picks and other combos
-  (odds 2^units). `placeSlip` routes any combo-bearing entry through
-  `bets.composeCombo` (parlay → one call with all specs + the regular picks'
-  selection ids as extras; a singles-mode combo → one call with its lone
-  spec) and everything else through `bets.place`. Item toggles pass through
-  when the slip is one bet.
+  (parlay odds = the true product of leg odds). `placeSlip` routes any
+  combo-bearing entry through `bets.composeCombo` (parlay → one call with all
+  specs carrying `quoted_odds` + the regular picks as line-shaped
+  `extraPicks`; a singles-mode combo → one call with its lone spec), pick-only
+  entries through `bets.placeAtLines`, and specials through `bets.place`.
+  `ODDS_MOVED` rejections drive the odds-moved confirm + bounded retry. Item
+  toggles pass through when the slip is one bet.
 - `SportsbookScreen` — **board-native combine mode** (2026-07-21, replacing
   the ⚰️ `ComboComposerSheet` + its "+ Build a Combo" CTA): a COMBINE chip in
   the board's filter row arms the mode (dim-and-toast under 2 RSVP'd); the
   next stat-pill tap seeds the combo (score O/U → `total_pins`, a prop → its
   `statKey`) and pivots the board to a member-picking list (every RSVP'd-in
   player, viewer first, solo line shown as context); the floating `BuilderBar`
-  (slip-bar footprint; the provider's `setSlipBarHidden` yields it) shows the
-  debounced live line (`useComboLinePreview` → `betMarkets.previewComboLine`)
-  and Add/Cancel — Add flips to "Remove" when the exact key is already staged.
+  (slip-bar footprint; the provider's `setSlipBarHidden` yields it) carries
+  the `◀ value ▶` editor priced live (`useLinePreview({kind:'combo'})` →
+  `betMarkets.priceComboLine`, seed-anchored, `comboLineValue` resets on
+  combo-identity change) and Add/Cancel — Add flips to "Remove" when the
+  exact key is already staged.
   Combo scope follows the board's scope filter (Weekly → night, Game N → that
   game; mid-build switches re-preview); an in-progress scope disables Add.
   Placed combos still flow through the `LineView → LineRow` seam with zero

@@ -8,7 +8,7 @@ import {
   useState,
   type ReactNode,
 } from 'react'
-import { View, StyleSheet } from 'react-native'
+import { View, StyleSheet, Alert, Platform } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import BetSlip, { type SlipPick, type SlipSpecial, type SlipCombo, type SlipSubmit } from './BetSlip'
 import {
@@ -18,6 +18,7 @@ import {
   type SelectionView,
 } from '../../hooks/usePinsinoData'
 import { computeBalance } from '../../utils/ledger'
+import { fmtOdds } from '../../utils/bets'
 import { useAuthStore } from '../../stores/authStore'
 import { useUiStore } from '../../stores/uiStore'
 import {
@@ -45,6 +46,9 @@ interface BetSlipContextValue {
   // Staging (board taps hand in a fully-built pick; specials hand in a bundle;
   // the combo composer hands in a market-less combo spec).
   stagePick: (pick: SlipPick) => void
+  // Live re-stage: value edits on an already-staged market patch its pick in
+  // place (line/odds/selectionId) — the slip chip and ticket re-render live.
+  updateSlipPick: (marketId: string, patch: Partial<SlipPick>) => void
   removeSlipPick: (marketId: string) => void
   stageSpecial: (special: SlipSpecial) => void
   removeSlipSpecial: (key: string) => void
@@ -74,6 +78,7 @@ const BetSlipContext = createContext<BetSlipContextValue>({
   slipSpecials: [],
   slipCombos: [],
   stagePick: NOOP,
+  updateSlipPick: NOOP,
   removeSlipPick: NOOP,
   stageSpecial: NOOP,
   removeSlipSpecial: NOOP,
@@ -187,12 +192,17 @@ export function BetSlipProvider({ children }: { children: ReactNode }) {
   const stagePick = useCallback((pick: SlipPick) => {
     setSlipPicks(prev => {
       const existing = prev.find(p => p.marketId === pick.marketId)
-      // Re-staging the same side removes it; a different side on that market replaces it.
-      if (existing && existing.selectionId === pick.selectionId) {
+      // Re-staging the same VALUE removes it; a different value on that market
+      // replaces it (picks are line-shaped — the value IS the identity).
+      if (existing && existing.line === pick.line) {
         return prev.filter(p => p.marketId !== pick.marketId)
       }
       return [...prev.filter(p => p.marketId !== pick.marketId), pick]
     })
+  }, [])
+
+  const updateSlipPick = useCallback((marketId: string, patch: Partial<SlipPick>) => {
+    setSlipPicks(prev => prev.map(p => (p.marketId === marketId ? { ...p, ...patch } : p)))
   }, [])
 
   const removeSlipPick = useCallback((marketId: string) => {
@@ -306,13 +316,39 @@ export function BetSlipProvider({ children }: { children: ReactNode }) {
     setSlipOpen(true)
   }, [enabled, showToast, refreshContext])
 
+  // The placement rejected because a quote drifted beyond quote_tolerance —
+  // 'ODDS_MOVED|<market_id>|<quoted>|<fresh>' (bet_mint_rung_internal).
+  const parseOddsMoved = (msg: string | undefined) => {
+    const m = /ODDS_MOVED\|([0-9a-f-]{36})\|([\d.]+)\|([\d.]+)/.exec(msg ?? '')
+    return m ? { marketId: m[1], quoted: Number(m[2]), fresh: Number(m[3]) } : null
+  }
+
+  // "Odds moved ×3.40 → ×3.15 — place at the new price?" RN Alert on native;
+  // window.confirm on web (react-native-web's Alert renders nothing).
+  const confirmOddsMoved = (quoted: number, fresh: number) =>
+    new Promise<boolean>(resolve => {
+      const msg = `The price moved ${fmtOdds(quoted)} → ${fmtOdds(fresh)} while you were betting. Place at the new price?`
+      if (Platform.OS === 'web') {
+        resolve(typeof window !== 'undefined' && window.confirm(msg))
+        return
+      }
+      Alert.alert('Odds moved', msg, [
+        { text: 'Cancel', style: 'cancel', onPress: () => resolve(false) },
+        { text: 'Place bet', onPress: () => resolve(true) },
+      ], { cancelable: true, onDismiss: () => resolve(false) })
+    })
+
   // Places the whole slip: at most one parlay (the combined picks + combo
   // specs) plus each standalone single (singles-mode picks/combos + every
-  // special, which carries its lineId tag). Combo-bearing entries route
-  // through compose_combo_bet — the combo markets are created atomically WITH
-  // the bet — everything else through bets.place. Items attach to the sole
-  // bet only (BetSlip gates the flags). Sequential; reports partial placement
-  // on failure.
+  // special, which carries its lineId tag). Regular picks are LINE-shaped —
+  // {market_id, line, quoted_odds} through place_bet_at_lines (the server
+  // prices the value authoritatively and mints the rung on demand); combo
+  // entries route through compose_combo_bet with any parlayed picks riding as
+  // extra_picks (still ONE bet); specials keep the selection-resolved
+  // bets.place path. An ODDS_MOVED rejection patches the drifted price and
+  // asks the bettor to confirm the fresh one (bounded retries). Items attach
+  // to the sole bet only (BetSlip gates the flags). Sequential; reports
+  // partial placement on failure.
   const placeSlip = useCallback(async ({ parlay, singles, insure, crutch, boost }: SlipSubmit) => {
     if (!enabled) return
     const total = (parlay?.stake ?? 0) + singles.reduce((s, e) => s + e.stake, 0)
@@ -321,39 +357,84 @@ export function BetSlipProvider({ children }: { children: ReactNode }) {
     if (total > balance) { showToast('Total stake exceeds your balance', 'error'); return }
 
     const comboByKey = new Map(slipCombos.map(c => [c.key, c]))
-    const toSpec = (c: SlipCombo) => ({
-      memberIds: c.memberIds, stat: c.stat, scope: c.scope, gameNumber: c.gameNumber,
-      // The chosen ladder rung; compose re-validates it server-side.
-      line: c.line,
-    })
+    const pickByMarket = new Map(slipPicks.map(p => [p.marketId, p]))
     const itemArgs = (): [string | undefined, string | undefined, string | undefined] => [
       insure ? tickets[0] : undefined, crutch ? crutches[0] : undefined, boost ? boosts[0] : undefined,
     ]
+
+    // One bet (parlay or single): resolve picks/combos to line-shaped legs and
+    // run the placement, re-confirming through bounded ODDS_MOVED rounds.
+    // Returns null on success, else the error message to toast.
+    const placeOne = async (
+      pickMarketIds: string[],
+      comboKeys: string[],
+      stake: number,
+      items: [string | undefined, string | undefined, string | undefined],
+    ): Promise<string | null> => {
+      const legs: { marketId: string; line: number; quotedOdds: number }[] = []
+      for (const id of pickMarketIds) {
+        const p = pickByMarket.get(id)
+        if (!p || p.line == null) return 'A staged pick went stale — re-add it from the board'
+        legs.push({ marketId: p.marketId, line: p.line, quotedOdds: p.odds })
+      }
+      const specs = comboKeys
+        .map(k => comboByKey.get(k))
+        .filter((c): c is SlipCombo => !!c)
+        .map(c => ({ ...c }))
+
+      for (let attempt = 0; attempt < 3; attempt++) {
+        const { error } = specs.length > 0
+          ? await bets.composeCombo(
+              specs[0].weekId,
+              specs.map(c => ({
+                memberIds: c.memberIds, stat: c.stat, scope: c.scope,
+                gameNumber: c.gameNumber, line: c.line, quotedOdds: c.odds,
+              })),
+              stake, undefined, ...items,
+              legs.length > 0 ? legs : undefined)
+          : await bets.placeAtLines(legs, stake, ...items)
+        if (!error) return null
+
+        const moved = parseOddsMoved(error.message)
+        if (!moved) return error.message
+
+        // Patch the drifted leg (market match) or, failing that, the combo
+        // spec carrying the rejected quote (a dedup-mint reports the combo's
+        // market id, which the slip doesn't know pre-compose).
+        const leg = legs.find(l => l.marketId === moved.marketId)
+        const spec = leg ? undefined : (specs.find(c => c.odds === moved.quoted) ?? specs[0])
+        if (leg) leg.quotedOdds = moved.fresh
+        else if (spec) spec.odds = moved.fresh
+        else return error.message
+
+        // Reflect reality on the staged slip either way (cancel leaves the
+        // ticket showing the price the book will actually honor).
+        if (leg) updateSlipPick(moved.marketId, { odds: moved.fresh })
+        else if (spec) setSlipCombos(prev => prev.map(c => (c.key === spec.key ? { ...c, odds: moved.fresh } : c)))
+
+        const ok = await confirmOddsMoved(moved.quoted, moved.fresh)
+        if (!ok) return 'Bet not placed — the slip now shows the current price'
+      }
+      return 'The odds keep moving — try placing again'
+    }
 
     setPlacing(true)
     let placed = 0
     const totalBets = (parlay ? 1 : 0) + singles.length
     try {
       if (parlay) {
-        const parlayCombos = parlay.comboKeys
-          .map(k => comboByKey.get(k))
-          .filter((c): c is SlipCombo => !!c)
-        const { error } = parlayCombos.length > 0
-          ? await bets.composeCombo(
-              parlayCombos[0].weekId, parlayCombos.map(toSpec), parlay.stake,
-              parlay.selectionIds.length > 0 ? parlay.selectionIds : undefined,
-              ...itemArgs())
-          : await bets.place(parlay.selectionIds, parlay.stake, undefined, ...itemArgs())
-        if (error) { showToast(error.message, 'error'); return }
+        const err = await placeOne(parlay.pickMarketIds, parlay.comboKeys, parlay.stake, itemArgs())
+        if (err) { showToast(err, 'error'); return }
         placed += 1
       }
       for (const e of singles) {
-        const combo = e.comboKey ? comboByKey.get(e.comboKey) : undefined
-        const { error } = combo
-          ? await bets.composeCombo(combo.weekId, [toSpec(combo)], e.stake, undefined, ...itemArgs())
-          : await bets.place(e.selectionIds, e.stake, e.lineId, ...itemArgs())
-        if (error) {
-          showToast(placed > 0 ? `Placed ${placed} — then: ${error.message}` : error.message, 'error')
+        // Specials stay selection-resolved (their bundle is RPC-validated as a
+        // unit and may legitimately include an under).
+        const err = e.lineId != null
+          ? (await bets.place(e.selectionIds ?? [], e.stake, e.lineId, ...itemArgs())).error?.message ?? null
+          : await placeOne(e.pickMarketIds ?? [], e.comboKey ? [e.comboKey] : [], e.stake, itemArgs())
+        if (err) {
+          showToast(placed > 0 ? `Placed ${placed} — then: ${err}` : err, 'error')
           return
         }
         placed += 1
@@ -367,7 +448,7 @@ export function BetSlipProvider({ children }: { children: ReactNode }) {
       await refreshContext()
       hostReload.current?.()
     }
-  }, [enabled, balance, slipCombos, tickets, crutches, boosts, showToast, clearSlip, refreshContext])
+  }, [enabled, balance, slipPicks, slipCombos, tickets, crutches, boosts, showToast, clearSlip, refreshContext, updateSlipPick])
 
   const value = useMemo<BetSlipContextValue>(() => ({
     enabled,
@@ -375,6 +456,7 @@ export function BetSlipProvider({ children }: { children: ReactNode }) {
     slipSpecials,
     slipCombos,
     stagePick,
+    updateSlipPick,
     removeSlipPick,
     stageSpecial,
     removeSlipSpecial,
@@ -387,7 +469,7 @@ export function BetSlipProvider({ children }: { children: ReactNode }) {
     ghosts,
     reloadInventory: refreshContext,
     registerReload,
-  }), [enabled, slipPicks, slipSpecials, slipCombos, stagePick, removeSlipPick, stageSpecial, removeSlipSpecial, stageCombo, removeSlipCombo, clearSlip, openSlip, copyBet, ghosts, refreshContext, registerReload])
+  }), [enabled, slipPicks, slipSpecials, slipCombos, stagePick, updateSlipPick, removeSlipPick, stageSpecial, removeSlipSpecial, stageCombo, removeSlipCombo, clearSlip, openSlip, copyBet, ghosts, refreshContext, registerReload])
 
   return (
     <BetSlipContext.Provider value={value}>

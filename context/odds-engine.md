@@ -72,14 +72,61 @@ refund-on-market-death paths are unchanged.
 
 ## Combos
 
-`combo_preview_ladder(member_ids, stat, season, n_games[, week_id, game_number])`
-returns the priced over-rungs as jsonb `[{line, odds, is_seed}]` — and when an
-open market already exists for the same `combo_key`, returns THAT market's
-posted rungs verbatim (a second bettor can only take posted lines).
-`compose_combo_bet` specs take an optional `"line"` (NULL = seed): new markets
-mint the FULL ladder then bet the chosen rung's over; the dedup path requires
-the chosen line to be posted (raises otherwise). `v_combos_out` now carries
-`odds`.
+`combo_price_line(member_ids, stat, season, n_games[, week_id, game_number, line])`
+quotes ANY half-point line for a member set (see Value-first lines below) —
+an existing open market's posted rungs echo verbatim and its seed anchors;
+unposted lines price fresh. `compose_combo_bet` specs take an optional
+`"line"` (NULL = seed) and, since value-first, `"quoted_odds"` — a quoted
+unposted line mints on demand on BOTH the fresh and dedup paths; without a
+quote the legacy posted-rungs-only behavior holds. `v_combos_out` carries
+`odds`. (⚰️ `combo_preview_ladder` is deprecated — kept one release for
+deployed clients.)
+
+## Value-first lines (2026-07-22, same day)
+
+The bettor picks the **VALUE they intend to beat**; the odds attach to the
+value. Any half-point line is quotable and bettable — the minted ladder is
+invisible infrastructure (the seed anchors the editor; posted rungs are the
+book's standing offers).
+
+- **Preview** (client-granted, STABLE, never expose mean/variance):
+  `market_price_line(market_id, line?)` for any priceable market and
+  `combo_price_line(member_ids, stat, season, n_games, week?, game?, line?)`
+  for a member set being composed. Return
+  `{line, odds, posted, seed_line, seed_odds, min_line, max_line}` — `odds`
+  null = "line unavailable". Posted rungs (incl. a frozen market's) echo
+  their posted odds **verbatim**; unposted lines price fresh inside the
+  **custom band** (`custom_odds_min/max`, NULL → `odds_min/max`). Band edges
+  come from `odds_engine_norm_ppf` (Acklam inverse CDF) in closed form,
+  snapped inward to half-points; an unposted SEED (fresh combo) force-prices
+  clamped, mirroring the minter. Engine off → only posted lines quote and the
+  band collapses onto the seed. Shared internals:
+  `odds_engine_market_distribution(market_id)` (one market → the generators'
+  exact mean/variance/n/range) + `odds_engine_quote_internal`.
+- **Placement = mint-on-demand**: `place_bet_at_lines(picks jsonb, stake,
+  items…)` takes line-shaped picks `{market_id, line, quoted_odds}`;
+  `bet_mint_rung_internal` re-prices each line authoritatively — posted rung
+  → reuse (quote tolerance-checked); absent → mint the over/under **pair** at
+  the fresh zero-vig price (client odds are never stored; unders stay
+  UI-hidden but must exist for settlement + PvP counterparty derivation).
+  Keys `over:<line>`/`under:<line>` via `trim_scale` (matches the ladder
+  minter's text form); `sort_order = 100 + 2·line` (after the ladder's 0..13;
+  client sorts by line). Race-safe: `ON CONFLICT (market_id, key) DO NOTHING`
+  + re-read. Then the untouched `place_house_bet` core — atomic, so **no
+  betless custom rung can persist** (failed placement rolls the mint back).
+- **Quote drift**: `quote_tolerance` (config, default 0.10 ≥ the 0.05 odds
+  rounding step). A drifted quote rejects with the machine-parseable
+  `ODDS_MOVED|<market_id>|<quoted>|<fresh>`; the app patches the staged price
+  and asks "odds moved — place at the new price?" (bounded retries).
+- **Combos**: `compose_combo_bet` specs carry optional `quoted_odds` — with
+  it an unposted chosen line MINTS (fresh AND dedup paths); without it,
+  legacy posted-rungs-only behavior (deployed-client compatible). New
+  `p_extra_picks` lets regular line-shaped legs ride the same ticket (one
+  bet). `combo_preview_ladder` is deprecated (kept one release for deployed
+  clients).
+- **Accepted quirk**: a custom rung minted on a bet-frozen market prices off
+  the CURRENT model while its posted neighbors keep frozen odds — the book
+  is honest; the band still bounds it.
 
 ## Config — `odds_engine_config`
 
@@ -94,25 +141,23 @@ which doubles as the integration proof).
 ## App layer
 
 - `SelectionView.side` (normalizeMarket; key-prefix fallback for cached rows).
-  Side-aware seams: `selectionBetsAgainstSubject`, `isSelectionHiddenInUI`,
-  `selectionButtonLabel` (now appends the rung's price: `"4.5+ STRIKES ×2.40"`;
-  `fmtOdds` lives in `utils/bets.ts`).
-- **Board** (`LineRow` → `LinePill`): each market gets its own FULL-WIDTH
-  pill row (condition left, payout right). Laddered pills carry a ▾ toggle
-  that expands the pill's own inline value selector — a horizontal strip of
-  every posted value with its payout; tapping a value stages that outcome
-  ("bet on the outcome you want; the odds derive from the selection").
-  Tapping the pill body stages/unstages the displayed value. Armed combine
-  mode hides the expander (taps seed the combo).
-- **Combos** (`BuilderBar` + `useComboLinePreview`): the hook returns
-  `{ladder, seedIndex, loading}` via `betMarkets.previewComboLadder`;
-  tapping the BuilderBar's line block opens the same `LineValueSheet`
-  (picking sets `comboRungIndex`; Add stages). The screen owns
-  `comboRungIndex` (snaps to seed on combo-identity change); `SlipCombo`
-  carries the chosen `line` + `odds`; `BetSlipProvider.toSpec` passes `line`
-  to compose.
-- **Slip**: parlay odds are the true product of leg odds (was `2^n`); combo
-  ticket cards show the previewed rung price.
+  Side-aware seams: `selectionBetsAgainstSubject`, `isSelectionHiddenInUI`
+  (`fmtOdds` lives in `utils/bets.ts`).
+- **Board** (`LineRow.renderPill` → `LinePill` + shared `LineStepper`):
+  value-first pills — `◀ value ▶ CONDITION … ×odds`; arrows nudge ±0.5 in the
+  quoted band, tap-the-number types any half-point, the price follows the
+  value live (`useLinePreview` → `betMarkets.priceMarketLine`, one active
+  edit at a time, 250ms debounce). Pill-body tap stages the displayed value;
+  staged picks re-price live (`updateSlipPick`). The ⚰️ rung-chip strip and
+  `LineValueSheet` are retired.
+- **Combos** (`BuilderBar`): the same `LineStepper` editor priced by
+  `useLinePreview({kind:'combo'})` → `betMarkets.priceComboLine`; the quote's
+  `seed_line` anchors; Add stages the chosen `line` + quoted `odds`.
+- **Slip** (`BetSlipProvider.placeSlip`): regular picks are line-shaped →
+  `bets.placeAtLines`; combo entries → `bets.composeCombo` (specs with
+  `quoted_odds`, parlayed picks as `extraPicks`); specials keep `bets.place`.
+  `ODDS_MOVED` rejections drive the odds-moved confirm + bounded retry.
+  Parlay odds are the true product of leg odds.
 
 ## Verification
 
@@ -122,9 +167,16 @@ invariants, disabled-legacy shape, cold-start = prior, recency direction
 (same history, opposite order → different means), side backfill, per-rung
 grading incl. push, PvP same-rung counterparty, generation shape, id
 stability across no-op resync, bet-freeze, combo alt-rung compose + preview
-pass-through + dedup rung mismatch. Run the full suite before AND after any
-push touching these functions; regenerate `supabase/schema.sql` +
-`database.types.ts` after pushing.
+pass-through + dedup rung mismatch — plus the value-first vectors: ppf
+round-trip, `market_price_line` posted echo / fresh-price parity /
+half-point + out-of-band + settled rejections / engine-off degradation,
+`combo_price_line` fresh + posted + unposted-on-existing, mint-on-demand
+placement (pair mint at the fresh price with convention keys, rung reuse,
+`ODDS_MOVED` contract with nothing minted, rollback leaves no orphan rung,
+custom-rung settlement, combo quoted-mint dedup, combo + extra-pick one-bet
+ticket). Run the full suite before AND after any push touching these
+functions; regenerate `supabase/schema.sql` + `database.types.ts` after
+pushing.
 
 ## Tuning / debugging recipes
 

@@ -1,127 +1,105 @@
-import { useState } from 'react'
-import { View, Text, TouchableOpacity, ScrollView, StyleSheet } from 'react-native'
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native'
 import { colors, fonts, radius, type } from '../../theme'
 import { fmtOdds } from '../../utils/bets'
-import {
-  selectionButtonLabel,
-  type LineView,
-  type SelectionView,
-} from '../../hooks/usePinsinoData'
-import type { SelectionUiState } from './LineRow'
+import LineStepper from './LineStepper'
+import { STAT_LABELS, type LineView } from '../../hooks/usePinsinoData'
 
 interface LinePillProps {
-  // One market. Laddered markets (multiple priced over rungs) get the inline
-  // value selector; single-selection markets render a plain pill.
+  // One market. The bettor chooses the VALUE they want to beat; the odds
+  // follow from the value (posted rung or live preview).
   line: LineView
-  // Per-selection cosmetic state (staged/disabled) — same contract as LineRow.
-  selectionState?: (line: LineView, sel: SelectionView) => SelectionUiState
-  // Tapping the pill body (or a value option) stages/toggles that selection.
-  onSelect?: (line: LineView, sel: SelectionView) => void
+  // The displayed line value (screen-owned: staged pick's value, the user's
+  // edit, else the seed rung).
+  value: number
+  // The price for `value`: posted odds, a live quote, or null (still pricing /
+  // out of the priceable band).
+  odds: number | null
+  // A preview fetch is in flight for this pill's value.
+  loading?: boolean
+  // The priceable half-point band once known (clamps the stepper).
+  band?: { min: number; max: number } | null
+  // Value edits (stepper nudge or committed type-in).
+  onValueChange?: (v: number) => void
+  // Pill-body tap: stage/unstage at the displayed value.
+  onStage?: () => void
+  staged?: boolean
+  // Cosmetic dim (low balance) — still pressable so the handler can toast.
+  dimmed?: boolean
   // Market/scope closed — fully inert.
   inert?: boolean
-  // Hide the value expander (armed combine mode repurposes taps to seed).
-  expandable?: boolean
+  // Armed combine mode repurposes taps to seed a combo — no value editing.
+  editable?: boolean
 }
 
-// A full-width board pill — one market per row. Left: the offered condition
-// ("4.5+ STRIKES"); right: its payout and, on laddered markets, a ▾ toggle
-// that expands the pill's own value selector: every posted value with its
-// payout, horizontally scrollable. Picking a value stages that outcome —
-// the odds simply follow the selection. Tapping the pill body stages/unstages
-// the displayed value.
-export default function LinePill({ line, selectionState, onSelect, inert, expandable = true }: LinePillProps) {
-  const [expanded, setExpanded] = useState(false)
-  // Which value the pill shows when nothing is staged (last browsed, else seed).
-  const [localIdx, setLocalIdx] = useState<number | null>(null)
+// What's being counted, sans the number (the stepper carries the number):
+// "PINS" / "TOTAL PINS" on score lines, the stat label on props/combos.
+function conditionLabel(line: LineView): string {
+  if (line.marketType === 'over_under') {
+    return line.gameNumber != null ? 'PINS' : 'TOTAL PINS'
+  }
+  if (line.statKey) return (STAT_LABELS[line.statKey] ?? line.statKey).toUpperCase()
+  return line.title.toUpperCase()
+}
 
-  const sels = line.selections // sorted by line ascending (mint order)
-  const isLadder = sels.length > 1 && sels.every(s => s.side === 'over')
-  const seedIdx = Math.max(0, isLadder ? sels.findIndex(s => s.key === 'over') : 0)
-  const stagedIdx = sels.findIndex(s => (selectionState?.(line, s) ?? {}).selected)
-  const idx = stagedIdx >= 0 ? stagedIdx : Math.min(localIdx ?? seedIdx, sels.length - 1)
-  const sel = sels[idx]
-  const st = selectionState?.(line, sel) ?? {}
-  const pressable = !inert && !!onSelect
-  const canExpand = pressable && isLadder && expandable
-
-  // Split label: condition on the left, payout on the right.
-  const condition = selectionButtonLabel(line, sel).replace(` ${fmtOdds(sel.odds)}`, '')
+// A full-width board pill — one market per row, value-first: ◀ value ▶ with
+// tap-to-type on the left (the number the bettor intends to beat), the
+// condition label beside it, the price on the right updating live as the
+// value moves. Tapping the pill body stages/unstages the displayed value —
+// the odds derive from the chosen value, never the other way around.
+export default function LinePill({
+  line,
+  value,
+  odds,
+  loading,
+  band,
+  onValueChange,
+  onStage,
+  staged,
+  dimmed,
+  inert,
+  editable = true,
+}: LinePillProps) {
+  const pressable = !inert && !!onStage
+  const canEdit = pressable && editable && !!onValueChange
 
   return (
     <View
       style={[
         styles.pill,
-        st.selected && styles.pillSelected,
-        (inert || st.disabled) && styles.pillDisabled,
+        staged && styles.pillSelected,
+        (inert || dimmed) && styles.pillDisabled,
       ]}
     >
       <View style={styles.mainRow}>
+        {canEdit ? (
+          <LineStepper
+            value={value}
+            onChange={onValueChange!}
+            min={band?.min}
+            max={band?.max}
+            onFill={staged}
+          />
+        ) : (
+          <Text style={[styles.staticValue, staged && styles.textSelected]}>
+            {value.toFixed(1)}+
+          </Text>
+        )}
         <TouchableOpacity
           style={styles.body}
-          onPress={pressable ? () => onSelect!(line, sel) : undefined}
+          onPress={pressable ? onStage : undefined}
           disabled={!pressable}
           activeOpacity={0.7}
         >
-          <Text style={[styles.condition, st.selected && styles.textSelected]}>{condition}</Text>
-          <Text style={[styles.odds, st.selected && styles.textSelected]}>{fmtOdds(sel.odds)}</Text>
+          <Text style={[styles.condition, staged && styles.textSelected]}>
+            {conditionLabel(line)}
+          </Text>
+          <Text style={[styles.odds, staged && styles.textSelected]}>
+            {loading ? '…' : odds != null ? fmtOdds(odds) : '—'}
+          </Text>
         </TouchableOpacity>
-        {canExpand && (
-          <TouchableOpacity
-            onPress={() => setExpanded(e => !e)}
-            hitSlop={{ top: 10, bottom: 10, left: 6, right: 6 }}
-            style={styles.expander}
-            activeOpacity={0.6}
-          >
-            <Text style={[styles.expanderText, st.selected && styles.textSelected]}>
-              {expanded ? '▴' : '▾'}
-            </Text>
-          </TouchableOpacity>
-        )}
       </View>
-
-      {canExpand && expanded && (
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.valueRow}
-        >
-          {sels.map((s, i) => {
-            const vst = selectionState?.(line, s) ?? {}
-            const shown = i === idx
-            return (
-              <TouchableOpacity
-                key={s.selectionId}
-                style={[
-                  styles.valueChip,
-                  shown && (st.selected ? styles.valueChipShownOnFill : styles.valueChipShown),
-                  vst.disabled && styles.valueChipDisabled,
-                ]}
-                onPress={() => {
-                  setLocalIdx(i)
-                  onSelect!(line, s)
-                }}
-                activeOpacity={0.7}
-              >
-                <Text
-                  style={[
-                    styles.valueLine,
-                    shown && (st.selected ? styles.valueTextShownOnFill : styles.valueTextShown),
-                  ]}
-                >
-                  {(s.line ?? 0).toFixed(1)}+
-                </Text>
-                <Text
-                  style={[
-                    styles.valueOdds,
-                    shown && (st.selected ? styles.valueTextShownOnFill : styles.valueTextShown),
-                  ]}
-                >
-                  {fmtOdds(s.odds)}
-                </Text>
-              </TouchableOpacity>
-            )
-          })}
-        </ScrollView>
+      {!loading && odds == null && (
+        <Text style={styles.unavailable}>line unavailable — try a closer number</Text>
       )}
     </View>
   )
@@ -138,35 +116,19 @@ const styles = StyleSheet.create({
   },
   pillSelected: { backgroundColor: colors.accent, borderColor: colors.accent },
   pillDisabled: { borderColor: colors.border2, opacity: 0.5 },
-  mainRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  mainRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   body: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8 },
+  staticValue: {
+    fontFamily: fonts.barlowCondensedHeavy,
+    fontSize: 15,
+    color: colors.text,
+  },
   condition: { flex: 1, ...type.chip, color: 'rgba(240,240,240,0.85)' },
   odds: {
     fontFamily: fonts.barlowCondensedHeavy,
     fontSize: 15,
     color: colors.accent,
   },
-  expander: { paddingHorizontal: 2 },
-  expanderText: { fontSize: 13, color: colors.accent },
   textSelected: { color: colors.bg },
-  // The inline value selector: small line+payout cells in a horizontal strip.
-  valueRow: { gap: 6, paddingTop: 10 },
-  valueChip: {
-    minWidth: 58,
-    alignItems: 'center',
-    paddingHorizontal: 8,
-    paddingVertical: 6,
-    borderRadius: radius.cardSm,
-    borderWidth: 1,
-    borderColor: colors.chipBorder,
-    backgroundColor: colors.surfaceTint,
-  },
-  valueChipShown: { backgroundColor: colors.accent, borderColor: colors.accent },
-  // Contrast flip when the whole pill is staged (accent fill).
-  valueChipShownOnFill: { backgroundColor: colors.bg, borderColor: colors.bg },
-  valueChipDisabled: { opacity: 0.4 },
-  valueLine: { ...type.chip, color: colors.text },
-  valueOdds: { ...type.label, color: colors.muted, marginTop: 1 },
-  valueTextShown: { color: colors.bg },
-  valueTextShownOnFill: { color: colors.accent },
+  unavailable: { ...type.label, color: colors.gold, marginTop: 6 },
 })

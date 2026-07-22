@@ -47,6 +47,32 @@
 --   CB2 preview pass-through: with the market now open, preview returns its
 --       posted rungs; dedup-composing an unposted line RAISES; the seed rung
 --       dedup-composes fine.
+--   P1  norm_ppf: cdf(ppf(p)) ≈ p across the central and tail regions.
+--   P2  market_price_line posted echo: NULL line → the seed rung's posted
+--       odds verbatim (posted=true); band edges are half-points bracketing
+--       the seed.
+--   P3  fresh-line parity: an unposted in-band line prices exactly what a
+--       direct price_pair call on the same distribution says (posted=false).
+--   P4  rejections: non-half-point lines RAISE; a far-out-of-range line
+--       returns odds NULL ("line unavailable"); settled markets RAISE.
+--   P5  engine-off degradation (season override): min=max=seed, seed still
+--       quotable at its posted price, unposted lines return odds NULL.
+--   P6  combo_price_line fresh path: seed anchor = combo_seed_line, seed
+--       prices in-band; posted echo on the CB1 market's seed; an UNPOSTED
+--       in-band line on that existing market prices fresh (odds non-NULL) —
+--       the compose-time mint contract.
+--   M1  place_bet_at_lines at an unposted line: mints EXACTLY one over/under
+--       pair at the fresh (= quoted) zero-vig price with convention keys,
+--       and the leg snapshots the chosen line + quote.
+--   M2  same line again (by the market's own subject — over on self is
+--       legal): rung REUSED, both bets share one selection id.
+--   M3  drifted quote → 'ODDS_MOVED|…' contract, nothing minted.
+--   M4  out-of-band line rejected; an over-balance placement rolls its
+--       freshly minted rung back (no betless custom rung persists).
+--   M5  settlement grades the custom rung per its own line; both bets pay.
+--   CB3 quoted combo spec at an UNPOSTED line on the existing (bet-frozen)
+--       market mints the rung and composes (dedup path).
+--   CB4 combo + line-shaped extra pick (p_extra_picks) → ONE bet, two legs.
 -- Always aborts via the final RAISE.
 DO $$
 DECLARE
@@ -73,6 +99,7 @@ DECLARE
   v_gmkt uuid; v_pmkt uuid; v_n3 int;
   v_ids_before uuid[]; v_ids_after uuid[];
   v_ladder jsonb; v_choice jsonb; v_res jsonb;
+  v_custom_line numeric; v_q numeric; v_bet_m uuid; v_bet_m2 uuid;
   v_combo_mkt uuid; v_combo_bet uuid; v_leg record;
   v_seed_cnt int;
   c_seed constant int := 1000;
@@ -431,6 +458,279 @@ BEGIN
     RAISE EXCEPTION 'PROBE_FAIL: CB2 seed over key count %', v_seed_cnt;
   END IF;
 
+  ------------------------------------------------------------------ P1 norm_ppf
+  FOREACH v_cdf IN ARRAY ARRAY[0.025, 0.3, 0.5, 0.7, 0.975]::double precision[] LOOP
+    IF abs(public.odds_engine_norm_cdf(public.odds_engine_norm_ppf(v_cdf)) - v_cdf) > 1e-4 THEN
+      RAISE EXCEPTION 'PROBE_FAIL: P1 cdf(ppf(%)) = %', v_cdf,
+        public.odds_engine_norm_cdf(public.odds_engine_norm_ppf(v_cdf));
+    END IF;
+  END LOOP;
+
+  ------------------------------------------------------------------ P2 posted echo + band
+  SELECT s.odds, s.line INTO v_over, v_line FROM public.bet_selections s
+    WHERE s.market_id = v_gmkt AND s.key = 'over';
+  v_res := public.market_price_line(v_gmkt, NULL);
+  IF (v_res ->> 'odds')::numeric IS DISTINCT FROM v_over
+     OR NOT (v_res ->> 'posted')::boolean
+     OR (v_res ->> 'line')::numeric IS DISTINCT FROM v_line
+     OR (v_res ->> 'seed_line')::numeric IS DISTINCT FROM v_line THEN
+    RAISE EXCEPTION 'PROBE_FAIL: P2 seed echo % (posted seed % @ %)', v_res, v_over, v_line;
+  END IF;
+  IF (v_res ->> 'min_line')::numeric <> floor((v_res ->> 'min_line')::numeric) + 0.5
+     OR (v_res ->> 'max_line')::numeric <> floor((v_res ->> 'max_line')::numeric) + 0.5
+     OR (v_res ->> 'min_line')::numeric > (v_res ->> 'max_line')::numeric THEN
+    RAISE EXCEPTION 'PROBE_FAIL: P2 band not half-point-ordered: %', v_res;
+  END IF;
+
+  ------------------------------------------------------------------ P3 fresh-line parity
+  -- An unposted half-point inside the band (ladder spacing is 10 on this
+  -- score market, so seed+5 is never a posted rung).
+  v_line := v_line + 5;
+  IF v_line <= (v_res ->> 'max_line')::numeric THEN
+    v_res := public.market_price_line(v_gmkt, v_line);
+    IF (v_res ->> 'posted')::boolean OR (v_res ->> 'odds') IS NULL THEN
+      RAISE EXCEPTION 'PROBE_FAIL: P3 fresh in-band line % not priced: %', v_line, v_res;
+    END IF;
+    SELECT ps.mean, ps.variance INTO v_mean, v_var
+      FROM public.odds_engine_player_stat(v_p1, v_season, 'score') ps;
+    SELECT pp.over_odds INTO v_over
+      FROM public.odds_engine_price_pair(v_mean, v_var, 1, v_line, 1.10, 8.00, false) pp;
+    IF (v_res ->> 'odds')::numeric IS DISTINCT FROM v_over THEN
+      RAISE EXCEPTION 'PROBE_FAIL: P3 quote % <> direct price_pair %', v_res ->> 'odds', v_over;
+    END IF;
+  END IF;
+
+  ------------------------------------------------------------------ P4 rejections
+  BEGIN
+    PERFORM public.market_price_line(v_gmkt, 142);
+    RAISE EXCEPTION 'PROBE_FAIL: P4 whole-number line quoted instead of raising';
+  EXCEPTION WHEN OTHERS THEN
+    IF SQLERRM LIKE 'PROBE_FAIL%' THEN RAISE; END IF;
+  END;
+  v_res := public.market_price_line(v_gmkt, 299.5);
+  IF (v_res ->> 'odds') IS NOT NULL THEN
+    RAISE EXCEPTION 'PROBE_FAIL: P4 out-of-band 299.5 priced at %', v_res ->> 'odds';
+  END IF;
+  BEGIN
+    PERFORM public.market_price_line(v_mkt, NULL);  -- settled in O9
+    RAISE EXCEPTION 'PROBE_FAIL: P4 settled market quoted instead of raising';
+  EXCEPTION WHEN OTHERS THEN
+    IF SQLERRM LIKE 'PROBE_FAIL%' THEN RAISE; END IF;
+  END;
+
+  ------------------------------------------------------------------ P5 engine-off degradation
+  INSERT INTO public.odds_engine_config (season_id, is_enabled)
+    VALUES (v_season, false) RETURNING id INTO v_cfg_row;
+  -- v_mkt2 was re-laddered by the G-vector resyncs (open + betless), so its
+  -- CURRENT posted seed is the reference — engine-off must echo it verbatim
+  -- with the band collapsed onto it.
+  SELECT s.odds, s.line INTO v_over, v_line FROM public.bet_selections s
+    WHERE s.market_id = v_mkt2 AND s.key = 'over';
+  v_res := public.market_price_line(v_mkt2, NULL);
+  IF (v_res ->> 'odds')::numeric IS DISTINCT FROM v_over
+     OR (v_res ->> 'min_line')::numeric IS DISTINCT FROM v_line
+     OR (v_res ->> 'max_line')::numeric IS DISTINCT FROM v_line THEN
+    RAISE EXCEPTION 'PROBE_FAIL: P5 engine-off seed quote % (posted % @ %)', v_res, v_over, v_line;
+  END IF;
+  -- Score ladders span seed ± 30, so seed+35 is a never-posted half-point.
+  v_res := public.market_price_line(v_mkt2, LEAST(v_line + 35, 299.5));
+  IF (v_res ->> 'odds') IS NOT NULL THEN
+    RAISE EXCEPTION 'PROBE_FAIL: P5 engine-off priced an unposted line: %', v_res;
+  END IF;
+  DELETE FROM public.odds_engine_config WHERE id = v_cfg_row;
+
+  ------------------------------------------------------------------ P6 combo_price_line
+  -- Fresh path (no spares combo market exists): seed anchor + in-band price.
+  v_line := public.combo_seed_line(ARRAY[v_p1, v_p2], 'spares', v_season, 2);
+  v_res := public.combo_price_line(ARRAY[v_p1, v_p2], 'spares', v_season, 2, v_week, NULL, NULL);
+  IF (v_res ->> 'seed_line')::numeric IS DISTINCT FROM v_line
+     OR (v_res ->> 'odds') IS NULL THEN
+    RAISE EXCEPTION 'PROBE_FAIL: P6 fresh combo quote % (seed %)', v_res, v_line;
+  END IF;
+  -- Posted echo on the CB1 strikes market's seed rung.
+  SELECT s.odds, s.line INTO v_over, v_line FROM public.bet_selections s
+    WHERE s.market_id = v_combo_mkt AND s.key = 'over';
+  v_res := public.combo_price_line(ARRAY[v_p2, v_p1], 'strikes', v_season, 2, v_week, NULL, v_line);
+  IF (v_res ->> 'odds')::numeric IS DISTINCT FROM v_over OR NOT (v_res ->> 'posted')::boolean THEN
+    RAISE EXCEPTION 'PROBE_FAIL: P6 posted combo echo % (posted % @ %)', v_res, v_over, v_line;
+  END IF;
+  -- An UNPOSTED in-band line on the existing market prices fresh (the rung is
+  -- minted at compose, 2 of 2). Count ladders span seed±3 at 1.0 spacing, so
+  -- seed+4 stays a half-point but is never posted.
+  v_res := public.combo_price_line(ARRAY[v_p1, v_p2], 'strikes', v_season, 2, v_week, NULL, v_line + 4);
+  IF (v_res ->> 'posted')::boolean THEN
+    RAISE EXCEPTION 'PROBE_FAIL: P6 off-ladder rung unexpectedly posted: %', v_res;
+  END IF;
+  IF (v_line + 4) <= (v_res ->> 'max_line')::numeric AND (v_res ->> 'odds') IS NULL THEN
+    RAISE EXCEPTION 'PROBE_FAIL: P6 unposted in-band combo line not priced: %', v_res;
+  END IF;
+
+  ------------------------------------------------------------------ M1 mint-on-demand placement
+  -- Quote an unposted line on the betless open O/U market, place at it as u2:
+  -- the rung pair mints at the fresh (= quoted) price and the bet attaches.
+  SELECT s.line INTO v_line FROM public.bet_selections s
+    WHERE s.market_id = v_gmkt AND s.key = 'over';
+  v_custom_line := v_line + 5;
+  v_res := public.market_price_line(v_gmkt, v_custom_line);
+  v_q := (v_res ->> 'odds')::numeric;
+  IF v_q IS NULL OR (v_res ->> 'posted')::boolean THEN
+    RAISE EXCEPTION 'PROBE_FAIL: M1 fixture line % not freshly quotable: %', v_custom_line, v_res;
+  END IF;
+
+  PERFORM set_config('request.jwt.claims', json_build_object(
+    'sub', v_u2, 'role', 'authenticated', 'app_metadata', json_build_object('role', 'player'))::text, true);
+  v_bet_m := public.place_bet_at_lines(jsonb_build_array(jsonb_build_object(
+               'market_id', v_gmkt, 'line', v_custom_line, 'quoted_odds', v_q)), 20);
+
+  SELECT count(*) FILTER (WHERE side = 'over'),
+         count(*) FILTER (WHERE side = 'under')
+    INTO v_n, v_n2
+    FROM public.bet_selections WHERE market_id = v_gmkt AND line = v_custom_line;
+  IF v_n <> 1 OR v_n2 <> 1 THEN
+    RAISE EXCEPTION 'PROBE_FAIL: M1 minted %/% over/under rows at the custom line', v_n, v_n2;
+  END IF;
+  SELECT s.odds INTO v_over FROM public.bet_selections s
+    WHERE s.market_id = v_gmkt AND s.line = v_custom_line AND s.side = 'over';
+  SELECT s.odds INTO v_under FROM public.bet_selections s
+    WHERE s.market_id = v_gmkt AND s.line = v_custom_line AND s.side = 'under';
+  IF v_over IS DISTINCT FROM v_q THEN
+    RAISE EXCEPTION 'PROBE_FAIL: M1 minted over odds % <> quoted %', v_over, v_q;
+  END IF;
+  IF abs(1.0 / v_over + 1.0 / v_under - 1.0) > 0.06 THEN
+    RAISE EXCEPTION 'PROBE_FAIL: M1 minted pair (%, %) is not zero-vig', v_over, v_under;
+  END IF;
+  SELECT count(*) INTO v_n FROM public.bet_selections s
+    WHERE s.market_id = v_gmkt AND s.line = v_custom_line
+      AND s.key NOT IN ('over:' || trim_scale(v_custom_line), 'under:' || trim_scale(v_custom_line));
+  IF v_n <> 0 THEN
+    RAISE EXCEPTION 'PROBE_FAIL: M1 custom rung keys are off-convention';
+  END IF;
+  SELECT bl.line_at_placement, bl.odds_at_placement INTO v_leg
+    FROM public.bet_legs bl WHERE bl.bet_id = v_bet_m;
+  IF v_leg.line_at_placement IS DISTINCT FROM v_custom_line
+     OR v_leg.odds_at_placement IS DISTINCT FROM v_q THEN
+    RAISE EXCEPTION 'PROBE_FAIL: M1 leg snapshot (%, %) vs (%, %)',
+      v_leg.line_at_placement, v_leg.odds_at_placement, v_custom_line, v_q;
+  END IF;
+
+  ------------------------------------------------------------------ M2 rung reuse + self-over
+  -- u1 takes the SAME line (their own market — over on self is legal): the
+  -- posted custom rung is reused, not re-minted.
+  PERFORM set_config('request.jwt.claims', json_build_object(
+    'sub', v_u1, 'role', 'authenticated', 'app_metadata', json_build_object('role', 'player'))::text, true);
+  v_bet_m2 := public.place_bet_at_lines(jsonb_build_array(jsonb_build_object(
+                'market_id', v_gmkt, 'line', v_custom_line, 'quoted_odds', v_q)), 15);
+  SELECT count(*) INTO v_n FROM public.bet_selections
+    WHERE market_id = v_gmkt AND line = v_custom_line;
+  IF v_n <> 2 THEN
+    RAISE EXCEPTION 'PROBE_FAIL: M2 re-placement changed rung count to %', v_n;
+  END IF;
+  SELECT count(DISTINCT bl.selection_id) INTO v_n
+    FROM public.bet_legs bl WHERE bl.bet_id IN (v_bet_m, v_bet_m2);
+  IF v_n <> 1 THEN
+    RAISE EXCEPTION 'PROBE_FAIL: M2 both bets should share ONE selection (got %)', v_n;
+  END IF;
+
+  ------------------------------------------------------------------ M3 tolerance reject
+  BEGIN
+    PERFORM public.place_bet_at_lines(jsonb_build_array(jsonb_build_object(
+      'market_id', v_gmkt, 'line', v_custom_line + 1, 'quoted_odds', 999)), 20);
+    RAISE EXCEPTION 'PROBE_FAIL: M3 drifted quote placed instead of raising';
+  EXCEPTION WHEN OTHERS THEN
+    IF SQLERRM LIKE 'PROBE_FAIL%' THEN RAISE; END IF;
+    IF SQLERRM NOT LIKE 'ODDS_MOVED|%' THEN
+      RAISE EXCEPTION 'PROBE_FAIL: M3 wrong error contract: %', SQLERRM;
+    END IF;
+  END;
+  SELECT count(*) INTO v_n FROM public.bet_selections
+    WHERE market_id = v_gmkt AND line = v_custom_line + 1;
+  IF v_n <> 0 THEN
+    RAISE EXCEPTION 'PROBE_FAIL: M3 rejected quote still minted % rows', v_n;
+  END IF;
+
+  ------------------------------------------------------------------ M4 out-of-band + rollback
+  BEGIN
+    PERFORM public.place_bet_at_lines(jsonb_build_array(jsonb_build_object(
+      'market_id', v_gmkt, 'line', 299.5, 'quoted_odds', 8)), 20);
+    RAISE EXCEPTION 'PROBE_FAIL: M4 out-of-band line placed instead of raising';
+  EXCEPTION WHEN OTHERS THEN
+    IF SQLERRM LIKE 'PROBE_FAIL%' THEN RAISE; END IF;
+  END;
+  -- Failed placement (stake > balance) leaves NO betless custom rung behind.
+  v_res := public.market_price_line(v_gmkt, v_custom_line + 2);
+  IF (v_res ->> 'odds') IS NOT NULL THEN
+    BEGIN
+      PERFORM public.place_bet_at_lines(jsonb_build_array(jsonb_build_object(
+        'market_id', v_gmkt, 'line', v_custom_line + 2,
+        'quoted_odds', (v_res ->> 'odds')::numeric)), 999999);
+      RAISE EXCEPTION 'PROBE_FAIL: M4 over-balance stake placed instead of raising';
+    EXCEPTION WHEN OTHERS THEN
+      IF SQLERRM LIKE 'PROBE_FAIL%' THEN RAISE; END IF;
+    END;
+    SELECT count(*) INTO v_n FROM public.bet_selections
+      WHERE market_id = v_gmkt AND line = v_custom_line + 2;
+    IF v_n <> 0 THEN
+      RAISE EXCEPTION 'PROBE_FAIL: M4 failed placement left % orphan rung rows', v_n;
+    END IF;
+  END IF;
+
+  ------------------------------------------------------------------ M5 custom rung settles
+  PERFORM public.settle_market_internal(v_gmkt, v_custom_line + 0.5);
+  SELECT count(*) INTO v_n FROM public.bet_selections
+    WHERE market_id = v_gmkt AND line = v_custom_line
+      AND ((side = 'over' AND result <> 'won') OR (side = 'under' AND result <> 'lost'));
+  IF v_n <> 0 THEN
+    RAISE EXCEPTION 'PROBE_FAIL: M5 custom rung graded wrong';
+  END IF;
+  SELECT count(*) INTO v_n FROM public.bets
+    WHERE id IN (v_bet_m, v_bet_m2) AND status = 'won';
+  IF v_n <> 2 THEN
+    RAISE EXCEPTION 'PROBE_FAIL: M5 custom-rung bets did not settle won (% of 2)', v_n;
+  END IF;
+
+  ------------------------------------------------------------------ CB3 quoted combo mint
+  -- A quoted spec at an UNPOSTED line on the EXISTING (bet-frozen) combo
+  -- market mints the rung instead of raising.
+  SELECT s.line INTO v_line FROM public.bet_selections s
+    WHERE s.market_id = v_combo_mkt AND s.key = 'over';
+  v_res := public.combo_price_line(ARRAY[v_p1, v_p2], 'strikes', v_season, 2, v_week, NULL, v_line + 4);
+  IF (v_res ->> 'odds') IS NOT NULL THEN
+    v_q := (v_res ->> 'odds')::numeric;
+    v_res := public.compose_combo_bet(v_week, jsonb_build_array(jsonb_build_object(
+               'member_ids', jsonb_build_array(v_p1::text, v_p2::text),
+               'stat', 'strikes', 'scope', 'night',
+               'line', v_line + 4, 'quoted_odds', v_q)), 25);
+    IF NOT (v_res -> 'combos' -> 0 ->> 'deduped')::boolean
+       OR (v_res -> 'combos' -> 0 ->> 'line')::numeric IS DISTINCT FROM (v_line + 4)
+       OR (v_res -> 'combos' -> 0 ->> 'odds')::numeric IS DISTINCT FROM v_q THEN
+      RAISE EXCEPTION 'PROBE_FAIL: CB3 quoted dedup mint result %', v_res;
+    END IF;
+    SELECT count(*) INTO v_n FROM public.bet_selections
+      WHERE market_id = v_combo_mkt AND line = v_line + 4;
+    IF v_n <> 2 THEN
+      RAISE EXCEPTION 'PROBE_FAIL: CB3 minted % rows at the quoted combo line', v_n;
+    END IF;
+  END IF;
+
+  ------------------------------------------------------------------ CB4 combo + extra pick, one bet
+  -- Seed-rung dedup combo parlayed with a line-shaped extra pick on the PvP
+  -- prop fixture market → ONE bet with two legs.
+  SELECT s.line, s.odds INTO v_alt_line, v_q FROM public.bet_selections s
+    WHERE s.market_id = v_mkt3 AND s.key = 'over';
+  v_res := public.compose_combo_bet(
+    v_week,
+    jsonb_build_array(jsonb_build_object(
+      'member_ids', jsonb_build_array(v_p1::text, v_p2::text),
+      'stat', 'strikes', 'scope', 'night')),
+    25, NULL, NULL, NULL, NULL,
+    jsonb_build_array(jsonb_build_object(
+      'market_id', v_mkt3, 'line', v_alt_line, 'quoted_odds', v_q)));
+  SELECT count(*) INTO v_n FROM public.bet_legs bl
+    WHERE bl.bet_id = (v_res ->> 'bet_id')::uuid;
+  IF v_n <> 2 THEN
+    RAISE EXCEPTION 'PROBE_FAIL: CB4 combo+extra ticket has % legs (expected 2)', v_n;
+  END IF;
+
   ------------------------------------------------------------------ result
   RAISE EXCEPTION 'PROBE_RESULT %', jsonb_build_object(
     'ladder_pairs', v_ladder_pairs,
@@ -447,5 +747,11 @@ BEGIN
     'gen_id_stability', true,
     'gen_bet_freezes_ladder', true,
     'combo_alt_rung', v_choice,
-    'combo_dedup_rungs', true);
+    'combo_dedup_rungs', true,
+    'ppf_roundtrip', true,
+    'price_line_posted_echo', true,
+    'price_line_fresh_parity', true,
+    'price_line_rejections', true,
+    'price_line_engine_off', true,
+    'combo_price_line', v_res);
 END $$;

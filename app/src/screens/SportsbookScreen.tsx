@@ -21,7 +21,7 @@ import SettledBetsView from '../components/betting/SettledBetsView'
 import BetDetailModal from '../components/betting/BetDetailModal'
 import { useBetSlip, useBetSlipReload } from '../components/betting/BetSlipProvider'
 import LineRow from '../components/betting/LineRow'
-import LineValueSheet from '../components/betting/LineValueSheet'
+import LinePill from '../components/betting/LinePill'
 import CustomLineRow from '../components/betting/CustomLineRow'
 import PickChip from '../components/betting/PickChip'
 import BuilderBar from '../components/betting/BuilderBar'
@@ -33,7 +33,6 @@ import TermsBlock from '../components/ui/TermsBlock'
 import { EXPLAINERS, TERMS } from '../data/pinsinoExplainers'
 import {
   usePinsinoData,
-  selectionBetsAgainstSubject,
   customLineSelfTank,
   customLegLabel,
   lineGroup,
@@ -43,10 +42,9 @@ import {
   STAT_LABELS,
   type BetView,
   type LineView,
-  type SelectionView,
   type CustomLineView,
 } from '../hooks/usePinsinoData'
-import { useComboLinePreview } from '../hooks/useComboLinePreview'
+import { useLinePreview } from '../hooks/useLinePreview'
 import { useRefresh } from '../hooks/useRefresh'
 import { useAuthStore } from '../stores/authStore'
 import { useUiStore } from '../stores/uiStore'
@@ -112,6 +110,7 @@ export default function SportsbookScreen() {
     slipSpecials,
     slipCombos,
     stagePick: stageSlipPick,
+    updateSlipPick,
     stageSpecial: stageSlipSpecial,
     stageCombo,
     setSlipBarHidden,
@@ -250,15 +249,6 @@ export default function SportsbookScreen() {
   )
   const comboScopeGame = scope === 'weekly' ? null : Number(scope.slice('game-'.length))
   const comboNGames = scope === 'weekly' ? Math.max(weekGameNumbers.length, 1) : 1
-  const { ladder: comboLadder, seedIndex: comboSeedIndex, loading: comboLineLoading } =
-    useComboLinePreview(
-      comboMemberIds,
-      combo?.stat ?? null,
-      currentSeasonId,
-      comboNGames,
-      currentWeekId,
-      comboScopeGame
-    )
   // Canonical staging key — the same format ComboComposerSheet used, so
   // toggle-off dedup works against anything previously staged.
   const comboKey =
@@ -267,18 +257,30 @@ export default function SportsbookScreen() {
       : ''
   const comboAlreadyStaged = combining && slipCombos.some(c => c.key === comboKey)
 
-  // Which ladder rung the BuilderBar shows; snaps back to the seed whenever
-  // the combo identity (or the fetched ladder's seed) changes.
-  const [comboRungIndex, setComboRungIndex] = useState(0)
-  useEffect(() => { setComboRungIndex(comboSeedIndex) }, [comboKey, comboSeedIndex])
-  const comboRung =
-    comboLadder && comboLadder.length > 0
-      ? comboLadder[Math.min(comboRungIndex, comboLadder.length - 1)]
+  // The combo's edited value (null = the seed anchor) — resets whenever the
+  // combo identity changes. Priced live by combo_price_line; the BuilderBar
+  // renders the same ◀ value ▶ editor the board pills use.
+  const [comboLineValue, setComboLineValue] = useState<number | null>(null)
+  useEffect(() => { setComboLineValue(null) }, [comboKey])
+  const { quote: comboQuote, loading: comboQuoteLoading } = useLinePreview(
+    combining && combo?.stat != null && currentSeasonId != null
+      ? {
+          kind: 'combo',
+          memberIds: comboMemberIds,
+          stat: combo.stat,
+          seasonId: currentSeasonId,
+          nGames: comboNGames,
+          weekId: currentWeekId,
+          gameNumber: comboScopeGame,
+        }
+      : null,
+    comboLineValue,
+  )
+  const shownComboValue = comboLineValue ?? comboQuote?.seedLine ?? null
+  const comboOdds =
+    comboQuote != null && shownComboValue != null && comboQuote.line === shownComboValue
+      ? comboQuote.odds
       : null
-
-  // Combo value sheet: tap the BuilderBar's line → pick the combo's value
-  // (board lines pick values inline, inside each pill).
-  const [comboSheetOpen, setComboSheetOpen] = useState(false)
 
   // The BuilderBar takes over the slip bar's footprint while combining.
   useEffect(() => {
@@ -286,12 +288,10 @@ export default function SportsbookScreen() {
     return () => setSlipBarHidden(false)
   }, [combining, setSlipBarHidden])
 
-  // Leaving the Place view (or flipping read-only) abandons any in-flight
-  // combo and dismisses the combo value sheet.
+  // Leaving the Place view (or flipping read-only) abandons any in-flight combo.
   useEffect(() => {
     if (effectiveView !== 'place' || readOnly) {
       setCombo(null)
-      setComboSheetOpen(false)
     }
   }, [effectiveView, readOnly])
 
@@ -327,10 +327,11 @@ export default function SportsbookScreen() {
       stat: combo.stat,
       scope: scope === 'weekly' ? 'night' : 'game',
       gameNumber: comboScopeGame,
-      // The chosen ladder rung — compose_combo_bet validates the line against
-      // the posted/mintable rungs and snapshots the rung's odds on the leg.
-      line: comboRung?.line ?? null,
-      odds: comboRung?.odds ?? null,
+      // The chosen VALUE + its quoted price — compose_combo_bet re-prices the
+      // line authoritatively (quote_tolerance) and mints the rung if the
+      // market doesn't carry it yet.
+      line: shownComboValue,
+      odds: comboOdds,
     })
     setCombo(null)
   }
@@ -350,40 +351,79 @@ export default function SportsbookScreen() {
     return rows
   }, [rsvpInPlayers, playerId])
 
-  // Anti-tanking, market-type-aware: backing the side that bets against your own
-  // performance (the `under` on your own line, or on your own team's line) is
-  // blocked. Friendly pre-check only — the prevent_self_tank trigger is the
-  // authoritative backstop.
-  function isSelfTank(line: LineView, sel: SelectionView): boolean {
-    if (!selectionBetsAgainstSubject(line.marketType, sel.key)) return false
-    if (line.marketType === 'team_prop') {
-      return line.teamId != null && line.teamId === weekTeams.myTeamId
+  // ── Value-first editing ───────────────────────────────────────────────
+  // Per-market value overrides (the number the bettor stepped/typed). One
+  // market is the "active edit" at a time — the single debounced preview
+  // stream prices it; other pills read posted rungs or their staged pick.
+  // Overrides reset on board reload so re-laddered seeds re-anchor.
+  const [lineValues, setLineValues] = useState<Record<string, number>>({})
+  const [activeEditMarketId, setActiveEditMarketId] = useState<string | null>(null)
+  useEffect(() => {
+    setLineValues({})
+    setActiveEditMarketId(null)
+  }, [openLines])
+
+  const { quote: editQuote, loading: editLoading } = useLinePreview(
+    activeEditMarketId != null ? { kind: 'market', marketId: activeEditMarketId } : null,
+    activeEditMarketId != null ? lineValues[activeEditMarketId] ?? null : null,
+  )
+
+  // The pill's anchor: the market's posted seed rung (canonical 'over' key).
+  const seedOf = (line: LineView) =>
+    line.selections.find(s => s.key === 'over')?.line ?? line.line ?? 0.5
+  const postedAt = (line: LineView, value: number) =>
+    line.selections.find(s => s.side === 'over' && s.line === value)
+
+  // Live re-stage, quote half: when the active edit's quote lands and that
+  // market's pick is staged at the quoted value, patch the staged price.
+  useEffect(() => {
+    if (editQuote == null || activeEditMarketId == null || editQuote.odds == null) return
+    const staged = slipPicks.find(p => p.marketId === activeEditMarketId)
+    if (staged && staged.line === editQuote.line && staged.odds !== editQuote.odds) {
+      updateSlipPick(activeEditMarketId, { odds: editQuote.odds })
     }
-    if (line.marketType === 'combo') {
-      return !!playerId && (line.comboMemberIds ?? []).includes(playerId)
+  }, [editQuote]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // A stepper nudge / committed type-in: record the value, make this market
+  // the active edit, and live re-stage a staged pick at the new value (posted
+  // odds immediately; a fresh quote patches in when it lands).
+  function editLineValue(line: LineView, v: number) {
+    setLineValues(prev => ({ ...prev, [line.marketId]: v }))
+    setActiveEditMarketId(line.marketId)
+    const staged = slipPicks.find(p => p.marketId === line.marketId)
+    if (staged && staged.line !== v) {
+      const posted = postedAt(line, v)
+      updateSlipPick(line.marketId, {
+        line: v,
+        selectionId: posted?.selectionId ?? null,
+        selectionKey: posted?.key ?? 'over',
+        ...(posted != null ? { odds: posted.odds } : {}),
+      })
     }
-    return line.subjectPlayerId === playerId
   }
 
-  // Tapping any selection toggles it in/out of the unified slip. One selection
-  // per market; own-against side always toasts (anti-tank). The provider owns the
-  // slip state + toggle; the screen builds the pick and enforces the anti-tank
-  // pre-check. Balance is validated at placement, so a low balance still stages.
-  function stagePick(line: LineView, sel: SelectionView) {
+  // Pill-body tap: stage/unstage at the displayed value with its displayed
+  // price. The value drives everything — the odds just follow. Balance is
+  // validated at placement, so a low balance still stages.
+  function stagePickAtValue(line: LineView, value: number, odds: number | null, loading: boolean) {
     if (readOnly) return
-    if (isSelfTank(line, sel)) { showToast('Believe in yourself man', 'error'); return }
+    if (odds == null) {
+      showToast(loading ? 'Still pricing that line…' : 'That line is unavailable', 'error')
+      return
+    }
+    const posted = postedAt(line, value)
     stageSlipPick({
-      selectionId: sel.selectionId,
-      selectionKey: sel.key,
-      selectionLabel: sel.label,
+      selectionId: posted?.selectionId ?? null,
+      selectionKey: posted?.key ?? 'over',
+      selectionLabel: 'Over',
       marketId: line.marketId,
       subjectName: line.subjectName,
       subjectPlayerId: line.subjectPlayerId,
       marketType: line.marketType,
       gameNumber: line.gameNumber,
-      line: sel.line ?? line.line,
+      line: value,
       statKey: line.statKey,
-      odds: sel.odds ?? 2,
+      odds,
     })
   }
 
@@ -406,11 +446,11 @@ export default function SportsbookScreen() {
     })
   }
 
-  // One subject row (≥1 markets → one button set) — a player's consolidated
-  // lines or a single combo. Tapping a cell stages it in the unified slip
-  // (staged = filled); an in-progress scope makes every side inert. Each button
-  // binds its own (line, selection). Combos tint neutral automatically
-  // (subjectRelation of a null subject).
+  // One subject row (≥1 markets → one card of value-first pills) — a player's
+  // consolidated lines or a single combo. Each pill shows ◀ value ▶ with its
+  // live price; tapping the body stages the displayed value (staged = filled);
+  // an in-progress scope makes every pill inert. Combos tint neutral
+  // automatically (subjectRelation of a null subject).
   function renderLineSet(lines: LineView[], isLast: boolean, groupInProgress: boolean) {
     return (
       <LineRow
@@ -418,20 +458,41 @@ export default function SportsbookScreen() {
         isLast={isLast}
         relation={subjectRelation(weekTeams, lines[0].subjectPlayerId, lines[0].gameNumber)}
         inProgress={groupInProgress}
-        // Armed combine mode repurposes the stat taps: the first tap seeds the
-        // combo and pivots to member picking (no anti-tank dim — over-on-self
-        // is legal for combos), so the in-pill value expander hides while
-        // armed. Outside it, each pill selects its value inline.
-        onSelect={comboArmed ? line => enterStatView(line) : stagePick}
-        expandable={!comboArmed}
-        selectionState={
-          comboArmed
-            ? () => ({})
-            : (line, sel) => ({
-                selected: slipPicks.some(p => p.selectionId === sel.selectionId),
-                disabled: balance < 10 || isSelfTank(line, sel),
-              })
-        }
+        renderPill={line => {
+          const staged = slipPicks.find(p => p.marketId === line.marketId)
+          const value = staged?.line ?? lineValues[line.marketId] ?? seedOf(line)
+          const posted = postedAt(line, value)
+          const isActive = activeEditMarketId === line.marketId
+          const quoted = isActive && editQuote != null && editQuote.line === value ? editQuote : null
+          // Price resolution: posted rung → staged snapshot → live quote.
+          const odds = posted?.odds
+            ?? (staged != null && staged.line === value ? staged.odds : null)
+            ?? (quoted?.odds ?? null)
+          const loading =
+            odds == null && isActive && (editLoading || (editQuote != null && editQuote.line !== value))
+          return (
+            <LinePill
+              line={line}
+              value={value}
+              odds={odds}
+              loading={loading}
+              band={isActive && editQuote != null ? { min: editQuote.minLine, max: editQuote.maxLine } : null}
+              staged={staged != null}
+              dimmed={balance < 10}
+              inert={groupInProgress || line.inProgress || readOnly}
+              // Armed combine mode repurposes the body tap: it seeds the combo
+              // and pivots to member picking, so value editing hides while
+              // armed.
+              editable={!comboArmed}
+              onValueChange={v => editLineValue(line, v)}
+              onStage={
+                comboArmed
+                  ? () => enterStatView(line)
+                  : () => stagePickAtValue(line, value, odds, loading)
+              }
+            />
+          )
+        }}
       />
     )
   }
@@ -464,6 +525,10 @@ export default function SportsbookScreen() {
           ScreenBackdrop keeps the one poker-table instance mounted across the
           load→ready swap — see pixelart/config.ts. */}
       <ScrollView
+        // Value type-in raises the keyboard mid-list: keep stepper/stage taps
+        // working with it up, dismiss on scroll, commit on blur.
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
         contentContainerStyle={[
           styles.content,
           { paddingTop: insets.top },
@@ -689,43 +754,15 @@ export default function SportsbookScreen() {
           )}
           statLabel={(STAT_LABELS[combo.stat] ?? combo.stat).toUpperCase()}
           scopeLabel={scope === 'weekly' ? 'NIGHT' : `GAME ${comboScopeGame}`}
-          ladder={comboLadder}
-          rungIndex={comboRungIndex}
-          onOpenLadder={() => setComboSheetOpen(true)}
-          ladderLoading={comboLineLoading}
+          value={comboLineValue}
+          onValueChange={setComboLineValue}
+          quote={comboQuote}
+          quoteLoading={comboQuoteLoading}
           minMembers={comboMemberIds.length >= 2}
           alreadyStaged={comboAlreadyStaged}
           blocked={board.scopeInProgress}
           onAdd={addComboToSlip}
           onCancel={() => setCombo(null)}
-        />
-      )}
-
-      {/* Combo value sheet — the BuilderBar's ladder. Picking only chooses the
-          rung (Add still stages). Board lines pick values inline in their
-          pills; combos keep the sheet (the BuilderBar is too small for one). */}
-      {comboSheetOpen && combining && combo?.stat != null && comboLadder != null && (
-        <LineValueSheet
-          title={comboMemberIds
-            .map(id => shortName(rsvpInPlayers.find(m => m.playerId === id)?.name))
-            .join(' + ')}
-          subtitle={`${(STAT_LABELS[combo.stat] ?? combo.stat).toUpperCase()} · ${
-            scope === 'weekly' ? 'NIGHT' : `GAME ${comboScopeGame}`
-          }`}
-          rungs={comboLadder.map((r, i) => ({
-            line: r.line,
-            odds: r.odds,
-            isSeed: r.isSeed,
-            selected: i === comboRungIndex,
-          }))}
-          formatLine={v =>
-            `${v.toFixed(1)}+ ${(STAT_LABELS[combo.stat!] ?? combo.stat).toUpperCase()}`
-          }
-          onPick={i => {
-            setComboRungIndex(i)
-            setComboSheetOpen(false)
-          }}
-          onClose={() => setComboSheetOpen(false)}
         />
       )}
 

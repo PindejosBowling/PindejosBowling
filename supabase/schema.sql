@@ -415,7 +415,10 @@ CREATE TABLE odds_engine_config (
   spacing_count numeric NOT NULL DEFAULT 1.0,
   updated_by uuid,
   created_at timestamp with time zone NOT NULL DEFAULT now(),
-  updated_at timestamp with time zone NOT NULL DEFAULT now()
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  custom_odds_min numeric,
+  custom_odds_max numeric,
+  quote_tolerance numeric NOT NULL DEFAULT 0.10
 );
 
 CREATE TABLE pin_ledger (
@@ -1077,6 +1080,8 @@ ALTER TABLE loans ADD CONSTRAINT loans_season_id_fkey FOREIGN KEY (season_id) RE
 
 ALTER TABLE loans ADD CONSTRAINT loans_status_check CHECK ((status = ANY (ARRAY['active'::text, 'paid_off'::text, 'season_closed'::text])));
 
+ALTER TABLE odds_engine_config ADD CONSTRAINT odds_engine_config_custom_clamp_check CHECK (((custom_odds_min IS NULL) OR (custom_odds_max IS NULL) OR ((custom_odds_min > 1.0) AND (custom_odds_max > custom_odds_min))));
+
 ALTER TABLE odds_engine_config ADD CONSTRAINT odds_engine_config_half_life_check CHECK ((half_life_games > (0)::numeric));
 
 ALTER TABLE odds_engine_config ADD CONSTRAINT odds_engine_config_odds_clamp_check CHECK (((odds_min > 1.0) AND (odds_max > odds_min)));
@@ -1084,6 +1089,8 @@ ALTER TABLE odds_engine_config ADD CONSTRAINT odds_engine_config_odds_clamp_chec
 ALTER TABLE odds_engine_config ADD CONSTRAINT odds_engine_config_pkey PRIMARY KEY (id);
 
 ALTER TABLE odds_engine_config ADD CONSTRAINT odds_engine_config_prior_weight_check CHECK ((prior_weight_games >= (0)::numeric));
+
+ALTER TABLE odds_engine_config ADD CONSTRAINT odds_engine_config_quote_tolerance_check CHECK ((quote_tolerance >= 0.05));
 
 ALTER TABLE odds_engine_config ADD CONSTRAINT odds_engine_config_rungs_check CHECK (((rungs_per_side >= 0) AND (rungs_per_side <= 6)));
 
@@ -2587,6 +2594,102 @@ AS $function$
 $function$
 ;
 
+CREATE OR REPLACE FUNCTION public.bet_mint_rung_internal(p_market_id uuid, p_line numeric, p_quoted_odds numeric)
+ RETURNS uuid
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+DECLARE
+  v_mkt      public.bet_markets;
+  v_line     numeric;
+  v_cfg      public.odds_engine_config;
+  v_d        record;
+  v_sel      record;
+  v_over     numeric;
+  v_under    numeric;
+BEGIN
+  IF p_quoted_odds IS NULL OR p_quoted_odds <= 1.0 THEN
+    RAISE EXCEPTION 'A quoted price is required to take a line';
+  END IF;
+
+  SELECT * INTO v_mkt FROM public.bet_markets WHERE id = p_market_id;
+  IF v_mkt.id IS NULL THEN
+    RAISE EXCEPTION 'Market not found';
+  END IF;
+  IF v_mkt.status <> 'open' THEN
+    RAISE EXCEPTION 'A selected market is not open';
+  END IF;
+
+  IF p_line IS NULL OR p_line <> floor(p_line) + 0.5 THEN
+    RAISE EXCEPTION 'Lines must land on a half point (got %)', p_line;
+  END IF;
+  -- Canonical numeric text: '4.50'::numeric and '4.5'::numeric must build the
+  -- SAME 'over:<line>' key the ladder minter builds (its lines come out of
+  -- seed + j × spacing arithmetic, minimal scale).
+  v_line := trim_scale(p_line);
+
+  SELECT * INTO v_d FROM public.odds_engine_market_distribution(p_market_id);
+  v_cfg := public.odds_engine_get_config(v_d.season_id);
+
+  -- Posted rung → the book's standing offer wins; the quote just has to
+  -- agree with it within tolerance.
+  SELECT s.id, s.odds INTO v_sel
+    FROM public.bet_selections s
+    WHERE s.market_id = p_market_id AND s.side = 'over' AND s.line = v_line;
+  IF v_sel.id IS NOT NULL THEN
+    IF abs(v_sel.odds - p_quoted_odds) > v_cfg.quote_tolerance THEN
+      RAISE EXCEPTION 'ODDS_MOVED|%|%|%', p_market_id, p_quoted_odds, v_sel.odds;
+    END IF;
+    RETURN v_sel.id;
+  END IF;
+
+  -- Fresh mint: price inside the custom band; out-of-band lines are simply
+  -- not offered. Engine off → nothing beyond the posted pair is offered.
+  IF NOT v_cfg.is_enabled THEN
+    RAISE EXCEPTION 'That line is not available right now';
+  END IF;
+  IF v_line < v_d.range_lo OR v_line > v_d.range_hi THEN
+    RAISE EXCEPTION 'That line is not available right now';
+  END IF;
+  SELECT pp.over_odds, pp.under_odds INTO v_over, v_under
+    FROM public.odds_engine_price_pair(v_d.mean, v_d.variance, v_d.n_games, v_line,
+                                       COALESCE(v_cfg.custom_odds_min, v_cfg.odds_min),
+                                       COALESCE(v_cfg.custom_odds_max, v_cfg.odds_max),
+                                       false) pp;
+  IF v_over IS NULL THEN
+    RAISE EXCEPTION 'That line is not available right now';
+  END IF;
+  IF abs(v_over - p_quoted_odds) > v_cfg.quote_tolerance THEN
+    RAISE EXCEPTION 'ODDS_MOVED|%|%|%', p_market_id, p_quoted_odds, v_over;
+  END IF;
+
+  -- Mint the PAIR at the fresh price. sort_order 100 + 2·line keeps custom
+  -- rungs stable, collision-free (half-point lines step in whole units of
+  -- 2·line), and after the generated ladder's 0..13; the client orders by
+  -- line anyway.
+  INSERT INTO public.bet_selections (market_id, key, label, odds, line, sort_order, side)
+    VALUES
+      (p_market_id, 'over:'  || v_line, 'Over',  v_over,  v_line, 100 + (v_line * 2)::integer, 'over'),
+      (p_market_id, 'under:' || v_line, 'Under', v_under, v_line, 101 + (v_line * 2)::integer, 'under')
+    ON CONFLICT (market_id, key) DO NOTHING;
+
+  -- Re-read: on a concurrent mint the unique constraint arbitrates and the
+  -- winner's posted price stands — tolerance-check it like any posted rung.
+  SELECT s.id, s.odds INTO v_sel
+    FROM public.bet_selections s
+    WHERE s.market_id = p_market_id AND s.side = 'over' AND s.line = v_line;
+  IF v_sel.id IS NULL THEN
+    RAISE EXCEPTION 'Could not mint the requested line';
+  END IF;
+  IF abs(v_sel.odds - p_quoted_odds) > v_cfg.quote_tolerance THEN
+    RAISE EXCEPTION 'ODDS_MOVED|%|%|%', p_market_id, p_quoted_odds, v_sel.odds;
+  END IF;
+  RETURN v_sel.id;
+END;
+$function$
+;
+
 CREATE OR REPLACE FUNCTION public.bet_selections_fill_side()
  RETURNS trigger
  LANGUAGE plpgsql
@@ -3009,6 +3112,92 @@ END;
 $function$
 ;
 
+CREATE OR REPLACE FUNCTION public.combo_price_line(p_member_ids uuid[], p_stat text, p_season_id uuid, p_n_games integer DEFAULT 1, p_week_id uuid DEFAULT NULL::uuid, p_game_number integer DEFAULT NULL::integer, p_line numeric DEFAULT NULL::numeric)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ STABLE SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+DECLARE
+  v_members      uuid[];
+  v_member_texts text[];
+  v_scope        text;
+  v_combo_key    text;
+  v_mkt          uuid;
+  v_seed_line    numeric;
+  v_seed_odds    numeric;
+  v_posted       numeric;
+  v_line         numeric;
+  v_mean         numeric;
+  v_var          numeric;
+  v_cfg          public.odds_engine_config;
+  v_hi           numeric;
+  v_cn           integer := GREATEST(COALESCE(p_n_games, 1), 1);
+BEGIN
+  IF p_stat IS NULL OR p_stat NOT IN ('clean_frames', 'strikes', 'spares', 'total_pins') THEN
+    RAISE EXCEPTION 'Unknown combo stat %', COALESCE(p_stat, '(null)');
+  END IF;
+
+  SELECT array_agg(m ORDER BY m) INTO v_members
+    FROM (SELECT DISTINCT m FROM unnest(COALESCE(p_member_ids, '{}')) m) d;
+  IF v_members IS NULL OR array_length(v_members, 1) < 2 THEN
+    RAISE EXCEPTION 'A combo needs at least two distinct players';
+  END IF;
+
+  -- Existing open combo for the same key → its seed anchors the editor and
+  -- its posted rungs echo verbatim.
+  IF p_week_id IS NOT NULL THEN
+    SELECT array_agg(m::text ORDER BY m) INTO v_member_texts FROM unnest(v_members) m;
+    v_scope := CASE WHEN p_game_number IS NULL THEN 'night' ELSE 'game' END;
+    v_combo_key := p_stat || '|' || v_scope || '|' || COALESCE(p_game_number::text, 'n')
+                   || '|' || array_to_string(v_member_texts, ',');
+    SELECT m.id INTO v_mkt
+      FROM public.bet_markets m
+      WHERE m.week_id = p_week_id AND m.market_type = 'combo'
+        AND m.status = 'open' AND m.params ->> 'combo_key' = v_combo_key;
+  END IF;
+
+  IF v_mkt IS NOT NULL THEN
+    SELECT s.line, s.odds INTO v_seed_line, v_seed_odds
+      FROM public.bet_selections s
+      WHERE s.market_id = v_mkt AND s.key = 'over';
+  ELSE
+    v_seed_line := public.combo_seed_line(v_members, p_stat, p_season_id, v_cn);
+  END IF;
+
+  v_line := COALESCE(p_line, v_seed_line);
+  IF v_line <> floor(v_line) + 0.5 THEN
+    RAISE EXCEPTION 'Lines must land on a half point (got %)', v_line;
+  END IF;
+
+  IF v_mkt IS NOT NULL THEN
+    SELECT s.odds INTO v_posted
+      FROM public.bet_selections s
+      WHERE s.market_id = v_mkt AND s.side = 'over' AND s.line = v_line;
+  END IF;
+
+  SELECT COALESCE(SUM(ps.mean), 0), COALESCE(SUM(ps.variance), 0)
+    INTO v_mean, v_var
+    FROM unnest(v_members) mem(m)
+    CROSS JOIN LATERAL public.odds_engine_player_stat(
+      mem.m, p_season_id,
+      CASE WHEN p_stat = 'total_pins' THEN 'score' ELSE p_stat END) ps;
+
+  v_cfg := public.odds_engine_get_config(p_season_id);
+  v_hi := CASE WHEN p_stat = 'total_pins'
+               THEN 300 * v_cn * array_length(v_members, 1) - 0.5
+               ELSE 10 * v_cn * array_length(v_members, 1) - 0.5 END;
+
+  RETURN public.odds_engine_quote_internal(
+    v_line, v_seed_line, v_seed_odds, v_posted,
+    v_cfg.is_enabled, v_mean, NULLIF(v_var, 0), v_cn,
+    0.5, v_hi,
+    COALESCE(v_cfg.custom_odds_min, v_cfg.odds_min),
+    COALESCE(v_cfg.custom_odds_max, v_cfg.odds_max));
+END;
+$function$
+;
+
 CREATE OR REPLACE FUNCTION public.combo_seed_line(p_member_ids uuid[], p_stat text, p_season_id uuid, p_n_games integer DEFAULT 1)
  RETURNS numeric
  LANGUAGE plpgsql
@@ -3052,7 +3241,7 @@ END;
 $function$
 ;
 
-CREATE OR REPLACE FUNCTION public.compose_combo_bet(p_week_id uuid, p_combos jsonb, p_stake integer, p_extra_selection_ids uuid[] DEFAULT NULL::uuid[], p_insurance_item_id uuid DEFAULT NULL::uuid, p_crutch_item_id uuid DEFAULT NULL::uuid, p_boost_item_id uuid DEFAULT NULL::uuid)
+CREATE OR REPLACE FUNCTION public.compose_combo_bet(p_week_id uuid, p_combos jsonb, p_stake integer, p_extra_selection_ids uuid[] DEFAULT NULL::uuid[], p_insurance_item_id uuid DEFAULT NULL::uuid, p_crutch_item_id uuid DEFAULT NULL::uuid, p_boost_item_id uuid DEFAULT NULL::uuid, p_extra_picks jsonb DEFAULT NULL::jsonb)
  RETURNS jsonb
  LANGUAGE plpgsql
  SECURITY DEFINER
@@ -3087,6 +3276,7 @@ DECLARE
   v_n_created    integer := 0;
   v_bet_id       uuid;
   v_spec_line    numeric;
+  v_spec_quote   numeric;
   v_odds         numeric;
   v_mean         numeric;
   v_var          numeric;
@@ -3094,6 +3284,9 @@ DECLARE
   v_spacing      numeric;
   v_hi           numeric;
   v_cn           integer;
+  v_pick         jsonb;
+  v_extra_ids    uuid[] := '{}';
+  v_pick_market  uuid;
 BEGIN
   v_player_id := public.current_player_id();
 
@@ -3132,9 +3325,12 @@ BEGIN
     v_stat := v_spec ->> 'stat';
     v_scope := v_spec ->> 'scope';
     v_game_number := (v_spec ->> 'game_number')::integer;
-    -- Optional chosen rung: bettors step the ladder in the BuilderBar; NULL
-    -- means the seed rung (canonical 'over' key).
+    -- Optional chosen rung: NULL means the seed rung (canonical 'over' key).
+    -- With a quoted price attached, an UNPOSTED chosen line mints on demand
+    -- (bet_mint_rung_internal); without one, legacy behavior — posted rungs
+    -- only.
     v_spec_line := (v_spec ->> 'line')::numeric;
+    v_spec_quote := (v_spec ->> 'quoted_odds')::numeric;
 
     IF v_stat IS NULL OR v_stat NOT IN ('clean_frames', 'strikes', 'spares', 'total_pins') THEN
       RAISE EXCEPTION 'Unknown combo stat %', COALESCE(v_stat, '(null)');
@@ -3196,6 +3392,12 @@ BEGIN
         SELECT s.id, s.line, s.odds INTO v_over_id, v_line, v_odds
           FROM public.bet_selections s
           WHERE s.market_id = v_market_id AND s.key = 'over';
+      ELSIF v_spec_quote IS NOT NULL THEN
+        -- Quoted spec: posted rungs reuse (tolerance-checked inside), unposted
+        -- lines mint at the fresh price.
+        v_over_id := public.bet_mint_rung_internal(v_market_id, v_spec_line, v_spec_quote);
+        SELECT s.line, s.odds INTO v_line, v_odds
+          FROM public.bet_selections s WHERE s.id = v_over_id;
       ELSE
         SELECT s.id, s.line, s.odds INTO v_over_id, v_line, v_odds
           FROM public.bet_selections s
@@ -3266,7 +3468,14 @@ BEGIN
           FROM public.bet_selections s
           WHERE s.market_id = v_market_id AND s.side = 'over' AND s.line = v_spec_line;
         IF v_over_id IS NULL THEN
-          RAISE EXCEPTION 'That line is not offered for this combo — pick a posted rung';
+          IF v_spec_quote IS NOT NULL THEN
+            -- Chosen line off the fresh ladder: mint it on demand alongside.
+            v_over_id := public.bet_mint_rung_internal(v_market_id, v_spec_line, v_spec_quote);
+            SELECT s.line, s.odds INTO v_line, v_odds
+              FROM public.bet_selections s WHERE s.id = v_over_id;
+          ELSE
+            RAISE EXCEPTION 'That line is not offered for this combo — pick a posted rung';
+          END IF;
         END IF;
       END IF;
 
@@ -3291,6 +3500,25 @@ BEGIN
       'market_id', v_market_id, 'line', v_line, 'odds', v_odds, 'deduped', v_deduped);
   END LOOP;
 
+  -- Line-shaped parlay extras: regular picks riding the same ticket, minted
+  -- through the same helper (must be OTHER markets — no self-referential legs).
+  IF p_extra_picks IS NOT NULL THEN
+    IF jsonb_typeof(p_extra_picks) <> 'array' THEN
+      RAISE EXCEPTION 'extra_picks must be an array';
+    END IF;
+    FOR v_pick IN SELECT value FROM jsonb_array_elements(p_extra_picks) LOOP
+      v_pick_market := (v_pick ->> 'market_id')::uuid;
+      IF v_pick_market IS NULL THEN
+        RAISE EXCEPTION 'Every pick needs a market_id';
+      END IF;
+      IF v_pick_market = ANY (v_market_ids) THEN
+        RAISE EXCEPTION 'A combo cannot parlay with its own selections';
+      END IF;
+      v_extra_ids := v_extra_ids || public.bet_mint_rung_internal(
+        v_pick_market, (v_pick ->> 'line')::numeric, (v_pick ->> 'quoted_odds')::numeric);
+    END LOOP;
+  END IF;
+
   -- Parlay extras must be OTHER markets' selections (no self-referential legs).
   IF p_extra_selection_ids IS NOT NULL AND EXISTS (
     SELECT 1 FROM public.bet_selections s
@@ -3302,9 +3530,9 @@ BEGIN
   -- Compose = bet: place_house_bet re-validates every leg (open market, same
   -- season/week, min stake, balance, anti-tank, item contracts) and writes the
   -- bet + legs + the bet_stake double entry. Any failure rolls the new
-  -- market(s) back too.
+  -- market(s) and minted rung(s) back too.
   v_bet_id := public.place_house_bet(
-    v_over_ids || COALESCE(p_extra_selection_ids, '{}'::uuid[]),
+    v_over_ids || v_extra_ids || COALESCE(p_extra_selection_ids, '{}'::uuid[]),
     p_stake, NULL,
     p_insurance_item_id, p_crutch_item_id, p_boost_item_id);
 
@@ -4816,6 +5044,63 @@ END;
 $function$
 ;
 
+CREATE OR REPLACE FUNCTION public.market_price_line(p_market_id uuid, p_line numeric DEFAULT NULL::numeric)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ STABLE SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+DECLARE
+  v_mkt       public.bet_markets;
+  v_seed_line numeric;
+  v_seed_odds numeric;
+  v_posted    numeric;
+  v_line      numeric;
+  v_cfg       public.odds_engine_config;
+  v_d         record;
+BEGIN
+  SELECT * INTO v_mkt FROM public.bet_markets WHERE id = p_market_id;
+  IF v_mkt.id IS NULL THEN
+    RAISE EXCEPTION 'Market not found';
+  END IF;
+  IF v_mkt.market_type NOT IN ('over_under', 'prop', 'combo') THEN
+    RAISE EXCEPTION 'Market type % is not priceable', v_mkt.market_type;
+  END IF;
+  -- Closed markets still preview (the client gates staging on status);
+  -- settled/void ones have nothing left to quote.
+  IF v_mkt.status NOT IN ('open', 'closed') THEN
+    RAISE EXCEPTION 'Market is no longer quotable';
+  END IF;
+
+  SELECT s.line, s.odds INTO v_seed_line, v_seed_odds
+    FROM public.bet_selections s
+    WHERE s.market_id = p_market_id AND s.key = 'over';
+  IF v_seed_line IS NULL THEN
+    RAISE EXCEPTION 'Market has no seed selection';
+  END IF;
+
+  v_line := COALESCE(p_line, v_seed_line);
+  IF v_line <> floor(v_line) + 0.5 THEN
+    RAISE EXCEPTION 'Lines must land on a half point (got %)', v_line;
+  END IF;
+
+  SELECT s.odds INTO v_posted
+    FROM public.bet_selections s
+    WHERE s.market_id = p_market_id AND s.side = 'over' AND s.line = v_line;
+
+  SELECT * INTO v_d FROM public.odds_engine_market_distribution(p_market_id);
+  v_cfg := public.odds_engine_get_config(v_d.season_id);
+
+  RETURN public.odds_engine_quote_internal(
+    v_line, v_seed_line, v_seed_odds, v_posted,
+    v_cfg.is_enabled, v_d.mean, v_d.variance, v_d.n_games,
+    v_d.range_lo, v_d.range_hi,
+    COALESCE(v_cfg.custom_odds_min, v_cfg.odds_min),
+    COALESCE(v_cfg.custom_odds_max, v_cfg.odds_max));
+END;
+$function$
+;
+
 CREATE OR REPLACE FUNCTION public.materialize_due_recurring_broadcasts()
  RETURNS void
  LANGUAGE plpgsql
@@ -4996,6 +5281,7 @@ BEGIN
     v_cfg.spacing_score        := 10;
     v_cfg.spacing_night_pins   := 20;
     v_cfg.spacing_count        := 1.0;
+    v_cfg.quote_tolerance      := 0.10;
   END IF;
   RETURN v_cfg;
 END;
@@ -5052,6 +5338,87 @@ END;
 $function$
 ;
 
+CREATE OR REPLACE FUNCTION public.odds_engine_market_distribution(p_market_id uuid, OUT mean numeric, OUT variance numeric, OUT n_games integer, OUT range_lo numeric, OUT range_hi numeric, OUT season_id uuid)
+ RETURNS record
+ LANGUAGE plpgsql
+ STABLE SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+DECLARE
+  v_mkt        public.bet_markets;
+  v_week_games integer;
+  v_stat       text;
+  v_scope      text;
+  v_members    uuid[];
+BEGIN
+  SELECT * INTO v_mkt FROM public.bet_markets WHERE id = p_market_id;
+  IF v_mkt.id IS NULL THEN
+    RAISE EXCEPTION 'Market not found';
+  END IF;
+
+  SELECT w.season_id INTO season_id FROM public.weeks w WHERE w.id = v_mkt.week_id;
+
+  -- Week schedule size (night scopes): the games table once it exists, else
+  -- the pre-teams default of 2 — the same policy as every sync generator.
+  SELECT COUNT(DISTINCT g.game_number) INTO v_week_games
+    FROM public.games g
+    JOIN public.teams t ON t.id = g.team_a_id
+    WHERE t.week_id = v_mkt.week_id;
+  IF v_week_games IS NULL OR v_week_games = 0 THEN
+    v_week_games := 2;
+  END IF;
+
+  IF v_mkt.market_type = 'over_under' THEN
+    SELECT ps.mean, ps.variance INTO mean, variance
+      FROM public.odds_engine_player_stat(v_mkt.subject_player_id, season_id, 'score') ps;
+    IF v_mkt.game_number IS NOT NULL THEN
+      n_games := 1;            range_lo := 0.5; range_hi := 299.5;
+    ELSE
+      n_games := v_week_games; range_lo := 0.5; range_hi := 300 * v_week_games - 0.5;
+    END IF;
+
+  ELSIF v_mkt.market_type = 'prop' THEN
+    v_stat := v_mkt.params ->> 'stat';
+    IF v_stat IS NULL OR v_stat NOT IN ('strikes', 'spares', 'clean_frames') THEN
+      RAISE EXCEPTION 'Market stat % is not priceable', COALESCE(v_stat, '(null)');
+    END IF;
+    SELECT ps.mean, ps.variance INTO mean, variance
+      FROM public.odds_engine_player_stat(v_mkt.subject_player_id, season_id, v_stat) ps;
+    IF v_mkt.game_number IS NOT NULL THEN
+      n_games := 1;            range_lo := 0.5; range_hi := 9.5;
+    ELSE
+      n_games := v_week_games; range_lo := 0.5; range_hi := 10 * v_week_games - 0.5;
+    END IF;
+
+  ELSIF v_mkt.market_type = 'combo' THEN
+    v_stat := v_mkt.params ->> 'stat';
+    v_scope := v_mkt.params ->> 'scope';
+    SELECT array_agg((m.value)::uuid) INTO v_members
+      FROM jsonb_array_elements_text(v_mkt.params -> 'member_ids') m;
+    IF v_members IS NULL OR v_stat IS NULL
+       OR v_stat NOT IN ('clean_frames', 'strikes', 'spares', 'total_pins') THEN
+      RAISE EXCEPTION 'Combo market % has no priceable params', p_market_id;
+    END IF;
+    -- Members modeled independent: per-game means and variances add.
+    SELECT COALESCE(SUM(ps.mean), 0), COALESCE(SUM(ps.variance), 0)
+      INTO mean, variance
+      FROM (SELECT DISTINCT m FROM unnest(v_members) m) mem
+      CROSS JOIN LATERAL public.odds_engine_player_stat(
+        mem.m, season_id,
+        CASE WHEN v_stat = 'total_pins' THEN 'score' ELSE v_stat END) ps;
+    n_games := CASE WHEN v_scope = 'game' THEN 1 ELSE v_week_games END;
+    range_lo := 0.5;
+    range_hi := CASE WHEN v_stat = 'total_pins'
+                     THEN 300 * n_games * array_length(v_members, 1) - 0.5
+                     ELSE 10 * n_games * array_length(v_members, 1) - 0.5 END;
+
+  ELSE
+    RAISE EXCEPTION 'Market type % is not priceable', v_mkt.market_type;
+  END IF;
+END;
+$function$
+;
+
 CREATE OR REPLACE FUNCTION public.odds_engine_mint_ladder(p_market_id uuid, p_seed_line numeric, p_mean numeric, p_variance numeric, p_n_games integer, p_spacing numeric, p_range_lo numeric, p_range_hi numeric, p_season_id uuid)
  RETURNS void
  LANGUAGE plpgsql
@@ -5082,6 +5449,48 @@ AS $function$
       FROM (SELECT abs(z) / sqrt(2.0) AS x) c
     ) t
   ) e;
+$function$
+;
+
+CREATE OR REPLACE FUNCTION public.odds_engine_norm_ppf(p double precision)
+ RETURNS double precision
+ LANGUAGE plpgsql
+ IMMUTABLE PARALLEL SAFE
+ SET search_path TO ''
+AS $function$
+DECLARE
+  q double precision;
+  r double precision;
+BEGIN
+  IF p <= 0 OR p >= 1 THEN
+    RAISE EXCEPTION 'norm_ppf requires p in (0, 1), got %', p;
+  END IF;
+
+  IF p < 0.02425 THEN
+    q := sqrt(-2 * ln(p));
+    RETURN (((((-7.784894002430293e-03 * q - 3.223964580411365e-01) * q
+               - 2.400758277161838e+00) * q - 2.549732539343734e+00) * q
+               + 4.374664141464968e+00) * q + 2.938163982698783e+00)
+         / ((((7.784695709041462e-03 * q + 3.224671290700398e-01) * q
+               + 2.445134137142996e+00) * q + 3.754408661907416e+00) * q + 1.0);
+  ELSIF p > 1 - 0.02425 THEN
+    q := sqrt(-2 * ln(1 - p));
+    RETURN -((((((-7.784894002430293e-03 * q - 3.223964580411365e-01) * q
+               - 2.400758277161838e+00) * q - 2.549732539343734e+00) * q
+               + 4.374664141464968e+00) * q + 2.938163982698783e+00)
+         / ((((7.784695709041462e-03 * q + 3.224671290700398e-01) * q
+               + 2.445134137142996e+00) * q + 3.754408661907416e+00) * q + 1.0));
+  ELSE
+    q := p - 0.5;
+    r := q * q;
+    RETURN (((((-3.969683028665376e+01 * r + 2.209460984245205e+02) * r
+               - 2.759285104469687e+02) * r + 1.383577518672690e+02) * r
+               - 3.066479806614716e+01) * r + 2.506628277459239e+00) * q
+         / (((((-5.447609879822406e+01 * r + 1.615858368580409e+02) * r
+               - 1.556989798598866e+02) * r + 6.680131188771972e+01) * r
+               - 1.328068155288572e+01) * r + 1.0);
+  END IF;
+END;
 $function$
 ;
 
@@ -5190,6 +5599,83 @@ BEGIN
 
   over_odds  := GREATEST(1.05, round(LEAST(p_odds_max, GREATEST(p_odds_min, v_over))  * 20) / 20);
   under_odds := GREATEST(1.05, round(LEAST(p_odds_max, GREATEST(p_odds_min, v_under)) * 20) / 20);
+END;
+$function$
+;
+
+CREATE OR REPLACE FUNCTION public.odds_engine_quote_internal(p_line numeric, p_seed_line numeric, p_seed_odds numeric, p_posted_odds numeric, p_enabled boolean, p_mean numeric, p_variance numeric, p_n_games integer, p_range_lo numeric, p_range_hi numeric, p_odds_min numeric, p_odds_max numeric)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ IMMUTABLE
+ SET search_path TO ''
+AS $function$
+DECLARE
+  v_mu       numeric;
+  v_sigma    numeric;
+  v_p_lo     double precision;
+  v_p_hi     double precision;
+  v_min_line numeric;
+  v_max_line numeric;
+  v_odds     numeric;
+  v_under    numeric;
+BEGIN
+  IF NOT p_enabled OR p_mean IS NULL OR p_variance IS NULL OR p_variance <= 0 THEN
+    -- Engine off (or no distribution): only posted lines are priceable — the
+    -- band collapses to the seed and unposted lines return odds NULL.
+    RETURN jsonb_build_object(
+      'line', p_line,
+      'odds', COALESCE(p_posted_odds, CASE WHEN p_line = p_seed_line THEN p_seed_odds END),
+      'posted', p_posted_odds IS NOT NULL OR p_line = p_seed_line,
+      'seed_line', p_seed_line, 'seed_odds', p_seed_odds,
+      'min_line', p_seed_line, 'max_line', p_seed_line);
+  END IF;
+
+  v_mu    := p_mean * GREATEST(p_n_games, 1);
+  v_sigma := sqrt(p_variance * GREATEST(p_n_games, 1));
+
+  -- Both sides of the zero-vig pair must land in [odds_min, odds_max]:
+  -- p_over ∈ [max(1/o_max, 1 − 1/o_min), min(1 − 1/o_max, 1/o_min)].
+  v_p_lo := GREATEST(1.0 / p_odds_max, 1.0 - 1.0 / p_odds_min);
+  v_p_hi := LEAST(1.0 - 1.0 / p_odds_max, 1.0 / p_odds_min);
+
+  -- p_over falls as the line rises: p_hi bounds the low edge, p_lo the high.
+  v_min_line := ceil((v_mu + public.odds_engine_norm_ppf(1.0 - v_p_hi) * v_sigma)::numeric - 0.5) + 0.5;
+  v_max_line := floor((v_mu + public.odds_engine_norm_ppf(1.0 - v_p_lo) * v_sigma)::numeric + 0.5) - 0.5;
+  v_min_line := GREATEST(v_min_line, p_range_lo);
+  v_max_line := LEAST(v_max_line, p_range_hi);
+  IF v_min_line > v_max_line THEN
+    v_min_line := p_seed_line;
+    v_max_line := p_seed_line;
+  END IF;
+  -- The seed is always offered (the minter forces it), so the selectable band
+  -- must contain it even when the raw odds band doesn't.
+  v_min_line := LEAST(v_min_line, p_seed_line);
+  v_max_line := GREATEST(v_max_line, p_seed_line);
+
+  IF p_posted_odds IS NOT NULL THEN
+    -- Posted rungs are the book's standing offer — echoed verbatim, never
+    -- re-quoted (a frozen market's rungs keep their frozen price).
+    v_odds := p_posted_odds;
+  ELSIF p_line < p_range_lo OR p_line > p_range_hi THEN
+    v_odds := NULL;
+  ELSE
+    SELECT pp.over_odds, pp.under_odds INTO v_odds, v_under
+      FROM public.odds_engine_price_pair(p_mean, p_variance, p_n_games, p_line,
+                                         p_odds_min, p_odds_max, false) pp;
+    IF v_odds IS NULL AND p_line = p_seed_line THEN
+      -- Unposted seed (fresh combo): mirror the minter — force, clamp.
+      SELECT pp.over_odds, pp.under_odds INTO v_odds, v_under
+        FROM public.odds_engine_price_pair(p_mean, p_variance, p_n_games, p_line,
+                                           p_odds_min, p_odds_max, true) pp;
+    END IF;
+  END IF;
+
+  RETURN jsonb_build_object(
+    'line', p_line,
+    'odds', v_odds,
+    'posted', p_posted_odds IS NOT NULL,
+    'seed_line', p_seed_line, 'seed_odds', p_seed_odds,
+    'min_line', v_min_line, 'max_line', v_max_line);
 END;
 $function$
 ;
@@ -5399,6 +5885,41 @@ BEGIN
      SET bidder_count = (SELECT count(*) FROM public.auction_bids b
                           WHERE b.auction_id = a.id AND b.status = 'active')
    WHERE a.id = p_auction_id;
+END;
+$function$
+;
+
+CREATE OR REPLACE FUNCTION public.place_bet_at_lines(p_picks jsonb, p_stake integer, p_insurance_item_id uuid DEFAULT NULL::uuid, p_crutch_item_id uuid DEFAULT NULL::uuid, p_boost_item_id uuid DEFAULT NULL::uuid)
+ RETURNS uuid
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+DECLARE
+  v_pick       jsonb;
+  v_market_id  uuid;
+  v_market_ids uuid[] := '{}';
+  v_sel_ids    uuid[] := '{}';
+BEGIN
+  IF p_picks IS NULL OR jsonb_typeof(p_picks) <> 'array' OR jsonb_array_length(p_picks) < 1 THEN
+    RAISE EXCEPTION 'No selections provided';
+  END IF;
+
+  FOR v_pick IN SELECT value FROM jsonb_array_elements(p_picks) LOOP
+    v_market_id := (v_pick ->> 'market_id')::uuid;
+    IF v_market_id IS NULL THEN
+      RAISE EXCEPTION 'Every pick needs a market_id';
+    END IF;
+    IF v_market_id = ANY (v_market_ids) THEN
+      RAISE EXCEPTION 'The same market appears twice on this ticket';
+    END IF;
+    v_market_ids := v_market_ids || v_market_id;
+    v_sel_ids := v_sel_ids || public.bet_mint_rung_internal(
+      v_market_id, (v_pick ->> 'line')::numeric, (v_pick ->> 'quoted_odds')::numeric);
+  END LOOP;
+
+  RETURN public.place_house_bet(v_sel_ids, p_stake, NULL,
+                                p_insurance_item_id, p_crutch_item_id, p_boost_item_id);
 END;
 $function$
 ;
