@@ -6,13 +6,6 @@ import { colors, fonts, radius, type } from '../../theme'
 import { fmtOdds } from '../../utils/bets'
 import { useLinePreview, type LinePreviewSource, type LineQuote } from '../../hooks/useLinePreview'
 
-// Snap any typed number onto the half-point grid: integers step up to X.5
-// ("140" → 140.5), everything else rounds to the nearest X.5. Cosmetic only —
-// the pricing/placement RPCs re-validate half-points server-side.
-export function snapToHalf(n: number): number {
-  return Math.round(n - 0.5) + 0.5
-}
-
 interface LineEntrySheetProps {
   // Sheet header: the subject ("Garrett Blinkhorn", "A + B + C").
   title: string
@@ -31,10 +24,13 @@ interface LineEntrySheetProps {
   onClose: () => void
 }
 
-// The value-entry sheet behind every value-first line: type the number the
-// bet should beat, see the acceptable band + the re-priced line live
-// (debounced preview), Accept returns the chosen value to the board. Replaces
-// the inline pill TextInput (which fought the keyboard for the lower board).
+// The value-entry sheet behind every value-first line: type the WHOLE number
+// the bet should beat (the half-point line X.5 is implied — shown on the
+// live-re-priced preview), see the acceptable band, Accept returns the chosen
+// value to the board. The half-point grid is enforced by construction
+// (integer + 0.5); the pricing/placement RPCs re-validate server-side.
+// Replaces the inline pill TextInput (which fought the keyboard for the
+// lower board).
 // Conditional-mount contract: callers render `{editing && <LineEntrySheet/>}`
 // so state resets between opens.
 export default function LineEntrySheet({
@@ -46,9 +42,11 @@ export default function LineEntrySheet({
   onAccept,
   onClose,
 }: LineEntrySheetProps) {
-  const [text, setText] = useState(initialValue.toFixed(1))
-  const parsed = parseFloat(text.replace(',', '.'))
-  const draft = isNaN(parsed) ? null : snapToHalf(parsed)
+  // The input traffics in WHOLE numbers — the .5 is implied and shown only on
+  // the previewed line ("142" → the 142.5+ line: beat 142).
+  const [text, setText] = useState(String(Math.floor(initialValue)))
+  const parsed = parseInt(text, 10)
+  const draft = isNaN(parsed) ? null : parsed + 0.5
 
   // Prices the draft as it changes (250ms debounce); a null draft prices the
   // seed rung, so the acceptable band is known even mid-erase.
@@ -80,8 +78,8 @@ export default function LineEntrySheet({
         <TextInput
           style={styles.input}
           value={text}
-          onChangeText={setText}
-          keyboardType={Platform.OS === 'ios' ? 'decimal-pad' : 'numeric'}
+          onChangeText={t => setText(t.replace(/[^0-9]/g, ''))}
+          keyboardType="number-pad"
           autoFocus
           selectTextOnFocus
           // No returnKeyType on iOS: RN pairs number pads + returnKeyType with
@@ -90,11 +88,12 @@ export default function LineEntrySheet({
           returnKeyType={Platform.OS === 'ios' ? undefined : 'done'}
         />
 
-        {/* The acceptable half-point band (from the quote; every quote
-            carries it, whatever line it priced). */}
+        {/* The acceptable band (from the quote; every quote carries it,
+            whatever line it priced) — shown in the input's whole-number
+            terms (the X.5 line ↔ typing X). */}
         <Text style={styles.range}>
           {quote != null
-            ? `Acceptable: ${quote.minLine.toFixed(1)} – ${quote.maxLine.toFixed(1)}`
+            ? `Acceptable: ${Math.floor(quote.minLine)} – ${Math.floor(quote.maxLine)}`
             : 'Finding the acceptable range…'}
         </Text>
 
