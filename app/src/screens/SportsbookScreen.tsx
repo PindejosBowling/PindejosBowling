@@ -21,7 +21,8 @@ import SettledBetsView from '../components/betting/SettledBetsView'
 import BetDetailModal from '../components/betting/BetDetailModal'
 import { useBetSlip, useBetSlipReload } from '../components/betting/BetSlipProvider'
 import LineRow from '../components/betting/LineRow'
-import LinePill from '../components/betting/LinePill'
+import LinePill, { conditionLabel } from '../components/betting/LinePill'
+import LineEntrySheet from '../components/betting/LineEntrySheet'
 import CustomLineRow from '../components/betting/CustomLineRow'
 import PickChip from '../components/betting/PickChip'
 import BuilderBar from '../components/betting/BuilderBar'
@@ -259,23 +260,26 @@ export default function SportsbookScreen() {
 
   // The combo's edited value (null = the seed anchor) — resets whenever the
   // combo identity changes. Priced live by combo_price_line; the BuilderBar
-  // renders the same ◀ value ▶ editor the board pills use.
+  // shows it, the LineEntrySheet edits it.
   const [comboLineValue, setComboLineValue] = useState<number | null>(null)
   useEffect(() => { setComboLineValue(null) }, [comboKey])
-  const { quote: comboQuote, loading: comboQuoteLoading } = useLinePreview(
-    combining && combo?.stat != null && currentSeasonId != null
-      ? {
-          kind: 'combo',
-          memberIds: comboMemberIds,
-          stat: combo.stat,
-          seasonId: currentSeasonId,
-          nGames: comboNGames,
-          weekId: currentWeekId,
-          gameNumber: comboScopeGame,
-        }
-      : null,
-    comboLineValue,
+  // Shared with the value sheet, which prices its draft off the same source.
+  const comboSource = useMemo(
+    () =>
+      combining && combo?.stat != null && currentSeasonId != null
+        ? {
+            kind: 'combo' as const,
+            memberIds: comboMemberIds,
+            stat: combo.stat,
+            seasonId: currentSeasonId,
+            nGames: comboNGames,
+            weekId: currentWeekId,
+            gameNumber: comboScopeGame,
+          }
+        : null,
+    [combining, combo?.stat, currentSeasonId, comboMemberIds, comboNGames, currentWeekId, comboScopeGame]
   )
+  const { quote: comboQuote, loading: comboQuoteLoading } = useLinePreview(comboSource, comboLineValue)
   const shownComboValue = comboLineValue ?? comboQuote?.seedLine ?? null
   const comboOdds =
     comboQuote != null && shownComboValue != null && comboQuote.line === shownComboValue
@@ -351,58 +355,41 @@ export default function SportsbookScreen() {
     return rows
   }, [rsvpInPlayers, playerId])
 
-  // ── Value-first editing ───────────────────────────────────────────────
-  // Per-market value overrides (the number the bettor stepped/typed). One
-  // market is the "active edit" at a time — the single debounced preview
-  // stream prices it; other pills read posted rungs or their staged pick.
-  // Overrides reset on board reload so re-laddered seeds re-anchor.
+  // ── Value-first editing (via the LineEntrySheet) ──────────────────────
+  // Per-market value overrides (the number the bettor accepted in the sheet)
+  // + the accepted quote per market so custom (non-posted) values keep their
+  // price on the board. Display-only; placement re-prices authoritatively
+  // (quote_tolerance). Both reset on board reload so re-laddered seeds
+  // re-anchor.
   const [lineValues, setLineValues] = useState<Record<string, number>>({})
-  const [activeEditMarketId, setActiveEditMarketId] = useState<string | null>(null)
-  // The last landed quote per market — keeps a custom (non-posted) value
-  // priced after the active edit moves to another pill (the live stream only
-  // prices one market at a time), and shows the band instantly on re-tap.
-  // Display-only; placement re-prices authoritatively (quote_tolerance).
   const [quoteCache, setQuoteCache] = useState<Record<string, LineQuote>>({})
+  // The open value editor: a board market's pill, or the combine bar's combo.
+  const [valueSheet, setValueSheet] = useState<
+    { kind: 'market'; line: LineView } | { kind: 'combo' } | null
+  >(null)
   useEffect(() => {
     setLineValues({})
-    setActiveEditMarketId(null)
     setQuoteCache({})
+    setValueSheet(null)
   }, [openLines])
-
-  const { quote: editQuote, loading: editLoading } = useLinePreview(
-    activeEditMarketId != null ? { kind: 'market', marketId: activeEditMarketId } : null,
-    activeEditMarketId != null ? lineValues[activeEditMarketId] ?? null : null,
-  )
-
-  // Every landed quote is remembered for its market (useLinePreview clears
-  // on source switch, so editQuote always belongs to the current active edit).
-  useEffect(() => {
-    if (editQuote == null || activeEditMarketId == null) return
-    setQuoteCache(prev => ({ ...prev, [activeEditMarketId]: editQuote }))
-  }, [editQuote]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // The pill's anchor: the market's posted seed rung (canonical 'over' key).
   const seedOf = (line: LineView) =>
     line.selections.find(s => s.key === 'over')?.line ?? line.line ?? 0.5
   const postedAt = (line: LineView, value: number) =>
     line.selections.find(s => s.side === 'over' && s.line === value)
+  // The pill's displayed value: staged pick → accepted edit → seed rung.
+  const valueOf = (line: LineView) =>
+    slipPicks.find(p => p.marketId === line.marketId)?.line
+      ?? lineValues[line.marketId]
+      ?? seedOf(line)
 
-  // Live re-stage, quote half: when the active edit's quote lands and that
-  // market's pick is staged at the quoted value, patch the staged price.
-  useEffect(() => {
-    if (editQuote == null || activeEditMarketId == null || editQuote.odds == null) return
-    const staged = slipPicks.find(p => p.marketId === activeEditMarketId)
-    if (staged && staged.line === editQuote.line && staged.odds !== editQuote.odds) {
-      updateSlipPick(activeEditMarketId, { odds: editQuote.odds })
-    }
-  }, [editQuote]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  // A committed type-in: record the value, make this market
-  // the active edit, and live re-stage a staged pick at the new value (posted
-  // odds immediately; a fresh quote patches in when it lands).
-  function editLineValue(line: LineView, v: number) {
+  // An accepted sheet value: record it + its quote, and re-stage a staged
+  // pick at the new value (posted rung odds when it lands on one, else the
+  // accepted quote's).
+  function acceptLineValue(line: LineView, v: number, quote: LineQuote) {
     setLineValues(prev => ({ ...prev, [line.marketId]: v }))
-    setActiveEditMarketId(line.marketId)
+    setQuoteCache(prev => ({ ...prev, [line.marketId]: quote }))
     const staged = slipPicks.find(p => p.marketId === line.marketId)
     if (staged && staged.line !== v) {
       const posted = postedAt(line, v)
@@ -410,7 +397,7 @@ export default function SportsbookScreen() {
         line: v,
         selectionId: posted?.selectionId ?? null,
         selectionKey: posted?.key ?? 'over',
-        ...(posted != null ? { odds: posted.odds } : {}),
+        odds: posted?.odds ?? quote.odds ?? staged.odds,
       })
     }
   }
@@ -418,10 +405,10 @@ export default function SportsbookScreen() {
   // Pill-body tap: stage/unstage at the displayed value with its displayed
   // price. The value drives everything — the odds just follow. Balance is
   // validated at placement, so a low balance still stages.
-  function stagePickAtValue(line: LineView, value: number, odds: number | null, loading: boolean) {
+  function stagePickAtValue(line: LineView, value: number, odds: number | null) {
     if (readOnly) return
     if (odds == null) {
-      showToast(loading ? 'Still pricing that line…' : 'That line is unavailable', 'error')
+      showToast('That line is unavailable', 'error')
       return
     }
     const posted = postedAt(line, value)
@@ -475,28 +462,17 @@ export default function SportsbookScreen() {
           const staged = slipPicks.find(p => p.marketId === line.marketId)
           const value = staged?.line ?? lineValues[line.marketId] ?? seedOf(line)
           const posted = postedAt(line, value)
-          const isActive = activeEditMarketId === line.marketId
-          const quoted = isActive && editQuote != null && editQuote.line === value ? editQuote : null
           const cached = quoteCache[line.marketId]
-          // Price resolution: posted rung → staged snapshot → live quote →
-          // last landed quote (keeps a custom value priced after the active
-          // edit moves on).
+          // Price resolution: posted rung → staged snapshot → the quote
+          // accepted in the value sheet.
           const odds = posted?.odds
             ?? (staged != null && staged.line === value ? staged.odds : null)
-            ?? quoted?.odds
             ?? (cached != null && cached.line === value ? cached.odds : null)
-          const loading =
-            odds == null && isActive && (editLoading || (editQuote != null && editQuote.line !== value))
-          // The band while editing: the live quote's, else the last landed
-          // one (instant on re-tap; same market, so still valid).
-          const band = isActive ? (editQuote ?? cached ?? null) : null
           return (
             <LinePill
               line={line}
               value={value}
               odds={odds}
-              loading={loading}
-              band={band != null ? { min: band.minLine, max: band.maxLine } : null}
               staged={staged != null}
               dimmed={balance < 10}
               inert={groupInProgress || line.inProgress || readOnly}
@@ -504,15 +480,11 @@ export default function SportsbookScreen() {
               // and pivots to member picking, so value editing hides while
               // armed.
               editable={!comboArmed}
-              onValueChange={v => editLineValue(line, v)}
-              // Opening the input makes this the active edit immediately —
-              // the preview (seed quote when no override yet) fetches the
-              // priceable band so it can show while the user types.
-              onEditStart={() => setActiveEditMarketId(line.marketId)}
+              onEditValue={() => setValueSheet({ kind: 'market', line })}
               onStage={
                 comboArmed
                   ? () => enterStatView(line)
-                  : () => stagePickAtValue(line, value, odds, loading)
+                  : () => stagePickAtValue(line, value, odds)
               }
             />
           )
@@ -549,14 +521,10 @@ export default function SportsbookScreen() {
           ScreenBackdrop keeps the one poker-table instance mounted across the
           load→ready swap — see pixelart/config.ts. */}
       <ScrollView
-        // Value type-in raises the keyboard mid-list: keep stepper/stage taps
-        // working with it up, dismiss on scroll, commit on blur. The keyboard
-        // inset keeps lower pills reachable — without it the keyboard covers
-        // the bottom of the list and silently swallows taps there (a pill
-        // "randomly" refusing to open its editor while another is focused).
+        // Value entry lives in the LineEntrySheet (its own modal), so the
+        // board itself never raises the keyboard — 'handled' kept so any
+        // future inline input doesn't reintroduce dead first-taps.
         keyboardShouldPersistTaps="handled"
-        keyboardDismissMode="on-drag"
-        automaticallyAdjustKeyboardInsets
         contentContainerStyle={[
           styles.content,
           { paddingTop: insets.top },
@@ -783,7 +751,7 @@ export default function SportsbookScreen() {
           statLabel={(STAT_LABELS[combo.stat] ?? combo.stat).toUpperCase()}
           scopeLabel={scope === 'weekly' ? 'NIGHT' : `GAME ${comboScopeGame}`}
           value={comboLineValue}
-          onValueChange={setComboLineValue}
+          onEditValue={() => setValueSheet({ kind: 'combo' })}
           quote={comboQuote}
           quoteLoading={comboQuoteLoading}
           minMembers={comboMemberIds.length >= 2}
@@ -791,6 +759,39 @@ export default function SportsbookScreen() {
           blocked={board.scopeInProgress}
           onAdd={addComboToSlip}
           onCancel={() => setCombo(null)}
+        />
+      )}
+
+      {/* Value-entry sheet — one instance serves both board pills and the
+          combine bar (conditional-mount so state resets between opens). */}
+      {valueSheet?.kind === 'market' && (
+        <LineEntrySheet
+          title={valueSheet.line.subjectFullName}
+          conditionLabel={conditionLabel(valueSheet.line)}
+          scopeLabel={valueSheet.line.gameNumber != null ? `GAME ${valueSheet.line.gameNumber}` : 'WEEKLY'}
+          source={{ kind: 'market', marketId: valueSheet.line.marketId }}
+          initialValue={valueOf(valueSheet.line)}
+          onAccept={(v, quote) => {
+            acceptLineValue(valueSheet.line, v, quote)
+            setValueSheet(null)
+          }}
+          onClose={() => setValueSheet(null)}
+        />
+      )}
+      {valueSheet?.kind === 'combo' && comboSource != null && combo?.stat != null && shownComboValue != null && (
+        <LineEntrySheet
+          title={comboMemberIds
+            .map(id => shortName(rsvpInPlayers.find(m => m.playerId === id)?.name))
+            .join(' + ')}
+          conditionLabel={(STAT_LABELS[combo.stat] ?? combo.stat).toUpperCase()}
+          scopeLabel={scope === 'weekly' ? 'NIGHT' : `GAME ${comboScopeGame}`}
+          source={comboSource}
+          initialValue={shownComboValue}
+          onAccept={v => {
+            setComboLineValue(v)
+            setValueSheet(null)
+          }}
+          onClose={() => setValueSheet(null)}
         />
       )}
 

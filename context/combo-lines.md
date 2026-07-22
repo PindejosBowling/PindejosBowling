@@ -1,8 +1,8 @@
 # Combo Lines — player-composed member-set aggregate markets
 
 > **OddsEngine + value-first lines (2026-07-22):** combos are fair-priced and
-> **value-first** — the BuilderBar carries the shared tap-to-type value editor
-> (`LineStepper`), priced live by `combo_price_line` (posted rungs verbatim
+> **value-first** — the BuilderBar's value opens the shared `LineEntrySheet`
+> editor, priced live by `combo_price_line` (posted rungs verbatim
 > when the combo_key already has an open market; ANY other half-point line
 > fresh). `compose_combo_bet` specs take optional `"line"` (NULL = seed) and
 > `"quoted_odds"` — a quoted unposted line MINTS on demand (fresh and dedup

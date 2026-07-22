@@ -1,7 +1,6 @@
-import { View, Text, StyleSheet } from 'react-native'
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native'
 import { colors, fonts, radius } from '../../theme'
 import Button from '../ui/Button'
-import LineStepper from './LineStepper'
 import { fmtOdds } from '../../utils/bets'
 import type { LineQuote } from '../../hooks/useLinePreview'
 
@@ -14,7 +13,8 @@ interface BuilderBarProps {
   scopeLabel: string
   // The displayed line value (screen-owned; seeds from the quote's seed_line).
   value: number | null
-  onValueChange: (v: number) => void
+  // Tapping the value opens the LineEntrySheet for this combo.
+  onEditValue: () => void
   // The live quote for `value` (combo_price_line) — odds, band, seed anchor.
   quote: LineQuote | null
   // The preview RPC is in flight (debounce included) — shows the calculating
@@ -32,16 +32,16 @@ interface BuilderBarProps {
 }
 
 // The combine-mode floating bar — same footprint as the bet-slip bar (which
-// hides while combining): live member tally on top; below it the same
-// tap-to-type value editor the board pills use (type the number the group
-// should beat) with the live price beside it. Presentational; the screen owns the
-// combo state, the edited value, and the debounced quote.
+// hides while combining): live member tally on top; below it the combo's
+// value (tap to retype it in the LineEntrySheet, same as a board pill) with
+// the live price beside it. Presentational; the screen owns the combo state,
+// the edited value, and the debounced quote.
 export default function BuilderBar({
   memberNames,
   statLabel,
   scopeLabel,
   value,
-  onValueChange,
+  onEditValue,
   quote,
   quoteLoading,
   minMembers,
@@ -74,16 +74,13 @@ export default function BuilderBar({
         >
           {sub}
         </Text>
-        {/* The value editor — same interaction as a board pill: tap the
-            number to type; the price follows the value. */}
+        {/* The value — same interaction as a board pill: tap the number to
+            retype it in the sheet; the price follows the value. */}
         {!blocked && minMembers && shownValue != null && (
           <View style={styles.valueRow}>
-            <LineStepper
-              value={shownValue}
-              onChange={onValueChange}
-              min={quote?.minLine}
-              max={quote?.maxLine}
-            />
+            <TouchableOpacity onPress={onEditValue} activeOpacity={0.7}>
+              <Text style={styles.value}>{shownValue.toFixed(1)}+</Text>
+            </TouchableOpacity>
             <Text style={styles.odds}>
               {quoteLoading ? '…' : odds != null ? fmtOdds(odds) : '—'}
             </Text>
@@ -133,6 +130,11 @@ const styles = StyleSheet.create({
   },
   subBlocked: { color: colors.gold },
   valueRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 4 },
+  value: {
+    fontFamily: fonts.barlowCondensedHeavy,
+    fontSize: 15,
+    color: colors.text,
+  },
   odds: {
     fontFamily: fonts.barlowCondensedHeavy,
     fontSize: 15,

@@ -143,17 +143,17 @@ which doubles as the integration proof).
 - `SelectionView.side` (normalizeMarket; key-prefix fallback for cached rows).
   Side-aware seams: `selectionBetsAgainstSubject`, `isSelectionHiddenInUI`
   (`fmtOdds` lives in `utils/bets.ts`).
-- **Board** (`LineRow.renderPill` → `LinePill` + shared `LineStepper`):
-  value-first pills — `value CONDITION … ×odds`; tap-the-number types any
-  half-point (the quoted min–max band shows while typing; no arrows — tap-to-
-  type only), the price follows the
-  value live (`useLinePreview` → `betMarkets.priceMarketLine`, one active
-  edit at a time, 250ms debounce; the screen's per-market `quoteCache` keeps a
-  custom value priced after the active edit moves to another pill — display
-  only, placement re-prices). Pill-body tap stages the displayed value;
-  staged picks re-price live (`updateSlipPick`). The ⚰️ rung-chip strip and
-  `LineValueSheet` are retired.
-- **Combos** (`BuilderBar`): the same `LineStepper` editor priced by
+- **Board** (`LineRow.renderPill` → `LinePill`): value-first pills —
+  `value CONDITION … ×odds`; tap-the-number opens the **`LineEntrySheet`**
+  (BottomSheet), which shows the quoted min–max band and re-prices the typed
+  half-point live (its own `useLinePreview` → `betMarkets.priceMarketLine`,
+  250ms debounce); Accept returns `(value, quote)` and the screen's
+  per-market `quoteCache` keeps the custom value priced on the board —
+  display only, placement re-prices. Pill-body tap stages the displayed
+  value; an accepted edit re-stages a staged pick (`updateSlipPick`). The
+  ⚰️ rung-chip strip, the old `LineValueSheet`, and the inline `LineStepper`
+  are retired.
+- **Combos** (`BuilderBar`): the same `LineEntrySheet` (combo source) priced by
   `useLinePreview({kind:'combo'})` → `betMarkets.priceComboLine`; the quote's
   `seed_line` anchors; Add stages the chosen `line` + quoted `odds`.
 - **Slip** (`BetSlipProvider.placeSlip`): regular picks are line-shaped →
