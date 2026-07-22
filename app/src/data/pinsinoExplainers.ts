@@ -42,7 +42,7 @@ export const EXPLAINERS: Record<PinsinoFeatureKey, FeatureExplainer> = {
       'Back a player to beat their projected line for the week.',
       'Every line is priced by the house — the ×odds on the button is what a winning pin pays. The book runs fair: no cut, no juice, just its honest read of each bowler.',
       'The book chases recent form. Think a hot streak is a fluke — or a slump is over? That\'s your edge.',
-      'Tap any line to see every number it\'s offered at. Safer numbers pay less, longshots pay more — bet the outcome you want and the odds follow.',
+      'Hit the ▾ on any line to see every number it\'s offered at. Safer numbers pay less, longshots pay more — bet the outcome you want and the odds follow.',
       'Build a combo: pick two or more players and bet their combined stat against one line. Your combo goes on the board for everyone to bet.',
       'Stack multiple picks into a parlay — every leg has to hit, and the odds multiply.',
       'Pins leave your balance when you place a bet. Tickets settle automatically when the week is finalized.',

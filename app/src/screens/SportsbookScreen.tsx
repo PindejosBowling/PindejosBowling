@@ -276,21 +276,9 @@ export default function SportsbookScreen() {
       ? comboLadder[Math.min(comboRungIndex, comboLadder.length - 1)]
       : null
 
-  // Value sheets: tap a laddered board chip → pick from its posted values;
-  // tap the BuilderBar's line → pick the combo's value. Odds derive from the
-  // selection either way.
-  const [ladderSheet, setLadderSheet] = useState<LineView | null>(null)
+  // Combo value sheet: tap the BuilderBar's line → pick the combo's value
+  // (board lines pick values inline, inside each pill).
   const [comboSheetOpen, setComboSheetOpen] = useState(false)
-
-  // The sheet row's condition text — selectionButtonLabel minus the odds
-  // (the sheet renders the payout in its own column).
-  function ladderConditionLabel(line: LineView, value: number): string {
-    const what =
-      line.marketType === 'over_under'
-        ? line.gameNumber != null ? 'Pins' : 'Total Pins'
-        : line.statKey ? STAT_LABELS[line.statKey] ?? line.statKey : null
-    return `${value.toFixed(1)}+${what ? ` ${what.toUpperCase()}` : ''}`
-  }
 
   // The BuilderBar takes over the slip bar's footprint while combining.
   useEffect(() => {
@@ -299,11 +287,10 @@ export default function SportsbookScreen() {
   }, [combining, setSlipBarHidden])
 
   // Leaving the Place view (or flipping read-only) abandons any in-flight
-  // combo and dismisses any open value sheet.
+  // combo and dismisses the combo value sheet.
   useEffect(() => {
     if (effectiveView !== 'place' || readOnly) {
       setCombo(null)
-      setLadderSheet(null)
       setComboSheetOpen(false)
     }
   }, [effectiveView, readOnly])
@@ -433,10 +420,10 @@ export default function SportsbookScreen() {
         inProgress={groupInProgress}
         // Armed combine mode repurposes the stat taps: the first tap seeds the
         // combo and pivots to member picking (no anti-tank dim — over-on-self
-        // is legal for combos). Outside it, laddered chips open the value
-        // sheet — pick the outcome, the odds derive from the pick.
+        // is legal for combos), so the in-pill value expander hides while
+        // armed. Outside it, each pill selects its value inline.
         onSelect={comboArmed ? line => enterStatView(line) : stagePick}
-        onOpenLadder={comboArmed ? undefined : line => setLadderSheet(line)}
+        expandable={!comboArmed}
         selectionState={
           comboArmed
             ? () => ({})
@@ -714,36 +701,9 @@ export default function SportsbookScreen() {
         />
       )}
 
-      {/* Value sheet — a laddered board line's full range: every posted value
-          with its payout. Picking stages that rung (or unstages it — stagePick
-          toggles); the sheet closes either way. */}
-      {ladderSheet != null && (
-        <LineValueSheet
-          title={ladderSheet.subjectFullName}
-          subtitle={`${(ladderSheet.marketType === 'over_under'
-            ? ladderSheet.gameNumber != null ? 'Pins' : 'Total Pins'
-            : ladderSheet.statKey ? STAT_LABELS[ladderSheet.statKey] ?? ladderSheet.statKey : 'Lines'
-          ).toUpperCase()} · ${
-            ladderSheet.gameNumber != null ? `GAME ${ladderSheet.gameNumber}` : 'NIGHT'
-          }`}
-          rungs={ladderSheet.selections.map(sel => ({
-            line: sel.line ?? ladderSheet.line ?? 0,
-            odds: sel.odds,
-            isSeed: sel.key === 'over',
-            selected: slipPicks.some(p => p.selectionId === sel.selectionId),
-            disabled: balance < 10 || isSelfTank(ladderSheet, sel),
-          }))}
-          formatLine={v => ladderConditionLabel(ladderSheet, v)}
-          onPick={i => {
-            stagePick(ladderSheet, ladderSheet.selections[i])
-            setLadderSheet(null)
-          }}
-          onClose={() => setLadderSheet(null)}
-        />
-      )}
-
       {/* Combo value sheet — the BuilderBar's ladder. Picking only chooses the
-          rung (Add still stages). */}
+          rung (Add still stages). Board lines pick values inline in their
+          pills; combos keep the sheet (the BuilderBar is too small for one). */}
       {comboSheetOpen && combining && combo?.stat != null && comboLadder != null && (
         <LineValueSheet
           title={comboMemberIds

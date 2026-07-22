@@ -97,13 +97,13 @@ which doubles as the integration proof).
   Side-aware seams: `selectionBetsAgainstSubject`, `isSelectionHiddenInUI`,
   `selectionButtonLabel` (now appends the rung's price: `"4.5+ STRIKES ×2.40"`;
   `fmtOdds` lives in `utils/bets.ts`).
-- **Board** (`LineRow` + `LineValueSheet`): a laddered market renders ONE chip
-  (staged rung, else seed, with a ▾); tapping it opens **`LineValueSheet`** —
-  a bottom sheet listing every posted value with its payout ("bet on the
-  outcome you want; the odds derive from the selection", seed marked HOUSE
-  LINE). Picking a row stages that rung via the normal `stagePick` toggle.
-  Single-rung/non-ladder chips keep tap-to-stage; armed combine mode keeps
-  the seeding tap.
+- **Board** (`LineRow` → `LinePill`): each market gets its own FULL-WIDTH
+  pill row (condition left, payout right). Laddered pills carry a ▾ toggle
+  that expands the pill's own inline value selector — a horizontal strip of
+  every posted value with its payout; tapping a value stages that outcome
+  ("bet on the outcome you want; the odds derive from the selection").
+  Tapping the pill body stages/unstages the displayed value. Armed combine
+  mode hides the expander (taps seed the combo).
 - **Combos** (`BuilderBar` + `useComboLinePreview`): the hook returns
   `{ladder, seedIndex, loading}` via `betMarkets.previewComboLadder`;
   tapping the BuilderBar's line block opens the same `LineValueSheet`
