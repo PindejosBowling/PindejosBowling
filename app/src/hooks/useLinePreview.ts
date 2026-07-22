@@ -38,17 +38,24 @@ export function useLinePreview(
   source: LinePreviewSource,
   line: number | null,
 ): { quote: LineQuote | null; loading: boolean } {
-  const [quote, setQuote] = useState<LineQuote | null>(null)
+  // The quote is stored TAGGED with the source it priced, and only returned
+  // while that source is still current — a source switch (different market /
+  // member set) hides the old quote on the very same render, so market A's
+  // band/odds can never flash on market B's editor (an effect-based clear
+  // would lag one render). Line-only changes keep the quote (same market:
+  // the band stays valid while the new line re-prices).
+  const [held, setHeld] = useState<{ key: string; quote: LineQuote } | null>(null)
   const [loading, setLoading] = useState(false)
   const sourceKey = source == null
     ? ''
     : source.kind === 'market'
       ? `m|${source.marketId}`
       : `c|${source.stat}|${source.nGames}|${source.gameNumber ?? 'n'}|${source.weekId ?? ''}|${source.memberIds.join(',')}`
+  const quote = held != null && held.key === sourceKey ? held.quote : null
 
   useEffect(() => {
     if (!source || (source.kind === 'combo' && (source.memberIds.length < 2 || !source.seasonId))) {
-      setQuote(null)
+      setHeld(null)
       setLoading(false)
       return
     }
@@ -63,19 +70,22 @@ export function useLinePreview(
           )
       if (cancelled) return
       if (error || !data || typeof data !== 'object') {
-        setQuote(null)
+        setHeld(null)
         setLoading(false)
         return
       }
       const q = data as Record<string, unknown>
-      setQuote({
-        line: Number(q.line),
-        odds: q.odds == null ? null : Number(q.odds),
-        posted: !!q.posted,
-        seedLine: Number(q.seed_line),
-        seedOdds: q.seed_odds == null ? null : Number(q.seed_odds),
-        minLine: Number(q.min_line),
-        maxLine: Number(q.max_line),
+      setHeld({
+        key: sourceKey,
+        quote: {
+          line: Number(q.line),
+          odds: q.odds == null ? null : Number(q.odds),
+          posted: !!q.posted,
+          seedLine: Number(q.seed_line),
+          seedOdds: q.seed_odds == null ? null : Number(q.seed_odds),
+          minLine: Number(q.min_line),
+          maxLine: Number(q.max_line),
+        },
       })
       setLoading(false)
     }, 250)

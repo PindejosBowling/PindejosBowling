@@ -44,7 +44,7 @@ import {
   type LineView,
   type CustomLineView,
 } from '../hooks/usePinsinoData'
-import { useLinePreview } from '../hooks/useLinePreview'
+import { useLinePreview, type LineQuote } from '../hooks/useLinePreview'
 import { useRefresh } from '../hooks/useRefresh'
 import { useAuthStore } from '../stores/authStore'
 import { useUiStore } from '../stores/uiStore'
@@ -358,15 +358,28 @@ export default function SportsbookScreen() {
   // Overrides reset on board reload so re-laddered seeds re-anchor.
   const [lineValues, setLineValues] = useState<Record<string, number>>({})
   const [activeEditMarketId, setActiveEditMarketId] = useState<string | null>(null)
+  // The last landed quote per market — keeps a custom (non-posted) value
+  // priced after the active edit moves to another pill (the live stream only
+  // prices one market at a time), and shows the band instantly on re-tap.
+  // Display-only; placement re-prices authoritatively (quote_tolerance).
+  const [quoteCache, setQuoteCache] = useState<Record<string, LineQuote>>({})
   useEffect(() => {
     setLineValues({})
     setActiveEditMarketId(null)
+    setQuoteCache({})
   }, [openLines])
 
   const { quote: editQuote, loading: editLoading } = useLinePreview(
     activeEditMarketId != null ? { kind: 'market', marketId: activeEditMarketId } : null,
     activeEditMarketId != null ? lineValues[activeEditMarketId] ?? null : null,
   )
+
+  // Every landed quote is remembered for its market (useLinePreview clears
+  // on source switch, so editQuote always belongs to the current active edit).
+  useEffect(() => {
+    if (editQuote == null || activeEditMarketId == null) return
+    setQuoteCache(prev => ({ ...prev, [activeEditMarketId]: editQuote }))
+  }, [editQuote]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // The pill's anchor: the market's posted seed rung (canonical 'over' key).
   const seedOf = (line: LineView) =>
@@ -384,7 +397,7 @@ export default function SportsbookScreen() {
     }
   }, [editQuote]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // A stepper nudge / committed type-in: record the value, make this market
+  // A committed type-in: record the value, make this market
   // the active edit, and live re-stage a staged pick at the new value (posted
   // odds immediately; a fresh quote patches in when it lands).
   function editLineValue(line: LineView, v: number) {
@@ -447,7 +460,7 @@ export default function SportsbookScreen() {
   }
 
   // One subject row (≥1 markets → one card of value-first pills) — a player's
-  // consolidated lines or a single combo. Each pill shows ◀ value ▶ with its
+  // consolidated lines or a single combo. Each pill shows a tap-to-type value with its
   // live price; tapping the body stages the displayed value (staged = filled);
   // an in-progress scope makes every pill inert. Combos tint neutral
   // automatically (subjectRelation of a null subject).
@@ -464,19 +477,26 @@ export default function SportsbookScreen() {
           const posted = postedAt(line, value)
           const isActive = activeEditMarketId === line.marketId
           const quoted = isActive && editQuote != null && editQuote.line === value ? editQuote : null
-          // Price resolution: posted rung → staged snapshot → live quote.
+          const cached = quoteCache[line.marketId]
+          // Price resolution: posted rung → staged snapshot → live quote →
+          // last landed quote (keeps a custom value priced after the active
+          // edit moves on).
           const odds = posted?.odds
             ?? (staged != null && staged.line === value ? staged.odds : null)
-            ?? (quoted?.odds ?? null)
+            ?? quoted?.odds
+            ?? (cached != null && cached.line === value ? cached.odds : null)
           const loading =
             odds == null && isActive && (editLoading || (editQuote != null && editQuote.line !== value))
+          // The band while editing: the live quote's, else the last landed
+          // one (instant on re-tap; same market, so still valid).
+          const band = isActive ? (editQuote ?? cached ?? null) : null
           return (
             <LinePill
               line={line}
               value={value}
               odds={odds}
               loading={loading}
-              band={isActive && editQuote != null ? { min: editQuote.minLine, max: editQuote.maxLine } : null}
+              band={band != null ? { min: band.minLine, max: band.maxLine } : null}
               staged={staged != null}
               dimmed={balance < 10}
               inert={groupInProgress || line.inProgress || readOnly}
@@ -485,6 +505,10 @@ export default function SportsbookScreen() {
               // armed.
               editable={!comboArmed}
               onValueChange={v => editLineValue(line, v)}
+              // Opening the input makes this the active edit immediately —
+              // the preview (seed quote when no override yet) fetches the
+              // priceable band so it can show while the user types.
+              onEditStart={() => setActiveEditMarketId(line.marketId)}
               onStage={
                 comboArmed
                   ? () => enterStatView(line)
@@ -526,9 +550,13 @@ export default function SportsbookScreen() {
           load→ready swap — see pixelart/config.ts. */}
       <ScrollView
         // Value type-in raises the keyboard mid-list: keep stepper/stage taps
-        // working with it up, dismiss on scroll, commit on blur.
+        // working with it up, dismiss on scroll, commit on blur. The keyboard
+        // inset keeps lower pills reachable — without it the keyboard covers
+        // the bottom of the list and silently swallows taps there (a pill
+        // "randomly" refusing to open its editor while another is focused).
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
+        automaticallyAdjustKeyboardInsets
         contentContainerStyle={[
           styles.content,
           { paddingTop: insets.top },

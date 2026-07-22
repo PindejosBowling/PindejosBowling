@@ -5,11 +5,13 @@ import { colors, fonts, radius } from '../../theme'
 interface LineStepperProps {
   // The displayed half-point value (the number the bettor intends to beat).
   value: number
-  // Fires with a snapped (X.5), band-clamped value — from an arrow nudge or a
-  // committed type-in.
+  // Fires with a snapped (X.5), band-clamped value on a committed type-in.
   onChange: (v: number) => void
+  // Fires the moment the input opens — the parent starts pricing this line
+  // so the min–max band is known while the user is still typing.
+  onEditStart?: () => void
   // The priceable half-point band (from the preview RPC); null until the
-  // first quote lands — stepping is allowed meanwhile, the next quote clamps.
+  // first quote lands — typing is allowed meanwhile, the next quote clamps.
   min?: number | null
   max?: number | null
   disabled?: boolean
@@ -26,14 +28,16 @@ export function snapToHalf(n: number): number {
   return Math.round(n - 0.5) + 0.5
 }
 
-// The shared ◀ value ▶ cluster behind value-first line entry — used inline in
-// every board LinePill and in the combo BuilderBar. Arrows nudge ±0.5 inside
-// the priceable band; tapping the number opens the numeric keyboard for
-// direct entry (commit on blur/submit — Android's decimal pad has no reliable
-// submit key). The parent owns the value and prices it (debounced preview).
+// The shared tap-to-type value editor behind value-first line entry — used
+// inline in every board LinePill and in the combo BuilderBar. Tapping the
+// number opens the numeric keyboard for direct entry (commit on blur/submit —
+// Android's decimal pad has no reliable submit key); while typing, the
+// priceable min–max band is shown under the input. The parent owns the value
+// and prices it (debounced preview).
 export default function LineStepper({
   value,
   onChange,
+  onEditStart,
   min,
   max,
   disabled,
@@ -57,52 +61,56 @@ export default function LineStepper({
     return out
   }
 
-  const nudge = (dir: 1 | -1) => {
-    if (disabled) return
-    onChange(clamp(snapToHalf(value) + dir * 0.5))
-  }
-
   const commit = () => {
     const raw = text
     setText(null)
     if (raw == null) return
     const n = parseFloat(raw.replace(',', '.'))
     if (isNaN(n)) return // garbage → revert to the previous value
-    onChange(clamp(snapToHalf(n)))
+    const next = clamp(snapToHalf(n))
+    // A no-op commit stays silent — the blur that happens when the user taps
+    // straight into ANOTHER line's editor must not fire onChange, or this
+    // market would steal the active edit back and kill the new editor's band.
+    if (next === value) return
+    onChange(next)
   }
 
-  const atMin = min != null && value <= min
-  const atMax = max != null && value >= max
   const textColor = onFill ? colors.bg : colors.text
-  const arrowColor = onFill ? colors.bg : colors.accent
+  const hintColor = onFill ? colors.bg : colors.muted
 
   return (
     <View style={styles.cluster}>
-      <TouchableOpacity
-        onPress={() => nudge(-1)}
-        disabled={disabled || atMin}
-        hitSlop={{ top: 10, bottom: 10, left: 8, right: 4 }}
-        activeOpacity={0.6}
-        style={(disabled || atMin) && styles.arrowDisabled}
-      >
-        <Text style={[styles.arrow, { color: arrowColor }]}>◀</Text>
-      </TouchableOpacity>
       {editing ? (
-        <TextInput
-          ref={inputRef}
-          style={[styles.value, styles.input, { color: textColor }]}
-          value={text}
-          onChangeText={setText}
-          onBlur={commit}
-          onSubmitEditing={commit}
-          keyboardType={Platform.OS === 'ios' ? 'decimal-pad' : 'numeric'}
-          autoFocus
-          selectTextOnFocus
-          returnKeyType="done"
-        />
+        <View style={styles.editCol}>
+          <TextInput
+            ref={inputRef}
+            style={[styles.value, styles.input, { color: textColor }]}
+            value={text}
+            onChangeText={setText}
+            onBlur={commit}
+            onSubmitEditing={commit}
+            keyboardType={Platform.OS === 'ios' ? 'decimal-pad' : 'numeric'}
+            autoFocus
+            selectTextOnFocus
+            // No returnKeyType on iOS: RN pairs number pads + returnKeyType
+            // with an auto "Done" accessory toolbar whose invisible spacer
+            // swallows every tap in the strip left of the button (dead pills
+            // right above the keyboard). Commit is on blur anyway. Android's
+            // numeric keyboard has a real Done key — keep it there.
+            returnKeyType={Platform.OS === 'ios' ? undefined : 'done'}
+          />
+          {min != null && max != null && (
+            <Text style={[styles.range, { color: hintColor }]}>
+              {min.toFixed(1)} – {max.toFixed(1)}
+            </Text>
+          )}
+        </View>
       ) : (
         <TouchableOpacity
-          onPress={disabled ? undefined : () => setText(value.toFixed(1))}
+          onPress={disabled ? undefined : () => {
+            setText(value.toFixed(1))
+            onEditStart?.()
+          }}
           disabled={disabled}
           activeOpacity={0.7}
         >
@@ -111,23 +119,13 @@ export default function LineStepper({
           </Text>
         </TouchableOpacity>
       )}
-      <TouchableOpacity
-        onPress={() => nudge(1)}
-        disabled={disabled || atMax}
-        hitSlop={{ top: 10, bottom: 10, left: 4, right: 8 }}
-        activeOpacity={0.6}
-        style={(disabled || atMax) && styles.arrowDisabled}
-      >
-        <Text style={[styles.arrow, { color: arrowColor }]}>▶</Text>
-      </TouchableOpacity>
     </View>
   )
 }
 
 const styles = StyleSheet.create({
-  cluster: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  arrow: { fontSize: 11 },
-  arrowDisabled: { opacity: 0.3 },
+  cluster: { flexDirection: 'row', alignItems: 'center' },
+  editCol: { alignItems: 'center' },
   value: {
     fontFamily: fonts.barlowCondensedHeavy,
     fontSize: 15,
@@ -140,5 +138,11 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderColor: colors.accent,
     borderRadius: radius.cardSm,
+  },
+  range: {
+    fontFamily: fonts.barlowCondensed,
+    fontSize: 10,
+    marginTop: 2,
+    opacity: 0.8,
   },
 })

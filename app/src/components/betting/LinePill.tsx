@@ -18,8 +18,11 @@ interface LinePillProps {
   loading?: boolean
   // The priceable half-point band once known (clamps the stepper).
   band?: { min: number; max: number } | null
-  // Value edits (stepper nudge or committed type-in).
+  // Value edits (committed type-in).
   onValueChange?: (v: number) => void
+  // The value input just opened — the screen starts pricing this market so
+  // the min–max band shows while typing.
+  onEditStart?: () => void
   // Pill-body tap: stage/unstage at the displayed value.
   onStage?: () => void
   staged?: boolean
@@ -41,8 +44,8 @@ function conditionLabel(line: LineView): string {
   return line.title.toUpperCase()
 }
 
-// A full-width board pill — one market per row, value-first: ◀ value ▶ with
-// tap-to-type on the left (the number the bettor intends to beat), the
+// A full-width board pill — one market per row, value-first: a tap-to-type
+// value on the left (the number the bettor intends to beat), the
 // condition label beside it, the price on the right updating live as the
 // value moves. Tapping the pill body stages/unstages the displayed value —
 // the odds derive from the chosen value, never the other way around.
@@ -53,6 +56,7 @@ export default function LinePill({
   loading,
   band,
   onValueChange,
+  onEditStart,
   onStage,
   staged,
   dimmed,
@@ -75,6 +79,7 @@ export default function LinePill({
           <LineStepper
             value={value}
             onChange={onValueChange!}
+            onEditStart={onEditStart}
             min={band?.min}
             max={band?.max}
             onFill={staged}

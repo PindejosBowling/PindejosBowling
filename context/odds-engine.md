@@ -144,10 +144,13 @@ which doubles as the integration proof).
   Side-aware seams: `selectionBetsAgainstSubject`, `isSelectionHiddenInUI`
   (`fmtOdds` lives in `utils/bets.ts`).
 - **Board** (`LineRow.renderPill` → `LinePill` + shared `LineStepper`):
-  value-first pills — `◀ value ▶ CONDITION … ×odds`; arrows nudge ±0.5 in the
-  quoted band, tap-the-number types any half-point, the price follows the
+  value-first pills — `value CONDITION … ×odds`; tap-the-number types any
+  half-point (the quoted min–max band shows while typing; no arrows — tap-to-
+  type only), the price follows the
   value live (`useLinePreview` → `betMarkets.priceMarketLine`, one active
-  edit at a time, 250ms debounce). Pill-body tap stages the displayed value;
+  edit at a time, 250ms debounce; the screen's per-market `quoteCache` keeps a
+  custom value priced after the active edit moves to another pill — display
+  only, placement re-prices). Pill-body tap stages the displayed value;
   staged picks re-price live (`updateSlipPick`). The ⚰️ rung-chip strip and
   `LineValueSheet` are retired.
 - **Combos** (`BuilderBar`): the same `LineStepper` editor priced by

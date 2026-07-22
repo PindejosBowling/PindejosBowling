@@ -1,7 +1,7 @@
 # Combo Lines — player-composed member-set aggregate markets
 
 > **OddsEngine + value-first lines (2026-07-22):** combos are fair-priced and
-> **value-first** — the BuilderBar carries the shared `◀ value ▶` editor
+> **value-first** — the BuilderBar carries the shared tap-to-type value editor
 > (`LineStepper`), priced live by `combo_price_line` (posted rungs verbatim
 > when the combo_key already has an open market; ANY other half-point line
 > fresh). `compose_combo_bet` specs take optional `"line"` (NULL = seed) and
@@ -209,7 +209,7 @@ params->>clock.eq.lanetalk)` alongside props and legacy team props.
   `statKey`) and pivots the board to a member-picking list (every RSVP'd-in
   player, viewer first, solo line shown as context); the floating `BuilderBar`
   (slip-bar footprint; the provider's `setSlipBarHidden` yields it) carries
-  the `◀ value ▶` editor priced live (`useLinePreview({kind:'combo'})` →
+  the tap-to-type value editor priced live (`useLinePreview({kind:'combo'})` →
   `betMarkets.priceComboLine`, seed-anchored, `comboLineValue` resets on
   combo-identity change) and Add/Cancel — Add flips to "Remove" when the
   exact key is already staged.

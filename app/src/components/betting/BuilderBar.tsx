@@ -33,8 +33,8 @@ interface BuilderBarProps {
 
 // The combine-mode floating bar — same footprint as the bet-slip bar (which
 // hides while combining): live member tally on top; below it the same
-// ◀ value ▶ editor the board pills use (type the number the group should
-// beat) with the live price beside it. Presentational; the screen owns the
+// tap-to-type value editor the board pills use (type the number the group
+// should beat) with the live price beside it. Presentational; the screen owns the
 // combo state, the edited value, and the debounced quote.
 export default function BuilderBar({
   memberNames,
@@ -74,8 +74,8 @@ export default function BuilderBar({
         >
           {sub}
         </Text>
-        {/* The value editor — same interaction as a board pill: nudge or tap
-            the number to type; the price follows the value. */}
+        {/* The value editor — same interaction as a board pill: tap the
+            number to type; the price follows the value. */}
         {!blocked && minMembers && shownValue != null && (
           <View style={styles.valueRow}>
             <LineStepper
