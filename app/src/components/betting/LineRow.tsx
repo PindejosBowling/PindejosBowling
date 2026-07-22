@@ -1,4 +1,3 @@
-import { useState } from 'react'
 import { View, Text, StyleSheet } from 'react-native'
 import { colors, fonts, radius, spacing } from '../../theme'
 import PickChip from './PickChip'
@@ -31,21 +30,23 @@ interface LineRowProps {
   selectionState?: (line: LineView, sel: SelectionView) => SelectionUiState
   // Tapping a selection. Omit (or set `inProgress`) to render inert chips.
   onSelect?: (line: LineView, sel: SelectionView) => void
+  // Tapping a LADDERED market's chip (many priced rungs): opens the caller's
+  // value sheet instead of staging directly. Omitted → ladder chips fall back
+  // to staging their displayed rung (armed-combine mode passes onSelect only).
+  onOpenLadder?: (line: LineView) => void
 }
 
 // Presentational, data-driven row for one betting subject. Generic over
 // market_type — new line kinds render through this same component; only the
 // caller's `selectionState` / `onSelect` change (mirrors BetRow's design).
 // Each chip carries its own (line, selection), so a row can span markets.
-export default function LineRow({ lines, relation, inProgress, selectionState, onSelect }: LineRowProps) {
+export default function LineRow({ lines, relation, inProgress, selectionState, onSelect, onOpenLadder }: LineRowProps) {
   const pressable = !inProgress && !!onSelect
   const first = lines[0]
-  // Alt-line ladder browsing: which rung each laddered market currently shows
-  // (marketId → index into its sorted visible selections). An explicit step
-  // wins; otherwise a staged rung shows; otherwise the seed rung (key 'over').
-  const [rungIdx, setRungIdx] = useState<Record<string, number>>({})
   // A laddered market (many priced over rungs after under-hiding) renders as
-  // ONE steppable chip; anything else keeps a chip per selection.
+  // ONE chip — the staged rung when one is in the slip, else the seed rung —
+  // and tapping it opens the value sheet (onOpenLadder) so the bettor picks
+  // the outcome they want; the odds derive from that pick.
   const isLadder = (l: LineView) =>
     l.selections.length > 1 && l.selections.every(s => s.side === 'over')
 
@@ -53,7 +54,7 @@ export default function LineRow({ lines, relation, inProgress, selectionState, o
   // own row, the chip set wrapping evenly beneath. Only a lone-chip row (a
   // bare moneyline WIN) keeps the horizontal name-left / chip-right
   // presentation — a row of one never needs to wrap. Ladders count as one
-  // chip (the stepper browses rungs in place).
+  // chip (the value sheet browses rungs).
   const chipCount = lines.reduce((n, l) => n + (isLadder(l) ? 1 : l.selections.length), 0)
   const stacked = first.marketType !== 'moneyline' || chipCount > 1
 
@@ -93,30 +94,27 @@ export default function LineRow({ lines, relation, inProgress, selectionState, o
               )
             })
           }
-          // Ladder: one chip showing the current rung, ‹ › steps its siblings.
+          // Ladder: one chip showing the staged rung (else the seed rung);
+          // tapping opens the value sheet. The ▾ marks the chip as a range.
           const sels = line.selections // sorted by sort_order = line ascending
           const seedIdx = Math.max(0, sels.findIndex(s => s.key === 'over'))
           const stagedIdx = sels.findIndex(s => (selectionState?.(line, s) ?? {}).selected)
-          const idx = Math.min(
-            sels.length - 1,
-            rungIdx[line.marketId] ?? (stagedIdx >= 0 ? stagedIdx : seedIdx)
-          )
-          const sel = sels[idx]
+          const sel = sels[stagedIdx >= 0 ? stagedIdx : seedIdx]
           const st = selectionState?.(line, sel) ?? {}
-          const step = (to: number) => setRungIdx(prev => ({ ...prev, [line.marketId]: to }))
+          const openSheet = onOpenLadder != null && !line.inProgress
           return [
             <PickChip
               key={line.marketId}
-              label={selectionButtonLabel(line, sel)}
+              label={`${selectionButtonLabel(line, sel)} ▾`}
               grid={stacked}
               selected={st.selected}
               disabled={line.inProgress || st.disabled}
               inert={!pressable}
-              onPress={pressable ? () => onSelect!(line, sel) : undefined}
-              stepper={{
-                onPrev: idx > 0 && !line.inProgress ? () => step(idx - 1) : null,
-                onNext: idx < sels.length - 1 && !line.inProgress ? () => step(idx + 1) : null,
-              }}
+              onPress={
+                !pressable ? undefined
+                  : openSheet ? () => onOpenLadder(line)
+                    : () => onSelect!(line, sel)
+              }
             />,
           ]
         })}

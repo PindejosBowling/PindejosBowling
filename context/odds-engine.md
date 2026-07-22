@@ -97,14 +97,20 @@ which doubles as the integration proof).
   Side-aware seams: `selectionBetsAgainstSubject`, `isSelectionHiddenInUI`,
   `selectionButtonLabel` (now appends the rung's price: `"4.5+ STRIKES ×2.40"`;
   `fmtOdds` lives in `utils/bets.ts`).
-- **Board** (`LineRow`): a laddered market renders ONE chip; `PickChip`'s
-  `stepper` prop puts ‹ › arrows flanking the label. Display priority:
-  explicit step > staged rung > seed. Tap stages the shown rung.
+- **Board** (`LineRow` + `LineValueSheet`): a laddered market renders ONE chip
+  (staged rung, else seed, with a ▾); tapping it opens **`LineValueSheet`** —
+  a bottom sheet listing every posted value with its payout ("bet on the
+  outcome you want; the odds derive from the selection", seed marked HOUSE
+  LINE). Picking a row stages that rung via the normal `stagePick` toggle.
+  Single-rung/non-ladder chips keep tap-to-stage; armed combine mode keeps
+  the seeding tap.
 - **Combos** (`BuilderBar` + `useComboLinePreview`): the hook returns
   `{ladder, seedIndex, loading}` via `betMarkets.previewComboLadder`;
-  the screen owns `comboRungIndex` (snaps to seed on combo-identity change);
-  `SlipCombo` carries the chosen `line` + `odds`; `BetSlipProvider.toSpec`
-  passes `line` to compose.
+  tapping the BuilderBar's line block opens the same `LineValueSheet`
+  (picking sets `comboRungIndex`; Add stages). The screen owns
+  `comboRungIndex` (snaps to seed on combo-identity change); `SlipCombo`
+  carries the chosen `line` + `odds`; `BetSlipProvider.toSpec` passes `line`
+  to compose.
 - **Slip**: parlay odds are the true product of leg odds (was `2^n`); combo
   ticket cards show the previewed rung price.
 

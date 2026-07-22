@@ -21,6 +21,7 @@ import SettledBetsView from '../components/betting/SettledBetsView'
 import BetDetailModal from '../components/betting/BetDetailModal'
 import { useBetSlip, useBetSlipReload } from '../components/betting/BetSlipProvider'
 import LineRow from '../components/betting/LineRow'
+import LineValueSheet from '../components/betting/LineValueSheet'
 import CustomLineRow from '../components/betting/CustomLineRow'
 import PickChip from '../components/betting/PickChip'
 import BuilderBar from '../components/betting/BuilderBar'
@@ -275,15 +276,36 @@ export default function SportsbookScreen() {
       ? comboLadder[Math.min(comboRungIndex, comboLadder.length - 1)]
       : null
 
+  // Value sheets: tap a laddered board chip → pick from its posted values;
+  // tap the BuilderBar's line → pick the combo's value. Odds derive from the
+  // selection either way.
+  const [ladderSheet, setLadderSheet] = useState<LineView | null>(null)
+  const [comboSheetOpen, setComboSheetOpen] = useState(false)
+
+  // The sheet row's condition text — selectionButtonLabel minus the odds
+  // (the sheet renders the payout in its own column).
+  function ladderConditionLabel(line: LineView, value: number): string {
+    const what =
+      line.marketType === 'over_under'
+        ? line.gameNumber != null ? 'Pins' : 'Total Pins'
+        : line.statKey ? STAT_LABELS[line.statKey] ?? line.statKey : null
+    return `${value.toFixed(1)}+${what ? ` ${what.toUpperCase()}` : ''}`
+  }
+
   // The BuilderBar takes over the slip bar's footprint while combining.
   useEffect(() => {
     setSlipBarHidden(combining)
     return () => setSlipBarHidden(false)
   }, [combining, setSlipBarHidden])
 
-  // Leaving the Place view (or flipping read-only) abandons any in-flight combo.
+  // Leaving the Place view (or flipping read-only) abandons any in-flight
+  // combo and dismisses any open value sheet.
   useEffect(() => {
-    if (effectiveView !== 'place' || readOnly) setCombo(null)
+    if (effectiveView !== 'place' || readOnly) {
+      setCombo(null)
+      setLadderSheet(null)
+      setComboSheetOpen(false)
+    }
   }, [effectiveView, readOnly])
 
   function toggleComboMember(id: string) {
@@ -411,8 +433,10 @@ export default function SportsbookScreen() {
         inProgress={groupInProgress}
         // Armed combine mode repurposes the stat taps: the first tap seeds the
         // combo and pivots to member picking (no anti-tank dim — over-on-self
-        // is legal for combos).
+        // is legal for combos). Outside it, laddered chips open the value
+        // sheet — pick the outcome, the odds derive from the pick.
         onSelect={comboArmed ? line => enterStatView(line) : stagePick}
+        onOpenLadder={comboArmed ? undefined : line => setLadderSheet(line)}
         selectionState={
           comboArmed
             ? () => ({})
@@ -680,13 +704,68 @@ export default function SportsbookScreen() {
           scopeLabel={scope === 'weekly' ? 'NIGHT' : `GAME ${comboScopeGame}`}
           ladder={comboLadder}
           rungIndex={comboRungIndex}
-          onStepRung={setComboRungIndex}
+          onOpenLadder={() => setComboSheetOpen(true)}
           ladderLoading={comboLineLoading}
           minMembers={comboMemberIds.length >= 2}
           alreadyStaged={comboAlreadyStaged}
           blocked={board.scopeInProgress}
           onAdd={addComboToSlip}
           onCancel={() => setCombo(null)}
+        />
+      )}
+
+      {/* Value sheet — a laddered board line's full range: every posted value
+          with its payout. Picking stages that rung (or unstages it — stagePick
+          toggles); the sheet closes either way. */}
+      {ladderSheet != null && (
+        <LineValueSheet
+          title={ladderSheet.subjectFullName}
+          subtitle={`${(ladderSheet.marketType === 'over_under'
+            ? ladderSheet.gameNumber != null ? 'Pins' : 'Total Pins'
+            : ladderSheet.statKey ? STAT_LABELS[ladderSheet.statKey] ?? ladderSheet.statKey : 'Lines'
+          ).toUpperCase()} · ${
+            ladderSheet.gameNumber != null ? `GAME ${ladderSheet.gameNumber}` : 'NIGHT'
+          }`}
+          rungs={ladderSheet.selections.map(sel => ({
+            line: sel.line ?? ladderSheet.line ?? 0,
+            odds: sel.odds,
+            isSeed: sel.key === 'over',
+            selected: slipPicks.some(p => p.selectionId === sel.selectionId),
+            disabled: balance < 10 || isSelfTank(ladderSheet, sel),
+          }))}
+          formatLine={v => ladderConditionLabel(ladderSheet, v)}
+          onPick={i => {
+            stagePick(ladderSheet, ladderSheet.selections[i])
+            setLadderSheet(null)
+          }}
+          onClose={() => setLadderSheet(null)}
+        />
+      )}
+
+      {/* Combo value sheet — the BuilderBar's ladder. Picking only chooses the
+          rung (Add still stages). */}
+      {comboSheetOpen && combining && combo?.stat != null && comboLadder != null && (
+        <LineValueSheet
+          title={comboMemberIds
+            .map(id => shortName(rsvpInPlayers.find(m => m.playerId === id)?.name))
+            .join(' + ')}
+          subtitle={`${(STAT_LABELS[combo.stat] ?? combo.stat).toUpperCase()} · ${
+            scope === 'weekly' ? 'NIGHT' : `GAME ${comboScopeGame}`
+          }`}
+          rungs={comboLadder.map((r, i) => ({
+            line: r.line,
+            odds: r.odds,
+            isSeed: r.isSeed,
+            selected: i === comboRungIndex,
+          }))}
+          formatLine={v =>
+            `${v.toFixed(1)}+ ${(STAT_LABELS[combo.stat!] ?? combo.stat).toUpperCase()}`
+          }
+          onPick={i => {
+            setComboRungIndex(i)
+            setComboSheetOpen(false)
+          }}
+          onClose={() => setComboSheetOpen(false)}
         />
       )}
 

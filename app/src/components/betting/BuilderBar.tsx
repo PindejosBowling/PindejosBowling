@@ -15,7 +15,10 @@ interface BuilderBarProps {
   // enough members. The screen owns which rung is shown (rungIndex).
   ladder: ComboLadderRung[] | null
   rungIndex: number
-  onStepRung: (index: number) => void
+  // Tapping the line block opens the screen's value sheet (bet on the outcome
+  // you want — the odds derive from the selection). Only offered when the
+  // ladder carries >1 rung.
+  onOpenLadder: () => void
   // The preview RPC is in flight (debounce included) — shows the calculating
   // state instead of the fetch-failed one while the ladder is still null.
   ladderLoading?: boolean
@@ -31,16 +34,17 @@ interface BuilderBarProps {
 }
 
 // The combine-mode floating bar — same footprint as the bet-slip bar (which
-// hides while combining): live member tally + the priced ladder rung on the
-// left (‹ › steps alt lines), Cancel/Add on the right. Presentational; the
-// screen owns the combo state and the chosen rung index.
+// hides while combining): live member tally + the chosen ladder rung on the
+// left (tap the line to pick a different value from the sheet), Cancel/Add on
+// the right. Presentational; the screen owns the combo state, the chosen rung
+// index, and the value sheet.
 export default function BuilderBar({
   memberNames,
   statLabel,
   scopeLabel,
   ladder,
   rungIndex,
-  onStepRung,
+  onOpenLadder,
   ladderLoading,
   minMembers,
   alreadyStaged,
@@ -50,36 +54,29 @@ export default function BuilderBar({
 }: BuilderBarProps) {
   const rung = ladder && ladder.length > 0 ? ladder[Math.min(rungIndex, ladder.length - 1)] : null
   const ladderFailed = minMembers && rung == null && !ladderLoading && !blocked
+  const canPickValue = rung != null && ladder != null && ladder.length > 1 && !blocked
 
   // Every pre-line state keeps the stat/scope the bettor committed to visible —
   // once a member is picked the title becomes names only, so this is the one
-  // place that context lives.
+  // place that context lives. The ▾ marks the line as a selectable range.
   const sub = blocked
     ? 'This scope is closed for betting'
     : !minMembers
       ? `Pick 2+ players · ${statLabel} · ${scopeLabel}`
       : rung != null
-        ? `OVER ${rung.line.toFixed(1)} ${statLabel} ${fmtOdds(rung.odds)} · ${scopeLabel}`
+        ? `OVER ${rung.line.toFixed(1)} ${statLabel} ${fmtOdds(rung.odds)} · ${scopeLabel}${canPickValue ? '  ▾' : ''}`
         : ladderLoading
           ? `Calculating lines… · ${statLabel} · ${scopeLabel}`
           : `Lines unavailable — tap a player to retry · ${statLabel}`
 
-  const canPrev = rung != null && rungIndex > 0
-  const canNext = rung != null && ladder != null && rungIndex < ladder.length - 1
-  const showStepper = rung != null && ladder != null && ladder.length > 1 && !blocked
-
   return (
     <View style={styles.bar}>
-      {showStepper && (
-        <TouchableOpacity
-          onPress={canPrev ? () => onStepRung(rungIndex - 1) : undefined}
-          disabled={!canPrev}
-          hitSlop={{ top: 10, bottom: 10, left: 8, right: 4 }}
-        >
-          <Text style={[styles.stepArrow, !canPrev && styles.stepArrowDim]}>‹</Text>
-        </TouchableOpacity>
-      )}
-      <View style={styles.info}>
+      <TouchableOpacity
+        style={styles.info}
+        onPress={canPickValue ? onOpenLadder : undefined}
+        disabled={!canPickValue}
+        activeOpacity={0.7}
+      >
         <Text style={styles.title} numberOfLines={1}>
           {memberNames.length > 0 ? memberNames.join(' + ') : `COMBO · ${statLabel}`}
         </Text>
@@ -89,16 +86,7 @@ export default function BuilderBar({
         >
           {sub}
         </Text>
-      </View>
-      {showStepper && (
-        <TouchableOpacity
-          onPress={canNext ? () => onStepRung(rungIndex + 1) : undefined}
-          disabled={!canNext}
-          hitSlop={{ top: 10, bottom: 10, left: 4, right: 8 }}
-        >
-          <Text style={[styles.stepArrow, !canNext && styles.stepArrowDim]}>›</Text>
-        </TouchableOpacity>
-      )}
+      </TouchableOpacity>
       <Button variant="ghost" label="Cancel" onPress={onCancel} style={styles.cancel} />
       <Button
         label={alreadyStaged ? 'Remove' : 'Add'}
@@ -141,13 +129,6 @@ const styles = StyleSheet.create({
     marginTop: 1,
   },
   subBlocked: { color: colors.gold },
-  stepArrow: {
-    fontFamily: fonts.barlowCondensedHeavy,
-    fontSize: 22,
-    color: colors.accent,
-    lineHeight: 24,
-  },
-  stepArrowDim: { opacity: 0.25 },
   cancel: { paddingHorizontal: 8, paddingVertical: 8 },
   add: { paddingHorizontal: 16, paddingVertical: 10 },
 })

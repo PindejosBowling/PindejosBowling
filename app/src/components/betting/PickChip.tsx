@@ -1,4 +1,4 @@
-import { Text, TouchableOpacity, View, StyleSheet, StyleProp, ViewStyle } from 'react-native'
+import { Text, TouchableOpacity, StyleSheet, StyleProp, ViewStyle } from 'react-native'
 import { colors, radius, type } from '../../theme'
 
 interface PickChipProps {
@@ -19,10 +19,6 @@ interface PickChipProps {
   size?: 'md' | 'lg'
   // Grid item inside a wrapping button set (uniform two-per-line cells).
   grid?: boolean
-  // Alt-line ladder stepper: renders ‹ › arrows flanking the label. A null
-  // handler renders its arrow dimmed-inert (ladder end); omit the prop
-  // entirely for single-rung chips and every non-ladder caller.
-  stepper?: { onPrev: (() => void) | null; onNext: (() => void) | null }
   onPress?: () => void
   style?: StyleProp<ViewStyle>
 }
@@ -40,34 +36,10 @@ export default function PickChip({
   gold,
   size = 'md',
   grid,
-  stepper,
   onPress,
   style,
 }: PickChipProps) {
   const pressable = !inert && !!onPress
-  const arrow = (dir: 'prev' | 'next') => {
-    if (!stepper) return null
-    const handler = dir === 'prev' ? stepper.onPrev : stepper.onNext
-    return (
-      <TouchableOpacity
-        onPress={handler ?? undefined}
-        disabled={!handler || inert}
-        hitSlop={{ top: 10, bottom: 10, left: 8, right: 8 }}
-        style={styles.stepArrow}
-        activeOpacity={0.6}
-      >
-        <Text
-          style={[
-            styles.stepArrowText,
-            selected && styles.textSelected,
-            (!handler || inert) && styles.stepArrowDim,
-          ]}
-        >
-          {dir === 'prev' ? '‹' : '›'}
-        </Text>
-      </TouchableOpacity>
-    )
-  }
   return (
     <TouchableOpacity
       style={[
@@ -75,7 +47,6 @@ export default function PickChip({
         size === 'lg' && styles.chipLg,
         grid && styles.chipGridItem,
         gold && styles.chipGold,
-        stepper != null && styles.chipStepper,
         selected && (gold ? styles.chipSelectedGold : styles.chipSelected),
         (inert || disabled) && styles.chipDisabled,
         style,
@@ -84,22 +55,18 @@ export default function PickChip({
       disabled={!pressable}
       activeOpacity={0.7}
     >
-      {arrow('prev')}
-      <View style={stepper != null ? styles.stepBody : undefined}>
-        <Text
-          style={[
-            size === 'lg' ? styles.textLg : styles.text,
-            gold && styles.textGold,
-            selected && styles.textSelected,
-          ]}
-        >
-          {label}
-        </Text>
-        {sublabel != null && (
-          <Text style={[styles.sublabel, selected && styles.textSelected]}>{sublabel}</Text>
-        )}
-      </View>
-      {arrow('next')}
+      <Text
+        style={[
+          size === 'lg' ? styles.textLg : styles.text,
+          gold && styles.textGold,
+          selected && styles.textSelected,
+        ]}
+      >
+        {label}
+      </Text>
+      {sublabel != null && (
+        <Text style={[styles.sublabel, selected && styles.textSelected]}>{sublabel}</Text>
+      )}
     </TouchableOpacity>
   )
 }
@@ -134,10 +101,4 @@ const styles = StyleSheet.create({
   textGold: { color: colors.gold },
   textSelected: { color: colors.bg },
   sublabel: { ...type.label, color: colors.muted, marginTop: 2 },
-  // Ladder stepper: arrows flank a centered label block inside one chip row.
-  chipStepper: { flexDirection: 'row', alignItems: 'center', gap: 2 },
-  stepBody: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  stepArrow: { paddingHorizontal: 2 },
-  stepArrowText: { ...type.chipLg, color: colors.accent, lineHeight: 20 },
-  stepArrowDim: { opacity: 0.25 },
 })
