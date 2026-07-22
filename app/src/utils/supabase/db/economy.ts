@@ -280,6 +280,19 @@ export const betMarkets = {
   // composer sheet previews the server's number rather than re-deriving it.
   previewComboLine: (memberIds: string[], stat: string, seasonId: string, nGames = 1) =>
     supabase.rpc('combo_seed_line', { p_member_ids: memberIds, p_stat: stat, p_season_id: seasonId, p_n_games: nGames }),
+  // The full priced rung ladder a combo would mint (STABLE, read-only) — the
+  // BuilderBar's stepper walks this. When weekId is given and the combo
+  // already has an open market, returns THAT market's posted rungs (a second
+  // bettor can only take lines the market carries). jsonb array of
+  // { line, odds, is_seed }, sorted by line ascending.
+  previewComboLadder: (
+    memberIds: string[], stat: string, seasonId: string, nGames = 1,
+    weekId?: string | null, gameNumber?: number | null,
+  ) =>
+    supabase.rpc('combo_preview_ladder', {
+      p_member_ids: memberIds, p_stat: stat, p_season_id: seasonId, p_n_games: nGames,
+      p_week_id: weekId ?? undefined, p_game_number: gameNumber ?? undefined,
+    }),
 }
 
 export const bets = {
@@ -346,7 +359,7 @@ export const bets = {
   // gating). Returns { bet_id, combos: [{market_id, line, deduped}] }.
   composeCombo: (
     weekId: string,
-    combos: { memberIds: string[]; stat: string; scope: 'game' | 'night'; gameNumber: number | null }[],
+    combos: { memberIds: string[]; stat: string; scope: 'game' | 'night'; gameNumber: number | null; line?: number | null }[],
     stake: number,
     extraSelectionIds?: string[],
     insuranceItemId?: string,
@@ -358,6 +371,8 @@ export const bets = {
       p_combos: combos.map(c => ({
         member_ids: c.memberIds, stat: c.stat, scope: c.scope,
         ...(c.gameNumber != null ? { game_number: c.gameNumber } : {}),
+        // Chosen ladder rung (BuilderBar stepper); omitted = the seed rung.
+        ...(c.line != null ? { line: c.line } : {}),
       })) as unknown as Json,
       p_stake: stake,
       p_extra_selection_ids: extraSelectionIds,

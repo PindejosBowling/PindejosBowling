@@ -40,8 +40,11 @@ export const EXPLAINERS: Record<PinsinoFeatureKey, FeatureExplainer> = {
     tileHook: 'Bet your pins on the weekly lines',
     bullets: [
       'Back a player to beat their projected line for the week.',
+      'Every line is priced by the house — the ×odds on the button is what a winning pin pays. The book runs fair: no cut, no juice, just its honest read of each bowler.',
+      'The book chases recent form. Think a hot streak is a fluke — or a slump is over? That\'s your edge.',
+      'Use the ‹ › arrows to slide a line up or down. Safer lines pay less, longshots pay more — pick your spot.',
       'Build a combo: pick two or more players and bet their combined stat against one line. Your combo goes on the board for everyone to bet.',
-      'Stack multiple picks into a parlay — every leg has to hit, but the payout multiplies. Combos parlay like any other line.',
+      'Stack multiple picks into a parlay — every leg has to hit, and the odds multiply.',
       'Pins leave your balance when you place a bet. Tickets settle automatically when the week is finalized.',
     ],
     caveat:
@@ -220,6 +223,7 @@ export const TERMS: Record<TermsKey, TermsCopy> = {
   combo: {
     lines: [
       'Pick two or more RSVP\'d-in players. Their combined stat is graded against one line.',
+      'Use the ‹ › arrows to slide the line — the house reprices it as you go.',
       'Your combo goes to the bet slip like any pick — set the stake there, and parlay it with other lines or more combos.',
       'When you place the bet, the combo goes on the board — anyone can bet it too.',
       'If someone already composed the identical combo, your bet joins their line.',

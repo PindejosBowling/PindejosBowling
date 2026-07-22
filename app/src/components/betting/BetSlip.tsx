@@ -12,6 +12,7 @@ import GoldenTicketToggle from '../auction/GoldenTicketToggle'
 import WinnersCrutchToggle from '../auction/WinnersCrutchToggle'
 import EnergyDrinkToggle from '../auction/EnergyDrinkToggle'
 import { betLineSuffix } from '../../hooks/usePinsinoData'
+import { fmtOdds } from '../../utils/bets'
 
 // One individual pick staged in the slip — a chosen selection on a market.
 // Combines with other picks into a parlay, or places as its own single.
@@ -48,7 +49,7 @@ export interface SlipSpecial {
 // NOT have a market yet. The market is created at placement, atomically with
 // the bet (compose_combo_bet), so an unbet combo market can never exist.
 // Combos behave exactly like picks in the slip: they parlay with regular
-// picks and with other combos, or place as their own single. Even money.
+// picks and with other combos, or place as their own single.
 export interface SlipCombo {
   key: string          // canonical identity (stat|scope|game|members) — staging key
   weekId: string
@@ -57,7 +58,11 @@ export interface SlipCombo {
   stat: string
   scope: 'game' | 'night'
   gameNumber: number | null
-  line: number | null  // server-previewed seed line (display; the RPC re-seeds)
+  // The CHOSEN rung from the BuilderBar's previewed ladder. compose_combo_bet
+  // takes `line` verbatim (it must match a posted/mintable rung) and the leg
+  // snapshots the rung's odds; `odds` here is the previewed price for display.
+  line: number | null
+  odds: number | null
 }
 
 type SlipMode = 'singles' | 'parlay'
@@ -175,7 +180,14 @@ export default function BetSlip({
     ((parlayPicks && specials.length === 0 && pickUnits >= 2) ||
       (specials.length === 1 && pickUnits === 0 && specials[0].multiLeg))
 
-  const parlayOdds = useMemo(() => Math.pow(2, pickUnits), [pickUnits])
+  // Engine-priced legs: the parlay pays the product of each leg's actual odds
+  // (pre-engine this degenerated to 2^n).
+  const parlayOdds = useMemo(
+    () =>
+      picks.reduce((prod, p) => prod * (p.odds || 2), 1) *
+      combos.reduce((prod, c) => prod * (c.odds ?? 2), 1),
+    [picks, combos]
+  )
 
   const specialsTotal = specials.reduce((s, sp) => s + (parseInt(specialWagers[sp.key] ?? '', 10) || 0), 0)
   const singlesPickTotal =
@@ -216,7 +228,6 @@ export default function BetSlip({
   }
 
   const ctaLabel = totalBets > 1 ? `Place ${totalBets} Bets` : 'Place Bet'
-  const fmtOdds = (n: number) => `×${n.toFixed(n % 1 === 0 ? 0 : 2)}`
   const subtitle = `${totalBets} ${totalBets === 1 ? 'BET' : 'BETS'} · ${grandTotal || 0} PINS`
 
   // Items attach to the sole resulting bet — and when oneBet holds, exactly ONE
@@ -332,14 +343,14 @@ export default function BetSlip({
               {combos.map(c => (
                 <TicketCard
                   key={c.key}
-                  header={{ title: 'COMBO', badge: { label: '×2', color: colors.accent } }}
+                  header={{ title: 'COMBO', badge: { label: fmtOdds(c.odds ?? 2), color: colors.accent } }}
                   footer={
                     <>
                       <WagerField
                         wager={singleWagers[c.key] ?? ''}
                         onChangeWager={v => setSingleWagers(s => ({ ...s, [c.key]: v }))}
                         balance={balance}
-                        odds={2}
+                        odds={c.odds ?? 2}
                         boostPct={oneBet && boost ? boostPct : undefined}
                         label="STAKE (pins)"
                         compact

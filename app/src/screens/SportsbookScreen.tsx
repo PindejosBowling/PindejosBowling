@@ -249,12 +249,15 @@ export default function SportsbookScreen() {
   )
   const comboScopeGame = scope === 'weekly' ? null : Number(scope.slice('game-'.length))
   const comboNGames = scope === 'weekly' ? Math.max(weekGameNumbers.length, 1) : 1
-  const { line: comboPreviewLine, loading: comboLineLoading } = useComboLinePreview(
-    comboMemberIds,
-    combo?.stat ?? null,
-    currentSeasonId,
-    comboNGames
-  )
+  const { ladder: comboLadder, seedIndex: comboSeedIndex, loading: comboLineLoading } =
+    useComboLinePreview(
+      comboMemberIds,
+      combo?.stat ?? null,
+      currentSeasonId,
+      comboNGames,
+      currentWeekId,
+      comboScopeGame
+    )
   // Canonical staging key — the same format ComboComposerSheet used, so
   // toggle-off dedup works against anything previously staged.
   const comboKey =
@@ -262,6 +265,15 @@ export default function SportsbookScreen() {
       ? `${combo.stat}|${scope === 'weekly' ? 'night' : comboScopeGame}|${comboMemberIds.join(',')}`
       : ''
   const comboAlreadyStaged = combining && slipCombos.some(c => c.key === comboKey)
+
+  // Which ladder rung the BuilderBar shows; snaps back to the seed whenever
+  // the combo identity (or the fetched ladder's seed) changes.
+  const [comboRungIndex, setComboRungIndex] = useState(0)
+  useEffect(() => { setComboRungIndex(comboSeedIndex) }, [comboKey, comboSeedIndex])
+  const comboRung =
+    comboLadder && comboLadder.length > 0
+      ? comboLadder[Math.min(comboRungIndex, comboLadder.length - 1)]
+      : null
 
   // The BuilderBar takes over the slip bar's footprint while combining.
   useEffect(() => {
@@ -306,7 +318,10 @@ export default function SportsbookScreen() {
       stat: combo.stat,
       scope: scope === 'weekly' ? 'night' : 'game',
       gameNumber: comboScopeGame,
-      line: comboPreviewLine,
+      // The chosen ladder rung — compose_combo_bet validates the line against
+      // the posted/mintable rungs and snapshots the rung's odds on the leg.
+      line: comboRung?.line ?? null,
+      odds: comboRung?.odds ?? null,
     })
     setCombo(null)
   }
@@ -663,8 +678,10 @@ export default function SportsbookScreen() {
           )}
           statLabel={(STAT_LABELS[combo.stat] ?? combo.stat).toUpperCase()}
           scopeLabel={scope === 'weekly' ? 'NIGHT' : `GAME ${comboScopeGame}`}
-          line={comboPreviewLine}
-          lineLoading={comboLineLoading}
+          ladder={comboLadder}
+          rungIndex={comboRungIndex}
+          onStepRung={setComboRungIndex}
+          ladderLoading={comboLineLoading}
           minMembers={comboMemberIds.length >= 2}
           alreadyStaged={comboAlreadyStaged}
           blocked={board.scopeInProgress}

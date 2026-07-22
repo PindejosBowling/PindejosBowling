@@ -1,5 +1,11 @@
 # LaneTalk Stat Bets — frame-stat props on a second settlement clock
 
+> **OddsEngine (2026-07-22):** `sync_lanetalk_prop_markets_for_week` now mints
+> fair-priced alt-line **ladders** around the unchanged `lanetalk_seed_lines`
+> seed (official games only feed the pricing model), and the betless reprice
+> block became a churn-guarded re-ladder. Settlement grades each rung against
+> its own line (side-aware). See [odds-engine.md](odds-engine.md).
+
 Bet lines on LaneTalk frame stats: **strikes + spares + clean frames O/U, both
 per game and night-level** (standardized 2026-07-01 — every scope carries the
 full stat range; **first-ball avg is retired as a bettable line**, kept only

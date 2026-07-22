@@ -147,7 +147,8 @@ CREATE TABLE bet_selections (
   result text,
   sort_order integer NOT NULL DEFAULT 0,
   created_at timestamp with time zone NOT NULL DEFAULT now(),
-  updated_at timestamp with time zone NOT NULL DEFAULT now()
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  side text
 );
 
 CREATE TABLE bets (
@@ -394,6 +395,25 @@ CREATE TABLE loans (
   issued_at timestamp with time zone NOT NULL DEFAULT now(),
   paid_off_at timestamp with time zone,
   season_closed_at timestamp with time zone,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now()
+);
+
+CREATE TABLE odds_engine_config (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  season_id uuid,
+  is_enabled boolean NOT NULL DEFAULT true,
+  half_life_games numeric NOT NULL DEFAULT 6,
+  prior_weight_games numeric NOT NULL DEFAULT 6,
+  variance_floor_score numeric NOT NULL DEFAULT 225,
+  variance_floor_count numeric NOT NULL DEFAULT 0.75,
+  odds_min numeric NOT NULL DEFAULT 1.10,
+  odds_max numeric NOT NULL DEFAULT 8.00,
+  rungs_per_side integer NOT NULL DEFAULT 3,
+  spacing_score numeric NOT NULL DEFAULT 10,
+  spacing_night_pins numeric NOT NULL DEFAULT 20,
+  spacing_count numeric NOT NULL DEFAULT 1.0,
+  updated_by uuid,
   created_at timestamp with time zone NOT NULL DEFAULT now(),
   updated_at timestamp with time zone NOT NULL DEFAULT now()
 );
@@ -851,6 +871,8 @@ ALTER TABLE bet_selections ADD CONSTRAINT bet_selections_pkey PRIMARY KEY (id);
 
 ALTER TABLE bet_selections ADD CONSTRAINT bet_selections_result_check CHECK ((result = ANY (ARRAY['won'::text, 'lost'::text, 'push'::text, 'void'::text])));
 
+ALTER TABLE bet_selections ADD CONSTRAINT bet_selections_side_check CHECK ((side = ANY (ARRAY['over'::text, 'under'::text])));
+
 ALTER TABLE bets ADD CONSTRAINT bets_boost_item_id_fkey FOREIGN KEY (boost_item_id) REFERENCES player_inventory_items(id);
 
 ALTER TABLE bets ADD CONSTRAINT bets_crutch_item_id_fkey FOREIGN KEY (crutch_item_id) REFERENCES player_inventory_items(id);
@@ -1054,6 +1076,24 @@ ALTER TABLE loans ADD CONSTRAINT loans_player_id_fkey FOREIGN KEY (player_id) RE
 ALTER TABLE loans ADD CONSTRAINT loans_season_id_fkey FOREIGN KEY (season_id) REFERENCES seasons(id) ON DELETE CASCADE;
 
 ALTER TABLE loans ADD CONSTRAINT loans_status_check CHECK ((status = ANY (ARRAY['active'::text, 'paid_off'::text, 'season_closed'::text])));
+
+ALTER TABLE odds_engine_config ADD CONSTRAINT odds_engine_config_half_life_check CHECK ((half_life_games > (0)::numeric));
+
+ALTER TABLE odds_engine_config ADD CONSTRAINT odds_engine_config_odds_clamp_check CHECK (((odds_min > 1.0) AND (odds_max > odds_min)));
+
+ALTER TABLE odds_engine_config ADD CONSTRAINT odds_engine_config_pkey PRIMARY KEY (id);
+
+ALTER TABLE odds_engine_config ADD CONSTRAINT odds_engine_config_prior_weight_check CHECK ((prior_weight_games >= (0)::numeric));
+
+ALTER TABLE odds_engine_config ADD CONSTRAINT odds_engine_config_rungs_check CHECK (((rungs_per_side >= 0) AND (rungs_per_side <= 6)));
+
+ALTER TABLE odds_engine_config ADD CONSTRAINT odds_engine_config_season_id_fkey FOREIGN KEY (season_id) REFERENCES seasons(id) ON DELETE CASCADE;
+
+ALTER TABLE odds_engine_config ADD CONSTRAINT odds_engine_config_spacing_check CHECK (((spacing_score > (0)::numeric) AND (spacing_night_pins > (0)::numeric) AND (spacing_count > (0)::numeric)));
+
+ALTER TABLE odds_engine_config ADD CONSTRAINT odds_engine_config_updated_by_fkey FOREIGN KEY (updated_by) REFERENCES players(id) ON DELETE SET NULL;
+
+ALTER TABLE odds_engine_config ADD CONSTRAINT odds_engine_config_variance_floors_check CHECK (((variance_floor_score > (0)::numeric) AND (variance_floor_count > (0)::numeric)));
 
 ALTER TABLE pin_ledger ADD CONSTRAINT pin_ledger_auction_id_fkey FOREIGN KEY (auction_id) REFERENCES auctions(id) ON DELETE CASCADE;
 
@@ -1482,6 +1522,10 @@ CREATE INDEX loans_player_id_idx ON public.loans USING btree (player_id);
 
 CREATE INDEX loans_season_id_idx ON public.loans USING btree (season_id);
 
+CREATE UNIQUE INDEX odds_engine_config_global_uniq ON public.odds_engine_config USING btree ((true)) WHERE (season_id IS NULL);
+
+CREATE UNIQUE INDEX odds_engine_config_season_uniq ON public.odds_engine_config USING btree (season_id) WHERE (season_id IS NOT NULL);
+
 CREATE INDEX pin_ledger_auction_idx ON public.pin_ledger USING btree (auction_id) WHERE (auction_id IS NOT NULL);
 
 CREATE INDEX pin_ledger_bounty_post_id_idx ON public.pin_ledger USING btree (bounty_post_id);
@@ -1872,6 +1916,15 @@ CREATE POLICY "admin can update" ON loans AS PERMISSIVE FOR UPDATE TO authentica
   WITH CHECK (( SELECT is_admin() AS is_admin));
 
 CREATE POLICY "authenticated can read" ON loans AS PERMISSIVE FOR SELECT TO authenticated
+  USING (true);
+
+ALTER TABLE odds_engine_config ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "admin can manage" ON odds_engine_config AS PERMISSIVE FOR ALL TO authenticated
+  USING (is_admin())
+  WITH CHECK (is_admin());
+
+CREATE POLICY "authenticated can read" ON odds_engine_config AS PERMISSIVE FOR SELECT TO authenticated
   USING (true);
 
 ALTER TABLE pin_ledger ENABLE ROW LEVEL SECURITY;
@@ -2534,6 +2587,23 @@ AS $function$
 $function$
 ;
 
+CREATE OR REPLACE FUNCTION public.bet_selections_fill_side()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SET search_path TO ''
+AS $function$
+BEGIN
+  IF NEW.side IS NULL THEN
+    NEW.side := CASE
+      WHEN NEW.key = 'over'  OR NEW.key LIKE 'over:%'  THEN 'over'
+      WHEN NEW.key = 'under' OR NEW.key LIKE 'under:%' THEN 'under'
+      ELSE NULL END;
+  END IF;
+  RETURN NEW;
+END;
+$function$
+;
+
 CREATE OR REPLACE FUNCTION public.broadcast_cancel(p_id uuid)
  RETURNS void
  LANGUAGE plpgsql
@@ -2856,6 +2926,89 @@ END;
 $function$
 ;
 
+CREATE OR REPLACE FUNCTION public.combo_preview_ladder(p_member_ids uuid[], p_stat text, p_season_id uuid, p_n_games integer DEFAULT 1, p_week_id uuid DEFAULT NULL::uuid, p_game_number integer DEFAULT NULL::integer)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ STABLE SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+DECLARE
+  v_members      uuid[];
+  v_member_texts text[];
+  v_scope        text;
+  v_combo_key    text;
+  v_mkt          uuid;
+  v_seed         numeric;
+  v_mean         numeric;
+  v_var          numeric;
+  v_cfg          public.odds_engine_config;
+  v_spacing      numeric;
+  v_hi           numeric;
+  v_cn           integer := GREATEST(COALESCE(p_n_games, 1), 1);
+  v_out          jsonb;
+BEGIN
+  IF p_stat IS NULL OR p_stat NOT IN ('clean_frames', 'strikes', 'spares', 'total_pins') THEN
+    RAISE EXCEPTION 'Unknown combo stat %', COALESCE(p_stat, '(null)');
+  END IF;
+
+  SELECT array_agg(m ORDER BY m) INTO v_members
+    FROM (SELECT DISTINCT m FROM unnest(COALESCE(p_member_ids, '{}')) m) d;
+  IF v_members IS NULL OR array_length(v_members, 1) < 2 THEN
+    RETURN '[]'::jsonb;
+  END IF;
+
+  -- Existing open combo for the same key → its posted rungs ARE the offer
+  -- (a second bettor can only take lines the market already carries).
+  IF p_week_id IS NOT NULL THEN
+    SELECT array_agg(m::text ORDER BY m) INTO v_member_texts FROM unnest(v_members) m;
+    v_scope := CASE WHEN p_game_number IS NULL THEN 'night' ELSE 'game' END;
+    v_combo_key := p_stat || '|' || v_scope || '|' || COALESCE(p_game_number::text, 'n')
+                   || '|' || array_to_string(v_member_texts, ',');
+    SELECT m.id INTO v_mkt
+      FROM public.bet_markets m
+      WHERE m.week_id = p_week_id AND m.market_type = 'combo'
+        AND m.status = 'open' AND m.params ->> 'combo_key' = v_combo_key;
+    IF v_mkt IS NOT NULL THEN
+      SELECT jsonb_agg(jsonb_build_object(
+               'line', s.line, 'odds', s.odds, 'is_seed', s.key = 'over')
+             ORDER BY s.line)
+        INTO v_out
+        FROM public.bet_selections s
+        WHERE s.market_id = v_mkt AND s.side = 'over';
+      RETURN COALESCE(v_out, '[]'::jsonb);
+    END IF;
+  END IF;
+
+  v_seed := public.combo_seed_line(v_members, p_stat, p_season_id, v_cn);
+
+  SELECT COALESCE(SUM(ps.mean), 0), COALESCE(SUM(ps.variance), 0)
+    INTO v_mean, v_var
+    FROM unnest(v_members) mem(m)
+    CROSS JOIN LATERAL public.odds_engine_player_stat(
+      mem.m, p_season_id,
+      CASE WHEN p_stat = 'total_pins' THEN 'score' ELSE p_stat END) ps;
+
+  v_cfg := public.odds_engine_get_config(p_season_id);
+  v_spacing := CASE
+    WHEN p_stat <> 'total_pins' THEN v_cfg.spacing_count
+    WHEN v_cn = 1 THEN v_cfg.spacing_score
+    ELSE v_cfg.spacing_night_pins END;
+  v_hi := CASE WHEN p_stat = 'total_pins'
+               THEN 300 * v_cn * array_length(v_members, 1) - 0.5
+               ELSE 10 * v_cn * array_length(v_members, 1) - 0.5 END;
+
+  SELECT jsonb_agg(jsonb_build_object(
+           'line', bl.line, 'odds', bl.odds, 'is_seed', bl.key = 'over')
+         ORDER BY bl.line)
+    INTO v_out
+    FROM public.odds_engine_build_ladder(v_seed, v_mean, v_var, v_cn,
+                                         v_spacing, 0.5, v_hi, p_season_id) bl
+    WHERE bl.side = 'over';
+  RETURN COALESCE(v_out, '[]'::jsonb);
+END;
+$function$
+;
+
 CREATE OR REPLACE FUNCTION public.combo_seed_line(p_member_ids uuid[], p_stat text, p_season_id uuid, p_n_games integer DEFAULT 1)
  RETURNS numeric
  LANGUAGE plpgsql
@@ -2933,6 +3086,14 @@ DECLARE
   v_first_created jsonb := NULL;
   v_n_created    integer := 0;
   v_bet_id       uuid;
+  v_spec_line    numeric;
+  v_odds         numeric;
+  v_mean         numeric;
+  v_var          numeric;
+  v_cfg          public.odds_engine_config;
+  v_spacing      numeric;
+  v_hi           numeric;
+  v_cn           integer;
 BEGIN
   v_player_id := public.current_player_id();
 
@@ -2961,6 +3122,7 @@ BEGIN
     v_target_games := ARRAY[1, 2];
   END IF;
   v_n_games := COALESCE(array_length(v_target_games, 1), 2);
+  v_cfg := public.odds_engine_get_config(v_season_id);
 
   -- One coarse lock per week serializes identical composes without per-spec
   -- lock-ordering concerns; the partial unique index is the backstop.
@@ -2970,6 +3132,9 @@ BEGIN
     v_stat := v_spec ->> 'stat';
     v_scope := v_spec ->> 'scope';
     v_game_number := (v_spec ->> 'game_number')::integer;
+    -- Optional chosen rung: bettors step the ladder in the BuilderBar; NULL
+    -- means the seed rung (canonical 'over' key).
+    v_spec_line := (v_spec ->> 'line')::numeric;
 
     IF v_stat IS NULL OR v_stat NOT IN ('clean_frames', 'strikes', 'spares', 'total_pins') THEN
       RAISE EXCEPTION 'Unknown combo stat %', COALESCE(v_stat, '(null)');
@@ -3027,9 +3192,18 @@ BEGIN
       END IF;
       v_market_id := v_existing.id;
       v_deduped := true;
-      SELECT s.id, s.line INTO v_over_id, v_line
-        FROM public.bet_selections s
-        WHERE s.market_id = v_market_id AND s.key = 'over';
+      IF v_spec_line IS NULL THEN
+        SELECT s.id, s.line, s.odds INTO v_over_id, v_line, v_odds
+          FROM public.bet_selections s
+          WHERE s.market_id = v_market_id AND s.key = 'over';
+      ELSE
+        SELECT s.id, s.line, s.odds INTO v_over_id, v_line, v_odds
+          FROM public.bet_selections s
+          WHERE s.market_id = v_market_id AND s.side = 'over' AND s.line = v_spec_line;
+        IF v_over_id IS NULL THEN
+          RAISE EXCEPTION 'This combo already exists at other lines — pick one of its posted rungs';
+        END IF;
+      END IF;
     ELSE
       v_deduped := false;
       v_clock := CASE WHEN v_stat = 'total_pins' THEN 'archive' ELSE 'lanetalk' END;
@@ -3061,13 +3235,40 @@ BEGIN
                 v_player_id)
         RETURNING id INTO v_market_id;
 
-      INSERT INTO public.bet_selections (market_id, key, label, odds, line, sort_order) VALUES
-        (v_market_id, 'over',  'Over',  2.000, v_line, 0),
-        (v_market_id, 'under', 'Under', 2.000, v_line, 1);
+      -- Combo distribution: members modeled independent, so per-game means
+      -- and variances add (night scaling happens inside the pricer). total_pins
+      -- maps to the members' score distributions.
+      SELECT COALESCE(SUM(ps.mean), 0), COALESCE(SUM(ps.variance), 0)
+        INTO v_mean, v_var
+        FROM (SELECT DISTINCT m FROM unnest(v_members) m) mem
+        CROSS JOIN LATERAL public.odds_engine_player_stat(
+          mem.m, v_season_id,
+          CASE WHEN v_stat = 'total_pins' THEN 'score' ELSE v_stat END) ps;
 
-      SELECT s.id INTO v_over_id
-        FROM public.bet_selections s
-        WHERE s.market_id = v_market_id AND s.key = 'over';
+      v_cn := CASE WHEN v_scope = 'game' THEN 1 ELSE v_n_games END;
+      v_spacing := CASE
+        WHEN v_stat <> 'total_pins' THEN v_cfg.spacing_count
+        WHEN v_scope = 'game' THEN v_cfg.spacing_score
+        ELSE v_cfg.spacing_night_pins END;
+      v_hi := CASE WHEN v_stat = 'total_pins'
+                   THEN 300 * v_cn * array_length(v_members, 1) - 0.5
+                   ELSE 10 * v_cn * array_length(v_members, 1) - 0.5 END;
+
+      PERFORM public.odds_engine_mint_ladder(
+        v_market_id, v_line, v_mean, v_var, v_cn, v_spacing, 0.5, v_hi, v_season_id);
+
+      IF v_spec_line IS NULL THEN
+        SELECT s.id, s.line, s.odds INTO v_over_id, v_line, v_odds
+          FROM public.bet_selections s
+          WHERE s.market_id = v_market_id AND s.key = 'over';
+      ELSE
+        SELECT s.id, s.line, s.odds INTO v_over_id, v_line, v_odds
+          FROM public.bet_selections s
+          WHERE s.market_id = v_market_id AND s.side = 'over' AND s.line = v_spec_line;
+        IF v_over_id IS NULL THEN
+          RAISE EXCEPTION 'That line is not offered for this combo — pick a posted rung';
+        END IF;
+      END IF;
 
       v_n_created := v_n_created + 1;
       IF v_first_created IS NULL THEN
@@ -3075,7 +3276,7 @@ BEGIN
           'stat', v_stat, 'scope', v_scope, 'game_number', v_game_number,
           'member_count', array_length(v_members, 1),
           'member_names', to_jsonb(v_member_names),
-          'line', v_line);
+          'line', v_line, 'odds', v_odds);
       END IF;
     END IF;
 
@@ -3087,7 +3288,7 @@ BEGIN
     v_market_ids := v_market_ids || v_market_id;
     v_over_ids := v_over_ids || v_over_id;
     v_combos_out := v_combos_out || jsonb_build_object(
-      'market_id', v_market_id, 'line', v_line, 'deduped', v_deduped);
+      'market_id', v_market_id, 'line', v_line, 'odds', v_odds, 'deduped', v_deduped);
   END LOOP;
 
   -- Parlay extras must be OTHER markets' selections (no self-referential legs).
@@ -3220,9 +3421,15 @@ BEGIN
     ) THEN
       RAISE EXCEPTION 'selection is not a valid key for this market';
     END IF;
-    SELECT key INTO v_counterparty_sel
-      FROM public.bet_selections
-      WHERE market_id = p_prop_market_id AND key <> p_selection LIMIT 1;
+    SELECT s2.key INTO v_counterparty_sel
+      FROM public.bet_selections s1
+      JOIN public.bet_selections s2
+        ON s2.market_id = s1.market_id
+       AND s2.id <> s1.id
+       AND s2.line IS NOT DISTINCT FROM s1.line
+       AND (s1.side IS NULL OR s2.side IS DISTINCT FROM s1.side)
+      WHERE s1.market_id = p_prop_market_id AND s1.key = p_selection
+      LIMIT 1;
     SELECT subject_player_id INTO v_subject_id
       FROM public.bet_markets WHERE id = p_prop_market_id;
   ELSIF p_contract_type = 'custom' THEN
@@ -3542,9 +3749,14 @@ BEGIN
     ) THEN
       RAISE EXCEPTION 'creator_selection is not a valid key for this market';
     END IF;
-    SELECT key INTO v_counterparty_sel
-      FROM public.bet_selections
-      WHERE market_id = p_prop_market_id AND key <> p_creator_selection
+    SELECT s2.key INTO v_counterparty_sel
+      FROM public.bet_selections s1
+      JOIN public.bet_selections s2
+        ON s2.market_id = s1.market_id
+       AND s2.id <> s1.id
+       AND s2.line IS NOT DISTINCT FROM s1.line
+       AND (s1.side IS NULL OR s2.side IS DISTINCT FROM s1.side)
+      WHERE s1.market_id = p_prop_market_id AND s1.key = p_creator_selection
       LIMIT 1;
     IF v_counterparty_sel IS NULL THEN
       RAISE EXCEPTION 'Could not derive counterparty selection for prop_duel';
@@ -4711,6 +4923,314 @@ AS $function$
 $function$
 ;
 
+CREATE OR REPLACE FUNCTION public.odds_engine_build_ladder(p_seed_line numeric, p_mean numeric, p_variance numeric, p_n_games integer, p_spacing numeric, p_range_lo numeric, p_range_hi numeric, p_season_id uuid)
+ RETURNS TABLE(key text, label text, odds numeric, line numeric, sort_order integer, side text)
+ LANGUAGE plpgsql
+ STABLE SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+DECLARE
+  v_cfg   public.odds_engine_config;
+  v_line  numeric;
+  v_over  numeric;
+  v_under numeric;
+  j       integer;
+BEGIN
+  v_cfg := public.odds_engine_get_config(p_season_id);
+
+  IF NOT v_cfg.is_enabled OR p_mean IS NULL OR p_variance IS NULL THEN
+    RETURN QUERY VALUES
+      ('over',  'Over',  2.000::numeric, p_seed_line, 0, 'over'),
+      ('under', 'Under', 2.000::numeric, p_seed_line, 1, 'under');
+    RETURN;
+  END IF;
+
+  FOR j IN -v_cfg.rungs_per_side .. v_cfg.rungs_per_side LOOP
+    v_line := p_seed_line + j * p_spacing;
+    IF v_line < p_range_lo OR v_line > p_range_hi THEN
+      CONTINUE;
+    END IF;
+
+    SELECT pp.over_odds, pp.under_odds INTO v_over, v_under
+      FROM public.odds_engine_price_pair(p_mean, p_variance, p_n_games, v_line,
+                                         v_cfg.odds_min, v_cfg.odds_max, j = 0) pp;
+    IF v_over IS NULL THEN
+      CONTINUE;  -- rung priced outside the clamp: not offered
+    END IF;
+
+    RETURN QUERY VALUES
+      (CASE WHEN j = 0 THEN 'over' ELSE 'over:' || v_line END,
+       'Over', v_over, v_line, (j + v_cfg.rungs_per_side) * 2, 'over'),
+      (CASE WHEN j = 0 THEN 'under' ELSE 'under:' || v_line END,
+       'Under', v_under, v_line, (j + v_cfg.rungs_per_side) * 2 + 1, 'under');
+  END LOOP;
+END;
+$function$
+;
+
+CREATE OR REPLACE FUNCTION public.odds_engine_get_config(p_season_id uuid)
+ RETURNS odds_engine_config
+ LANGUAGE plpgsql
+ STABLE SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+DECLARE
+  v_cfg public.odds_engine_config;
+BEGIN
+  -- Season override wins over the global row; a missing table row degrades to
+  -- typed defaults (engine enabled) so fixture seasons never crash pricing.
+  SELECT * INTO v_cfg
+    FROM public.odds_engine_config
+    WHERE season_id = p_season_id OR season_id IS NULL
+    ORDER BY season_id NULLS LAST
+    LIMIT 1;
+  IF v_cfg.id IS NULL THEN
+    v_cfg.is_enabled           := true;
+    v_cfg.half_life_games      := 6;
+    v_cfg.prior_weight_games   := 6;
+    v_cfg.variance_floor_score := 225;
+    v_cfg.variance_floor_count := 0.75;
+    v_cfg.odds_min             := 1.10;
+    v_cfg.odds_max             := 8.00;
+    v_cfg.rungs_per_side       := 3;
+    v_cfg.spacing_score        := 10;
+    v_cfg.spacing_night_pins   := 20;
+    v_cfg.spacing_count        := 1.0;
+  END IF;
+  RETURN v_cfg;
+END;
+$function$
+;
+
+CREATE OR REPLACE FUNCTION public.odds_engine_league_prior(p_season_id uuid, p_stat text, OUT mean numeric, OUT variance numeric)
+ RETURNS record
+ LANGUAGE plpgsql
+ STABLE SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+BEGIN
+  IF p_stat = 'score' THEN
+    SELECT AVG(s.score), var_pop(s.score) INTO mean, variance
+    FROM public.scores s
+    JOIN public.team_slots ts ON ts.id = s.team_slot_id
+    JOIN public.teams t       ON t.id = ts.team_id
+    JOIN public.weeks w       ON w.id = t.week_id
+    WHERE w.season_id = p_season_id AND w.is_archived = true
+      AND ts.player_id IS NOT NULL AND s.score > 0;
+
+    IF mean IS NULL THEN
+      SELECT AVG(s.score), var_pop(s.score) INTO mean, variance
+      FROM public.scores s
+      JOIN public.team_slots ts ON ts.id = s.team_slot_id
+      JOIN public.teams t       ON t.id = ts.team_id
+      JOIN public.weeks w       ON w.id = t.week_id
+      WHERE w.is_archived = true AND ts.player_id IS NOT NULL AND s.score > 0;
+    END IF;
+
+    mean     := COALESCE(mean, 130);
+    variance := COALESCE(NULLIF(variance, 0), 225);
+
+  ELSIF p_stat IN ('strikes', 'spares', 'clean_frames') THEN
+    SELECT AVG(v), var_pop(v) INTO mean, variance
+    FROM (
+      SELECT CASE p_stat
+               WHEN 'strikes' THEN i.strikes
+               WHEN 'spares'  THEN i.spares
+               ELSE i.strikes + i.spares
+             END AS v
+      FROM public.lanetalk_game_imports i
+      WHERE i.classification = 'official' AND i.frames > 0
+    ) g;
+
+    mean     := COALESCE(mean, CASE p_stat WHEN 'clean_frames' THEN 4 ELSE 2 END);
+    variance := COALESCE(NULLIF(variance, 0), 2);
+
+  ELSE
+    RAISE EXCEPTION 'Unknown odds engine stat %', p_stat;
+  END IF;
+END;
+$function$
+;
+
+CREATE OR REPLACE FUNCTION public.odds_engine_mint_ladder(p_market_id uuid, p_seed_line numeric, p_mean numeric, p_variance numeric, p_n_games integer, p_spacing numeric, p_range_lo numeric, p_range_hi numeric, p_season_id uuid)
+ RETURNS void
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+BEGIN
+  INSERT INTO public.bet_selections (market_id, key, label, odds, line, sort_order, side)
+    SELECT p_market_id, bl.key, bl.label, bl.odds, bl.line, bl.sort_order, bl.side
+    FROM public.odds_engine_build_ladder(p_seed_line, p_mean, p_variance, p_n_games,
+                                         p_spacing, p_range_lo, p_range_hi, p_season_id) bl;
+END;
+$function$
+;
+
+CREATE OR REPLACE FUNCTION public.odds_engine_norm_cdf(z double precision)
+ RETURNS double precision
+ LANGUAGE sql
+ IMMUTABLE PARALLEL SAFE
+ SET search_path TO ''
+AS $function$
+  SELECT CASE WHEN z >= 0 THEN 0.5 * (1.0 + e.erf) ELSE 0.5 * (1.0 - e.erf) END
+  FROM (
+    SELECT 1.0 - (((((1.061405429 * t.t - 1.453152027) * t.t + 1.421413741) * t.t
+                    - 0.284496736) * t.t + 0.254829592) * t.t) * exp(-t.x * t.x) AS erf
+    FROM (
+      SELECT c.x, 1.0 / (1.0 + 0.3275911 * c.x) AS t
+      FROM (SELECT abs(z) / sqrt(2.0) AS x) c
+    ) t
+  ) e;
+$function$
+;
+
+CREATE OR REPLACE FUNCTION public.odds_engine_player_stat(p_player_id uuid, p_season_id uuid, p_stat text, OUT mean numeric, OUT variance numeric, OUT w_total numeric)
+ RETURNS record
+ LANGUAGE plpgsql
+ STABLE SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+DECLARE
+  v_cfg    public.odds_engine_config;
+  v_mean_w numeric;
+  v_var_w  numeric;
+  v_floor  numeric;
+  v_pm     numeric;
+  v_pv     numeric;
+BEGIN
+  v_cfg := public.odds_engine_get_config(p_season_id);
+  v_floor := CASE WHEN p_stat = 'score' THEN v_cfg.variance_floor_score ELSE v_cfg.variance_floor_count END;
+
+  IF p_stat = 'score' THEN
+    -- Archived bowled scores, lifetime (skill persists across seasonal pin
+    -- resets), newest night first.
+    WITH ordered AS (
+      SELECT s.score::numeric AS v,
+             row_number() OVER (ORDER BY w.bowled_at DESC NULLS LAST, w.created_at DESC, s.created_at DESC) - 1 AS rk
+      FROM public.scores s
+      JOIN public.team_slots ts ON ts.id = s.team_slot_id
+      JOIN public.teams t       ON t.id = ts.team_id
+      JOIN public.weeks w       ON w.id = t.week_id
+      WHERE w.is_archived = true AND ts.player_id = p_player_id AND s.score > 0
+    ), weighted AS (
+      SELECT v, power(0.5, rk / v_cfg.half_life_games) AS wt FROM ordered
+    ), agg AS (
+      SELECT SUM(wt) AS w, SUM(wt * v) / NULLIF(SUM(wt), 0) AS m FROM weighted
+    )
+    SELECT a.w, a.m,
+           (SELECT SUM(wt * (v - a.m) ^ 2) / NULLIF(a.w, 0) FROM weighted)
+      INTO w_total, v_mean_w, v_var_w
+    FROM agg a;
+
+  ELSIF p_stat IN ('strikes', 'spares', 'clean_frames') THEN
+    WITH ordered AS (
+      SELECT (CASE p_stat
+                WHEN 'strikes' THEN i.strikes
+                WHEN 'spares'  THEN i.spares
+                ELSE i.strikes + i.spares
+              END)::numeric AS v,
+             row_number() OVER (ORDER BY i.played_at DESC NULLS LAST, i.created_at DESC) - 1 AS rk
+      FROM public.lanetalk_game_imports i
+      WHERE i.player_id = p_player_id AND i.classification = 'official' AND i.frames > 0
+    ), weighted AS (
+      SELECT v, power(0.5, rk / v_cfg.half_life_games) AS wt FROM ordered
+    ), agg AS (
+      SELECT SUM(wt) AS w, SUM(wt * v) / NULLIF(SUM(wt), 0) AS m FROM weighted
+    )
+    SELECT a.w, a.m,
+           (SELECT SUM(wt * (v - a.m) ^ 2) / NULLIF(a.w, 0) FROM weighted)
+      INTO w_total, v_mean_w, v_var_w
+    FROM agg a;
+
+  ELSE
+    RAISE EXCEPTION 'Unknown odds engine stat %', p_stat;
+  END IF;
+
+  w_total := COALESCE(w_total, 0);
+  SELECT lp.mean, lp.variance INTO v_pm, v_pv FROM public.odds_engine_league_prior(p_season_id, p_stat) lp;
+
+  IF w_total = 0 THEN
+    mean     := v_pm;
+    variance := GREATEST(v_floor, v_pv);
+  ELSE
+    mean     := (w_total * v_mean_w + v_cfg.prior_weight_games * v_pm) / (w_total + v_cfg.prior_weight_games);
+    variance := GREATEST(v_floor,
+                  (w_total * COALESCE(v_var_w, 0) + v_cfg.prior_weight_games * v_pv)
+                  / (w_total + v_cfg.prior_weight_games));
+  END IF;
+END;
+$function$
+;
+
+CREATE OR REPLACE FUNCTION public.odds_engine_price_pair(p_mean numeric, p_variance numeric, p_n_games integer, p_line numeric, p_odds_min numeric, p_odds_max numeric, p_force boolean, OUT over_odds numeric, OUT under_odds numeric)
+ RETURNS record
+ LANGUAGE plpgsql
+ IMMUTABLE
+ SET search_path TO ''
+AS $function$
+DECLARE
+  v_mean  numeric := p_mean * GREATEST(p_n_games, 1);
+  v_var   numeric := p_variance * GREATEST(p_n_games, 1);
+  v_p     double precision;
+  v_over  numeric;
+  v_under numeric;
+BEGIN
+  v_p := 1.0 - public.odds_engine_norm_cdf(((p_line - v_mean) / sqrt(v_var))::double precision);
+  v_p := LEAST(1.0 - 1e-9, GREATEST(1e-9, v_p));
+  v_over  := 1.0 / v_p;
+  v_under := 1.0 / (1.0 - v_p);
+
+  IF NOT p_force AND (v_over  < p_odds_min OR v_over  > p_odds_max
+                   OR v_under < p_odds_min OR v_under > p_odds_max) THEN
+    over_odds  := NULL;
+    under_odds := NULL;
+    RETURN;
+  END IF;
+
+  over_odds  := GREATEST(1.05, round(LEAST(p_odds_max, GREATEST(p_odds_min, v_over))  * 20) / 20);
+  under_odds := GREATEST(1.05, round(LEAST(p_odds_max, GREATEST(p_odds_min, v_under)) * 20) / 20);
+END;
+$function$
+;
+
+CREATE OR REPLACE FUNCTION public.odds_engine_reladder_if_changed(p_market_id uuid, p_seed_line numeric, p_mean numeric, p_variance numeric, p_n_games integer, p_spacing numeric, p_range_lo numeric, p_range_hi numeric, p_season_id uuid)
+ RETURNS boolean
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+DECLARE
+  v_changed boolean;
+BEGIN
+  SELECT EXISTS (
+    SELECT 1 FROM (
+      (SELECT s.key, s.label, s.odds, s.line, s.sort_order, s.side
+         FROM public.bet_selections s WHERE s.market_id = p_market_id
+       EXCEPT
+       SELECT bl.key, bl.label, bl.odds, bl.line, bl.sort_order, bl.side
+         FROM public.odds_engine_build_ladder(p_seed_line, p_mean, p_variance, p_n_games,
+                                              p_spacing, p_range_lo, p_range_hi, p_season_id) bl)
+      UNION ALL
+      (SELECT bl.key, bl.label, bl.odds, bl.line, bl.sort_order, bl.side
+         FROM public.odds_engine_build_ladder(p_seed_line, p_mean, p_variance, p_n_games,
+                                              p_spacing, p_range_lo, p_range_hi, p_season_id) bl
+       EXCEPT
+       SELECT s.key, s.label, s.odds, s.line, s.sort_order, s.side
+         FROM public.bet_selections s WHERE s.market_id = p_market_id)
+    ) d
+  ) INTO v_changed;
+
+  IF v_changed THEN
+    DELETE FROM public.bet_selections WHERE market_id = p_market_id;
+    PERFORM public.odds_engine_mint_ladder(p_market_id, p_seed_line, p_mean, p_variance,
+                                           p_n_games, p_spacing, p_range_lo, p_range_hi, p_season_id);
+  END IF;
+  RETURN v_changed;
+END;
+$function$
+;
+
 CREATE OR REPLACE FUNCTION public.open_auction_internal(p_auction_id uuid)
  RETURNS void
  LANGUAGE plpgsql
@@ -4927,7 +5447,7 @@ BEGIN
   -- distinct open market.
   v_n := 0;
   FOR v_sel IN
-    SELECT s.id AS selection_id, s.key, s.odds, s.line,
+    SELECT s.id AS selection_id, s.key, s.side, s.odds, s.line,
            m.id AS market_id, m.status, m.subject_player_id, m.week_id
     FROM public.bet_selections s
     JOIN public.bet_markets    m ON m.id = s.market_id
@@ -4968,7 +5488,7 @@ BEGIN
     END IF;
 
     -- Anti-tank (trigger is the backstop): no backing 'under' on your own market.
-    IF v_sel.subject_player_id = v_player_id AND v_sel.key = 'under' THEN
+    IF v_sel.subject_player_id = v_player_id AND v_sel.side = 'under' THEN
       RAISE EXCEPTION 'A player cannot bet the under on their own line';
     END IF;
 
@@ -5515,22 +6035,22 @@ AS $function$
 DECLARE
   v_bettor      uuid;
   v_subject     uuid;
-  v_key         text;
+  v_side        text;
   v_market_type text;
   v_params      jsonb;
 BEGIN
   SELECT player_id INTO v_bettor FROM public.bets WHERE id = NEW.bet_id;
 
-  SELECT m.subject_player_id, s.key, m.market_type, m.params
-    INTO v_subject, v_key, v_market_type, v_params
+  SELECT m.subject_player_id, s.side, m.market_type, m.params
+    INTO v_subject, v_side, v_market_type, v_params
     FROM public.bet_selections s
     JOIN public.bet_markets    m ON m.id = s.market_id
     WHERE s.id = NEW.selection_id;
 
   -- Player markets: no backing the under (or laying the over) on your OWN line.
   IF v_subject IS NOT NULL AND v_subject = v_bettor THEN
-    IF (NEW.side = 'back' AND v_key = 'under')
-       OR (NEW.side = 'lay' AND v_key = 'over') THEN
+    IF (NEW.side = 'back' AND v_side = 'under')
+       OR (NEW.side = 'lay' AND v_side = 'over') THEN
       RAISE EXCEPTION 'A player cannot bet against their own performance (anti-tanking)';
     END IF;
   END IF;
@@ -5538,7 +6058,7 @@ BEGIN
   -- Team markets: no backing the under (or laying the over) on a team the bettor
   -- is rostered on this week (betting your own team to do poorly).
   IF v_market_type = 'team_prop'
-     AND ((NEW.side = 'back' AND v_key = 'under') OR (NEW.side = 'lay' AND v_key = 'over')) THEN
+     AND ((NEW.side = 'back' AND v_side = 'under') OR (NEW.side = 'lay' AND v_side = 'over')) THEN
     IF EXISTS (
       SELECT 1 FROM public.team_slots ts
       WHERE ts.team_id = (v_params ->> 'team_id')::uuid
@@ -5552,7 +6072,7 @@ BEGIN
   -- Combo markets: no backing the under (or laying the over) on a combo whose
   -- member set contains the bettor. Backing your own over stays allowed.
   IF v_market_type = 'combo'
-     AND ((NEW.side = 'back' AND v_key = 'under') OR (NEW.side = 'lay' AND v_key = 'over'))
+     AND ((NEW.side = 'back' AND v_side = 'under') OR (NEW.side = 'lay' AND v_side = 'over'))
      AND (v_params -> 'member_ids') ? v_bettor::text THEN
     RAISE EXCEPTION 'A player cannot bet against a combo containing themselves (anti-tanking)';
   END IF;
@@ -7115,13 +7635,14 @@ BEGIN
     RETURN;  -- idempotent
   END IF;
 
-  -- Selection results: over wins above the line, under below; half-point lines
-  -- never push, but equality is handled as push for completeness.
+  -- Selection results (side-aware — ladders carry many over/under pairs,
+  -- each graded against its OWN line): over wins above the line, under below;
+  -- half-point lines never push, but equality is handled as push for completeness.
   UPDATE public.bet_selections s
     SET result = CASE
-      WHEN s.key = 'over'  THEN CASE WHEN p_result_value > s.line THEN 'won'
+      WHEN s.side = 'over'  THEN CASE WHEN p_result_value > s.line THEN 'won'
                                      WHEN p_result_value < s.line THEN 'lost' ELSE 'push' END
-      WHEN s.key = 'under' THEN CASE WHEN p_result_value < s.line THEN 'won'
+      WHEN s.side = 'under' THEN CASE WHEN p_result_value < s.line THEN 'won'
                                      WHEN p_result_value > s.line THEN 'lost' ELSE 'push' END
       ELSE s.result END
     WHERE s.market_id = p_market_id;
@@ -8330,11 +8851,16 @@ DECLARE
   v_rec          record;
   v_market_id    uuid;
   v_line         numeric;
+  v_cfg          public.odds_engine_config;
+  v_mean         numeric;
+  v_var          numeric;
+  v_sl           record;
 BEGIN
   SELECT season_id INTO v_season_id FROM public.weeks WHERE id = p_week_id;
   IF v_season_id IS NULL THEN
     RAISE EXCEPTION 'Week not found';
   END IF;
+  v_cfg := public.odds_engine_get_config(v_season_id);
 
   SELECT EXISTS (SELECT 1 FROM public.teams t WHERE t.week_id = p_week_id)
     INTO v_has_teams;
@@ -8450,14 +8976,15 @@ BEGIN
         AND m.params ->> 'source' = 'lanetalk' AND m.params ->> 'stat' = 'strikes'
         AND m.game_number = v_rec.game_number AND m.subject_player_id = v_rec.player_id
     ) THEN
+      SELECT ps.mean, ps.variance INTO v_mean, v_var
+        FROM public.odds_engine_player_stat(v_rec.player_id, v_season_id, 'strikes') ps;
       INSERT INTO public.bet_markets (market_type, title, week_id, game_number, subject_player_id, params, status)
         VALUES ('prop', v_rec.name || ' Strikes — Game ' || v_rec.game_number,
                 p_week_id, v_rec.game_number, v_rec.player_id,
                 jsonb_build_object('source', 'lanetalk', 'stat', 'strikes', 'scope', 'game'), 'open')
         RETURNING id INTO v_market_id;
-      INSERT INTO public.bet_selections (market_id, key, label, odds, line, sort_order) VALUES
-        (v_market_id, 'over',  'Over',  2.000, v_rec.strikes_line, 0),
-        (v_market_id, 'under', 'Under', 2.000, v_rec.strikes_line, 1);
+      PERFORM public.odds_engine_mint_ladder(
+        v_market_id, v_rec.strikes_line, v_mean, v_var, 1, v_cfg.spacing_count, 0.5, 9.5, v_season_id);
     END IF;
 
     IF NOT EXISTS (
@@ -8466,14 +8993,15 @@ BEGIN
         AND m.params ->> 'source' = 'lanetalk' AND m.params ->> 'stat' = 'spares'
         AND m.game_number = v_rec.game_number AND m.subject_player_id = v_rec.player_id
     ) THEN
+      SELECT ps.mean, ps.variance INTO v_mean, v_var
+        FROM public.odds_engine_player_stat(v_rec.player_id, v_season_id, 'spares') ps;
       INSERT INTO public.bet_markets (market_type, title, week_id, game_number, subject_player_id, params, status)
         VALUES ('prop', v_rec.name || ' Spares — Game ' || v_rec.game_number,
                 p_week_id, v_rec.game_number, v_rec.player_id,
                 jsonb_build_object('source', 'lanetalk', 'stat', 'spares', 'scope', 'game'), 'open')
         RETURNING id INTO v_market_id;
-      INSERT INTO public.bet_selections (market_id, key, label, odds, line, sort_order) VALUES
-        (v_market_id, 'over',  'Over',  2.000, v_rec.spares_line, 0),
-        (v_market_id, 'under', 'Under', 2.000, v_rec.spares_line, 1);
+      PERFORM public.odds_engine_mint_ladder(
+        v_market_id, v_rec.spares_line, v_mean, v_var, 1, v_cfg.spacing_count, 0.5, 9.5, v_season_id);
     END IF;
 
     IF NOT EXISTS (
@@ -8482,17 +9010,18 @@ BEGIN
         AND m.params ->> 'source' = 'lanetalk' AND m.params ->> 'stat' = 'clean_frames'
         AND m.game_number = v_rec.game_number AND m.subject_player_id = v_rec.player_id
     ) THEN
-      -- Per-game clean line: floor+0.5 on the per-game average, clamped inside
-      -- the possible range (10 frames a game).
+      -- Per-game clean seed line: floor+0.5 on the per-game average, clamped
+      -- inside the possible range (10 frames a game).
       v_line := LEAST(9.5, GREATEST(0.5, floor(v_rec.clean_frames_per_game) + 0.5));
+      SELECT ps.mean, ps.variance INTO v_mean, v_var
+        FROM public.odds_engine_player_stat(v_rec.player_id, v_season_id, 'clean_frames') ps;
       INSERT INTO public.bet_markets (market_type, title, week_id, game_number, subject_player_id, params, status)
         VALUES ('prop', v_rec.name || ' Clean Frames — Game ' || v_rec.game_number,
                 p_week_id, v_rec.game_number, v_rec.player_id,
                 jsonb_build_object('source', 'lanetalk', 'stat', 'clean_frames', 'scope', 'game'), 'open')
         RETURNING id INTO v_market_id;
-      INSERT INTO public.bet_selections (market_id, key, label, odds, line, sort_order) VALUES
-        (v_market_id, 'over',  'Over',  2.000, v_line, 0),
-        (v_market_id, 'under', 'Under', 2.000, v_line, 1);
+      PERFORM public.odds_engine_mint_ladder(
+        v_market_id, v_line, v_mean, v_var, 1, v_cfg.spacing_count, 0.5, 9.5, v_season_id);
     END IF;
   END LOOP;
 
@@ -8522,10 +9051,10 @@ BEGIN
     JOIN public.players p ON p.id = ep.player_id
     JOIN LATERAL public.lanetalk_seed_lines(ep.player_id) sl ON true
   LOOP
-    -- Night lines: per-game average scaled to this week's schedule, floored
-    -- ONCE to a half so it can't push, clamped inside the possible range
-    -- (10 frames a game — the money definitions count FRAMES, so 10·n is the
-    -- true ceiling for strikes, spares, and clean frames alike).
+    -- Night seed lines: per-game average scaled to this week's schedule,
+    -- floored ONCE to a half so it can't push, clamped inside the possible
+    -- range (10 frames a game — the money definitions count FRAMES, so 10·n
+    -- is the true ceiling for strikes, spares, and clean frames alike).
     IF NOT EXISTS (
       SELECT 1 FROM public.bet_markets m
       WHERE m.week_id = p_week_id AND m.market_type = 'prop'
@@ -8534,14 +9063,15 @@ BEGIN
     ) THEN
       v_line := LEAST(10 * v_n_games - 0.5,
                 GREATEST(0.5, floor(v_rec.clean_frames_per_game * v_n_games) + 0.5));
+      SELECT ps.mean, ps.variance INTO v_mean, v_var
+        FROM public.odds_engine_player_stat(v_rec.player_id, v_season_id, 'clean_frames') ps;
       INSERT INTO public.bet_markets (market_type, title, week_id, game_number, subject_player_id, params, status)
         VALUES ('prop', v_rec.name || ' Clean Frames — Night',
                 p_week_id, NULL, v_rec.player_id,
                 jsonb_build_object('source', 'lanetalk', 'stat', 'clean_frames', 'scope', 'night'), 'open')
         RETURNING id INTO v_market_id;
-      INSERT INTO public.bet_selections (market_id, key, label, odds, line, sort_order) VALUES
-        (v_market_id, 'over',  'Over',  2.000, v_line, 0),
-        (v_market_id, 'under', 'Under', 2.000, v_line, 1);
+      PERFORM public.odds_engine_mint_ladder(
+        v_market_id, v_line, v_mean, v_var, v_n_games, v_cfg.spacing_count, 0.5, 10 * v_n_games - 0.5, v_season_id);
     END IF;
 
     IF NOT EXISTS (
@@ -8552,14 +9082,15 @@ BEGIN
     ) THEN
       v_line := LEAST(10 * v_n_games - 0.5,
                 GREATEST(0.5, floor(v_rec.strikes_per_game * v_n_games) + 0.5));
+      SELECT ps.mean, ps.variance INTO v_mean, v_var
+        FROM public.odds_engine_player_stat(v_rec.player_id, v_season_id, 'strikes') ps;
       INSERT INTO public.bet_markets (market_type, title, week_id, game_number, subject_player_id, params, status)
         VALUES ('prop', v_rec.name || ' Strikes — Night',
                 p_week_id, NULL, v_rec.player_id,
                 jsonb_build_object('source', 'lanetalk', 'stat', 'strikes', 'scope', 'night'), 'open')
         RETURNING id INTO v_market_id;
-      INSERT INTO public.bet_selections (market_id, key, label, odds, line, sort_order) VALUES
-        (v_market_id, 'over',  'Over',  2.000, v_line, 0),
-        (v_market_id, 'under', 'Under', 2.000, v_line, 1);
+      PERFORM public.odds_engine_mint_ladder(
+        v_market_id, v_line, v_mean, v_var, v_n_games, v_cfg.spacing_count, 0.5, 10 * v_n_games - 0.5, v_season_id);
     END IF;
 
     IF NOT EXISTS (
@@ -8570,56 +9101,65 @@ BEGIN
     ) THEN
       v_line := LEAST(10 * v_n_games - 0.5,
                 GREATEST(0.5, floor(v_rec.spares_per_game * v_n_games) + 0.5));
+      SELECT ps.mean, ps.variance INTO v_mean, v_var
+        FROM public.odds_engine_player_stat(v_rec.player_id, v_season_id, 'spares') ps;
       INSERT INTO public.bet_markets (market_type, title, week_id, game_number, subject_player_id, params, status)
         VALUES ('prop', v_rec.name || ' Spares — Night',
                 p_week_id, NULL, v_rec.player_id,
                 jsonb_build_object('source', 'lanetalk', 'stat', 'spares', 'scope', 'night'), 'open')
         RETURNING id INTO v_market_id;
-      INSERT INTO public.bet_selections (market_id, key, label, odds, line, sort_order) VALUES
-        (v_market_id, 'over',  'Over',  2.000, v_line, 0),
-        (v_market_id, 'under', 'Under', 2.000, v_line, 1);
+      PERFORM public.odds_engine_mint_ladder(
+        v_market_id, v_line, v_mean, v_var, v_n_games, v_cfg.spacing_count, 0.5, 10 * v_n_games - 0.5, v_season_id);
     END IF;
   END LOOP;
 
-  -- --- Reprice: unbet open/closed markets whose seeded line drifted ---------
-  -- (new imports since creation). Never moves a line under a placed bet.
-  -- Keyed on stat × scope (game_number is the structural scope marker);
-  -- first_ball_avg resolves NULL → skipped, so legacy FBA lines stay frozen.
-  UPDATE public.bet_selections s
-     SET line = d.line
+  -- --- Re-ladder: unbet open/closed markets track new imports (line drift ---
+  -- AND recency-weighted odds drift). Never touches a market under a placed
+  -- bet; ids only churn when the posted ladder actually changed. Legacy
+  -- stats (first_ball_avg) are skipped — frozen as before.
+  FOR v_rec IN
+    SELECT m.id AS market_id, m.subject_player_id, m.game_number,
+           m.params ->> 'stat' AS stat
     FROM public.bet_markets m
-    CROSS JOIN LATERAL public.lanetalk_seed_lines(m.subject_player_id) sl
-    CROSS JOIN LATERAL (
-      SELECT CASE
-               WHEN m.params ->> 'stat' = 'strikes' AND m.game_number IS NOT NULL
-                 THEN sl.strikes_line
-               WHEN m.params ->> 'stat' = 'strikes'
-                 THEN LEAST(10 * v_n_games - 0.5,
-                      GREATEST(0.5, floor(sl.strikes_per_game * v_n_games) + 0.5))
-               WHEN m.params ->> 'stat' = 'spares' AND m.game_number IS NOT NULL
-                 THEN sl.spares_line
-               WHEN m.params ->> 'stat' = 'spares'
-                 THEN LEAST(10 * v_n_games - 0.5,
-                      GREATEST(0.5, floor(sl.spares_per_game * v_n_games) + 0.5))
-               WHEN m.params ->> 'stat' = 'clean_frames' AND m.game_number IS NOT NULL
-                 THEN LEAST(9.5, GREATEST(0.5, floor(sl.clean_frames_per_game) + 0.5))
-               WHEN m.params ->> 'stat' = 'clean_frames'
-                 THEN LEAST(10 * v_n_games - 0.5,
-                      GREATEST(0.5, floor(sl.clean_frames_per_game * v_n_games) + 0.5))
-               ELSE NULL
-             END AS line
-    ) d
-   WHERE s.market_id = m.id
-     AND m.week_id = p_week_id
-     AND m.market_type = 'prop'
-     AND m.params ->> 'source' = 'lanetalk'
-     AND m.status IN ('open', 'closed')
-     AND d.line IS NOT NULL
-     AND s.line IS DISTINCT FROM d.line
-     AND NOT EXISTS (
-       SELECT 1 FROM public.bet_legs l
-       JOIN public.bet_selections s2 ON s2.id = l.selection_id
-       WHERE s2.market_id = m.id);
+    WHERE m.week_id = p_week_id
+      AND m.market_type = 'prop'
+      AND m.params ->> 'source' = 'lanetalk'
+      AND m.status IN ('open', 'closed')
+      AND m.params ->> 'stat' IN ('strikes', 'spares', 'clean_frames')
+      AND NOT EXISTS (
+        SELECT 1 FROM public.bet_legs l
+        JOIN public.bet_selections s2 ON s2.id = l.selection_id
+        WHERE s2.market_id = m.id)
+  LOOP
+    SELECT sl.* INTO v_sl FROM public.lanetalk_seed_lines(v_rec.subject_player_id) sl;
+    IF v_sl IS NULL OR v_sl.strikes_per_game IS NULL THEN
+      CONTINUE;  -- no official history (the prune above handles removal)
+    END IF;
+
+    v_line := CASE
+      WHEN v_rec.stat = 'strikes' AND v_rec.game_number IS NOT NULL THEN v_sl.strikes_line
+      WHEN v_rec.stat = 'strikes' THEN LEAST(10 * v_n_games - 0.5,
+             GREATEST(0.5, floor(v_sl.strikes_per_game * v_n_games) + 0.5))
+      WHEN v_rec.stat = 'spares' AND v_rec.game_number IS NOT NULL THEN v_sl.spares_line
+      WHEN v_rec.stat = 'spares' THEN LEAST(10 * v_n_games - 0.5,
+             GREATEST(0.5, floor(v_sl.spares_per_game * v_n_games) + 0.5))
+      WHEN v_rec.game_number IS NOT NULL THEN
+             LEAST(9.5, GREATEST(0.5, floor(v_sl.clean_frames_per_game) + 0.5))
+      ELSE LEAST(10 * v_n_games - 0.5,
+             GREATEST(0.5, floor(v_sl.clean_frames_per_game * v_n_games) + 0.5))
+    END;
+
+    SELECT ps.mean, ps.variance INTO v_mean, v_var
+      FROM public.odds_engine_player_stat(v_rec.subject_player_id, v_season_id, v_rec.stat) ps;
+
+    IF v_rec.game_number IS NOT NULL THEN
+      PERFORM public.odds_engine_reladder_if_changed(
+        v_rec.market_id, v_line, v_mean, v_var, 1, v_cfg.spacing_count, 0.5, 9.5, v_season_id);
+    ELSE
+      PERFORM public.odds_engine_reladder_if_changed(
+        v_rec.market_id, v_line, v_mean, v_var, v_n_games, v_cfg.spacing_count, 0.5, 10 * v_n_games - 0.5, v_season_id);
+    END IF;
+  END LOOP;
 END;
 $function$
 ;
@@ -8654,11 +9194,15 @@ DECLARE
   v_line         numeric;
   v_market_id    uuid;
   v_rec          record;
+  v_cfg          public.odds_engine_config;
+  v_mean         numeric;
+  v_var          numeric;
 BEGIN
   SELECT season_id INTO v_season_id FROM public.weeks WHERE id = p_week_id;
   IF v_season_id IS NULL THEN
     RAISE EXCEPTION 'Week not found';
   END IF;
+  v_cfg := public.odds_engine_get_config(v_season_id);
 
   SELECT EXISTS (SELECT 1 FROM public.teams t WHERE t.week_id = p_week_id)
     INTO v_has_teams;
@@ -8733,27 +9277,35 @@ BEGIN
                AND r.player_id = m.subject_player_id))
      );
 
-  -- --- Refresh: recompute the line on every OPEN market that has no bets yet,
-  -- so re-syncs pick up the current season→lifetime→league ladder. Markets with
-  -- any bet on any selection are frozen (line untouched) to protect bettors.
-  -- Game markets: pvp_player_line (already FLOOR(avg) + 0.5). Night markets:
-  -- the raw ladder mean × the week's game count, floored once.
-  UPDATE public.bet_selections bs
-     SET line = CASE
-       WHEN m.game_number IS NOT NULL THEN public.pvp_player_line(m.subject_player_id, v_season_id)
-       ELSE GREATEST(0.5, floor(public.player_raw_avg_score(m.subject_player_id, v_season_id) * v_n_games) + 0.5)
-     END
-   FROM public.bet_markets m
-   WHERE bs.market_id = m.id
-     AND m.week_id = p_week_id
-     AND m.market_type = 'over_under'
-     AND m.status = 'open'
-     AND m.subject_player_id IS NOT NULL
-     AND NOT EXISTS (
-       SELECT 1 FROM public.bet_legs bl
-       JOIN public.bet_selections s2 ON s2.id = bl.selection_id
-       WHERE s2.market_id = m.id
-     );
+  -- --- Re-ladder: rebuild line + priced rungs on every OPEN market with no ---
+  -- bets, so re-syncs pick up new history AND fresh recency-weighted odds.
+  -- Selection ids only churn when the posted ladder actually changed
+  -- (odds_engine_reladder_if_changed). Markets with any bet stay frozen.
+  FOR v_rec IN
+    SELECT m.id AS market_id, m.subject_player_id, m.game_number
+    FROM public.bet_markets m
+    WHERE m.week_id = p_week_id
+      AND m.market_type = 'over_under'
+      AND m.status = 'open'
+      AND m.subject_player_id IS NOT NULL
+      AND NOT EXISTS (
+        SELECT 1 FROM public.bet_legs bl
+        JOIN public.bet_selections s2 ON s2.id = bl.selection_id
+        WHERE s2.market_id = m.id
+      )
+  LOOP
+    SELECT ps.mean, ps.variance INTO v_mean, v_var
+      FROM public.odds_engine_player_stat(v_rec.subject_player_id, v_season_id, 'score') ps;
+    IF v_rec.game_number IS NOT NULL THEN
+      v_line := public.pvp_player_line(v_rec.subject_player_id, v_season_id);
+      PERFORM public.odds_engine_reladder_if_changed(
+        v_rec.market_id, v_line, v_mean, v_var, 1, v_cfg.spacing_score, 0.5, 299.5, v_season_id);
+    ELSE
+      v_line := GREATEST(0.5, floor(public.player_raw_avg_score(v_rec.subject_player_id, v_season_id) * v_n_games) + 0.5);
+      PERFORM public.odds_engine_reladder_if_changed(
+        v_rec.market_id, v_line, v_mean, v_var, v_n_games, v_cfg.spacing_night_pins, 0.5, 300 * v_n_games - 0.5, v_season_id);
+    END IF;
+  END LOOP;
 
   -- --- Create missing markets for eligible (player, game) pairs ---------------
   FOR v_rec IN
@@ -8789,17 +9341,18 @@ BEGIN
         AND m.game_number = ep.game_number AND m.subject_player_id = ep.player_id
     )
   LOOP
-    -- Season → lifetime → league ladder, shared with PvP lines.
+    -- Season → lifetime → league ladder, shared with PvP lines (seed rung).
     v_line := public.pvp_player_line(v_rec.player_id, v_season_id);
+    SELECT ps.mean, ps.variance INTO v_mean, v_var
+      FROM public.odds_engine_player_stat(v_rec.player_id, v_season_id, 'score') ps;
 
     INSERT INTO public.bet_markets (market_type, title, week_id, game_number, subject_player_id, status)
       VALUES ('over_under', v_rec.name || ' · Game ' || v_rec.game_number,
               p_week_id, v_rec.game_number, v_rec.player_id, 'open')
       RETURNING id INTO v_market_id;
 
-    INSERT INTO public.bet_selections (market_id, key, label, odds, line, sort_order) VALUES
-      (v_market_id, 'over',  'Over',  2.000, v_line, 0),
-      (v_market_id, 'under', 'Under', 2.000, v_line, 1);
+    PERFORM public.odds_engine_mint_ladder(
+      v_market_id, v_line, v_mean, v_var, 1, v_cfg.spacing_score, 0.5, 299.5, v_season_id);
   END LOOP;
 
   -- --- Create missing NIGHT markets (player total pins across the night) ------
@@ -8832,6 +9385,8 @@ BEGIN
     )
   LOOP
     v_line := GREATEST(0.5, floor(public.player_raw_avg_score(v_rec.player_id, v_season_id) * v_n_games) + 0.5);
+    SELECT ps.mean, ps.variance INTO v_mean, v_var
+      FROM public.odds_engine_player_stat(v_rec.player_id, v_season_id, 'score') ps;
 
     INSERT INTO public.bet_markets (market_type, title, week_id, game_number, subject_player_id, params, status)
       VALUES ('over_under', v_rec.name || ' Total Pins — Night',
@@ -8839,9 +9394,8 @@ BEGIN
               jsonb_build_object('scope', 'night'), 'open')
       RETURNING id INTO v_market_id;
 
-    INSERT INTO public.bet_selections (market_id, key, label, odds, line, sort_order) VALUES
-      (v_market_id, 'over',  'Over',  2.000, v_line, 0),
-      (v_market_id, 'under', 'Under', 2.000, v_line, 1);
+    PERFORM public.odds_engine_mint_ladder(
+      v_market_id, v_line, v_mean, v_var, v_n_games, v_cfg.spacing_night_pins, 0.5, 300 * v_n_games - 0.5, v_season_id);
   END LOOP;
 END;
 $function$
@@ -9730,6 +10284,8 @@ CREATE TRIGGER trg_refund_bets_before_market_delete BEFORE DELETE ON public.bet_
 
 CREATE TRIGGER set_updated_at BEFORE UPDATE ON public.bet_selections FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
+CREATE TRIGGER trg_bet_selections_fill_side BEFORE INSERT ON public.bet_selections FOR EACH ROW EXECUTE FUNCTION bet_selections_fill_side();
+
 CREATE TRIGGER set_updated_at BEFORE UPDATE ON public.bets FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
 CREATE TRIGGER set_updated_at BEFORE UPDATE ON public.board_posts FOR EACH ROW EXECUTE FUNCTION set_updated_at();
@@ -9777,6 +10333,8 @@ CREATE TRIGGER loan_products_immutable_terms BEFORE UPDATE ON public.loan_produc
 CREATE TRIGGER set_updated_at BEFORE UPDATE ON public.loan_products FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
 CREATE TRIGGER set_updated_at BEFORE UPDATE ON public.loans FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+CREATE TRIGGER set_updated_at BEFORE UPDATE ON public.odds_engine_config FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
 CREATE TRIGGER set_updated_at BEFORE UPDATE ON public.pin_ledger FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 

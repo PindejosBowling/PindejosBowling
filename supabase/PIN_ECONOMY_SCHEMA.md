@@ -1,5 +1,21 @@
 # Pin Economy & Betting Schema
 
+> **OddsEngine (2026-07-22).** Odds are no longer uniformly 2.000: every
+> generated market carries a fair-priced (zero-vig) **ladder** of over/under
+> rungs from the `odds_engine_*` function family (recency-weighted normal
+> model, official games only; knobs in `odds_engine_config`, shipped enabled).
+> Structural changes to this schema: `bet_selections.side` ('over'/'under',
+> NULL for moneyline team keys; BEFORE INSERT trigger derives it from the key)
+> is the dispatch column for grading (`settle_market_internal`), anti-tank
+> (`place_house_bet`, `prevent_self_tank`), and the UI under-hide; alt rungs
+> use keys `'over:<line>'`/`'under:<line>'` while the seed rung keeps
+> `'over'`/`'under'`; PvP prop-duel counterparty = same rung, opposite side;
+> `compose_combo_bet` specs accept `"line"` and `combo_preview_ladder` is the
+> preview RPC. Accounting is untouched — legs still snapshot
+> `odds_at_placement`/`line_at_placement` and payouts remain
+> `floor(stake × Π odds)`. Full reference:
+> [../context/odds-engine.md](../context/odds-engine.md).
+
 Reference for the pin economy and the betting subsystem — the tables, their
 relationships, the accounting model, and how to implement or extend betting
 features. Read this before touching anything under the `bet_*` / `pin_ledger`

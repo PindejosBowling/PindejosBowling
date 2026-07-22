@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { View, Text, StyleSheet } from 'react-native'
 import { colors, fonts, radius, spacing } from '../../theme'
 import PickChip from './PickChip'
@@ -39,11 +40,21 @@ interface LineRowProps {
 export default function LineRow({ lines, relation, inProgress, selectionState, onSelect }: LineRowProps) {
   const pressable = !inProgress && !!onSelect
   const first = lines[0]
+  // Alt-line ladder browsing: which rung each laddered market currently shows
+  // (marketId → index into its sorted visible selections). An explicit step
+  // wins; otherwise a staged rung shows; otherwise the seed rung (key 'over').
+  const [rungIdx, setRungIdx] = useState<Record<string, number>>({})
+  // A laddered market (many priced over rungs after under-hiding) renders as
+  // ONE steppable chip; anything else keeps a chip per selection.
+  const isLadder = (l: LineView) =>
+    l.selections.length > 1 && l.selections.every(s => s.side === 'over')
+
   // Multi-chip rows (player overs + stat props) stack: name centered on its
   // own row, the chip set wrapping evenly beneath. Only a lone-chip row (a
   // bare moneyline WIN) keeps the horizontal name-left / chip-right
-  // presentation — a row of one never needs to wrap.
-  const chipCount = lines.reduce((n, l) => n + l.selections.length, 0)
+  // presentation — a row of one never needs to wrap. Ladders count as one
+  // chip (the stepper browses rungs in place).
+  const chipCount = lines.reduce((n, l) => n + (isLadder(l) ? 1 : l.selections.length), 0)
   const stacked = first.marketType !== 'moneyline' || chipCount > 1
 
   return (
@@ -65,22 +76,50 @@ export default function LineRow({ lines, relation, inProgress, selectionState, o
         )}
       </View>
       <View style={stacked ? styles.pickBtnsStacked : styles.pickBtns}>
-        {lines.flatMap(line =>
-          line.selections.map(sel => {
-            const st = selectionState?.(line, sel) ?? {}
-            return (
-              <PickChip
-                key={sel.selectionId}
-                label={selectionButtonLabel(line, sel)}
-                grid={stacked}
-                selected={st.selected}
-                disabled={line.inProgress || st.disabled}
-                inert={!pressable}
-                onPress={pressable ? () => onSelect!(line, sel) : undefined}
-              />
-            )
-          })
-        )}
+        {lines.flatMap(line => {
+          if (!isLadder(line)) {
+            return line.selections.map(sel => {
+              const st = selectionState?.(line, sel) ?? {}
+              return (
+                <PickChip
+                  key={sel.selectionId}
+                  label={selectionButtonLabel(line, sel)}
+                  grid={stacked}
+                  selected={st.selected}
+                  disabled={line.inProgress || st.disabled}
+                  inert={!pressable}
+                  onPress={pressable ? () => onSelect!(line, sel) : undefined}
+                />
+              )
+            })
+          }
+          // Ladder: one chip showing the current rung, ‹ › steps its siblings.
+          const sels = line.selections // sorted by sort_order = line ascending
+          const seedIdx = Math.max(0, sels.findIndex(s => s.key === 'over'))
+          const stagedIdx = sels.findIndex(s => (selectionState?.(line, s) ?? {}).selected)
+          const idx = Math.min(
+            sels.length - 1,
+            rungIdx[line.marketId] ?? (stagedIdx >= 0 ? stagedIdx : seedIdx)
+          )
+          const sel = sels[idx]
+          const st = selectionState?.(line, sel) ?? {}
+          const step = (to: number) => setRungIdx(prev => ({ ...prev, [line.marketId]: to }))
+          return [
+            <PickChip
+              key={line.marketId}
+              label={selectionButtonLabel(line, sel)}
+              grid={stacked}
+              selected={st.selected}
+              disabled={line.inProgress || st.disabled}
+              inert={!pressable}
+              onPress={pressable ? () => onSelect!(line, sel) : undefined}
+              stepper={{
+                onPrev: idx > 0 && !line.inProgress ? () => step(idx - 1) : null,
+                onNext: idx < sels.length - 1 && !line.inProgress ? () => step(idx + 1) : null,
+              }}
+            />,
+          ]
+        })}
       </View>
     </View>
   )

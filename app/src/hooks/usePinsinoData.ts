@@ -1,7 +1,7 @@
 import { weeks, seasons, betMarkets, bets, pinLedger, loanLedger, loans, pvpChallenges, bountyPosts, teamSlots, customLines, games, players, rsvp, auctionHouseState } from '../utils/supabase/db'
 import { computeBalance } from '../utils/ledger'
 import { shortName } from '../utils/helpers'
-import { betPayout } from '../utils/bets'
+import { betPayout, fmtOdds } from '../utils/bets'
 import { useAsyncData } from './useAsyncData'
 
 // One bettable side of a market (a single `bet_selections` row, flattened).
@@ -10,10 +10,13 @@ import { useAsyncData } from './useAsyncData'
 // types reuse it without bespoke fields.
 export interface SelectionView {
   selectionId: string
-  key: string            // stable side key: 'over' | 'under' | 'yes' | a player id, …
+  key: string            // stable side key: 'over' | 'under', ladder rungs 'over:<line>', a player id, …
+  // O/U side, ladder-safe (DB bet_selections.side): dispatch on this, never on
+  // the key text — alt rungs carry suffixed keys. null = non-O/U (moneyline).
+  side: 'over' | 'under' | null
   label: string          // display label ('Over', 'Under', …)
-  line: number | null    // this side's total/handicap (the O/U number); null if n/a
-  odds: number           // decimal odds (2.000 = even money)
+  line: number | null    // this rung's total/handicap (the O/U number); null if n/a
+  odds: number           // decimal odds (engine-priced; 2.000 = even money)
 }
 
 // A flattened bettable market (one market + its selections). Generic over
@@ -56,15 +59,17 @@ export interface LineView {
 // semantics in one place — new market types declare their "against the subject"
 // side here.
 export function selectionBetsAgainstSubject(marketType: string, selectionKey: string): boolean {
-  if (marketType === 'over_under') return selectionKey === 'under'
+  // Ladder rungs carry suffixed keys ('under:4.5'); the prefix IS the side.
+  const isUnder = selectionKey === 'under' || selectionKey.startsWith('under:')
+  if (marketType === 'over_under') return isUnder
   // Stat props share O/U shape: the under bets against the subject's night.
-  if (marketType === 'prop') return selectionKey === 'under'
+  if (marketType === 'prop') return isUnder
   // Team-aggregate props: the under bets against the anchored team (the
   // "subject" is the team — callers key ownership off LineView.teamId).
-  if (marketType === 'team_prop') return selectionKey === 'under'
+  if (marketType === 'team_prop') return isUnder
   // Combo lines: the under bets against the member set (callers key
   // self-inclusion off LineView.comboMemberIds).
-  if (marketType === 'combo') return selectionKey === 'under'
+  if (marketType === 'combo') return isUnder
   return false
 }
 
@@ -80,7 +85,7 @@ export function isSelectionHiddenInUI(line: LineView, sel: SelectionView): boole
   return (
     (line.marketType === 'over_under' || line.marketType === 'prop' ||
      line.marketType === 'team_prop' || line.marketType === 'combo') &&
-    sel.key === 'under'
+    sel.side === 'under'
   )
 }
 
@@ -111,14 +116,16 @@ export const STAT_LABELS: Record<string, string> = {
 // prop. Lineless sides (moneyline "WIN") keep their label.
 export function selectionButtonLabel(line: LineView, sel: SelectionView): string {
   const threshold = sel.line ?? line.line
-  if (sel.key === 'over' && threshold != null) {
+  if (sel.side === 'over' && threshold != null) {
     const what =
       line.marketType === 'prop' || line.marketType === 'team_prop' || line.marketType === 'combo'
         ? line.statKey ? STAT_LABELS[line.statKey] ?? line.statKey : null
         // Score lines: a game row reads "PINS"; the night line matches the
         // team row's "TOTAL PINS" wording (it IS the night total).
         : line.marketType === 'over_under' ? (line.gameNumber != null ? 'Pins' : 'Total Pins') : null
-    return `${threshold.toFixed(1)}+${what ? ` ${what.toUpperCase()}` : ''}`
+    // Engine-priced boards carry the rung's payout on the button itself
+    // ("4.5+ STRIKES ×2.40") — the odds ARE part of the offer now.
+    return `${threshold.toFixed(1)}+${what ? ` ${what.toUpperCase()}` : ''} ${fmtOdds(sel.odds)}`
   }
   return (sel.label || sel.key).toUpperCase()
 }
@@ -386,6 +393,11 @@ export function normalizeMarket(m: any): LineView {
     .map((s: any) => ({
       selectionId: s.id,
       key: s.key,
+      // Prefer the DB side column; derive from the key for any cached rows
+      // fetched before the side migration.
+      side: (s.side ?? (s.key === 'over' || String(s.key).startsWith('over:') ? 'over'
+        : s.key === 'under' || String(s.key).startsWith('under:') ? 'under' : null)) as
+        'over' | 'under' | null,
       label: s.label ?? s.key ?? '—',
       line: s.line != null ? Number(s.line) : null,
       odds: Number(s.odds ?? 2),

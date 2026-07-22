@@ -323,6 +323,8 @@ export function BetSlipProvider({ children }: { children: ReactNode }) {
     const comboByKey = new Map(slipCombos.map(c => [c.key, c]))
     const toSpec = (c: SlipCombo) => ({
       memberIds: c.memberIds, stat: c.stat, scope: c.scope, gameNumber: c.gameNumber,
+      // The chosen ladder rung; compose re-validates it server-side.
+      line: c.line,
     })
     const itemArgs = (): [string | undefined, string | undefined, string | undefined] => [
       insure ? tickets[0] : undefined, crutch ? crutches[0] : undefined, boost ? boosts[0] : undefined,

@@ -1,5 +1,12 @@
 # Betting Line Board — Place Bets composition
 
+> **OddsEngine (2026-07-22):** markets are no longer even-money singles — each
+> carries a fair-priced **ladder of alt-line rungs** (`bet_selections.side` +
+> `over:<line>` keys), rendered as ONE steppable chip per market (`PickChip`'s
+> `stepper` ‹ › arrows; the label carries the price, e.g. "4.5+ STRIKES ×2.40").
+> Dispatch on `SelectionView.side`, never key text. Full model + recipes:
+> [odds-engine.md](odds-engine.md).
+
 The **Place Bets** view in [src/screens/SportsbookScreen.tsx](../app/src/screens/SportsbookScreen.tsx) renders open betting markets as a **flat, filter-driven board**: a scope selector (Weekly / Game N pills) plus a player dropdown, showing the chosen player's available lines for the chosen scope (the collapsible-section board is ⚰️ retired — see below). It is built as a **reusable, market-type-agnostic stack** so new market kinds (props, team totals, season-long futures) drop in by adding data + a few pure helpers — **with no new rendering code**. Over/under was the first consumer; **game moneylines** were the second — the board rendered them with no new component code, validating the seam. **Read this before adding a market type to the board.** (Schema/RPC side of adding a bet type lives in [supabase/PIN_ECONOMY_SCHEMA.md](../supabase/PIN_ECONOMY_SCHEMA.md) §7 — keep that authoritative; this section is the **UI** counterpart.)
 
 ### The layers (data → screen)

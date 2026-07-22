@@ -1,5 +1,12 @@
 # Combo Lines — player-composed member-set aggregate markets
 
+> **OddsEngine (2026-07-22):** combos are fair-priced ladders now.
+> `combo_preview_ladder` feeds the BuilderBar's ‹ › line stepper (posted rungs
+> verbatim when the combo_key already has an open market); `compose_combo_bet`
+> specs take an optional `"line"` (chosen rung, NULL = seed) and mint the full
+> ladder on new markets. `combo_seed_line` is unchanged as the ladder center.
+> See [odds-engine.md](odds-engine.md).
+
 The replacement for team props (and the reason moneyline generation retired with
 them). A **combo line** is an over/under on the **summed stat of an explicit set
 of players** — "Alice + Bob + Carl combined strikes (night): Over 12.5" — with

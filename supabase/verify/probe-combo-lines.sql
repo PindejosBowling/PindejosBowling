@@ -94,6 +94,14 @@ BEGIN
     (v_p2, v_season, v_week, c_seed, 'score_credit', 'PROBE FIXTURE seed'),
     (v_p3, v_season, v_week, c_seed, 'score_credit', 'PROBE FIXTURE seed');
 
+  -- Pin the OddsEngine OFF for this probe's season (season-override row,
+  -- rolled back with everything else): every vector here asserts exact
+  -- even-money parlay math (×4), so combos must mint the legacy 2.000 pair.
+  -- This doubles as the integration proof that is_enabled=false reproduces
+  -- pre-engine behavior end-to-end. Priced combos are probed in
+  -- probe-odds-engine.sql.
+  INSERT INTO public.odds_engine_config (season_id, is_enabled) VALUES (v_season, false);
+
   INSERT INTO public.rsvp (week_id, player_id, status) VALUES
     (v_week, v_p1, 'in'), (v_week, v_p2, 'in');
 
@@ -281,7 +289,9 @@ BEGIN
   IF v_mkt_ou IS NULL THEN
     RAISE EXCEPTION 'PROBE_SETUP_FAILED: no auto-synced O/U market for P1 game 1';
   END IF;
-  UPDATE public.bet_selections SET line = 100.5 WHERE market_id = v_mkt_ou;
+  -- Pin line AND odds: the OddsEngine prices real markets now, and this vector
+  -- asserts exact ×4 parlay math, so the fixture leg must be even money.
+  UPDATE public.bet_selections SET line = 100.5, odds = 2.000 WHERE market_id = v_mkt_ou;
   SELECT id INTO v_sel_ou FROM public.bet_selections
     WHERE market_id = v_mkt_ou AND key = 'over';
 

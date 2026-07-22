@@ -7,6 +7,10 @@ import { signed } from './formatting'
 // `signed` now lives in utils/formatting.ts; re-exported here for back-compat.
 export { signed }
 
+// Decimal odds as the house multiplier ("×2.40", whole numbers bare "×4").
+// Shared by the slip, ticket cards, and the board's priced pick chips.
+export const fmtOdds = (n: number) => `×${n.toFixed(n % 1 === 0 ? 0 : 2)}`
+
 // Badge from the bet's own status (the target model resolves outcome per bet),
 // or from an individual leg's result (which adds 'crutched').
 export function resultBadge(status: string) {

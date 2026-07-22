@@ -649,6 +649,7 @@ export type Database = {
           market_id: string
           odds: number
           result: string | null
+          side: string | null
           sort_order: number
           updated_at: string
         }
@@ -661,6 +662,7 @@ export type Database = {
           market_id: string
           odds?: number
           result?: string | null
+          side?: string | null
           sort_order?: number
           updated_at?: string
         }
@@ -673,6 +675,7 @@ export type Database = {
           market_id?: string
           odds?: number
           result?: string | null
+          side?: string | null
           sort_order?: number
           updated_at?: string
         }
@@ -1714,6 +1717,78 @@ export type Database = {
             columns: ["season_id"]
             isOneToOne: false
             referencedRelation: "seasons"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      odds_engine_config: {
+        Row: {
+          created_at: string
+          half_life_games: number
+          id: string
+          is_enabled: boolean
+          odds_max: number
+          odds_min: number
+          prior_weight_games: number
+          rungs_per_side: number
+          season_id: string | null
+          spacing_count: number
+          spacing_night_pins: number
+          spacing_score: number
+          updated_at: string
+          updated_by: string | null
+          variance_floor_count: number
+          variance_floor_score: number
+        }
+        Insert: {
+          created_at?: string
+          half_life_games?: number
+          id?: string
+          is_enabled?: boolean
+          odds_max?: number
+          odds_min?: number
+          prior_weight_games?: number
+          rungs_per_side?: number
+          season_id?: string | null
+          spacing_count?: number
+          spacing_night_pins?: number
+          spacing_score?: number
+          updated_at?: string
+          updated_by?: string | null
+          variance_floor_count?: number
+          variance_floor_score?: number
+        }
+        Update: {
+          created_at?: string
+          half_life_games?: number
+          id?: string
+          is_enabled?: boolean
+          odds_max?: number
+          odds_min?: number
+          prior_weight_games?: number
+          rungs_per_side?: number
+          season_id?: string | null
+          spacing_count?: number
+          spacing_night_pins?: number
+          spacing_score?: number
+          updated_at?: string
+          updated_by?: string | null
+          variance_floor_count?: number
+          variance_floor_score?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "odds_engine_config_season_id_fkey"
+            columns: ["season_id"]
+            isOneToOne: false
+            referencedRelation: "seasons"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "odds_engine_config_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "players"
             referencedColumns: ["id"]
           },
         ]
@@ -3162,6 +3237,17 @@ export type Database = {
         Args: { p_game_number: number; p_week_id: string }
         Returns: undefined
       }
+      combo_preview_ladder: {
+        Args: {
+          p_game_number?: number
+          p_member_ids: string[]
+          p_n_games?: number
+          p_season_id: string
+          p_stat: string
+          p_week_id?: string
+        }
+        Returns: Json
+      }
       combo_seed_line: {
         Args: {
           p_member_ids: string[]
@@ -3329,6 +3415,102 @@ export type Database = {
       }
       materialize_due_recurring_broadcasts: { Args: never; Returns: undefined }
       my_bid_amount: { Args: { p_auction_id: string }; Returns: number }
+      odds_engine_build_ladder: {
+        Args: {
+          p_mean: number
+          p_n_games: number
+          p_range_hi: number
+          p_range_lo: number
+          p_season_id: string
+          p_seed_line: number
+          p_spacing: number
+          p_variance: number
+        }
+        Returns: {
+          key: string
+          label: string
+          line: number
+          odds: number
+          side: string
+          sort_order: number
+        }[]
+      }
+      odds_engine_get_config: {
+        Args: { p_season_id: string }
+        Returns: {
+          created_at: string
+          half_life_games: number
+          id: string
+          is_enabled: boolean
+          odds_max: number
+          odds_min: number
+          prior_weight_games: number
+          rungs_per_side: number
+          season_id: string | null
+          spacing_count: number
+          spacing_night_pins: number
+          spacing_score: number
+          updated_at: string
+          updated_by: string | null
+          variance_floor_count: number
+          variance_floor_score: number
+        }
+        SetofOptions: {
+          from: "*"
+          to: "odds_engine_config"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      odds_engine_league_prior: {
+        Args: { p_season_id: string; p_stat: string }
+        Returns: Record<string, unknown>
+      }
+      odds_engine_mint_ladder: {
+        Args: {
+          p_market_id: string
+          p_mean: number
+          p_n_games: number
+          p_range_hi: number
+          p_range_lo: number
+          p_season_id: string
+          p_seed_line: number
+          p_spacing: number
+          p_variance: number
+        }
+        Returns: undefined
+      }
+      odds_engine_norm_cdf: { Args: { z: number }; Returns: number }
+      odds_engine_player_stat: {
+        Args: { p_player_id: string; p_season_id: string; p_stat: string }
+        Returns: Record<string, unknown>
+      }
+      odds_engine_price_pair: {
+        Args: {
+          p_force: boolean
+          p_line: number
+          p_mean: number
+          p_n_games: number
+          p_odds_max: number
+          p_odds_min: number
+          p_variance: number
+        }
+        Returns: Record<string, unknown>
+      }
+      odds_engine_reladder_if_changed: {
+        Args: {
+          p_market_id: string
+          p_mean: number
+          p_n_games: number
+          p_range_hi: number
+          p_range_lo: number
+          p_season_id: string
+          p_seed_line: number
+          p_spacing: number
+          p_variance: number
+        }
+        Returns: boolean
+      }
       open_auction_internal: {
         Args: { p_auction_id: string }
         Returns: undefined
