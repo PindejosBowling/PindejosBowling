@@ -244,9 +244,11 @@ params->>clock.eq.lanetalk)` alongside props and legacy team props.
   **with the live board** (not on any group action — the first add renders
   synchronously; member toggles are client-side re-sums) — **season-scoped
   with an explicit fallback chain** the RPC reports in its `source` column and
-  the UI labels honestly: `SEASON AVG` → `LIFETIME AVG` (→ `LEAGUE AVG`,
-  total_pins only; no frame-stat data at all → `NO STAT HISTORY`), shown per
-  member (Total Pins, `· FORECAST` ▲/▼) on the `AddPlayersSheet` rows.
+  the UI labels honestly: season → lifetime (→ league, total_pins only; no
+  data at all → `NO STAT HISTORY`), shown per member as **four scope-scaled
+  season averages** (`PINS · CLEAN · STRIKES · SPARES`; `*` + footnote = the
+  fallback; ⚰️ the FORECAST value + ▲/▼, dropped for space) on the
+  `AddPlayersSheet` rows.
   Display-only — the seed/pricing math keeps
   its own windows (frame-stat seeds are lifetime), so the shown average can
   legitimately differ from the line the book anchors. The summed `groupRows`

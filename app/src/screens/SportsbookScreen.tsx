@@ -50,7 +50,6 @@ import { useRefresh } from '../hooks/useRefresh'
 import { useAuthStore } from '../stores/authStore'
 import { useUiStore } from '../stores/uiStore'
 import { betMarkets, haunts } from '../utils/supabase/db'
-import { deltaDir } from '../utils/bets'
 import { shortName } from '../utils/helpers'
 import { PinsinoStackParamList } from '../navigation/types'
 import EmptyCard from '../components/ui/EmptyCard'
@@ -69,6 +68,14 @@ const VIEW_OPTIONS: { key: View2; label: string }[] = [
 // value-first pill (and one group-projection column) per entry.
 const COMBO_STATS = ['total_pins', 'clean_frames', 'strikes', 'spares']
 const comboStatLabel = (stat: string) => (STAT_LABELS[stat] ?? stat).toUpperCase()
+// Compressed stat labels for the Add Players rows' four-average line (the
+// BookProjectionCard column vocabulary — four stats share one row width).
+const AVG_STAT_LABELS: Record<string, string> = {
+  total_pins: 'PINS',
+  clean_frames: 'CLEAN',
+  strikes: 'STRIKES',
+  spares: 'SPARES',
+}
 
 export default function SportsbookScreen() {
   const playerId = useAuthStore(s => s.playerId)
@@ -958,40 +965,35 @@ export default function SportsbookScreen() {
 
       {/* Add Players — the combo builder sheet, raised from the heading's ＋
           chip. Toggles edit the board's subject group LIVE (the board under
-          the sheet re-prices as members change); rows carry the same
-          scope-scaled Total Pins avg/forecast context the old picker rows
-          showed (the arrow rides the BOOK: ▲ = rated above their average).
+          the sheet re-prices as members change); rows carry the player's four
+          scope-scaled season averages, one per combinable stat (`*` = the
+          lifetime/league fallback, footnoted in the sheet).
           Conditional-mount contract, like every sheet. */}
       {addPlayersOpen && (
         <AddPlayersSheet
           rows={comboMemberPool.map(m => {
-            const entry = poolStats['total_pins']?.[m.playerId]
-            const avgShown = entry?.avg != null ? entry.avg * comboNGames : null
-            const projShown = entry?.proj != null ? entry.proj * comboNGames : null
+            const parts = COMBO_STATS.flatMap(stat => {
+              const entry = poolStats[stat]?.[m.playerId]
+              if (entry?.avg == null) return []
+              const shown = (entry.avg * comboNGames).toFixed(1)
+              return [`${AVG_STAT_LABELS[stat]} ${shown}${entry.source !== 'season' ? '*' : ''}`]
+            })
+            const loaded = poolStats['total_pins']?.[m.playerId] != null
             const isSoloSubject = !groupMode && m.playerId === board.selectedPlayerId
             return {
               id: m.playerId,
               name: `${m.name}${m.playerId === playerId ? ' (you)' : ''}`,
-              contextLabel:
-                entry == null
-                  ? null
-                  : avgShown == null
-                    ? 'NO STAT HISTORY'
-                    : entry.source === 'season'
-                      ? `SEASON AVG ${avgShown.toFixed(1)}`
-                      : entry.source === 'lifetime'
-                        ? `LIFETIME AVG ${avgShown.toFixed(1)}`
-                        : `LEAGUE AVG ${avgShown.toFixed(1)}`,
-              forecastLabel: projShown != null ? `FORECAST ${projShown.toFixed(1)}` : null,
-              dir: deltaDir(projShown, avgShown),
+              contextLabel: parts.length > 0 ? parts.join('  ·  ') : loaded ? 'NO STAT HISTORY' : null,
               selected: groupMode ? groupMembers.includes(m.playerId) : isSoloSubject,
-              // The solo subject is already on the board — they leave it only
-              // by the group shrinking around them, not from this sheet.
-              locked: isSoloSubject,
             }
           })}
           onToggle={id => {
             if (groupMode && groupMembers.includes(id)) removeGroupMember(id)
+            else if (!groupMode && id === board.selectedPlayerId)
+              // The solo subject's ✓ is live like every other chip, but the
+              // board always needs a subject — they leave only by the group
+              // shrinking around them.
+              showToast('Add another player to combine with them', 'error')
             else addGroupMember(id)
           }}
           onClose={() => setAddPlayersOpen(false)}
