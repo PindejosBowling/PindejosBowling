@@ -27,6 +27,7 @@ import { useWeekClock } from './src/hooks/useWeekClock'
 import { useOtaUpdates } from './src/hooks/useOtaUpdates'
 import { useUpdateGate } from './src/hooks/useUpdateGate'
 import UpdateRequiredScreen from './src/screens/UpdateRequiredScreen'
+import OtaUpdatingScreen from './src/screens/OtaUpdatingScreen'
 import { syncPushToken } from './src/utils/pushTokens'
 
 const BASE = 'PindejosBowling'
@@ -122,8 +123,9 @@ export default function App() {
   // Live week clock: DB-driven refresh of week-derived UI on every device.
   useWeekClock(!!role)
 
-  // Silently pull + apply the latest OTA update whenever the app foregrounds.
-  useOtaUpdates()
+  // Pull + apply the latest OTA update whenever the app foregrounds; while a
+  // found update downloads/restarts we swap in OtaUpdatingScreen below.
+  const { isApplying: otaApplying } = useOtaUpdates()
 
   // Update gate: block builds below app_version_config.min_supported_version
   // (they can no longer receive OTA updates). Fails open; no-op on web/dev.
@@ -149,6 +151,14 @@ export default function App() {
   }, [role])
 
   if (!fontsLoaded || !isHydrated) return null
+
+  if (otaApplying) {
+    return (
+      <SafeAreaProvider>
+        <OtaUpdatingScreen />
+      </SafeAreaProvider>
+    )
+  }
 
   if (updateRequired) {
     return (

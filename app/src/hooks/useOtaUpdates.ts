@@ -1,8 +1,8 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { AppState } from 'react-native'
 import * as Updates from 'expo-updates'
 
-// Silently pulls and applies the latest OTA (EAS Update) bundle on foreground.
+// Pulls and applies the latest OTA (EAS Update) bundle on foreground.
 //
 // The app is provisioned for EAS Update (updates.url + runtimeVersion in
 // app.json), but Expo only *checks* at cold start (checkAutomatically defaults
@@ -11,7 +11,13 @@ import * as Updates from 'expo-updates'
 // user fully kills and relaunches — the "only applies on manual reload"
 // problem. The signal we actually want is "the user just came back to the
 // app": foreground return is a natural break, so on every AppState 'active'
-// transition we check → fetch → reloadAsync() immediately and silently.
+// transition we check → fetch → reloadAsync().
+//
+// The routine no-update check stays silent, but once an update is actually
+// found `isApplying` flips true for the fetch + reload window — App.tsx swaps
+// the navigator for OtaUpdatingScreen so the reload reads as a deliberate
+// update instead of an unexplained flash-and-reset. A failed fetch flips it
+// back and the session continues on the old bundle.
 //
 // Mount ONCE at app root. Runs independent of auth (updates should apply
 // regardless of sign-in state), self-guarding on the two environments where
@@ -26,6 +32,7 @@ const MIN_CHECK_INTERVAL_MS = 60_000
 
 export function useOtaUpdates() {
   const lastCheckRef = useRef(0)
+  const [isApplying, setIsApplying] = useState(false)
 
   useEffect(() => {
     if (__DEV__ || !Updates.isEnabled) return
@@ -39,11 +46,13 @@ export function useOtaUpdates() {
       try {
         const result = await Updates.checkForUpdateAsync()
         if (cancelled || !result.isAvailable) return
+        setIsApplying(true)
         await Updates.fetchUpdateAsync()
         if (cancelled) return
         await Updates.reloadAsync()
       } catch {
         // Offline / transient — retry on the next foreground.
+        if (!cancelled) setIsApplying(false)
       }
     }
 
@@ -59,4 +68,6 @@ export function useOtaUpdates() {
       sub.remove()
     }
   }, [])
+
+  return { isApplying }
 }
