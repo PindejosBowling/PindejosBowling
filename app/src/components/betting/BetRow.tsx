@@ -1,10 +1,10 @@
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native'
-import { colors, fonts, radius } from '../../theme'
+import { colors, fonts } from '../../theme'
+import TicketCard from './TicketCard'
 import { betLineSuffix, type BetView } from '../../hooks/usePinsinoData'
 
 interface BetRowProps {
   bet: BetView
-  isLast: boolean
   badge: { label: string; color: string } | null
   betReturnText: string
   onPress?: () => void
@@ -14,126 +14,90 @@ interface BetRowProps {
   haunted?: boolean
 }
 
-// Presentational: the row is tappable when given an `onPress`, and shows a cancel
-// (✕) affordance when given an `onCancelPress`. Callers gate those callbacks
-// (read-only surfaces omit them; admin surfaces pass them).
+// One placed bet as a compact ticket card — the same shell the slip builds
+// with, so what you placed looks like what you built. Presentational: the
+// card is tappable when given an `onPress`, and shows a cancel (✕) affordance
+// when given an `onCancelPress`. Callers gate those callbacks (read-only
+// surfaces omit them; admin surfaces pass them).
 export default function BetRow({
   bet,
-  isLast,
   badge,
   betReturnText,
   onPress,
   onCancelPress,
   haunted,
 }: BetRowProps) {
-  const isPressable = !!onPress
-  const showCancelBtn = !!onCancelPress
-
   const isParlay = bet.legCount > 1
 
-  const content = (
-    <>
-      <View style={{ flex: 1 }}>
-        {/* Custom-line branding: the special's title headlines its legs. */}
-        {bet.customLineTitle != null && (
-          <Text style={[styles.betTitle, bet.customLineCategory === 'special' && styles.betTitleSpecial]}>
-            {bet.customLineTitle}
-          </Text>
-        )}
-        {isParlay ? (
-          <>
-            {bet.legs.map((leg, i) => (
-              <Text key={i} style={styles.betSubject}>
-                {leg.subjectName} · {leg.pick?.toUpperCase()}
-                {betLineSuffix(leg.marketType, leg.line, leg.statKey)}
-                {leg.gameNumber != null ? ` (G${leg.gameNumber})` : ''}
-                {leg.result ? ` — ${leg.result === 'crutched' ? 'SAVED 🩼' : leg.result.toUpperCase()}` : ''}
-              </Text>
-            ))}
-            <Text style={styles.betDetails}>
-              {bet.bettorName} · {bet.customLineTitle != null ? 'SPECIAL' : 'PARLAY'} ({bet.legCount} legs)
-            </Text>
-          </>
-        ) : (
-          <>
-            <Text style={styles.betSubject}>
-              {bet.subjectName} · {bet.pick?.toUpperCase()}
-              {betLineSuffix(bet.marketType, bet.line, bet.statKey)}
-              {bet.gameNumber != null ? ` · G${bet.gameNumber}` : ''}
-            </Text>
-            <Text style={styles.betDetails}>
-              {bet.bettorName}{bet.customLineTitle != null ? ' · SPECIAL' : ''}
-            </Text>
-          </>
-        )}
-      </View>
-      <View style={styles.betRight}>
-        {badge ? (
-          <Text style={[styles.betBadge, { color: badge.color }]}>{badge.label}</Text>
-        ) : (
-          <Text style={styles.betPending}>PENDING</Text>
-        )}
-        <Text style={styles.betWager}>{betReturnText} pins</Text>
-      </View>
-    </>
-  )
-
   return (
-    <View
-      style={[
-        styles.betRow,
-        bet.customLineCategory === 'special' && styles.betRowSpecial,
-        // Gold outline wins over the row divider so it reads as a clean chip.
-        !isLast && !haunted && styles.lineRowBorder,
-        haunted && styles.betRowHaunted,
-      ]}
+    <TicketCard
+      gold={bet.customLineCategory === 'special'}
+      haunted={haunted}
+      onPress={onPress}
     >
-      {isPressable ? (
-        <TouchableOpacity
-          style={styles.betPressable}
-          onPress={onPress}
-          activeOpacity={0.7}
-        >
-          {content}
-        </TouchableOpacity>
-      ) : (
-        content
-      )}
-      {showCancelBtn && (
-        <TouchableOpacity
-          style={styles.cancelBtn}
-          onPress={onCancelPress}
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          activeOpacity={0.7}
-        >
-          <Text style={styles.cancelBtnText}>✕</Text>
-        </TouchableOpacity>
-      )}
-    </View>
+      <View style={styles.inner}>
+        <View style={{ flex: 1 }}>
+          {/* Custom-line branding: the special's title headlines its legs. */}
+          {bet.customLineTitle != null && (
+            <Text style={[styles.betTitle, bet.customLineCategory === 'special' && styles.betTitleSpecial]}>
+              {bet.customLineTitle}
+            </Text>
+          )}
+          {isParlay ? (
+            <>
+              {bet.legs.map((leg, i) => (
+                <Text key={i} style={styles.betSubject}>
+                  {leg.subjectName} · {leg.pick?.toUpperCase()}
+                  {betLineSuffix(leg.marketType, leg.line, leg.statKey)}
+                  {leg.gameNumber != null ? ` (G${leg.gameNumber})` : ''}
+                  {leg.result ? ` — ${leg.result === 'crutched' ? 'SAVED 🩼' : leg.result.toUpperCase()}` : ''}
+                </Text>
+              ))}
+              <Text style={styles.betDetails}>
+                {bet.bettorName} · {bet.customLineTitle != null ? 'SPECIAL' : 'PARLAY'} ({bet.legCount} legs)
+              </Text>
+            </>
+          ) : (
+            <>
+              <Text style={styles.betSubject}>
+                {bet.subjectName} · {bet.pick?.toUpperCase()}
+                {betLineSuffix(bet.marketType, bet.line, bet.statKey)}
+                {bet.gameNumber != null ? ` · G${bet.gameNumber}` : ''}
+              </Text>
+              <Text style={styles.betDetails}>
+                {bet.bettorName}{bet.customLineTitle != null ? ' · SPECIAL' : ''}
+              </Text>
+            </>
+          )}
+        </View>
+        <View style={styles.betRight}>
+          {badge ? (
+            <Text style={[styles.betBadge, { color: badge.color }]}>{badge.label}</Text>
+          ) : (
+            <Text style={styles.betPending}>PENDING</Text>
+          )}
+          <Text style={styles.betWager}>{betReturnText} pins</Text>
+        </View>
+        {!!onCancelPress && (
+          <TouchableOpacity
+            style={styles.cancelBtn}
+            onPress={onCancelPress}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.cancelBtnText}>✕</Text>
+          </TouchableOpacity>
+        )}
+      </View>
+    </TicketCard>
   )
 }
 
 const styles = StyleSheet.create({
-  betRow: {
+  inner: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 14,
-    paddingVertical: 12,
     gap: 10,
-  },
-  lineRowBorder: {
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  // Special-branded bets carry the gold wash through their placed-bet rows.
-  betRowSpecial: { backgroundColor: colors.goldTint },
-  // A bet the viewer is secretly haunting — gold outline, inset as a chip.
-  betRowHaunted: {
-    borderWidth: 1,
-    borderColor: colors.gold,
-    borderRadius: radius.cardSm,
-    marginHorizontal: 6,
-    marginVertical: 4,
   },
   betSubject: {
     fontFamily: fonts.barlowCondensed,
@@ -157,7 +121,6 @@ const styles = StyleSheet.create({
     letterSpacing: 0.3,
   },
   betRight: { alignItems: 'flex-end' },
-  betPressable: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10 },
   cancelBtn: {
     width: 28,
     height: 28,

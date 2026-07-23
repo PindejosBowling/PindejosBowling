@@ -75,12 +75,11 @@ export default function ActiveBetsView({
       {myBets && myBets.length > 0 && (
         <View>
           <Text style={styles.gameLabel}>MY BETS</Text>
-          <View style={styles.card}>
-            {myBets.map((bet, idx) => (
+          <View>
+            {myBets.map(bet => (
               <BetRow
                 key={bet.id}
                 bet={bet}
-                isLast={idx === myBets.length - 1}
                 badge={resultBadge(bet.status)}
                 betReturnText={betReturnText(bet, perspective)}
                 onPress={onBetPress ? () => onBetPress(bet) : undefined}
@@ -112,12 +111,11 @@ export default function ActiveBetsView({
       {singleGroups.map(({ group, bets: groupBets }) => (
         <View key={group.key}>
           <Text style={styles.gameLabel}>{group.label}</Text>
-          <View style={styles.card}>
-            {groupBets.map((bet, idx) => (
+          <View>
+            {groupBets.map(bet => (
               <BetRow
                 key={bet.id}
                 bet={bet}
-                isLast={idx === groupBets.length - 1}
                 badge={resultBadge(bet.status)}
                 betReturnText={betReturnText(bet, perspective)}
                 onPress={onBetPress ? () => onBetPress(bet) : undefined}
@@ -132,12 +130,11 @@ export default function ActiveBetsView({
       {parlays.length > 0 && (
         <View>
           <Text style={styles.gameLabel}>PARLAYS</Text>
-          <View style={styles.card}>
-            {parlays.map((bet, idx) => (
+          <View>
+            {parlays.map(bet => (
               <BetRow
                 key={bet.id}
                 bet={bet}
-                isLast={idx === parlays.length - 1}
                 badge={resultBadge(bet.status)}
                 betReturnText={betReturnText(bet, perspective)}
                 onPress={onParlayPress ? () => onParlayPress(bet) : undefined}
@@ -194,13 +191,5 @@ const styles = StyleSheet.create({
     color: colors.accent,
     marginBottom: 6,
     marginTop: 4,
-  },
-  card: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.cardMd,
-    borderWidth: 1,
-    borderColor: colors.border,
-    marginBottom: 10,
-    overflow: 'hidden',
   },
 })

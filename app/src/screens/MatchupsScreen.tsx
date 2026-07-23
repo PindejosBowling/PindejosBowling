@@ -196,11 +196,17 @@ export default function MatchupsScreen() {
     if (!weekId) return
     setStartingGame(gameNum)
     try {
-      await betMarkets.setOUStatusByWeekGame(weekId, gameNum, started ? 'closed' : 'open')
-      await betMarkets.setMoneylineStatusByWeekGame(weekId, gameNum, started ? 'closed' : 'open')
-      // Stat props suspend with the game too (game 1 also flips the night-scoped props).
-      await betMarkets.setPropStatusByWeekGame(weekId, gameNum, started ? 'closed' : 'open')
-      await betMarkets.setTeamPropStatusByWeekGame(weekId, gameNum, started ? 'closed' : 'open')
+      // The per-market-type toggles hit disjoint rows and are order-independent
+      // — run them together instead of serially. (Stat props + combos suspend
+      // with the game too; game 1 also flips the night-scoped markets.)
+      const status = started ? 'closed' as const : 'open' as const
+      await Promise.all([
+        betMarkets.setOUStatusByWeekGame(weekId, gameNum, status),
+        betMarkets.setMoneylineStatusByWeekGame(weekId, gameNum, status),
+        betMarkets.setPropStatusByWeekGame(weekId, gameNum, status),
+        betMarkets.setTeamPropStatusByWeekGame(weekId, gameNum, status),
+        betMarkets.setComboStatusByWeekGame(weekId, gameNum, status),
+      ])
       if (started) {
         await pvpChallenges.closeOpenForGame(weekId, gameNum)
         setOpenGames(prev => ({ ...prev, [gameNum]: true }))
@@ -262,8 +268,7 @@ export default function MatchupsScreen() {
       // team-gen makes for game 3). Idempotent.
       await betMarkets.syncOUForWeek(weekId, [nextGameNum])
       await betMarkets.syncLanetalkPropsForWeek(weekId)
-      // Moneylines do derive from the new games rows — sync them too. Idempotent.
-      await betMarkets.syncMoneylineForWeek(weekId)
+      // (Moneyline generation is retired — combos replaced team-anchored markets.)
       await reload()
     } finally {
       setAddingGame(false)
@@ -318,11 +323,14 @@ export default function MatchupsScreen() {
             .map(k => parseInt(k.split('|')[1]))
         )).filter(num => !inProgressGames.includes(num))
         for (const num of scoredGameNums) {
-          await betMarkets.setOUStatusByWeekGame(weekId, num, 'closed')
-          await betMarkets.setMoneylineStatusByWeekGame(weekId, num, 'closed')
-          await betMarkets.setPropStatusByWeekGame(weekId, num, 'closed')
-          await betMarkets.setTeamPropStatusByWeekGame(weekId, num, 'closed')
-          await pvpChallenges.closeOpenForGame(weekId, num)
+          await Promise.all([
+            betMarkets.setOUStatusByWeekGame(weekId, num, 'closed'),
+            betMarkets.setMoneylineStatusByWeekGame(weekId, num, 'closed'),
+            betMarkets.setPropStatusByWeekGame(weekId, num, 'closed'),
+            betMarkets.setTeamPropStatusByWeekGame(weekId, num, 'closed'),
+            betMarkets.setComboStatusByWeekGame(weekId, num, 'closed'),
+            pvpChallenges.closeOpenForGame(weekId, num),
+          ])
         }
       }
 

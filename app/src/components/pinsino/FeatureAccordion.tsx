@@ -12,10 +12,9 @@ interface FeatureAccordionProps {
   defaultCollapsed?: boolean
 }
 
-// A single collapsible "how it works" section for the Pinsino help screen.
-// Mirrors the visual idiom of the betting LineRowContainer (surface bar +
-// chevron, condensed title) but carries help copy rather than line rows.
-// Owns its own collapse state so each section toggles independently.
+// A single collapsible "how it works" section for the Pinsino help screen
+// (surface bar + chevron, condensed title) carrying help copy rather than
+// line rows. Owns its own collapse state so each section toggles independently.
 export default function FeatureAccordion({
   icon,
   title,

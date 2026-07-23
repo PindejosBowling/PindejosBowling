@@ -168,9 +168,10 @@ corrupt reversal. Two kinds, anchored to the run:
 | c | **Moneyline** | game with ≥1 score → `settle_moneyline_market_internal`; **zero → `closed`** | same as (b) | same |
 | c′ | **team_prop `total_pins`** (`clock='archive'`) | game/night team pinfall → `settle_market_internal`; **zero → `closed`** | same as (b) | same |
 | c″ | **LaneTalk player + team props** (FOLDED IN) | Settles `market_type='prop'`/`team_prop clock='lanetalk'` off official `lanetalk_game_imports`. Gradable value → settle; else `p_void_missing` → delete-refund (§5c rail); else left pending. Increments the returned `settled`/`voided`/`left_pending` | same as (b) | market `settled` |
+| c‴ | **Combo lines** (both clocks — [combo-lines.md](combo-lines.md)) | Per-member **complete-data guard** (archive: every member has non-fill score(s); lanetalk: every member covered by official imports, the c″ night predicate per member) → Σ member stats → `settle_market_internal`; incomplete → `p_void_missing` ? delete-refund : left pending (backstop-exempt, **both** clocks). Increments `settled`/`voided`/`left_pending` | same as (b) | market `settled` |
 | d | **Loans** (`process_weekly_loans`) | garnish = min(week pincome × rate, outstanding) → interest on still-active loans | garnish pair + `loan_ledger`; interest `loan_ledger` only | per-(loan, week) guard |
 | e | **PvP** (`settle_pvp_for_week`) | close open offers, auto-settle `locked` contracts (decisive/push/void) | `pvp_payout`/`pvp_refund` pairs | challenge status |
-| f | **BACKSTOP (narrowed)** | Count still-`pending` bets. **>0 and not force → RAISE**; force → void+refund. **Exemption gated on `NOT p_void_missing`**: a bet is exempt only if it has a leg on a still-unsettled LaneTalk market (genuinely lacking data). With `p_void_missing=true`, c″ already delete-refunded those, so nothing is exempt | force: `bet_refund` pair | state-driven |
+| f | **BACKSTOP (narrowed)** | Count still-`pending` bets. **>0 and not force → RAISE**; force → void+refund. **Exemption gated on `NOT p_void_missing`**: a bet is exempt only if it has a leg on a still-unsettled LaneTalk market OR **any combo** (genuinely lacking data). With `p_void_missing=true`, c″/c‴ already delete-refunded those, so nothing is exempt | force: `bet_refund` pair | state-driven |
 | g | **UNIFIED House weekly P/L** | `sportsbook_weekly_house_result`, `house_net` = `SUM(pin_ledger.amount) WHERE is_house AND week_id=N AND auction_id IS NULL AND bounty_post_id IS NULL` — bets + PvP + loan garnishment, **excluding** bounty/auction (own feed cards + own clocks). **UPSERT** (re-settle refreshes the value) | none (feed row) | UPSERT, not skip |
 
 **Then**: `UPDATE weeks SET settled_at = now() WHERE settled_at IS NULL` (preserves
@@ -333,15 +334,20 @@ void = "the bet was valid but ungradeable".
 ### 5d. The coupling triggers (no client path can forget)
 
 Statement-level AFTER triggers, all funnelling into
-`resync_week_markets(week_id, moneyline?)` → the syncs (O/U, **the LaneTalk
-stat-prop sync**, and **the team-prop sync** (`sync_team_prop_markets_for_week`
-— unconditional, a cheap no-op until games exist; prune-dead → create
-game×team×stat **plus one night market per team×stat** (`subject_game_id`
-null, pruned by week-team membership / empty schedule rather than the games
-cascade) → reseed-unbet via `team_prop_seed_line(…, n_games)`), plus moneyline
-when flagged — see [lanetalk-stat-bets.md](lanetalk-stat-bets.md)). The helper skips
-weeks that are archived (settled markets immutable) or already deleted
-(mid-cascade).
+`resync_week_markets(week_id, moneyline?)` → the syncs: O/U, **the LaneTalk
+stat-prop sync**, and **the combo prune** (`sync_combo_markets_for_week` —
+prune-ONLY: deletes open/closed combos having any member without an `'in'`
+rsvp row; the predicate reads **only `rsvp`**, so team_slots/games/scores
+churn can never kill a combo — [combo-lines.md](combo-lines.md)). See
+[lanetalk-stat-bets.md](lanetalk-stat-bets.md). The helper skips weeks that are
+archived (settled markets immutable) or already deleted (mid-cascade).
+
+> **Retired 2026-07-21** (`…170000_retire_team_prop_moneyline_generation`):
+> the team-prop sync (`sync_team_prop_markets_for_week`, DROPPED) and the
+> moneyline branch (`sync_moneyline_markets_for_week` is now a no-op stub for
+> deployed clients; `p_moneyline` survives in the signature, inert). Combos
+> replaced team props; settle branches for both retired types are KEPT for
+> cutover bets + historical unarchive/resettle.
 
 | Table | Triggers | Week resolution | Notes |
 |---|---|---|---|

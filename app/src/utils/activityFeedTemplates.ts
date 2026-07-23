@@ -189,6 +189,20 @@ export function renderFeedEvent(row: FeedEventView): FeedRenderParts {
         amount: placementPayout(p),
       }
 
+    case 'sportsbook.combo_composed': {
+      // A player composed ≥1 new combo lines (member-set aggregate markets)
+      // on one ticket. The markets are public — anyone can copy the bet.
+      // Payload carries the FIRST created combo + combo_count.
+      const members = Array.isArray(p.member_names) ? p.member_names.join(' + ') : `${num(p.member_count)} players`
+      const stat = typeof p.stat === 'string' ? p.stat.replace(/_/g, ' ') : 'stats'
+      const more = num(p.combo_count) > 1 ? ` (+${num(p.combo_count) - 1} more on the ticket)` : ''
+      return {
+        ...meta,
+        line: `${actorOf(row)} built a combo — ${members} combined ${stat}, over ${num(p.line)}${more}.`,
+        amount: { value: num(p.stake), tone: 'neutral', label: 'STAKED' },
+      }
+    }
+
     case 'sportsbook.big_ticket_placed':
       return {
         ...meta,

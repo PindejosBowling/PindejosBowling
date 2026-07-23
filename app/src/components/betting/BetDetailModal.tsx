@@ -5,6 +5,7 @@ import CenterModal from '../ui/CenterModal'
 import { betLineSuffix, type BetView } from '../../hooks/usePinsinoData'
 import { resultBadge, betPayout, betBoostBonus, betReturn, betReturnDisplay } from '../../utils/bets'
 import { haunts } from '../../utils/supabase/db'
+import { shortName } from '../../utils/helpers'
 import { useBetSlip } from './BetSlipProvider'
 
 interface BetDetailModalProps {
@@ -31,7 +32,7 @@ export default function BetDetailModal({ bet, onClose, canHaunt, alreadyHaunted,
     if (bet && bet.status === 'won') {
       haunts.listForBet(bet.id).then(({ data }) => {
         if (!active) return
-        setHaunters((data ?? []).map((r: any) => ({ name: r.players?.name ?? '—', cut: r.payout_amount })))
+        setHaunters((data ?? []).map((r: any) => ({ name: shortName(r.players?.name), cut: r.payout_amount })))
       })
     } else {
       setHaunters([])

@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { View, Text, StyleSheet } from 'react-native'
-import { colors, fonts, radius } from '../../theme'
+import { colors, fonts } from '../../theme'
 import BetRow from './BetRow'
 import { resultBadge, betReturnText } from '../../utils/bets'
 import type { BetView } from '../../hooks/usePinsinoData'
@@ -48,12 +48,11 @@ export default function SettledBetsView({ bets, perspective = 'player', onBetPre
       {weekNumbers.map(wk => (
         <View key={wk}>
           <Text style={styles.gameLabel}>WEEK {wk}</Text>
-          <View style={styles.card}>
-            {byWeek[wk].map((bet, idx) => (
+          <View>
+            {byWeek[wk].map(bet => (
               <BetRow
                 key={bet.id}
                 bet={bet}
-                isLast={idx === byWeek[wk].length - 1}
                 badge={resultBadge(bet.status)}
                 betReturnText={betReturnText(bet, perspective)}
                 onPress={onBetPress ? () => onBetPress(bet) : undefined}
@@ -75,13 +74,5 @@ const styles = StyleSheet.create({
     color: colors.accent,
     marginBottom: 6,
     marginTop: 4,
-  },
-  card: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.cardMd,
-    borderWidth: 1,
-    borderColor: colors.border,
-    marginBottom: 10,
-    overflow: 'hidden',
   },
 })

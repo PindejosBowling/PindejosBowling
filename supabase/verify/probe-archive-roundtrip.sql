@@ -59,9 +59,10 @@ BEGIN
     (v_p1, v_season, v_week, c_seed, 'score_credit', 'PROBE FIXTURE seed'),
     (v_p2, v_season, v_week, c_seed, 'score_credit', 'PROBE FIXTURE seed');
 
-  -- team_prop fixture: the game INSERT fires trg_resync_markets_games →
-  -- sync_team_prop_markets_for_week creates the markets via the live coupling
-  -- path. Scores exist (T1 Σ=150), so the total_pins market settles AT archive.
+  -- team_prop fixture. Generation is RETIRED (combos replaced team props), so
+  -- the market is synthesized directly below in the exact as-generated shape —
+  -- this is the "open team bet at cutover / historical week" case the KEPT
+  -- settle branches exist for. Scores exist (T1 Σ=150), so it settles AT archive.
   INSERT INTO public.teams (week_id, team_number) VALUES (v_week, 998) RETURNING id INTO v_t1;
   INSERT INTO public.teams (week_id, team_number) VALUES (v_week, 999) RETURNING id INTO v_t2;
   INSERT INTO public.team_slots (team_id, slot, player_id) VALUES (v_t1, 1, v_p1) RETURNING id INTO v_slot1;
@@ -85,16 +86,17 @@ BEGIN
     JOIN public.teams t       ON t.id = ts.team_id
    WHERE t.week_id = v_week AND ts.is_fill AND s.score IS NULL;
 
-  SELECT id INTO v_mkt_tp FROM public.bet_markets
-    WHERE market_type = 'team_prop' AND subject_game_id = v_game
-      AND params ->> 'team_id' = v_t1::text AND params ->> 'stat' = 'total_pins';
-  IF v_mkt_tp IS NULL THEN
-    RAISE EXCEPTION 'PROBE_SETUP_FAILED: team_prop market not created by the resync trigger';
-  END IF;
-  -- Pin the line for deterministic grading (seeded line floats with live
-  -- averages) — above T1's real score alone (150) but below real+fill (280),
+  -- Line 260.5: above T1's real score alone (150) but below real+fill (280),
   -- so the over only wins if the materialized fill counts.
-  UPDATE public.bet_selections SET line = 260.5 WHERE market_id = v_mkt_tp;
+  INSERT INTO public.bet_markets (market_type, title, week_id, game_number, subject_game_id, params, status)
+    VALUES ('team_prop', 'PROBE Team 998 Total Pins — Game 1', v_week, 1, v_game,
+            jsonb_build_object('family', 'team_aggregate', 'stat', 'total_pins', 'scope', 'game',
+                               'team_id', v_t1::text, 'team_number', 998, 'clock', 'archive'),
+            'open')
+    RETURNING id INTO v_mkt_tp;
+  INSERT INTO public.bet_selections (market_id, key, label, odds, line, sort_order) VALUES
+    (v_mkt_tp, 'over',  'Over',  2.000, 260.5, 0),
+    (v_mkt_tp, 'under', 'Under', 2.000, 260.5, 1);
   SELECT id INTO v_sel_tp_over FROM public.bet_selections
     WHERE market_id = v_mkt_tp AND key = 'over';
 

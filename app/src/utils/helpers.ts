@@ -3,6 +3,15 @@
 // payoff schedule's weekly-pinfall estimate).
 export const GAMES_PER_WEEK = 2
 
+// Sportsbook display convention: "First L." — first name + last initial.
+// Single-word names pass through; null/empty renders the usual em-dash.
+export function shortName(name: string | null | undefined): string {
+  if (!name) return '—'
+  const parts = name.trim().split(/\s+/)
+  if (parts.length === 1) return parts[0]
+  return `${parts[0]} ${parts[parts.length - 1][0].toUpperCase()}.`
+}
+
 export function initials(name: string | null | undefined): string {
   if (!name) return '?'
   return name.split(' ').map(w => w[0]).join('').substring(0, 2).toUpperCase()

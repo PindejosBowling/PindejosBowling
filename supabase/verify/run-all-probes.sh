@@ -13,7 +13,7 @@ DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 OUT="${1:-$DIR/../../.verify-artifacts}"
 mkdir -p "$OUT"
 
-PROBES=(probe-loans probe-pvp probe-bets-bounty probe-winners-crutch probe-energy-drink probe-ghost-in-the-slip probe-archive-roundtrip probe-settle-lifecycle probe-auctions probe-admin-guards probe-rsvp-bonus)
+PROBES=(probe-loans probe-pvp probe-bets-bounty probe-winners-crutch probe-energy-drink probe-ghost-in-the-slip probe-archive-roundtrip probe-settle-lifecycle probe-combo-lines probe-auctions probe-admin-guards probe-rsvp-bonus probe-odds-engine)
 for p in "${PROBES[@]}"; do
   echo "── $p"
   "$DIR/run-probe.sh" "$DIR/$p.sql" "$OUT/$p-latest.json"

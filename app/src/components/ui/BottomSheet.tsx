@@ -25,6 +25,9 @@ interface BottomSheetProps {
   children: ReactNode
   // Button row rendered below the body, inside the sheet.
   footer?: ReactNode
+  // Node pinned to the sheet's top-right corner, aligned with the title — for
+  // a prominent at-a-glance value (e.g. the payout multiple on the line editor).
+  headerRight?: ReactNode
   // Wrap in a KeyboardAvoidingView (iOS padding) — for sheets with text inputs.
   keyboardAvoiding?: boolean
 }
@@ -43,6 +46,7 @@ export default function BottomSheet({
   busy,
   children,
   footer,
+  headerRight,
   keyboardAvoiding,
 }: BottomSheetProps) {
   const { height } = useWindowDimensions()
@@ -59,6 +63,7 @@ export default function BottomSheet({
     <>
       <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={dismiss} />
       <View style={styles.sheet}>
+        {headerRight != null && <View style={styles.headerRight}>{headerRight}</View>}
         <Text style={[styles.title, titleColor != null && { color: titleColor }]}>{title}</Text>
         {subtitle != null && <Text style={styles.subtitle}>{subtitle}</Text>}
         <ScrollView style={{ maxHeight: bodyMaxHeight }} keyboardShouldPersistTaps="handled">
@@ -94,6 +99,9 @@ const styles = StyleSheet.create({
     padding: 24,
     paddingBottom: Platform.OS === 'ios' ? 40 : 24,
   },
+  // Pinned to the sheet's top-right, aligned with the title's top edge (the
+  // sheet's 24px padding is the inset).
+  headerRight: { position: 'absolute', top: 24, right: 24, alignItems: 'flex-end' },
   title: { fontFamily: fonts.barlowCondensed, fontSize: 22, color: colors.text, fontWeight: '700' },
   subtitle: { fontFamily: fonts.barlowCondensed, fontSize: 13, color: colors.muted, letterSpacing: 0.5, marginTop: 2, marginBottom: 14 },
 })

@@ -279,19 +279,16 @@ export default function PlayerPinsinoScreen() {
               {openGameNumbers.map(gameNum => (
                 <View key={gameNum}>
                   <Text style={styles.gameLabel}>GAME {gameNum}</Text>
-                  <View style={styles.card}>
-                    {openBetsByGame[gameNum].map((bet, idx) => {
-                      const isLast = idx === openBetsByGame[gameNum].length - 1
-                      return (
-                        <BetRow
-                          key={bet.id}
-                          bet={bet}
-                          isLast={isLast}
-                          badge={null}
-                          betReturnText={betReturnText(bet)}
-                        />
-                      )
-                    })}
+                  {/* BetRow renders self-contained ticket cards — no wrapper card. */}
+                  <View>
+                    {openBetsByGame[gameNum].map(bet => (
+                      <BetRow
+                        key={bet.id}
+                        bet={bet}
+                        badge={null}
+                        betReturnText={betReturnText(bet)}
+                      />
+                    ))}
                   </View>
                 </View>
               ))}
@@ -323,20 +320,15 @@ export default function PlayerPinsinoScreen() {
                     </TouchableOpacity>
 
                     {isExpanded && (
-                      <View style={styles.card}>
-                        {betsInWeek.map((bet, idx) => {
-                          const badge = resultBadge(bet.status)
-                          const isLast = idx === betsInWeek.length - 1
-                          return (
-                            <BetRow
-                              key={bet.id}
-                              bet={bet}
-                              isLast={isLast}
-                              badge={badge}
-                              betReturnText={betReturnText(bet)}
-                            />
-                          )
-                        })}
+                      <View>
+                        {betsInWeek.map(bet => (
+                          <BetRow
+                            key={bet.id}
+                            bet={bet}
+                            badge={resultBadge(bet.status)}
+                            betReturnText={betReturnText(bet)}
+                          />
+                        ))}
                       </View>
                     )}
                   </View>

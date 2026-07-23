@@ -19,23 +19,15 @@ const GAME_NUMBERS = [1, 2]
 
 type Scope = 'this_week' | 'pick_weeks' | 'permanent'
 
-// The builder offers two leg families — who the leg is about — with the line
-// kind as a stat chip underneath: the score O/U is just another player stat,
-// the moneyline win just another team stat. All picks are over/win (the
-// board's no-unders policy applies to specials too).
-type LegFamily = 'player' | 'team'
-// Chip order per family. 'score' / 'win' are pseudo-stats mapping to the
-// over_under / moneyline kinds; the rest map to prop / team_prop with that
-// params.stat. first_ball_avg is retired — not offered.
-const FAMILY_STATS: Record<LegFamily, string[]> = {
-  player: ['score', 'strikes', 'spares', 'clean_frames'],
-  team: ['win', 'total_pins', 'clean_frames', 'strikes', 'spares'],
-}
-const CHIP_LABELS: Record<string, string> = { score: 'Score', win: 'Win', ...STAT_LABELS }
-function kindOf(family: LegFamily, stat: string): CustomLegSpec['kind'] {
-  if (family === 'player') return stat === 'score' ? 'over_under' : 'prop'
-  return stat === 'win' ? 'moneyline' : 'team_prop'
-}
+// Only player-stat legs are authorable (the team family — moneyline win /
+// team_prop stats — retired with team-anchored market generation; combos
+// replaced it. Legacy team legs still RENDER via legSummary, but new ones
+// can't be authored — they'd never resolve). 'score' is a pseudo-stat mapping
+// to the over_under kind; the rest map to prop with that params.stat.
+// first_ball_avg is retired — not offered. All picks are over (the board's
+// no-unders policy applies to specials too).
+const PLAYER_STATS = ['score', 'strikes', 'spares', 'clean_frames']
+const CHIP_LABELS: Record<string, string> = { score: 'Score', ...STAT_LABELS }
 
 interface Props {
   // Mounted conditionally so it resets between opens. Doubles as the Edit sheet
@@ -68,14 +60,12 @@ export default function CustomLineCreateModal({ currentWeekId, seasonId, initial
   const [legs, setLegs] = useState<CustomLegSpec[]>(Array.isArray(initial?.legs) ? initial.legs : [])
   const [saving, setSaving] = useState(false)
 
-  // Add-leg sub-form, progressive: family first, then only the pickers that
-  // family needs (stat chips, scope, game, subject). Subject is either a
-  // specific player or THE BETTOR (self-referential: "whoever takes this bet"
-  // — resolves per-taker, e.g. "you beat your over" / "your team wins").
-  const [legFamily, setLegFamily] = useState<LegFamily>('player')
+  // Add-leg sub-form, progressive: stat chips, scope, game, subject. Subject
+  // is either a specific player or THE BETTOR (self-referential: "whoever
+  // takes this bet" — resolves per-taker, e.g. "you beat your over").
   const [legStat, setLegStat] = useState<string>('score')
   // Game legs bind to a game; night legs settle over the whole night (one
-  // null-game market). Team Win is per-game only.
+  // null-game market).
   const [legScope, setLegScope] = useState<'game' | 'night'>('game')
   const [legWho, setLegWho] = useState<'player' | 'bettor'>('player')
   const [legPlayer, setLegPlayer] = useState<PlayerPickerItem | null>(null)
@@ -87,13 +77,7 @@ export default function CustomLineCreateModal({ currentWeekId, seasonId, initial
   const [legGame, setLegGame] = useState<number | 'both' | 'each'>(1)
   const [pickerOpen, setPickerOpen] = useState(false)
 
-  const legKind = kindOf(legFamily, legStat)
-  const effScope = legKind === 'moneyline' ? 'game' : legScope
-
-  function changeFamily(f: LegFamily) {
-    setLegFamily(f)
-    setLegStat(FAMILY_STATS[f][0])
-  }
+  const legKind: CustomLegSpec['kind'] = legStat === 'score' ? 'over_under' : 'prop'
 
   // Season roster (leg subjects/anchors) + season weeks (the Pick Weeks chips).
   const [seasonPlayers, setSeasonPlayers] = useState<PlayerPickerItem[]>([])
@@ -137,10 +121,10 @@ export default function CustomLineCreateModal({ currentWeekId, seasonId, initial
     // scope: BOTH stages one leg per official game (a cross-game bundle in one
     // bet); EACH stores null (per-game offering); a number is just that game.
     const games: (number | null)[] =
-      effScope === 'night' ? [null] :
+      legScope === 'night' ? [null] :
       legGame === 'both' ? GAME_NUMBERS : legGame === 'each' ? [null] : [legGame]
     // Only real stat kinds carry params.stat; 'score'/'win' are the kind itself.
-    const stat = legKind === 'prop' || legKind === 'team_prop' ? legStat : undefined
+    const stat = legKind === 'prop' ? legStat : undefined
     const newLegs: CustomLegSpec[] = games.map(g => ({
       kind: legKind,
       // null = the bettor (self-referential) — resolved per-taker on the board.
@@ -148,11 +132,11 @@ export default function CustomLineCreateModal({ currentWeekId, seasonId, initial
       ...(stat ? { stat } : {}),
       // Always written explicitly so new rows are self-describing (legacy rows
       // lack it and read as 'game').
-      scope: effScope,
+      scope: legScope,
       game_number: g,
       // Over-only creation: no side ever bets against a subject, so anti-tank
-      // can never block a taker. 'win' for team-win legs; 'over' otherwise.
-      pick: legKind === 'moneyline' ? 'win' : 'over',
+      // can never block a taker.
+      pick: 'over',
     }))
     if (legs.length + newLegs.length > MAX_LEGS) {
       showToast(`Max ${MAX_LEGS} legs`, 'error')
@@ -301,16 +285,14 @@ export default function CustomLineCreateModal({ currentWeekId, seasonId, initial
         </View>
       ))}
 
-      {/* Add-leg sub-form: family first (who it's about), then that family's
-          stat chips — the score/win kinds live as the first chip. */}
+      {/* Add-leg sub-form: player-stat chips — the score kind lives as the
+          first chip. (The Team Stat / Win family is retired with team-anchored
+          market generation — combos replaced it. Legacy team legs still render
+          in the list above but new ones can't be authored: they'd never
+          resolve once team_prop/moneyline markets stop generating.) */}
       <View style={styles.addLegCard}>
-        <ToggleGroup
-          options={[{ key: 'player', label: 'Player Stat' }, { key: 'team', label: 'Team Stat' }]}
-          value={legFamily}
-          onChange={changeFamily}
-        />
         <View style={styles.chipWrapForm}>
-          {FAMILY_STATS[legFamily].map(s => (
+          {PLAYER_STATS.map(s => (
             <TouchableOpacity key={s} style={[styles.chip, legStat === s && styles.chipOn]} onPress={() => setLegStat(s)} activeOpacity={0.7}>
               <Text style={[styles.chipText, legStat === s && styles.chipTextOn]}>
                 {(CHIP_LABELS[s] ?? s).toUpperCase()}
@@ -326,29 +308,22 @@ export default function CustomLineCreateModal({ currentWeekId, seasonId, initial
         {legWho === 'player' ? (
           <TouchableOpacity style={styles.playerBtn} onPress={() => setPickerOpen(true)} activeOpacity={0.8}>
             <Text style={[styles.playerBtnText, !legPlayer && { color: colors.muted2 }]}>
-              {legPlayer ? legPlayer.name
-                : legKind === 'moneyline' ? 'Anchor player (their team wins)'
-                : legKind === 'team_prop' ? "Anchor player (their team's stat)"
-                : 'Player'}
+              {legPlayer ? legPlayer.name : 'Player'}
             </Text>
             <Text style={styles.playerBtnChevron}>›</Text>
           </TouchableOpacity>
         ) : (
           <Text style={styles.hint}>
-            The leg is about the taker themself — {
-              legKind === 'moneyline' ? '"your team wins the game". Only offered to players on a team that week.'
-              : legKind === 'team_prop' ? '"your team beats its line". Only offered to players on a team that week.'
-              : '"you beat your over". Hidden from players it can\'t resolve for.'}
+            The leg is about the taker themself — "you beat your over". Hidden
+            from players it can't resolve for.
           </Text>
         )}
-        {legKind !== 'moneyline' && (
-          <ToggleGroup
-            options={[{ key: 'game', label: 'Per Game' }, { key: 'night', label: 'Whole Night' }]}
-            value={legScope}
-            onChange={(s: 'game' | 'night') => setLegScope(s)}
-          />
-        )}
-        {effScope === 'game' && (
+        <ToggleGroup
+          options={[{ key: 'game', label: 'Per Game' }, { key: 'night', label: 'Whole Night' }]}
+          value={legScope}
+          onChange={(s: 'game' | 'night') => setLegScope(s)}
+        />
+        {legScope === 'game' && (
           <View style={styles.chipWrapForm}>
             {GAME_NUMBERS.map(g => (
               <TouchableOpacity key={g} style={[styles.chip, legGame === g && styles.chipOn]} onPress={() => setLegGame(g)} activeOpacity={0.7}>
@@ -363,17 +338,17 @@ export default function CustomLineCreateModal({ currentWeekId, seasonId, initial
             </TouchableOpacity>
           </View>
         )}
-        {effScope === 'night' && (
+        {legScope === 'night' && (
           <Text style={styles.hint}>
             Whole night: one leg settled over the night's total — no single game. Placed in the WEEKLY section.
           </Text>
         )}
-        {effScope === 'game' && legGame === 'both' && (
+        {legScope === 'game' && legGame === 'both' && (
           <Text style={styles.hint}>
             Both games: adds a leg for Game 1 and Game 2 in ONE bet — every leg must hit ("…in both games"). A week-level bundle.
           </Text>
         )}
-        {effScope === 'game' && legGame === 'each' && (
+        {legScope === 'game' && legGame === 'each' && (
           <Text style={styles.hint}>
             Each game: the special is offered once per game that week — this leg binds to each game in turn ("…in this game").
           </Text>
@@ -388,7 +363,7 @@ export default function CustomLineCreateModal({ currentWeekId, seasonId, initial
         items={seasonPlayers}
         onSelectItem={p => { setLegPlayer(p); setPickerOpen(false) }}
         onClose={() => setPickerOpen(false)}
-        title={legFamily === 'team' ? 'Anchor Player' : 'Select Player'}
+        title="Select Player"
       />
     </BottomSheet>
   )

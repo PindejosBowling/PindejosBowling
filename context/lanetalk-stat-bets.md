@@ -1,15 +1,28 @@
 # LaneTalk Stat Bets — frame-stat props on a second settlement clock
 
+> **OddsEngine (2026-07-22):** `sync_lanetalk_prop_markets_for_week` now mints
+> fair-priced alt-line **ladders** around the unchanged `lanetalk_seed_lines`
+> seed (official games only feed the pricing model), and the betless reprice
+> block became a churn-guarded re-ladder. Settlement grades each rung against
+> its own line (side-aware). See [odds-engine.md](odds-engine.md).
+
 Bet lines on LaneTalk frame stats: **strikes + spares + clean frames O/U, both
 per game and night-level** (standardized 2026-07-01 — every scope carries the
 full stat range; **first-ball avg is retired as a bettable line**, kept only
 for settled history) — generated from imported **official** LaneTalk games and
 settled when the admin taps **"Confirm LaneTalk Data"** on the import screen.
 The same Confirm also settles **LaneTalk-clock team props**
-(`market_type='team_prop'`, `params.clock='lanetalk'` — game AND night scope);
-see the team-prop section below. Archive runs night-of; LaneTalk data often
+(`market_type='team_prop'`, `params.clock='lanetalk'` — game AND night scope;
+**generation retired 2026-07-21**, settle path kept for cutover/history) and
+**LaneTalk-clock combo lines** (`market_type='combo'`,
+`params.clock='lanetalk'` — the team-prop replacement, settled in `settle_week`
+step (c‴) with a per-member complete-data guard; see
+[combo-lines.md](combo-lines.md)). Archive runs night-of; LaneTalk data often
 lands the next day, so these bets ride a **separate settlement clock** from
-`archive_week`.
+`archive_week`. The Confirm badge queries (`listUnsettledLanetalkProps` /
+`listSettledLanetalkPropWeeks` in `db/economy.ts`) therefore match **three**
+market shapes: lanetalk props, lanetalk-clock team props, and lanetalk-clock
+combos.
 
 **Zero schema additions.** Every persisted record is an ordinary row in the
 existing betting architecture:
@@ -139,7 +152,9 @@ sit alongside the `syncOUForWeek` belt-and-braces call sites. Idempotent.
 - **Scope matrix (standardized 2026-07-01):** strikes, spares, and clean
   frames are all generated at **both** scopes — per game (`scope='game'`,
   `game_number` set) and night (`scope='night'`, `game_number` null).
-- **Rounding:** per-game counts → `floor(avg)+0.5` clamped [0.5, 9.5]; night
+- **Rounding:** seeds are projection-anchored (`floor(engine mean × games)+0.5`,
+  see odds-engine.md) since 2026-07-23; engine off falls back to the legacy
+  averages: per-game counts → `floor(avg)+0.5` clamped [0.5, 9.5]; night
   counts → `floor(avg-per-game × scheduled-games)+0.5` clamped
   [0.5, 10·games−0.5] (all frame counts max 10/game — the money definitions
   count FRAMES, so a triple-strike 10th is one frame). No pushes anywhere.
@@ -154,7 +169,7 @@ row per player (a unified button set: `142.5+ PINS · 4.5+ STRIKES · 2.5+ SPARE
 **Night Props** section under a
 **WEEKLY** group that leads the board, above the game groups (shared with the
 week-level specials' header). `LineView.statKey` carries the stat, and the pick button is the full condition
-itself (`4.5+ STRIKES`, via `selectionButtonLabel` — all board bets are overs
+itself (`4.5+ STRIKES` — all board bets are overs
 by definition; score lines read `142.5+ PINS`); **unders are UI-hidden**
 (same social policy + trivial revert as score O/U). Game start/stop toggles
 (`setPropStatusByWeekGame` + `setTeamPropStatusByWeekGame`) close a game's

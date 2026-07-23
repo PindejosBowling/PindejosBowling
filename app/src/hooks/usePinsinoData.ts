@@ -1,5 +1,6 @@
-import { weeks, seasons, betMarkets, bets, pinLedger, loanLedger, loans, pvpChallenges, bountyPosts, teamSlots, customLines, games, players, auctionHouseState } from '../utils/supabase/db'
+import { weeks, seasons, betMarkets, bets, pinLedger, loanLedger, loans, pvpChallenges, bountyPosts, teamSlots, customLines, games, players, rsvp, auctionHouseState } from '../utils/supabase/db'
 import { computeBalance } from '../utils/ledger'
+import { shortName } from '../utils/helpers'
 import { betPayout } from '../utils/bets'
 import { useAsyncData } from './useAsyncData'
 
@@ -9,10 +10,13 @@ import { useAsyncData } from './useAsyncData'
 // types reuse it without bespoke fields.
 export interface SelectionView {
   selectionId: string
-  key: string            // stable side key: 'over' | 'under' | 'yes' | a player id, …
+  key: string            // stable side key: 'over' | 'under', ladder rungs 'over:<line>', a player id, …
+  // O/U side, ladder-safe (DB bet_selections.side): dispatch on this, never on
+  // the key text — alt rungs carry suffixed keys. null = non-O/U (moneyline).
+  side: 'over' | 'under' | null
   label: string          // display label ('Over', 'Under', …)
-  line: number | null    // this side's total/handicap (the O/U number); null if n/a
-  odds: number           // decimal odds (2.000 = even money)
+  line: number | null    // this rung's total/handicap (the O/U number); null if n/a
+  odds: number           // decimal odds (engine-priced; 2.000 = even money)
 }
 
 // A flattened bettable market (one market + its selections). Generic over
@@ -22,7 +26,11 @@ export interface LineView {
   marketType: string         // 'over_under' | 'moneyline' | 'prop'
   title: string
   subjectPlayerId: string | null
+  // Sportsbook name convention: subjectName is the "First L." display form
+  // (what slips/tickets/bet rows show); subjectFullName keeps the full name
+  // for the two full-name surfaces — the board row header + player dropdown.
   subjectName: string
+  subjectFullName: string
   gameNumber: number | null
   line: number | null        // shared line when every selection shares one (O/U); else null
   // Stat key (bet_markets.params.stat) for prop/team_prop markets; null otherwise.
@@ -30,9 +38,14 @@ export interface LineView {
   // Anchored team (bet_markets.params.team_id) for team_prop markets; null
   // otherwise. Drives the "Your Team" label + the own-team anti-tank pre-check.
   teamId: string | null
-  // Optional left-column metadata line, shown where O/U renders "LINE 142.5".
-  // Lets lineless markets (moneyline → "MONEYLINE · vs Team 3") carry context.
-  subtitle?: string
+  // Combo member set (bet_markets.params.member_ids / member_names, aligned
+  // arrays snapshotted at compose) for combo markets; null otherwise. Drives
+  // the member label + the contains-me anti-tank pre-check.
+  comboMemberIds: string[] | null
+  // Aligned with comboMemberIds: shortened "First L." forms for display, full
+  // forms for the player dropdown's name resolution.
+  comboMemberNames: string[] | null
+  comboMemberFullNames: string[] | null
   selections: SelectionView[]
   // Game in progress: market closed for betting, still shown but not bettable.
   inProgress: boolean
@@ -43,12 +56,17 @@ export interface LineView {
 // semantics in one place — new market types declare their "against the subject"
 // side here.
 export function selectionBetsAgainstSubject(marketType: string, selectionKey: string): boolean {
-  if (marketType === 'over_under') return selectionKey === 'under'
+  // Ladder rungs carry suffixed keys ('under:4.5'); the prefix IS the side.
+  const isUnder = selectionKey === 'under' || selectionKey.startsWith('under:')
+  if (marketType === 'over_under') return isUnder
   // Stat props share O/U shape: the under bets against the subject's night.
-  if (marketType === 'prop') return selectionKey === 'under'
+  if (marketType === 'prop') return isUnder
   // Team-aggregate props: the under bets against the anchored team (the
   // "subject" is the team — callers key ownership off LineView.teamId).
-  if (marketType === 'team_prop') return selectionKey === 'under'
+  if (marketType === 'team_prop') return isUnder
+  // Combo lines: the under bets against the member set (callers key
+  // self-inclusion off LineView.comboMemberIds).
+  if (marketType === 'combo') return isUnder
   return false
 }
 
@@ -62,8 +80,9 @@ export function selectionBetsAgainstSubject(marketType: string, selectionKey: st
 // screen) so both the board and the "Copy this bet" flow share one policy.
 export function isSelectionHiddenInUI(line: LineView, sel: SelectionView): boolean {
   return (
-    (line.marketType === 'over_under' || line.marketType === 'prop' || line.marketType === 'team_prop') &&
-    sel.key === 'under'
+    (line.marketType === 'over_under' || line.marketType === 'prop' ||
+     line.marketType === 'team_prop' || line.marketType === 'combo') &&
+    sel.side === 'under'
   )
 }
 
@@ -87,36 +106,27 @@ export const STAT_LABELS: Record<string, string> = {
   first_ball_avg: 'First-Ball Avg',
 }
 
-// The pick button IS the line being agreed to. Every side offered on the board
-// is an over (unders are UI-hidden — all bets are over by definition), so the
-// button reads as the full condition: threshold + what's being counted —
-// "142.5+ PINS" on a score line, "4.5+ STRIKES" / "62.5+ CLEAN %" on a stat
-// prop. Lineless sides (moneyline "WIN") keep their label.
-export function selectionButtonLabel(line: LineView, sel: SelectionView): string {
-  const threshold = sel.line ?? line.line
-  if (sel.key === 'over' && threshold != null) {
-    const what =
-      line.marketType === 'prop' || line.marketType === 'team_prop'
-        ? line.statKey ? STAT_LABELS[line.statKey] ?? line.statKey : null
-        // Score lines: a game row reads "PINS"; the night line matches the
-        // team row's "TOTAL PINS" wording (it IS the night total).
-        : line.marketType === 'over_under' ? (line.gameNumber != null ? 'Pins' : 'Total Pins') : null
-    return `${threshold.toFixed(1)}+${what ? ` ${what.toUpperCase()}` : ''}`
-  }
-  return (sel.label || sel.key).toUpperCase()
-}
-
 // The line suffix placed-bet surfaces append after the pick ("OVER 4.5 STRIKES",
 // "OVER 142.5"). One helper so every gate (BetRow, detail/settle modals, parlay
 // slips) treats stat props and score O/U the same way.
 export function betLineSuffix(marketType: string, line: number | null, statKey?: string | null): string {
   if (line == null) return ''
   if (marketType === 'over_under') return ` ${line.toFixed(1)}`
-  if (marketType === 'prop' || marketType === 'team_prop') {
+  if (marketType === 'prop' || marketType === 'team_prop' || marketType === 'combo') {
     const label = statKey ? STAT_LABELS[statKey] ?? statKey : null
     return ` ${line.toFixed(1)}${label ? ` ${label.toUpperCase()}` : ''}`
   }
   return ''
+}
+
+// The "where does this leg score" suffix betLineSuffix's consumers append after
+// the line: G<n> for a game leg, the night word for a whole-week leg
+// (moneylines are game-implicit, so they carry nothing). `nightWord`
+// parameterizes the per-surface wording ('NIGHT' on placed/special legs,
+// 'THIS WEEK' in the slip) while keeping the dispatch itself in one place.
+export function scopeSuffix(marketType: string, gameNumber: number | null, nightWord = 'NIGHT'): string {
+  if (gameNumber != null) return ` · G${gameNumber}`
+  return marketType === 'moneyline' ? '' : ` · ${nightWord}`
 }
 
 // One resolved special leg as a display string — shared by the board row and
@@ -132,9 +142,7 @@ export function customLegLabel(leg: {
   gameNumber: number | null
 }): string {
   const suffix = betLineSuffix(leg.marketType, leg.line, leg.statKey)
-  const where =
-    leg.gameNumber != null ? ` · G${leg.gameNumber}` : leg.marketType === 'moneyline' ? '' : ' · NIGHT'
-  return `${leg.subjectName} · ${leg.pick.toUpperCase()}${suffix}${where}`
+  return `${leg.subjectName} · ${leg.pick.toUpperCase()}${suffix}${scopeSuffix(leg.marketType, leg.gameNumber)}`
 }
 
 // The section a line is bucketed under on the Place Bets board. Per-game markets
@@ -154,10 +162,10 @@ export function marketGroup(gameNumber: number | null, marketType: string): Line
   if (gameNumber != null) {
     return { key: `game-${gameNumber}`, label: `GAME ${gameNumber}`, sortOrder: gameNumber }
   }
-  // Night-scoped markets — player stat props, team props, and the player
-  // night total-pins O/U (no single game, settled over the whole night) —
-  // lead the board, above the game groups (game numbers start at 1).
-  if (marketType === 'prop' || marketType === 'team_prop' || marketType === 'over_under') {
+  // Night-scoped markets — player stat props, team props, combos, and the
+  // player night total-pins O/U (no single game, settled over the whole
+  // night) — lead the board, above the game groups (game numbers start at 1).
+  if (marketType === 'prop' || marketType === 'team_prop' || marketType === 'over_under' || marketType === 'combo') {
     return { key: 'weekly', label: 'WEEKLY', sortOrder: 0 }
   }
   // Season-long / futures markets (no game scope) collect at the end.
@@ -166,51 +174,6 @@ export function marketGroup(gameNumber: number | null, marketType: string): Line
 
 export function lineGroup(line: LineView): LineGroup {
   return marketGroup(line.gameNumber, line.marketType)
-}
-
-// The line *category* within a group — one collapsible LineRowContainer. A single
-// game can surface several categories (player over/unders, team totals, …), each
-// independently collapsible; the label summarizes what's inside on the collapsed
-// bar. Market-type aware so new line kinds name their own section.
-export interface LineCategory {
-  key: string
-  label: string
-  sortOrder: number
-}
-
-export function lineCategory(line: LineView): LineCategory {
-  switch (line.marketType) {
-    case 'moneyline':
-      return { key: 'player_ou', label: 'Player Overs', sortOrder: 1 }
-    case 'team_prop':
-      // Team lines live INSIDE the game listing alongside the player rows: a
-      // team's moneyline (viewer's team only — toYourTeamMoneyline) and its
-      // team_prop stat lines consolidate into ONE row (rowKey = teamId) shown
-      // above that team's player rows (the screen's team-block sorting).
-      // Night team props (no game number) join the WEEKLY group's night
-      // section instead, consolidating per team the same way.
-      return line.gameNumber != null
-        ? { key: 'player_ou', label: 'Player Overs', sortOrder: 1 }
-        : { key: 'night_props', label: 'Night Props', sortOrder: 0 }
-    case 'over_under':
-      // Only the "over" side is bettable in the UI (the "under" is hidden — see
-      // SportsbookScreen / context/betting-line-board.md), so the section reads
-      // "Player Overs" rather than "Player Over/Unders". The night total-pins
-      // O/U (no game number) joins the WEEKLY group's night section, leading
-      // its player's consolidated night row.
-      return line.gameNumber != null
-        ? { key: 'player_ou', label: 'Player Overs', sortOrder: 1 }
-        : { key: 'night_props', label: 'Night Props', sortOrder: 0 }
-    case 'prop':
-      // LaneTalk stat lines: per-game strike/spare props share the score O/U's
-      // "Player Overs" section (one collapsible menu per game); night-level
-      // clean% / first-ball props get their own section under WEEKLY.
-      return line.gameNumber != null
-        ? { key: 'player_ou', label: 'Player Overs', sortOrder: 1 }
-        : { key: 'night_props', label: 'Night Props', sortOrder: 0 }
-    default:
-      return { key: line.marketType, label: line.title || line.marketType, sortOrder: 99 }
-  }
 }
 
 // Copy shown when a group's betting is closed (the market is in progress).
@@ -339,6 +302,24 @@ export interface ActiveLoanSummary {
   outstanding: number
 }
 
+// A market's subject display name — the one fallback chain every normalized
+// surface shares: named subject → combo member-name snapshot → anchored team
+// number → market title. Player names follow the Sportsbook convention
+// ("First L." via shortName); `full: true` keeps the full forms for the two
+// full-name surfaces (board row header + player dropdown). New market types
+// add their naming rule HERE, not per call site.
+function marketSubjectName(mkt: any, opts?: { full?: boolean }): string {
+  const full = opts?.full ?? false
+  if (mkt?.subject?.name != null) return full ? mkt.subject.name : shortName(mkt.subject.name)
+  const members: string[] | null =
+    Array.isArray(mkt?.params?.member_names) && mkt.params.member_names.length
+      ? mkt.params.member_names : null
+  if (members) return (full ? members : members.map(shortName)).join(' + ')
+  const teamNumber = mkt?.market_type === 'team_prop' ? mkt?.params?.team_number ?? null : null
+  if (teamNumber != null) return `Team ${teamNumber}`
+  return mkt?.title ?? '—'
+}
+
 // Collapse bet → legs → selections → markets into a flat row. A single O/U bet
 // has one leg; a parlay has many (combined odds = Π of the legs' odds).
 export function normalizeBet(b: any): BetView {
@@ -350,7 +331,7 @@ export function normalizeBet(b: any): BetView {
       selectionId: sel?.id ?? '',
       marketId: mkt?.id ?? '',
       marketType: mkt?.market_type ?? '',
-      subjectName: mkt?.subject?.name ?? mkt?.title ?? '—',
+      subjectName: marketSubjectName(mkt),
       // Prefer the selection label (readable for every market type — a team name
       // for moneylines, whose `key` is a team uuid) over the raw key.
       pick: sel?.label ?? sel?.key ?? '',
@@ -368,7 +349,7 @@ export function normalizeBet(b: any): BetView {
   return {
     id: b.id,
     playerId: b.player_id,
-    bettorName: b.players?.name ?? '—',
+    bettorName: shortName(b.players?.name),
     stake: b.stake,
     status: b.status,
     settledAt: b.settled_at,
@@ -377,7 +358,7 @@ export function normalizeBet(b: any): BetView {
     line: Number(firstLeg?.line_at_placement ?? firstSel?.line ?? 0),
     statKey: firstMkt?.params?.stat ?? null,
     gameNumber: firstMkt?.game_number ?? null,
-    subjectName: firstMkt?.subject?.name ?? firstMkt?.title ?? '—',
+    subjectName: marketSubjectName(firstMkt),
     marketId: firstMkt?.id ?? '',
     marketType: firstMkt?.market_type ?? '',
     marketStatus: firstMkt?.status ?? '',
@@ -404,6 +385,11 @@ export function normalizeMarket(m: any): LineView {
     .map((s: any) => ({
       selectionId: s.id,
       key: s.key,
+      // Prefer the DB side column; derive from the key for any cached rows
+      // fetched before the side migration.
+      side: (s.side ?? (s.key === 'over' || String(s.key).startsWith('over:') ? 'over'
+        : s.key === 'under' || String(s.key).startsWith('under:') ? 'under' : null)) as
+        'over' | 'under' | null,
       label: s.label ?? s.key ?? '—',
       line: s.line != null ? Number(s.line) : null,
       odds: Number(s.odds ?? 2),
@@ -416,54 +402,45 @@ export function normalizeMarket(m: any): LineView {
   const sharedLine =
     lineVals.length > 0 && lineVals.every(v => v === lineVals[0]) ? lineVals[0] : null
 
-  // Stat props (player + team) carry their kind in params.stat; the full
-  // condition (threshold + stat) renders in the pick button
-  // (selectionButtonLabel), so no subtitle.
+  // Stat props (player + team + combo) carry their kind in params.stat; the
+  // full condition (threshold + stat) renders on the pill itself.
   const statKey: string | null =
-    m.market_type === 'prop' || m.market_type === 'team_prop' ? m.params?.stat ?? null : null
+    m.market_type === 'prop' || m.market_type === 'team_prop' || m.market_type === 'combo'
+      ? m.params?.stat ?? null : null
   // team_prop rows are anchored to a team, not a player: params carries the
-  // team id (ownership checks) + team number (display label).
+  // team id (ownership checks) + team number (the display label, resolved in
+  // marketSubjectName).
   const teamId: string | null = m.market_type === 'team_prop' ? m.params?.team_id ?? null : null
-  const teamNumber: number | null = m.market_type === 'team_prop' ? m.params?.team_number ?? null : null
+  // combo rows are anchored to an explicit member set: params carries the ids
+  // (anti-tank self-inclusion checks) + the names snapshot (display label).
+  const comboMemberIds: string[] | null =
+    m.market_type === 'combo' && Array.isArray(m.params?.member_ids) ? m.params.member_ids : null
+  // Snapshot names kept in both forms: full for the dropdown/row header,
+  // shortened "First L." for every other display.
+  const comboMemberFullNames: string[] | null =
+    m.market_type === 'combo' && Array.isArray(m.params?.member_names)
+      ? m.params.member_names : null
+  const comboMemberNames: string[] | null = comboMemberFullNames?.map(shortName) ?? null
 
   return {
     marketId: m.id,
     marketType: m.market_type,
     title: m.title ?? '',
     subjectPlayerId: m.subject_player_id ?? null,
-    // O/U markets name a player (subject); team props name their team;
-    // moneylines name a matchup via the market title (subject is a game, so
-    // the player embed resolves null).
-    subjectName:
-      m.subject?.name ?? (teamNumber != null ? `Team ${teamNumber}` : m.title ?? '—'),
+    // O/U markets name a player (subject); team props name their team; combos
+    // name their member set; moneylines name a matchup via the market title
+    // (subject is a game, so the player embed resolves null).
+    subjectName: marketSubjectName(m),
+    subjectFullName: marketSubjectName(m, { full: true }),
     gameNumber: m.game_number ?? null,
     line: sharedLine,
     statKey,
     teamId,
+    comboMemberIds,
+    comboMemberNames,
+    comboMemberFullNames,
     selections,
     inProgress: m.status === 'closed',
-  }
-}
-
-// Sportsbook social policy: a player may only bet their OWN team to win. Each
-// moneyline market is reduced to the single selection for the player's week team
-// (the opponent side is hidden). It's reshaped to mirror a player-prop row:
-//   subject "Your Team" · subtitle "vs <opponent>" · button "WIN".
-// The opponent's label is the metadata we keep before dropping that selection.
-// Markets not involving the player's team (the other matchups) drop out — so a
-// player sees exactly their own team's moneyline per game. `teamId` is stamped
-// with the viewer's team so the board consolidates this row with the team's
-// team_prop lines (one "Your Team" row: WIN + the team stat buttons).
-function toYourTeamMoneyline(line: LineView, myTeamId: string | null): LineView | null {
-  const mine = myTeamId ? line.selections.find(s => s.key === myTeamId) : undefined
-  if (!mine) return null
-  const opponent = line.selections.find(s => s.key !== mine.key)
-  return {
-    ...line,
-    subjectName: 'Your Team',
-    teamId: myTeamId,
-    subtitle: opponent ? `vs ${opponent.label}` : undefined,
-    selections: [{ ...mine, label: 'Win' }],
   }
 }
 
@@ -679,6 +656,12 @@ interface PinsinoPayload {
   // every player's team, the viewer's team, and per game the team the
   // viewer's team is matched up against.
   weekTeams: WeekTeams
+  // The week's RSVP'd-in players — the combo composer's selectable member pool
+  // (mirrors the compose RPC's eligibility rule).
+  rsvpInPlayers: { playerId: string; name: string }[]
+  // The week's game numbers (schedule ∪ any per-game lines), ascending — drives
+  // the board's scope selector and the combo composer's game picker.
+  weekGameNumbers: number[]
   // Auction House admin kill-switch for the live season. Drives the "closed"
   // status overlay + entry gate on the Pinsino tile (live mode only).
   auctionHouseClosed: boolean
@@ -702,6 +685,8 @@ const EMPTY: PinsinoPayload = {
   openAction: 0,
   activeLoan: null,
   weekTeams: EMPTY_WEEK_TEAMS,
+  rsvpInPlayers: [],
+  weekGameNumbers: [],
   auctionHouseClosed: false,
   auctionHouseClosedMessage: null,
 }
@@ -743,11 +728,13 @@ export function usePinsinoData(playerId: string | null, viewSeasonId?: string | 
 
       const fetches: PromiseLike<any>[] = []
 
-      // Open O/U + moneyline + stat-prop + team-prop markets + all bets for this week
+      // Open O/U + stat-prop + combo markets + all bets for this week.
+      // (Moneyline + team_prop generation is RETIRED — combos replaced them;
+      // their fetch/board paths are gone but settled history still renders.)
       let marketsData: any[] = []
-      let moneylineData: any[] = []
       let propData: any[] = []
-      let teamPropData: any[] = []
+      let comboData: any[] = []
+      let rsvpData: any[] = []
       let weekBetsData: any[] = []
       // The player's team for this week — drives "Your Team" on the moneyline board.
       let myTeamId: string | null = null
@@ -772,14 +759,14 @@ export function usePinsinoData(playerId: string | null, viewSeasonId?: string | 
           betMarkets.listActiveOUByWeek(weekId).then(({ data }) => {
             marketsData = data ?? []
           }),
-          betMarkets.listActiveMoneylineByWeek(weekId).then(({ data }) => {
-            moneylineData = data ?? []
-          }),
           betMarkets.listActivePropByWeek(weekId).then(({ data }) => {
             propData = data ?? []
           }),
-          betMarkets.listActiveTeamPropByWeek(weekId).then(({ data }) => {
-            teamPropData = data ?? []
+          betMarkets.listActiveComboByWeek(weekId).then(({ data }) => {
+            comboData = data ?? []
+          }),
+          rsvp.listByWeek(weekId).then(({ data }) => {
+            rsvpData = data ?? []
           }),
           bets.listByWeek(weekId).then(({ data }) => {
             weekBetsData = data ?? []
@@ -868,10 +855,10 @@ export function usePinsinoData(playerId: string | null, viewSeasonId?: string | 
       // Resolve custom lines against the RAW market views (pre-policy: before
       // "Your Team" reshaping / under-hiding) — specials may bundle selections
       // the viewer's own board hides.
-      const rawLineViews = [...marketsData, ...moneylineData, ...propData, ...teamPropData].map(normalizeMarket)
+      const rawLineViews = [...marketsData, ...propData, ...comboData].map(normalizeMarket)
       const slotByPlayer = new Map<string, { teamId: string; playerName: string }>()
       for (const s of weekSlotsData) {
-        if (s.player_id) slotByPlayer.set(s.player_id, { teamId: s.team_id, playerName: s.players?.name ?? '—' })
+        if (s.player_id) slotByPlayer.set(s.player_id, { teamId: s.team_id, playerName: shortName(s.players?.name) })
       }
 
       // Week team topology for the board's with/against tinting.
@@ -890,9 +877,10 @@ export function usePinsinoData(playerId: string | null, viewSeasonId?: string | 
       // Resolve a row into board instances for one taker: lines with a null-game
       // ("every game") leg materialize once per game on this week's schedule;
       // fixed-game lines resolve once. Self-referential legs bind to the taker.
-      const weekGameNumbers = [...new Set(
-        rawLineViews.map(l => l.gameNumber).filter((g): g is number => g != null)
-      )].sort((a, b) => a - b)
+      const weekGameNumbers = [...new Set([
+        ...weekGamesData.map((g: any) => g.game_number as number),
+        ...rawLineViews.map(l => l.gameNumber).filter((g): g is number => g != null),
+      ])].sort((a, b) => a - b)
       const resolveInstances = (cl: any, taker: string | null): CustomLineView[] => {
         // Only game-scope null-game legs mean EACH; night legs also carry a
         // null game_number but resolve once (against the night market).
@@ -1080,24 +1068,19 @@ export function usePinsinoData(playerId: string | null, viewSeasonId?: string | 
       const myDebt = playerId ? (debtByPlayer[playerId] ?? 0) : 0
       const myActiveLoan = myLoansData.find((l: any) => l.status === 'active')
 
-      // Build the board: O/U lines pass through; moneylines are reduced to the
-      // player's own team ("Your Team"), dropping matchups they're not in;
-      // team props keep every team but relabel the viewer's own.
-      const openLinesResolved: LineView[] = []
-      for (const line of rawLineViews) {
-        if (line.marketType === 'moneyline') {
-          const ml = toYourTeamMoneyline(line, myTeamId)
-          if (ml) openLinesResolved.push(ml)
-        } else if (line.marketType === 'team_prop' && line.teamId != null && line.teamId === myTeamId) {
-          openLinesResolved.push({ ...line, subjectName: 'Your Team' })
-        } else {
-          openLinesResolved.push(line)
-        }
-      }
+      // The week's RSVP'd-in players (id + name), for the combo composer's
+      // member picker — the same eligibility rule the compose RPC enforces.
+      const rsvpInPlayers = rsvpData
+        .filter((r: any) => r.status === 'in' && r.player_id)
+        .map((r: any) => ({ playerId: r.player_id as string, name: r.players?.name ?? '—' }))
+        .sort((a, b) => a.name.localeCompare(b.name))
 
       return {
         balance: computeBalance(ledgerData),
-        openLines: openLinesResolved,
+        // Every fetched line passes through as-is (the moneyline "Your Team"
+        // reshaping and team_prop relabel died with their market generation —
+        // combos carry their own member-name labels).
+        openLines: rawLineViews,
         myBets: myBetViews,
         weekBets: weekBetViews,
         settledBets: settledBetsData.map(normalizeBet).map(brandBet),
@@ -1119,6 +1102,8 @@ export function usePinsinoData(playerId: string | null, viewSeasonId?: string | 
             }
           : null,
         weekTeams: { myTeamId, teamByPlayer, opponentTeamByGame },
+        rsvpInPlayers,
+        weekGameNumbers,
         auctionHouseClosed: auctionStateData?.is_closed ?? false,
         auctionHouseClosedMessage: auctionStateData?.closed_message ?? null,
       }

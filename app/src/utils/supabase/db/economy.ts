@@ -45,17 +45,6 @@ export const betMarkets = {
       .select('game_number, status')
       .eq('week_id', weekId)
       .eq('market_type', 'over_under'),
-  // Active (open + closed-for-betting) moneyline markets for a week. Subject is a
-  // game (the matchup), so the player-subject embed in MARKET_GRAPH resolves null;
-  // the row label comes from the market title + the team-named selections.
-  listActiveMoneylineByWeek: (weekId: string) =>
-    supabase
-      .from('bet_markets')
-      .select(MARKET_GRAPH)
-      .eq('week_id', weekId)
-      .eq('market_type', 'moneyline')
-      .in('status', ['open', 'closed'])
-      .order('game_number'),
   // Active (open + closed-for-betting) prop markets for a week — the LaneTalk
   // stat lines (strikes/spares per game, clean%/first-ball avg per night).
   // Night markets carry game_number null and group under WEEKLY on the board.
@@ -68,18 +57,18 @@ export const betMarkets = {
       .in('status', ['open', 'closed'])
       .order('game_number', { nullsFirst: false })
       .order('subject_player_id'),
-  // Active (open + closed-for-betting) team_prop markets for a week — team
-  // aggregate lines (clean frames / strikes / spares / total pins per game).
-  // Anchored by subject_game_id + params.team_id, so the player-subject embed
-  // resolves null (like moneyline); the row label comes from params.team_number.
-  listActiveTeamPropByWeek: (weekId: string) =>
+  // Active (open + closed-for-betting) combo markets for a week — player-composed
+  // aggregate lines over an explicit member set (params.member_ids/member_names),
+  // with no team/game anchor. The player-subject embed resolves null; the row
+  // label comes from params.member_names.
+  listActiveComboByWeek: (weekId: string) =>
     supabase
       .from('bet_markets')
       .select(MARKET_GRAPH)
       .eq('week_id', weekId)
-      .eq('market_type', 'team_prop')
+      .eq('market_type', 'combo')
       .in('status', ['open', 'closed'])
-      .order('game_number')
+      .order('game_number', { nullsFirst: false })
       .order('title'),
   // Active (open + closed-for-betting) markets by id, with selections + subject —
   // any market_type. Used by the "Copy this bet" flow to re-resolve a bet's legs
@@ -101,7 +90,7 @@ export const betMarkets = {
     supabase
       .from('bet_markets')
       .select('id, week_id, game_number, subject_player_id, params, status, title')
-      .or('and(market_type.eq.prop,params->>source.eq.lanetalk),and(market_type.eq.team_prop,params->>clock.eq.lanetalk)')
+      .or('and(market_type.eq.prop,params->>source.eq.lanetalk),and(market_type.eq.team_prop,params->>clock.eq.lanetalk),and(market_type.eq.combo,params->>clock.eq.lanetalk)')
       .in('status', ['open', 'closed']),
   // Week ids that have settled LaneTalk-clock markets — pairs with
   // listUnsettledLanetalkProps so the import screen can mark a week Confirmed
@@ -110,7 +99,7 @@ export const betMarkets = {
     supabase
       .from('bet_markets')
       .select('week_id')
-      .or('and(market_type.eq.prop,params->>source.eq.lanetalk),and(market_type.eq.team_prop,params->>clock.eq.lanetalk)')
+      .or('and(market_type.eq.prop,params->>source.eq.lanetalk),and(market_type.eq.team_prop,params->>clock.eq.lanetalk),and(market_type.eq.combo,params->>clock.eq.lanetalk)')
       .eq('status', 'settled'),
   // Start/reopen a game's betting: flip every O/U market for a week+game between
   // 'open' and 'closed' in one admin write. Closing blocks new bets (place_house_bet
@@ -189,18 +178,39 @@ export const betMarkets = {
       .is('game_number', null)
       .eq('status', from)
   },
+  // Same open/close toggle for a week+game's combo markets (run alongside the
+  // other toggles when a game starts/reopens). Night-scoped combos
+  // (game_number null) ride game 1's toggle, like the night player props.
+  setComboStatusByWeekGame: async (weekId: string, gameNumber: number, status: 'open' | 'closed') => {
+    const from = status === 'closed' ? 'open' : 'closed'
+    const res = await supabase
+      .from('bet_markets')
+      .update({ status })
+      .eq('week_id', weekId)
+      .eq('market_type', 'combo')
+      .eq('game_number', gameNumber)
+      .eq('status', from)
+    if (res.error || gameNumber !== 1) return res
+    return supabase
+      .from('bet_markets')
+      .update({ status })
+      .eq('week_id', weekId)
+      .eq('market_type', 'combo')
+      .is('game_number', null)
+      .eq('status', from)
+  },
   // Reopen every closed O/U line for a week. Clear Matchups returns the week to a
   // pre-game state, so Start Game's betting suspension must not survive the reset —
   // surviving lines (both players still RSVP'd in) would otherwise be stranded
   // unbettable with no games row left to expose the reopen toggle.
-  // Covers stat props and team props too — they suspend with the games, so the
-  // reset must reopen them alongside the O/U lines.
+  // Covers stat props, team props and combos too — they suspend with the games,
+  // so the reset must reopen them alongside the O/U lines.
   reopenOUForWeek: (weekId: string) =>
     supabase
       .from('bet_markets')
       .update({ status: 'open' })
       .eq('week_id', weekId)
-      .in('market_type', ['over_under', 'prop', 'team_prop'])
+      .in('market_type', ['over_under', 'prop', 'team_prop', 'combo'])
       .eq('status', 'closed'),
   // Create/refund of O/U markets (SECURITY DEFINER, server-side). Line ownership:
   // RSVP owns the lines until the week has teams; the roster (team_slots) owns
@@ -242,6 +252,60 @@ export const betMarkets = {
   // Returns one summary row { settled, voided, left_pending } for the toast.
   settleLanetalkProps: (weekId: string, voidMissing = false) =>
     supabase.rpc('settle_lanetalk_props_for_week', { p_week_id: weekId, p_void_missing: voidMissing }),
+  // Per-player per-game averages for a stat (STABLE, read-only) — the
+  // combine-mode member list shows these so a bettor can see where the combo
+  // line sits relative to the group's actual production. Season-scoped with
+  // an explicit fallback chain reported in `source`: 'season' → 'lifetime'
+  // (→ 'league' for total_pins only). `games` = the counted-game denominator
+  // of the rung that answered (0 for the league fallback). Display-only;
+  // the seed/pricing math reads its own windows.
+  comboMemberAverages: (playerIds: string[], stat: string, seasonId: string) =>
+    supabase.rpc('combo_member_averages', {
+      p_player_ids: playerIds, p_stat: stat, p_season_id: seasonId,
+    }),
+  // The book's per-stat projection for one player next to their current-season
+  // average (STABLE, read-only) — one row per stat ('score' / 'clean_frames' /
+  // 'strikes' / 'spares'), all values PER GAME (the client scales night scope
+  // × games). `projected` is the engine's rounded mean — NULL when the engine
+  // is disabled; `season_avg` resolves through combo_member_averages' fallback
+  // chain with `avg_source` ('season'/'lifetime'/'league') + `avg_games` so
+  // the display can label honestly. Display-only; no pricing path reads it.
+  playerProjection: (playerId: string, seasonId: string) =>
+    supabase.rpc('odds_engine_player_projection', {
+      p_player_id: playerId, p_season_id: seasonId,
+    }),
+  // Batched book projections for one COMBO stat ('total_pins' maps to the
+  // engine's 'score') — the combine-mode member list shows these beside the
+  // averages so a bettor can pick members the book rates above/below their
+  // average. PER-GAME values, `projected` NULL when the engine is disabled.
+  // Display-only; the compose/pricing path reads its own model.
+  memberProjections: (playerIds: string[], stat: string, seasonId: string) =>
+    supabase.rpc('odds_engine_member_projections', {
+      p_player_ids: playerIds, p_stat: stat, p_season_id: seasonId,
+    }),
+  // Value-first pricing: quote ANY half-point line on one market (STABLE,
+  // read-only). NULL line → the seed rung (the pill's anchor). Posted rungs
+  // echo their posted odds verbatim; unposted lines price fresh inside the
+  // custom band. Returns { line, odds, posted, seed_line, seed_odds,
+  // min_line, max_line } — odds null = "line unavailable". The distribution
+  // itself never leaves the server.
+  priceMarketLine: (marketId: string, line?: number | null) =>
+    supabase.rpc('market_price_line', {
+      p_market_id: marketId,
+      ...(line != null ? { p_line: line } : {}),
+    }),
+  // The same quote for a combo member set (the combo stat pills' editor). An
+  // existing open market's posted rungs echo verbatim and its seed anchors
+  // the editor; unposted lines price fresh (the rung mints at compose time).
+  priceComboLine: (
+    memberIds: string[], stat: string, seasonId: string, nGames = 1,
+    weekId?: string | null, gameNumber?: number | null, line?: number | null,
+  ) =>
+    supabase.rpc('combo_price_line', {
+      p_member_ids: memberIds, p_stat: stat, p_season_id: seasonId, p_n_games: nGames,
+      p_week_id: weekId ?? undefined, p_game_number: gameNumber ?? undefined,
+      ...(line != null ? { p_line: line } : {}),
+    }),
 }
 
 export const bets = {
@@ -295,9 +359,91 @@ export const bets = {
   place: (selectionIds: string[], stake: number, customLineId?: string, insuranceItemId?: string, crutchItemId?: string, boostItemId?: string) =>
     // undefined is dropped from the RPC payload → the param's NULL default applies.
     supabase.rpc('place_house_bet', { p_selection_ids: selectionIds, p_stake: stake, p_custom_line_id: customLineId, p_insurance_item_id: insuranceItemId, p_crutch_item_id: crutchItemId, p_boost_item_id: boostItemId }),
+  // Value-first placement (SECURITY DEFINER): picks are line-shaped —
+  // { marketId, line, quotedOdds } — the server prices each line
+  // authoritatively, mints the over/under rung pair if absent, and routes
+  // into place_house_bet. A quote drifted beyond quote_tolerance rejects
+  // with 'ODDS_MOVED|<market_id>|<quoted>|<fresh>' (parse for the confirm
+  // sheet); items pass through exactly like bets.place.
+  placeAtLines: (
+    picks: { marketId: string; line: number; quotedOdds: number }[],
+    stake: number,
+    insuranceItemId?: string, crutchItemId?: string, boostItemId?: string,
+  ) =>
+    supabase.rpc('place_bet_at_lines', {
+      p_picks: picks.map(p => ({
+        market_id: p.marketId, line: p.line, quoted_odds: p.quotedOdds,
+      })) as unknown as Json,
+      p_stake: stake,
+      p_insurance_item_id: insuranceItemId,
+      p_crutch_item_id: crutchItemId,
+      p_boost_item_id: boostItemId,
+    }),
+  // Parlay preview: the joint (correlation-repriced) price for a prospective
+  // ticket — picks {marketId, line, quotedOdds} + marketless combo specs.
+  // Returns {odds, correlated, factors} or {blocked_player_id} when a 3+ leg
+  // correlated cluster would be rejected at placement. Display only —
+  // place_house_bet reprices authoritatively.
+  parlayPrice: (
+    weekId: string | null,
+    picks: { marketId: string; line: number; quotedOdds: number }[],
+    combos: { memberIds: string[]; stat: string; scope: 'game' | 'night'; gameNumber: number | null; line: number; quotedOdds: number }[],
+  ) =>
+    supabase.rpc('parlay_price', {
+      p_week_id: weekId ?? undefined,
+      p_picks: picks.map(p => ({
+        market_id: p.marketId, line: p.line, quoted_odds: p.quotedOdds,
+      })) as unknown as Json,
+      p_combos: combos.map(c => ({
+        member_ids: c.memberIds, stat: c.stat, scope: c.scope,
+        game_number: c.gameNumber, line: c.line, quoted_odds: c.quotedOdds,
+      })) as unknown as Json,
+    }),
   // Admin: total undo of a placed bet (removes ledger rows + bet, re-opens market).
   cancel: (betId: string) =>
     supabase.rpc('cancel_bet', { p_bet_id: betId }),
+  // Place a slip bet containing ≥1 combo specs in ONE transaction (SECURITY
+  // DEFINER): each spec creates (or dedups into) its member-set market +
+  // over/under selections, then ONE bet is placed across every combo's over
+  // plus any extra staged selection ids — so a ticket can parlay a combo with
+  // single lines AND with other combos. A combo market can never exist without
+  // a bet riding it (a failed placement rolls the new markets back). Item ids
+  // pass through to place_house_bet (single-bet slips only, per BetSlip's
+  // gating). Returns { bet_id, combos: [{market_id, line, deduped}] }.
+  composeCombo: (
+    weekId: string,
+    combos: { memberIds: string[]; stat: string; scope: 'game' | 'night'; gameNumber: number | null; line?: number | null; quotedOdds?: number | null }[],
+    stake: number,
+    extraSelectionIds?: string[],
+    insuranceItemId?: string,
+    crutchItemId?: string,
+    boostItemId?: string,
+    extraPicks?: { marketId: string; line: number; quotedOdds: number }[],
+  ) =>
+    supabase.rpc('compose_combo_bet', {
+      p_week_id: weekId,
+      p_combos: combos.map(c => ({
+        member_ids: c.memberIds, stat: c.stat, scope: c.scope,
+        ...(c.gameNumber != null ? { game_number: c.gameNumber } : {}),
+        // Chosen value (the combo pill/sheet editor); omitted = the seed rung.
+        // With quoted_odds attached, an unposted line MINTS on demand
+        // (tolerance-checked); without it, posted rungs only.
+        ...(c.line != null ? { line: c.line } : {}),
+        ...(c.line != null && c.quotedOdds != null ? { quoted_odds: c.quotedOdds } : {}),
+      })) as unknown as Json,
+      p_stake: stake,
+      p_extra_selection_ids: extraSelectionIds,
+      p_insurance_item_id: insuranceItemId,
+      p_crutch_item_id: crutchItemId,
+      p_boost_item_id: boostItemId,
+      // Line-shaped regular legs riding the same ticket (minted via the same
+      // helper) — a combo + custom-line single stays ONE bet.
+      ...(extraPicks && extraPicks.length
+        ? { p_extra_picks: extraPicks.map(p => ({
+              market_id: p.marketId, line: p.line, quoted_odds: p.quotedOdds,
+            })) as unknown as Json }
+        : {}),
+    }),
 }
 
 // ── Ghost in the Slip (bet_haunts) ──────────────────────────────────────────

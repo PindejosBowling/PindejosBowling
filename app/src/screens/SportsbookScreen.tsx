@@ -5,6 +5,7 @@ import {
   ScrollView,
   StyleSheet,
   RefreshControl,
+  TouchableOpacity,
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useNavigation } from '@react-navigation/native'
@@ -20,35 +21,36 @@ import ActiveBetsView from '../components/betting/ActiveBetsView'
 import SettledBetsView from '../components/betting/SettledBetsView'
 import BetDetailModal from '../components/betting/BetDetailModal'
 import { useBetSlip, useBetSlipReload } from '../components/betting/BetSlipProvider'
-import LineRow from '../components/betting/LineRow'
-import LineRowContainer from '../components/betting/LineRowContainer'
+import SubjectLinesCard, { conditionLabel, type StatPillSpec } from '../components/betting/SubjectLinesCard'
+import LineEntrySheet from '../components/betting/LineEntrySheet'
 import CustomLineRow from '../components/betting/CustomLineRow'
+import AddPlayersModal from '../components/betting/AddPlayersModal'
+import BookProjectionCard, { type ProjectionRow } from '../components/betting/BookProjectionCard'
 import ReadOnlySeasonBanner from '../components/betting/ReadOnlySeasonBanner'
 import ConfirmActionSheet from '../components/ui/ConfirmActionSheet'
+import Dropdown from '../components/ui/Dropdown'
 import FeatureExplainerSheet from '../components/pinsino/FeatureExplainerSheet'
 import TermsBlock from '../components/ui/TermsBlock'
 import { EXPLAINERS, TERMS } from '../data/pinsinoExplainers'
 import {
   usePinsinoData,
-  selectionBetsAgainstSubject,
   customLineSelfTank,
   customLegLabel,
   lineGroup,
-  lineCategory,
   closedBettingNote,
   subjectRelation,
   withVisibleSelections,
+  STAT_LABELS,
   type BetView,
   type LineView,
-  type LineGroup,
-  type LineCategory,
-  type SelectionView,
   type CustomLineView,
 } from '../hooks/usePinsinoData'
+import { useLinePreview, oddsForLine, type LineQuote, type LinePreviewSource } from '../hooks/useLinePreview'
 import { useRefresh } from '../hooks/useRefresh'
 import { useAuthStore } from '../stores/authStore'
 import { useUiStore } from '../stores/uiStore'
-import { haunts } from '../utils/supabase/db'
+import { betMarkets, haunts } from '../utils/supabase/db'
+import { shortName } from '../utils/helpers'
 import { PinsinoStackParamList } from '../navigation/types'
 import EmptyCard from '../components/ui/EmptyCard'
 
@@ -62,6 +64,19 @@ const VIEW_OPTIONS: { key: View2; label: string }[] = [
   { key: 'settled', label: 'Settled' },
 ]
 
+// The four combinable stats, in board column order — combo mode renders one
+// value-first pill (and one group-projection column) per entry.
+const COMBO_STATS = ['total_pins', 'clean_frames', 'strikes', 'spares']
+const comboStatLabel = (stat: string) => (STAT_LABELS[stat] ?? stat).toUpperCase()
+// Compressed stat labels for the Add Players rows' four-average line (the
+// BookProjectionCard column vocabulary — four stats share one row width).
+const AVG_STAT_LABELS: Record<string, string> = {
+  total_pins: 'PINS',
+  clean_frames: 'CLEAN',
+  strikes: 'STRIKES',
+  spares: 'SPARES',
+}
+
 export default function SportsbookScreen() {
   const playerId = useAuthStore(s => s.playerId)
   const { showToast } = useUiStore()
@@ -69,7 +84,7 @@ export default function SportsbookScreen() {
   const pinsinoViewSeasonId = useUiStore(s => s.pinsinoViewSeasonId)
   const navigation = useNavigation<PinsinoNav>()
 
-  const { loading, balance, openLines, weekTeams, customLines, weekBets, settledBets, seasonNumber, readOnly, reload } = usePinsinoData(playerId, pinsinoViewSeasonId)
+  const { loading, balance, openLines, weekTeams, customLines, weekBets, settledBets, seasonNumber, readOnly, reload, currentWeekId, currentSeasonId, rsvpInPlayers, weekGameNumbers } = usePinsinoData(playerId, pinsinoViewSeasonId)
   const { refreshing, onRefresh } = useRefresh(reload)
   const insets = useSafeAreaInsets()
 
@@ -83,6 +98,30 @@ export default function SportsbookScreen() {
   const [detailModal, setDetailModal] = useState<BetView | null>(null)
   const [helpOpen, setHelpOpen] = useState(false)
 
+  // Place-board filters: a scope (Weekly or one game) + a player. The board is
+  // flat — it shows only the chosen player's lines for the chosen scope. The
+  // player pick is the user's EXPLICIT choice; the effective selection is
+  // derived in the board memo (pick while still available → viewer → first
+  // available), so scope switches and reloads never need a reconciling effect.
+  const [scope, setScope] = useState<string>('weekly')
+  const [pickedPlayerId, setPickedPlayerId] = useState<string | null>(null)
+
+  // The board's subject GROUP — combos are NOT a mode (⚰️ the COMBO chip +
+  // comboMode flag, 2026-07-23): the subject is simply 1..N players. Empty =
+  // the ordinary single-player board about the picked player; 2+ ids = the
+  // same board about the group (the projection card sums it, the line card
+  // offers one value-first pill per combinable stat, each with its own live
+  // quote). NEVER length 1 — collapsing a group to one member promotes them
+  // to the picked player and clears this. Members are added via the heading's
+  // ＋ chip (the Add Players sheet) and removed via their heading chip's ✕.
+  // Scope follows the board's scope filter: Weekly → a night combo, Game N →
+  // that game.
+  const [groupMembers, setGroupMembers] = useState<string[]>([])
+  const [addPlayersOpen, setAddPlayersOpen] = useState(false)
+  // Per-stat values accepted in the LineEntrySheet (absent = the seed anchor).
+  // Reset whenever the combo identity (members/scope) changes.
+  const [comboValues, setComboValues] = useState<Record<string, number>>({})
+
   // The bet slip (staged picks/specials, placement, item inventory, balance) is
   // owned by the app-level BetSlipProvider so it can also be raised from Bet
   // Details on other screens. The board feeds it staged picks and reads its
@@ -91,8 +130,12 @@ export default function SportsbookScreen() {
   const {
     slipPicks,
     slipSpecials,
+    slipCombos,
     stagePick: stageSlipPick,
+    updateSlipPick,
     stageSpecial: stageSlipSpecial,
+    stageCombo,
+    removeSlipCombo,
     ghosts,
     reloadInventory,
   } = useBetSlip()
@@ -120,141 +163,483 @@ export default function SportsbookScreen() {
   // Surfaced as a MY BETS section atop Active Bets; Place Bets is purely for placing.
   const myActiveBets = useMemo(() => activeBets.filter(b => b.playerId === playerId), [activeBets, playerId])
 
-  // Two-level grouping for the board: game group (GAME 1, …, SEASON) → line
-  // category (Player Over/Unders, …). Each category renders one collapsible
-  // LineRowContainer, so a single game can carry several independently-collapsed
-  // line types. Both levels are market-type-aware, so the screen stays agnostic.
-  //
-  // Within a category, a subject's markets consolidate into ONE row: lines
-  // sharing a subjectPlayerId render as a unified button set on that player
-  // ("142.5+ PINS · 4.5+ STRIKES · 2.5+ SPARES"), ordered score line first
-  // then stat props. Team-anchored lines (the viewer's moneyline WIN + every
-  // team's team_prop stat lines) consolidate the same way per teamId — one
-  // team row ("Your Team" / "Team N": WIN · 612.5+ TOTAL PINS · …). Rows then
-  // group by week team — the viewer's team first, the remaining teams in
-  // first-appearance order — with each team's row leading its players.
-  const lineGroups = useMemo(() => {
+  // Under-hide applied once: strip UI-hidden selections (the "under" side)
+  // before a line ever reaches the board, so it can't be picked, parlayed, or
+  // shown in the sheet. Fully-hidden lines drop out.
+  const visibleLines = useMemo(
+    () => openLines.map(withVisibleSelections).filter(l => l.selections.length > 0),
+    [openLines]
+  )
+
+  // Scope options: Weekly (night-scoped markets) + one per scheduled game. The
+  // keys are lineGroup keys, so matching a line to the scope reuses the
+  // existing market-type seam (`lineGroup(line).key === scope`).
+  const scopeOptions = useMemo(
+    () => [
+      { key: 'weekly', label: 'Weekly' },
+      ...weekGameNumbers.map(n => ({ key: `game-${n}`, label: `Game ${n}` })),
+    ],
+    [weekGameNumbers]
+  )
+
+  // The flat board for the current filters: scope-filter the lines + specials,
+  // derive the players who have anything to show in this scope (the picker's
+  // option pool), resolve the effective selection, and collect the selected
+  // player's rows. Membership rules: a combo shows when the player is one of
+  // its members; a special when any leg is about them (self-referential
+  // specials resolve their legs to the viewer's id, so they surface only under
+  // the viewer's own entry). The player's own markets consolidate into ONE
+  // row — a unified button set ("142.5+ PINS · 4.5+ STRIKES · 2.5+ SPARES"),
+  // score line first then stat props — each combo renders as its own row.
+  const board = useMemo(() => {
     const kindOrder = (l: LineView) =>
-      // The moneyline WIN leads its team row; the team stat buttons follow.
-      l.marketType === 'moneyline' ? -1
-        : l.marketType === 'over_under' ? 0
-          : l.marketType === 'prop'
-            // One stat order everywhere — player and team rows alike read
-            // PINS · CLEAN FRAMES · STRIKES · SPARES (the score line is the
-            // player row's "total pins"). (first_ball_avg is retired for new
-            // markets — legacy lines sink to the row's end.)
-            ? 1 + ['clean_frames', 'strikes', 'spares'].indexOf(l.statKey ?? '')
-            : l.marketType === 'team_prop'
-              ? 1 + ['total_pins', 'clean_frames', 'strikes', 'spares'].indexOf(l.statKey ?? '')
-              : 9
-    const games = new Map<string, {
-      group: LineGroup
-      categories: Map<string, { category: LineCategory; rowMap: Map<string, LineView[]>; count: number }>
-    }>()
-    for (const rawLine of openLines) {
-      // Strip UI-hidden selections (e.g. the "under" side) before the line ever
-      // reaches the board, so it can't be picked, parlayed, or shown in the sheet.
-      const line = withVisibleSelections(rawLine)
-      if (line.selections.length === 0) continue
-      const group = lineGroup(line)
-      let g = games.get(group.key)
-      if (!g) { g = { group, categories: new Map() }; games.set(group.key, g) }
-      const category = lineCategory(line)
-      let c = g.categories.get(category.key)
-      if (!c) { c = { category, rowMap: new Map(), count: 0 }; g.categories.set(category.key, c) }
-      // Team-prop lines consolidate per team (one row of stat buttons per
-      // team), mirroring how a player's markets consolidate per subject.
-      const rowKey = line.teamId ?? line.subjectPlayerId ?? line.marketId
-      const row = c.rowMap.get(rowKey)
-      if (row) row.push(line)
-      else c.rowMap.set(rowKey, [line])
-      c.count += 1
-    }
-    return Array.from(games.values())
-      .sort((a, b) => a.group.sortOrder - b.group.sortOrder)
-      .map(g => ({
-        group: g.group,
-        categories: Array.from(g.categories.values())
-          .sort((a, b) => a.category.sortOrder - b.category.sortOrder)
-          .map(({ category, rowMap, count }) => {
-            const rows = Array.from(rowMap.entries()).map(([key, lines]) => ({
-              key,
-              lines: lines.slice().sort((a, b) => kindOrder(a) - kindOrder(b)),
-            }))
-            // Group rows by week team: viewer's team rank 0, the rest by first
-            // appearance. Within a team block the TEAM row (moneyline WIN +
-            // team stat lines, rowKey = teamId) leads its players.
-            const teamRank = new Map<string, number>()
-            const rankOf = (row: { key: string; lines: LineView[] }) => {
-              // Team rows carry their team directly; player rows map through
-              // the week roster.
-              const team = row.lines[0]?.teamId ?? weekTeams.teamByPlayer[row.key]
-              if (!team) return Number.MAX_SAFE_INTEGER
-              if (team === weekTeams.myTeamId) return 0
-              if (!teamRank.has(team)) teamRank.set(team, 1 + teamRank.size)
-              return teamRank.get(team)!
-            }
-            const isTeamRow = (row: { lines: LineView[] }) => (row.lines[0]?.teamId != null ? 0 : 1)
-            const ranked = rows.map((row, idx) => ({ row, rank: rankOf(row), idx }))
-            ranked.sort((a, b) => a.rank - b.rank || isTeamRow(a.row) - isTeamRow(b.row) || a.idx - b.idx)
-            return { category, count, rows: ranked.map(r => r.row) }
-          }),
-      }))
-  }, [openLines, weekTeams])
+      // The score line leads the player's row; stat props follow in the shared
+      // stat order (first_ball_avg is retired — legacy lines sink to the end).
+      l.marketType === 'over_under' ? 0
+        : l.marketType === 'prop'
+          ? 1 + ['clean_frames', 'strikes', 'spares'].indexOf(l.statKey ?? '')
+          : 9
+    const specialScopeKey = (cl: CustomLineView) =>
+      cl.gameNumber == null ? 'weekly' : `game-${cl.gameNumber}`
+    const scopeLines = visibleLines.filter(l => lineGroup(l).key === scope)
+    const scopeSpecials = customLines.filter(cl => specialScopeKey(cl) === scope)
 
-  // Custom lines ("specials") bucketed for the board: single-game lines render
-  // inside that game's group; mixed-game lines — plus per-game lines whose game
-  // group isn't on this viewer's board (e.g. all its legs are other matchups'
-  // moneylines) — collect in the top-level SPECIALS section.
-  const { customByGame, topSpecials } = useMemo(() => {
-    const byGame = new Map<number, CustomLineView[]>()
-    const top: CustomLineView[] = []
-    const renderedGames = new Set(
-      lineGroups.filter(g => g.group.key !== 'season').map(g => g.group.sortOrder)
+    // Players with in-scope availability (own lines ∪ combo membership ∪
+    // special involvement). Seeded from the RSVP roster first so real names
+    // win over any resolved-leg display names ("You").
+    const nameById = new Map<string, string>()
+    for (const p of rsvpInPlayers) nameById.set(p.playerId, p.name)
+    const available = new Set<string>()
+    const add = (id: string | null | undefined, name?: string) => {
+      if (!id) return
+      if (!nameById.has(id) && name) nameById.set(id, name)
+      if (nameById.has(id)) available.add(id)
+    }
+    for (const l of scopeLines) {
+      // Full-name forms — the player dropdown is a full-name surface.
+      add(l.subjectPlayerId, l.subjectFullName)
+      l.comboMemberIds?.forEach((id, i) => add(id, l.comboMemberFullNames?.[i]))
+    }
+    for (const cl of scopeSpecials) for (const leg of cl.legs) add(leg.subjectPlayerId)
+    const players = [...available]
+      .map(id => ({ id, name: nameById.get(id)! }))
+      .sort((a, b) => a.name.localeCompare(b.name))
+
+    // Effective selection: an explicit pick survives while it's still
+    // available; otherwise the viewer when they have lines in scope, else the
+    // first available player, else none (→ the empty-scope card).
+    const has = (id: string | null) => id != null && available.has(id)
+    const selectedPlayerId = has(pickedPlayerId)
+      ? pickedPlayerId
+      : has(playerId) ? playerId : (players[0]?.id ?? null)
+
+    const playerLines = scopeLines
+      .filter(l => l.subjectPlayerId != null && l.subjectPlayerId === selectedPlayerId)
+      .sort((a, b) => kindOrder(a) - kindOrder(b))
+    const comboLines = scopeLines.filter(
+      l => l.marketType === 'combo' &&
+        selectedPlayerId != null &&
+        (l.comboMemberIds ?? []).includes(selectedPlayerId)
     )
-    for (const cl of customLines) {
-      if (cl.gameNumber != null && renderedGames.has(cl.gameNumber)) {
-        const arr = byGame.get(cl.gameNumber)
-        if (arr) arr.push(cl)
-        else byGame.set(cl.gameNumber, [cl])
-      } else {
-        top.push(cl)
-      }
+    const specials = scopeSpecials.filter(cl =>
+      selectedPlayerId != null && cl.legs.some(leg => leg.subjectPlayerId === selectedPlayerId)
+    )
+    const firstInProgress = scopeLines.find(l => l.inProgress) ?? null
+    return {
+      players,
+      selectedPlayerId,
+      playerLines,
+      comboLines,
+      specials,
+      // A closed market anywhere in scope locks the whole scope (a started
+      // game closes all its markets together), mirroring the old group lock.
+      firstInProgress,
+      scopeInProgress: firstInProgress != null,
     }
-    return { customByGame: byGame, topSpecials: top }
-  }, [customLines, lineGroups])
+  }, [visibleLines, customLines, scope, pickedPlayerId, playerId, rsvpInPlayers])
 
-  // Anti-tanking, market-type-aware: backing the side that bets against your own
-  // performance (the `under` on your own line, or on your own team's line) is
-  // blocked. Friendly pre-check only — the prevent_self_tank trigger is the
-  // authoritative backstop.
-  function isSelfTank(line: LineView, sel: SelectionView): boolean {
-    if (!selectionBetsAgainstSubject(line.marketType, sel.key)) return false
-    if (line.marketType === 'team_prop') {
-      return line.teamId != null && line.teamId === weekTeams.myTeamId
+  // ── Group (combo) derivations ─────────────────────────────────────────
+  const groupMode = groupMembers.length >= 2
+  const comboMemberIds = useMemo(() => [...groupMembers].sort(), [groupMembers])
+  const comboScopeGame = scope === 'weekly' ? null : Number(scope.slice('game-'.length))
+  const comboNGames = scope === 'weekly' ? Math.max(weekGameNumbers.length, 1) : 1
+  const comboScopeLabel = scope === 'weekly' ? 'NIGHT' : `GAME ${comboScopeGame}`
+  const comboMemberShortNames = useMemo(() => {
+    const nameById = new Map(rsvpInPlayers.map(m => [m.playerId, m.name]))
+    return comboMemberIds.map(id => shortName(nameById.get(id)))
+  }, [comboMemberIds, rsvpInPlayers])
+
+  // Canonical staging key per stat — the same format the composer always used,
+  // so toggle-off dedup works against anything previously staged.
+  const comboMembersKey = comboMemberIds.join(',')
+  const comboKeyFor = (stat: string) =>
+    `${stat}|${scope === 'weekly' ? 'night' : comboScopeGame}|${comboMembersKey}`
+  const stagedComboFor = (stat: string) => slipCombos.find(c => c.key === comboKeyFor(stat))
+
+  // A combo-identity change (members or scope) re-anchors every stat's value
+  // to its fresh seed.
+  useEffect(() => { setComboValues({}) }, [comboMembersKey, scope])
+
+  // The pricing source for one stat's pill/sheet — each ComboStatPill owns its
+  // own useLinePreview over this, so the four stats quote independently.
+  const comboSourceFor = (stat: string): LinePreviewSource =>
+    currentSeasonId != null
+      ? {
+          kind: 'combo',
+          memberIds: comboMemberIds,
+          stat,
+          seasonId: currentSeasonId,
+          nGames: comboNGames,
+          weekId: currentWeekId,
+          gameNumber: comboScopeGame,
+        }
+      : null
+
+  // Per-member per-game averages + book projections for ALL four combinable
+  // stats across the whole RSVP pool, PREFETCHED with the live board (8
+  // parallel STABLE reads) — not on the combo toggle, so entering combo mode
+  // has every number already in hand: the group card sums, the picker rows'
+  // context, and the client-side seed anchors all render synchronously (no
+  // switch buffering). Member toggles and stat switches are pure client-side
+  // re-sums. Display-only (server RPCs stay authoritative for money).
+  const [poolStats, setPoolStats] = useState<
+    Record<string, Record<string, { avg: number | null; source: string | null; proj: number | null }>>
+  >({})
+  useEffect(() => {
+    if (readOnly || currentSeasonId == null || rsvpInPlayers.length === 0) {
+      setPoolStats({})
+      return
     }
-    return line.subjectPlayerId === playerId
+    let cancelled = false
+    const ids = rsvpInPlayers.map(m => m.playerId)
+    for (const stat of COMBO_STATS) {
+      Promise.all([
+        betMarkets.comboMemberAverages(ids, stat, currentSeasonId),
+        betMarkets.memberProjections(ids, stat, currentSeasonId),
+      ]).then(([avgRes, projRes]) => {
+        if (cancelled) return
+        const entry: Record<string, { avg: number | null; source: string | null; proj: number | null }> = {}
+        for (const r of (avgRes.data ?? []) as { player_id: string; avg_per_game: number | null; source: string | null }[]) {
+          entry[r.player_id] = { avg: r.avg_per_game, source: r.source, proj: null }
+        }
+        for (const r of (projRes.data ?? []) as { player_id: string; projected: number | null }[]) {
+          entry[r.player_id] = { ...(entry[r.player_id] ?? { avg: null, source: null }), proj: r.projected }
+        }
+        setPoolStats(prev => ({ ...prev, [stat]: entry }))
+      })
+    }
+    return () => { cancelled = true }
+  }, [readOnly, currentSeasonId, rsvpInPlayers])
+
+  // The client-side seed anchor for one stat — the SAME formula the server
+  // seeds combo lines with (Σ per-member floor(projected mean × games), + the
+  // single half point; engine off → the per-member floored average). Lets a
+  // combo pill show its value the instant the member set changes, with the
+  // authoritative quote (same number) replacing it when it lands ~250ms later
+  // — the value slot never blanks, only the odds digit shows '…'.
+  const clientSeedFor = (stat: string): number | null => {
+    const entry = poolStats[stat]
+    if (entry == null || comboMemberIds.length === 0) return null
+    let sum = 0
+    for (const id of comboMemberIds) {
+      const per = entry[id]?.proj ?? entry[id]?.avg
+      if (per == null) return null
+      sum += Math.floor(per * comboNGames)
+    }
+    return sum + 0.5
   }
 
-  // Tapping any selection toggles it in/out of the unified slip. One selection
-  // per market; own-against side always toasts (anti-tank). The provider owns the
-  // slip state + toggle; the screen builds the pick and enforces the anti-tank
-  // pre-check. Balance is validated at placement, so a low balance still stages.
-  function stagePick(line: LineView, sel: SelectionView) {
+  // The picked group's per-game sums, one ProjectionRow per combinable stat —
+  // the SINGLE source both the group BookProjectionCard and the LineEntrySheet
+  // contextNote read, so the two surfaces can never disagree. Average: a
+  // no-history member contributes 0 (nothing to average); the pricing math
+  // instead uses their prior-informed projection — the FORECAST beside it.
+  // Projection: engine on → every member has one (the prior covers cold
+  // starts), so a null means the engine is off (the card then self-hides).
+  const groupRows = useMemo<ProjectionRow[]>(
+    () =>
+      COMBO_STATS.map(stat => {
+        const entry = poolStats[stat] ?? {}
+        const avgs = comboMemberIds.map(id => entry[id]?.avg ?? null)
+        const projs = comboMemberIds.map(id => entry[id]?.proj ?? null)
+        return {
+          stat,
+          seasonAvg:
+            comboMemberIds.length > 0 && avgs.some(a => a != null)
+              ? avgs.reduce((s: number, a) => s + (a ?? 0), 0)
+              : null,
+          projected:
+            comboMemberIds.length > 0 && projs.every(p => p != null)
+              ? projs.reduce((s: number, p) => s + p!, 0)
+              : null,
+          avgSource: comboMemberIds.some(
+            id => entry[id]?.avg != null && entry[id]?.source !== 'season'
+          )
+            ? 'fallback'
+            : 'season',
+        }
+      }),
+    [poolStats, comboMemberIds]
+  )
+  const groupRowFor = (stat: string) => groupRows.find(r => r.stat === stat)
+
+  // Leaving the Place view (or flipping read-only) abandons any in-flight group.
+  useEffect(() => {
+    if (effectiveView !== 'place' || readOnly) {
+      setGroupMembers([])
+      setComboValues({})
+      setAddPlayersOpen(false)
+    }
+  }, [effectiveView, readOnly])
+
+  // Add a player to the subject. From the solo board this CREATES the group:
+  // the current subject + the newcomer (a single-player bet is a combo of
+  // one; adding a second makes it a combo in fact).
+  function addGroupMember(id: string) {
+    if (groupMembers.includes(id)) return
+    if (groupMembers.length === 0) {
+      if (board.selectedPlayerId == null || id === board.selectedPlayerId) return
+      setGroupMembers([board.selectedPlayerId, id])
+    } else {
+      setGroupMembers([...groupMembers, id])
+    }
+  }
+
+  // Remove a member (heading chip ✕ / sheet toggle). Dropping to one member
+  // dissolves the group back into the ordinary board about that player.
+  function removeGroupMember(id: string) {
+    const next = groupMembers.filter(m => m !== id)
+    if (next.length === 1) {
+      setPickedPlayerId(next[0])
+      setGroupMembers([])
+    } else {
+      setGroupMembers(next)
+    }
+  }
+
+  // Pill-body tap on a combo stat: stage/unstage via the slip's canonical
+  // toggle — the combo lands in the ordinary slip bar like any staged pick
+  // (no auto-raise, no mode exit; parlays form there by default).
+  function stageComboAt(stat: string, value: number, odds: number | null) {
+    if (readOnly || currentWeekId == null) return
+    const staged = stagedComboFor(stat)
+    if (staged == null && odds == null) {
+      showToast('That line is unavailable', 'error')
+      return
+    }
+    stageCombo({
+      key: comboKeyFor(stat),
+      weekId: currentWeekId,
+      memberIds: comboMemberIds,
+      memberNames: comboMemberShortNames,
+      stat,
+      scope: scope === 'weekly' ? 'night' : 'game',
+      gameNumber: comboScopeGame,
+      // The chosen VALUE + its quoted price — compose_combo_bet re-prices the
+      // line authoritatively (quote_tolerance) and mints the rung if the
+      // market doesn't carry it yet.
+      line: value,
+      odds,
+    })
+  }
+
+  // An accepted sheet value for a combo stat: record it and, when that exact
+  // combo is already staged at a different value, re-stage it live (the slip
+  // chip/ticket re-render) — same invariant as acceptLineValue on a pick.
+  function acceptComboValue(stat: string, v: number, quote: LineQuote) {
+    setComboValues(prev => ({ ...prev, [stat]: v }))
+    const staged = stagedComboFor(stat)
+    if (staged && staged.line !== v) {
+      removeSlipCombo(staged.key)
+      stageCombo({ ...staged, line: v, odds: quote.odds ?? staged.odds })
+    }
+  }
+
+  // The Add Players sheet's candidate pool: every RSVP'd-in player (the
+  // compose RPC's only eligibility rule — a player without an individual line
+  // still combines), viewer first, then the roster's name order.
+  const comboMemberPool = useMemo(() => {
+    const rows = [...rsvpInPlayers]
+    if (playerId) {
+      const i = rows.findIndex(r => r.playerId === playerId)
+      if (i > 0) {
+        const [me] = rows.splice(i, 1)
+        rows.unshift(me)
+      }
+    }
+    return rows
+  }, [rsvpInPlayers, playerId])
+
+  // One live quote per combinable stat — four STATIC useLinePreview calls
+  // (fixed order keeps hooks legal) so the quotes belong to the screen and
+  // the card stays purely presentational. Sources go null while combo mode is
+  // off — no idle fetching; useLinePreview additionally withholds quotes
+  // below 2 members.
+  const comboQuotes: Record<string, { quote: LineQuote | null; loading: boolean }> = {
+    total_pins: useLinePreview(groupMode ? comboSourceFor('total_pins') : null, comboValues['total_pins'] ?? null),
+    clean_frames: useLinePreview(groupMode ? comboSourceFor('clean_frames') : null, comboValues['clean_frames'] ?? null),
+    strikes: useLinePreview(groupMode ? comboSourceFor('strikes') : null, comboValues['strikes'] ?? null),
+    spares: useLinePreview(groupMode ? comboSourceFor('spares') : null, comboValues['spares'] ?? null),
+  }
+
+  // One combo stat → one pill spec: value = slip truth → accepted edit → the
+  // live quote's seed → the client-computed seed (instant), price = staged
+  // snapshot or the quote for that exact value.
+  function comboSpecFor(stat: string): StatPillSpec {
+    const staged = stagedComboFor(stat)
+    const { quote, loading } = comboQuotes[stat]
+    const value = staged?.line
+      ?? comboValues[stat]
+      ?? quote?.seedLine
+      ?? clientSeedFor(stat)
+    const odds = staged != null && staged.line === value
+      ? staged.odds
+      : oddsForLine(quote, value)
+    const priceable = comboMemberIds.length >= 2
+    return {
+      key: stat,
+      label: comboStatLabel(stat),
+      value,
+      odds,
+      quoteLoading: loading,
+      staged: staged != null,
+      inert: !priceable || readOnly,
+      onEditValue: value != null && priceable
+        ? () => setValueSheet({ kind: 'combo', stat, value })
+        : undefined,
+      onStage: value != null && priceable
+        ? () => stageComboAt(stat, value, odds)
+        : undefined,
+    }
+  }
+
+  // One posted market → one pill spec (single-player mode + posted combo
+  // rows). Same slot keys as combo mode ('total_pins' for the score line, the
+  // statKey for props) so each pill survives the mode toggle in place.
+  function lineToSpec(line: LineView, groupInProgress: boolean): StatPillSpec {
+    const staged = slipPicks.find(p => p.marketId === line.marketId)
+    const value = valueOf(line)
+    const posted = postedAt(line, value)
+    const cached = quoteCache[line.marketId]
+    // Price resolution: posted rung → staged snapshot → the quote accepted in
+    // the value sheet.
+    const odds = posted?.odds
+      ?? (staged != null && staged.line === value ? staged.odds : null)
+      ?? (cached != null && cached.line === value ? cached.odds : null)
+    return {
+      key: line.marketType === 'over_under' ? 'total_pins' : line.statKey ?? line.marketId,
+      label: conditionLabel(line),
+      value,
+      odds,
+      staged: staged != null,
+      inert: groupInProgress || line.inProgress || readOnly,
+      onEditValue: () => setValueSheet({ kind: 'market', line }),
+      onStage: () => stagePickAtValue(line, value, odds),
+    }
+  }
+
+  // ── Book projection vs season average ─────────────────────────────────
+  // The selected player's per-game engine projection (rounded mean) beside
+  // their season average, cached per player. Display-only context — the
+  // strip never stages or prices anything. Cache resets with the board
+  // reload effect below so new history re-projects.
+  const [projCache, setProjCache] = useState<Record<string, ProjectionRow[]>>({})
+  const toProjectionRows = (data: unknown): ProjectionRow[] =>
+    (data as {
+      stat: string; projected: number | null; season_avg: number | null; avg_source: string | null
+    }[]).map(r => ({
+      stat: r.stat, projected: r.projected, seasonAvg: r.season_avg, avgSource: r.avg_source,
+    }))
+  const projPlayerId = effectiveView === 'place' && !readOnly ? board.selectedPlayerId : null
+  useEffect(() => {
+    if (projPlayerId == null || currentSeasonId == null || projCache[projPlayerId] != null) return
+    let cancelled = false
+    betMarkets.playerProjection(projPlayerId, currentSeasonId).then(({ data }) => {
+      if (cancelled || !data) return
+      setProjCache(prev => ({ ...prev, [projPlayerId]: toProjectionRows(data) }))
+    })
+    return () => { cancelled = true }
+  }, [projPlayerId, currentSeasonId, projCache])
+
+  // ── Value-first editing (via the LineEntrySheet) ──────────────────────
+  // Per-market value overrides (the number the bettor accepted in the sheet)
+  // + the accepted quote per market so custom (non-posted) values keep their
+  // price on the board. Display-only; placement re-prices authoritatively
+  // (quote_tolerance). Both reset on board reload so re-laddered seeds
+  // re-anchor.
+  const [lineValues, setLineValues] = useState<Record<string, number>>({})
+  const [quoteCache, setQuoteCache] = useState<Record<string, LineQuote>>({})
+  // The open value editor: a board market's pill, or one combo stat's pill
+  // (carrying the value it showed, as the sheet's starting draft).
+  const [valueSheet, setValueSheet] = useState<
+    { kind: 'market'; line: LineView } | { kind: 'combo'; stat: string; value: number } | null
+  >(null)
+  // Keyed on a CONTENT signature, not the array identity — useAsyncData
+  // returns a fresh payload object every reload (pull-to-refresh, placement),
+  // and wiping the caches on identical board content would refetch the
+  // projection strip for nothing.
+  const boardSig = useMemo(
+    () => openLines.map(l => `${l.marketId}:${l.line}`).join('|'),
+    [openLines]
+  )
+  useEffect(() => {
+    setLineValues({})
+    setQuoteCache({})
+    setValueSheet(null)
+    setProjCache({})
+  }, [boardSig])
+
+  // The pill's anchor: the market's posted seed rung (canonical 'over' key).
+  const seedOf = (line: LineView) =>
+    line.selections.find(s => s.key === 'over')?.line ?? line.line ?? 0.5
+  const postedAt = (line: LineView, value: number) =>
+    line.selections.find(s => s.side === 'over' && s.line === value)
+  // The pill's displayed value: staged pick → accepted edit → seed rung.
+  const valueOf = (line: LineView) =>
+    slipPicks.find(p => p.marketId === line.marketId)?.line
+      ?? lineValues[line.marketId]
+      ?? seedOf(line)
+
+  // An accepted sheet value: record it + its quote, and re-stage a staged
+  // pick at the new value (posted rung odds when it lands on one, else the
+  // accepted quote's).
+  function acceptLineValue(line: LineView, v: number, quote: LineQuote) {
+    setLineValues(prev => ({ ...prev, [line.marketId]: v }))
+    setQuoteCache(prev => ({ ...prev, [line.marketId]: quote }))
+    const staged = slipPicks.find(p => p.marketId === line.marketId)
+    if (staged && staged.line !== v) {
+      const posted = postedAt(line, v)
+      updateSlipPick(line.marketId, {
+        line: v,
+        selectionId: posted?.selectionId ?? null,
+        selectionKey: posted?.key ?? 'over',
+        odds: posted?.odds ?? quote.odds ?? staged.odds,
+      })
+    }
+  }
+
+  // Pill-body tap: stage/unstage at the displayed value with its displayed
+  // price. The value drives everything — the odds just follow. Balance is
+  // validated at placement, so a low balance still stages.
+  function stagePickAtValue(line: LineView, value: number, odds: number | null) {
     if (readOnly) return
-    if (isSelfTank(line, sel)) { showToast('Believe in yourself man', 'error'); return }
+    if (odds == null) {
+      showToast('That line is unavailable', 'error')
+      return
+    }
+    const posted = postedAt(line, value)
     stageSlipPick({
-      selectionId: sel.selectionId,
-      selectionKey: sel.key,
-      selectionLabel: sel.label,
+      selectionId: posted?.selectionId ?? null,
+      selectionKey: posted?.key ?? 'over',
+      selectionLabel: 'Over',
       marketId: line.marketId,
       subjectName: line.subjectName,
       subjectPlayerId: line.subjectPlayerId,
       marketType: line.marketType,
       gameNumber: line.gameNumber,
-      line: sel.line ?? line.line,
+      line: value,
       statKey: line.statKey,
-      odds: sel.odds ?? 2,
+      odds,
     })
   }
 
@@ -277,55 +662,49 @@ export default function SportsbookScreen() {
     })
   }
 
-  // One subject row (≥1 markets → one button set) — a player's lines or a
-  // team's (WIN + team stats). Tapping a cell stages it in the unified slip
-  // (staged = filled); an in-progress game makes every side inert. Each button
-  // binds its own (line, selection).
-  function renderLineSet(lines: LineView[], isLast: boolean, groupInProgress: boolean) {
+  // The main card's pill set — the board's one line surface, rebuilt as plain
+  // specs each render: the selected player's posted markets, or the picked
+  // group's four combo lines. Same slot keys either way, so the mounted card
+  // updates each pill in place across a mode toggle.
+  const mainPills: StatPillSpec[] = groupMode
+    ? COMBO_STATS.map(comboSpecFor)
+    : board.playerLines.map(l =>
+        lineToSpec(l, board.scopeInProgress || board.playerLines.some(x => x.inProgress))
+      )
+
+  // The heading's ＋ chip — opens the Add Players sheet (the combo builder).
+  // Dim-but-pressable below 2 RSVP'd players (house convention: still
+  // toasts); absent entirely when there's no current week/season to bet into.
+  function renderAddChip() {
+    if (readOnly || currentWeekId == null || currentSeasonId == null) return null
+    const short = rsvpInPlayers.length < 2
     return (
-      <LineRow
-        lines={lines}
-        isLast={isLast}
-        relation={
-          // Every moneyline on the player board is "Your Team" (toYourTeamMoneyline),
-          // so it shares the teammate green — one color story for "your side".
-          lines[0].marketType === 'moneyline'
-            ? 'with'
-            : lines[0].teamId != null
-              // Team-prop rows relate by their anchored team directly; a night
-              // team row (no game) reads "against" if that team opposes the
-              // viewer in ANY of the night's games.
-              ? lines[0].teamId === weekTeams.myTeamId
-                ? 'with'
-                : (lines[0].gameNumber != null
-                    ? weekTeams.opponentTeamByGame[lines[0].gameNumber] === lines[0].teamId
-                    : Object.values(weekTeams.opponentTeamByGame).includes(lines[0].teamId))
-                  ? 'against'
-                  : null
-              : subjectRelation(weekTeams, lines[0].subjectPlayerId, lines[0].gameNumber)
-        }
-        inProgress={groupInProgress}
-        onSelect={stagePick}
-        selectionState={(line, sel) => ({
-          selected: slipPicks.some(p => p.selectionId === sel.selectionId),
-          disabled: balance < 10 || isSelfTank(line, sel),
-        })}
-      />
+      <TouchableOpacity
+        style={[styles.addChip, short && styles.addChipDim]}
+        onPress={() => {
+          if (short) {
+            showToast("Not enough players RSVP'd in yet", 'error')
+            return
+          }
+          setAddPlayersOpen(true)
+        }}
+        activeOpacity={0.7}
+      >
+        <Text style={styles.addChipText}>＋</Text>
+      </TouchableOpacity>
     )
   }
 
-  // One card of custom-line rows, shared by the week-wide slot (top of the
-  // board) and the per-game slot (top of each game group). No section header —
-  // the rows' styling (gold for 'special') is the distinguishing mark.
-  // Disabled (dim, still pressable → toast) mirrors LineRow.
+  // The scope's custom lines as a stack of ticket cards leading the board. No
+  // section header — the tickets' styling (gold for 'special') is the
+  // distinguishing mark. Disabled (dim, still pressable → toast) mirrors LineRow.
   function renderSpecialsCard(lines: CustomLineView[], gameInProgress: boolean) {
     return (
-      <View style={styles.card}>
-        {lines.map((cl, idx) => (
+      <View>
+        {lines.map(cl => (
           <CustomLineRow
             key={cl.id}
             line={cl}
-            isLast={idx === lines.length - 1}
             inProgress={gameInProgress || cl.inProgress}
             disabled={balance < 10 || customLineSelfTank(cl, playerId)}
             selected={slipSpecials.some(s => s.key === cl.id)}
@@ -343,10 +722,16 @@ export default function SportsbookScreen() {
           ScreenBackdrop keeps the one poker-table instance mounted across the
           load→ready swap — see pixelart/config.ts. */}
       <ScrollView
+        // Value entry lives in the LineEntrySheet (its own modal), so the
+        // board itself never raises the keyboard — 'handled' kept so any
+        // future inline input doesn't reintroduce dead first-taps.
+        keyboardShouldPersistTaps="handled"
         contentContainerStyle={[
           styles.content,
           { paddingTop: insets.top },
-          effectiveView === 'place' && (slipPicks.length > 0 || slipSpecials.length > 0) && { paddingBottom: 96 },
+          effectiveView === 'place' &&
+            (slipPicks.length > 0 || slipSpecials.length > 0 || slipCombos.length > 0) &&
+            { paddingBottom: 96 },
         ]}
         refreshControl={
           loading ? undefined : (
@@ -391,89 +776,156 @@ export default function SportsbookScreen() {
 
         {/* ── Place Bets ──────────────────────────────────────── */}
         {effectiveView === 'place' && <>
-        {/* Open lines — the board starts straight at its WEEKLY/GAME labels
-            (no "this week" section header; that's implicit in the Sportsbook). */}
-        {lineGroups.length > 0 || topSpecials.length > 0 ? (
+        {/* The flat board: the stats-strip header leads (with the scope
+            picker inline), then the subject selector, then the subject's
+            available lines for that scope. The filters ARE the navigation —
+            no collapsible sections. Staged picks live in the global slip
+            bar, so building a parlay across players/scopes is just
+            switching the filters. */}
+        {visibleLines.length > 0 || customLines.length > 0 ? (
           <View style={styles.board}>
-            {/* Week-level specials (legs across games) lead the board under a
-                WEEKLY header styled like the game labels. When night props exist
-                they form their own WEEKLY group (first, below), so the specials
-                render inside it instead of under a duplicate header here. */}
-            {topSpecials.length > 0 && !lineGroups.some(g => g.group.key === 'weekly') && (
-              <View>
-                <Text style={styles.gameLabel}>WEEKLY</Text>
-                {renderSpecialsCard(topSpecials, false)}
+            {/* The board header — the board's MAIN HEADING, with the scope
+                Dropdown as the title's live word (⚰️ the standalone filter
+                row beneath the subject heading; ⚰️ the "SEASON N AVG vs
+                FORECAST" title, demoted to the subtitle beneath). */}
+            <View style={styles.boardHeaderRow}>
+              <Text style={styles.boardHeaderText}>TONIGHT'S LINES ·</Text>
+              <Dropdown
+                options={scopeOptions}
+                value={scope}
+                onChange={setScope}
+                style={styles.scopeSelect}
+                triggerTextStyle={styles.scopeSelectText}
+                caretStyle={styles.selectCaret}
+              />
+            </View>
+            {/* What the stats strip beneath actually shows, in one breath —
+                the AVERAGES span picks up the accent (matching the average
+                values), "vs" reads white, and "the Book's Forecast" keeps the
+                grey of the FORECAST subtext beneath each column. */}
+            <Text style={styles.boardSubtitle}>
+              <Text style={styles.boardSubtitleAvg}>Season {seasonNumber ?? '—'} Averages</Text>
+              <Text style={styles.boardSubtitleVs}> vs </Text>
+              <Text style={styles.boardSubtitleForecast}>the Book's Forecast</Text>
+            </Text>
+            {/* The subject selection, demoted to a sub-row beneath the
+                header. Solo: the anchored player-name selector (the ONE name
+                on the board) with a ＋ chip that opens the Add Players sheet
+                — adding a second player turns the subject into a group in
+                place (⚰️ the COMBO mode chip). Group: one removable chip per
+                member (✕) plus the same ＋. */}
+            {groupMode ? (
+              <View style={styles.headingRow}>
+                {comboMemberIds.map((id, i) => (
+                  <TouchableOpacity
+                    key={id}
+                    style={styles.memberChip}
+                    onPress={() => removeGroupMember(id)}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.memberChipText}>{comboMemberShortNames[i]}</Text>
+                    <Text style={styles.memberChipX}>✕</Text>
+                  </TouchableOpacity>
+                ))}
+                {renderAddChip()}
               </View>
+            ) : board.selectedPlayerId != null ? (
+              <View style={styles.headingRow}>
+                <Dropdown
+                  options={board.players.map(p => ({
+                    key: p.id,
+                    label: `${p.name}${p.id === playerId ? ' (You)' : ''}`,
+                  }))}
+                  value={board.selectedPlayerId}
+                  onChange={setPickedPlayerId}
+                  style={styles.playerNameSelect}
+                  triggerTextStyle={styles.playerNameSelectText}
+                  caretStyle={styles.selectCaret}
+                />
+                {renderAddChip()}
+              </View>
+            ) : null}
+            {/* ── One board, one component tree, one subject of 1..N ──────
+                The projection card and the main line card render ONCE at
+                stable positions (never inside a subject-count ternary), so
+                growing/shrinking the group is a props update on already-
+                mounted components — no remount, no visual load. Only two
+                things vary: whose data the surfaces describe (player vs
+                group), and whether the heading is the selector or chips. */}
+            {/* What the book expects from the subject this week against what
+                it actually averages — scope-scaled like the lines beneath it
+                (Weekly = × the night's games). Headerless — the board header
+                above is its title. Self-hides when the engine has no
+                opinion. */}
+            {(groupMode || (board.selectedPlayerId != null && projCache[board.selectedPlayerId] != null)) && (
+              <BookProjectionCard
+                rows={groupMode ? groupRows : projCache[board.selectedPlayerId!]}
+                nGames={comboNGames}
+              />
             )}
-            {lineGroups.map(({ group, categories }) => {
-              // ONE collapsible per outer group — "Weekly Overs", "Game 1",
-              // "Game 2", … — holding everything that used to sit under the
-              // group's text header: its specials, the moneyline row, and the
-              // team-grouped player rows (in category sort order).
-              const gameInProgress =
-                group.key !== 'season' &&
-                categories.some(({ rows }) => rows.some(r => r.lines.some(l => l.inProgress)))
-              const specials = group.key === 'weekly'
-                ? topSpecials
-                : group.key !== 'season' ? customByGame.get(group.sortOrder) ?? [] : []
-              const title = group.key === 'weekly'
-                ? 'Weekly Overs'
-                : group.key === 'season' ? 'Season' : `Game ${group.sortOrder}`
-              const lineCount =
-                specials.length + categories.reduce((n, c) => n + c.count, 0)
-              const containerRows = [
-                ...specials.map(cl => ({
-                  key: cl.id,
-                  // Keep a staged special visible under a collapsed header.
-                  pinned: slipSpecials.some(s => s.key === cl.id),
-                  render: (isLast: boolean) => (
-                    <CustomLineRow
-                      line={cl}
-                      isLast={isLast}
-                      inProgress={gameInProgress || cl.inProgress}
-                      disabled={balance < 10 || customLineSelfTank(cl, playerId)}
-                      selected={slipSpecials.some(s => s.key === cl.id)}
-                      onTake={() => stageSpecial(cl)}
-                    />
-                  ),
-                })),
-                ...categories.flatMap(({ rows }) =>
-                  rows.map(row => ({
-                    key: row.key,
-                    // Keep a subject's row visible while collapsed if any of its
-                    // lines is staged in the slip — lets players build across
-                    // collapsed games.
-                    pinned: row.lines.some(l => slipPicks.some(p => p.marketId === l.marketId)),
-                    render: (isLast: boolean) =>
-                      renderLineSet(
-                        row.lines,
-                        isLast,
-                        gameInProgress || row.lines.some(l => l.inProgress),
-                      ),
-                  })),
-                ),
-              ]
-              return (
-                <View key={group.key}>
-                  {/* Game started: the container locks collapsed, so the
-                      in-progress note renders above the bar. */}
-                  {gameInProgress && (
-                    <Text style={styles.inProgressNote}>
-                      {closedBettingNote(categories[0].rows[0].lines[0])}
-                    </Text>
-                  )}
-                  <LineRowContainer
-                    title={title}
-                    count={lineCount}
-                    // Every group starts collapsed — the board lands as summary
-                    // bars over the poker table; players expand what they want.
-                    defaultCollapsed
-                    disabled={gameInProgress}
-                    rows={containerRows}
+            {board.scopeInProgress && board.firstInProgress && (
+              <Text style={styles.inProgressNote}>
+                {closedBettingNote(board.firstInProgress)}
+              </Text>
+            )}
+            {!groupMode && board.selectedPlayerId == null ? (
+              // Nobody has lines in this scope (they may in another — the
+              // scope dropdown stays live above).
+              <EmptyCard
+                text={`No ${scopeOptions.find(o => o.key === scope)?.label ?? ''} lines are open yet`}
+              />
+            ) : (
+              <>
+                {/* Specials lead (their styling is the distinguishing mark);
+                    single-player subjects only — a special is a curated
+                    bundle about one player, not a group. */}
+                {!groupMode && board.specials.length > 0 && renderSpecialsCard(board.specials, board.scopeInProgress)}
+                {/* THE line card — the same mounted SubjectLinesCard for any
+                    subject size, its pills keyed by stat so each slot updates
+                    in place: the player's posted markets, or the group's four
+                    combo lines (values anchored instantly by the client-side
+                    seed; the live quote replaces the odds as it lands).
+                    Staging several combo stats parlays them in the slip — one
+                    group, one parlay across different bet types. */}
+                {mainPills.length > 0 && (
+                  <SubjectLinesCard
+                    relation={
+                      groupMode || board.playerLines.length === 0
+                        ? null
+                        : subjectRelation(weekTeams, board.playerLines[0].subjectPlayerId, board.playerLines[0].gameNumber)
+                    }
+                    inProgress={
+                      board.scopeInProgress ||
+                      (!groupMode && board.playerLines.some(l => l.inProgress))
+                    }
+                    dimmed={balance < 10}
+                    pills={mainPills}
                   />
-                </View>
-              )
-            })}
+                )}
+                {/* Posted combo markets the player belongs to — the same card
+                    component, one pill each (single-player subjects only; a
+                    group's own lines render on the main card above). */}
+                {!groupMode &&
+                  board.comboLines.map(cl => (
+                    <SubjectLinesCard
+                      key={cl.marketId}
+                      header={cl.subjectFullName}
+                      inProgress={board.scopeInProgress || cl.inProgress}
+                      dimmed={balance < 10}
+                      pills={[lineToSpec(cl, board.scopeInProgress || cl.inProgress)]}
+                    />
+                  ))}
+              </>
+            )}
+            {/* ELI5 foot section — why the strip up top shows BOTH numbers.
+                Voice rule: the gap between average and forecast is always
+                framed as the BOOK taking a position (an opportunity for the
+                bettor), never as the player trending well or badly — no
+                praising ▲ or shaming ▼. */}
+            <Text style={styles.boardFootText}>
+              The Sportsbook makes a forecast each week for all players based on their 
+              lifetime Official games.All betting lines are priced based on the forecast. 
+            </Text>
           </View>
         ) : (
           <EmptyCard text="No open lines this week" />
@@ -491,6 +943,88 @@ export default function SportsbookScreen() {
       {/* The unified bet slip (persistent bar → placement sheet) is rendered by
           the app-level BetSlipProvider, so it can be raised from Bet Details on
           any screen. The board just feeds/reads it. */}
+
+      {/* Value-entry sheet — one instance serves both board pills and the
+          combo stat pills (conditional-mount so state resets between opens). */}
+      {valueSheet?.kind === 'market' && (
+        <LineEntrySheet
+          title={valueSheet.line.subjectFullName}
+          conditionLabel={conditionLabel(valueSheet.line)}
+          scopeLabel={valueSheet.line.gameNumber != null ? `GAME ${valueSheet.line.gameNumber}` : 'WEEKLY'}
+          source={{ kind: 'market', marketId: valueSheet.line.marketId }}
+          initialValue={valueOf(valueSheet.line)}
+          onAccept={(v, quote) => {
+            acceptLineValue(valueSheet.line, v, quote)
+            setValueSheet(null)
+          }}
+          onClose={() => setValueSheet(null)}
+        />
+      )}
+      {valueSheet?.kind === 'combo' && currentSeasonId != null && (() => {
+        // The same groupRows the projection card renders — the two surfaces
+        // can never disagree (per-game sums, scope-scaled here).
+        const row = groupRowFor(valueSheet.stat)
+        const avg = row?.seasonAvg != null ? row.seasonAvg * comboNGames : null
+        const proj = row?.projected != null ? row.projected * comboNGames : null
+        return (
+          <LineEntrySheet
+            title={comboMemberShortNames.join(' + ')}
+            conditionLabel={comboStatLabel(valueSheet.stat)}
+            scopeLabel={comboScopeLabel}
+            contextNote={
+              avg != null
+                ? proj != null
+                  ? `Group Average ${avg.toFixed(1)} · Forecast ${proj.toFixed(1)}`
+                  : `Group Average: ${avg.toFixed(1)} — lines above it pay longer odds`
+                : undefined
+            }
+            source={comboSourceFor(valueSheet.stat)!}
+            initialValue={valueSheet.value}
+            onAccept={(v, quote) => {
+              acceptComboValue(valueSheet.stat, v, quote)
+              setValueSheet(null)
+            }}
+            onClose={() => setValueSheet(null)}
+          />
+        )
+      })()}
+
+      {/* Add Players — the combo builder popup, raised from the heading's ＋
+          chip. Toggles edit the board's subject group LIVE (the board under
+          the popup re-prices as members change); rows carry the player's four
+          scope-scaled season averages, one per combinable stat (`*` = the
+          lifetime/league fallback, footnoted in the modal).
+          Conditional-mount contract, like every sheet/modal. */}
+      {addPlayersOpen && (
+        <AddPlayersModal
+          rows={comboMemberPool.map(m => {
+            const parts = COMBO_STATS.flatMap(stat => {
+              const entry = poolStats[stat]?.[m.playerId]
+              if (entry?.avg == null) return []
+              const shown = (entry.avg * comboNGames).toFixed(1)
+              return [`${AVG_STAT_LABELS[stat]} ${shown}${entry.source !== 'season' ? '*' : ''}`]
+            })
+            const loaded = poolStats['total_pins']?.[m.playerId] != null
+            const isSoloSubject = !groupMode && m.playerId === board.selectedPlayerId
+            return {
+              id: m.playerId,
+              name: `${m.name}${m.playerId === playerId ? ' (You)' : ''}`,
+              contextLabel: parts.length > 0 ? parts.join('  ·  ') : loaded ? 'NO STAT HISTORY' : null,
+              selected: groupMode ? groupMembers.includes(m.playerId) : isSoloSubject,
+            }
+          })}
+          onToggle={id => {
+            if (groupMode && groupMembers.includes(id)) removeGroupMember(id)
+            else if (!groupMode && id === board.selectedPlayerId)
+              // The solo subject's ✓ is live like every other chip, but the
+              // board always needs a subject — they leave only by the group
+              // shrinking around them.
+              showToast('Add another player to combine with them', 'error')
+            else addGroupMember(id)
+          }}
+          onClose={() => setAddPlayersOpen(false)}
+        />
+      )}
 
       {/* Bet details modal */}
       <BetDetailModal
@@ -540,31 +1074,155 @@ const styles = StyleSheet.create({
   artHidden: { opacity: 0 },
   // flexGrow keeps the scroll content (and the poker-table border measured
   // from it) at least viewport-height when every group is collapsed.
-  content: { paddingHorizontal: 16, paddingBottom: 40, flexGrow: 1 },
+  content: { paddingHorizontal: 16, paddingBottom: 24, flexGrow: 1 },
 
-  viewToggle: { marginBottom: 20 },
+  viewToggle: { marginBottom: 12 },
 
-  card: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.cardMd,
-    borderWidth: 1,
-    borderColor: colors.border,
-    marginBottom: 10,
-    overflow: 'hidden',
+  // The toggle's own bottom margin is the whole separation — the board adds
+  // none of its own (the two used to stack into ~36px of dead space above the
+  // "TONIGHT'S LINES" header).
+  board: { marginTop: 0 },
+  // The board header — the projection strip's title as the board's main
+  // heading, with the scope Dropdown inline as the qualifier (one row doing
+  // the work of the old card title + filter row).
+  boardHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 2,
   },
-  // Separates the board from the mode toggle above it — the board has no section
-  // header of its own; the WEEKLY/GAME labels lead directly.
-  board: { marginTop: 16 },
-  gameLabel: {
-    fontFamily: fonts.barlowCondensed,
-    fontSize: 13,
+  boardHeaderText: {
+    fontFamily: fonts.barlowCondensedHeavy,
+    fontSize: 22,
     letterSpacing: 1,
+    color: colors.text,
+  },
+  // The scope picker as the header's live word — white text with a prominent
+  // accent caret as the sole tappable cue (no border/fill needed).
+  scopeSelect: {
+    backgroundColor: 'transparent',
+    borderWidth: 0,
+    paddingHorizontal: 5,
+    paddingVertical: 4,
+    gap: 4,
+  },
+  scopeSelectText: {
+    fontFamily: fonts.barlowCondensedHeavy,
+    fontSize: 22,
+    letterSpacing: 1,
+    color: colors.text,
+    textTransform: 'uppercase',
+  },
+  // The tappable caret — accent + larger than the default so the affordance
+  // pops next to the white label. Shared by BOTH header selectors (scope and
+  // player) so the one yellow ▾ reads as "this word is pickable".
+  selectCaret: {
+    fontSize: 16,
     color: colors.accent,
-    marginTop: 8,
+    marginTop: 2,
+  },
+  // The demoted explainer line under the title — what the stats strip shows.
+  boardSubtitle: {
+    fontFamily: fonts.barlowCondensed,
+    fontSize: 14,
+    letterSpacing: 0.5,
+    color: colors.muted,
+    textAlign: 'center',
     marginBottom: 8,
   },
-  // Game-level in-progress warning — same styling as LineRowContainer's note,
-  // promoted above the game's sections when the whole game is closed.
+  // "Season N Averages" — accent, matching the average values in the strip.
+  boardSubtitleAvg: { color: colors.accent },
+  // "vs" — white pivot between the two sides.
+  boardSubtitleVs: { color: colors.text },
+  // "the Book's Forecast" — the same grey as each column's FORECAST subtext.
+  boardSubtitleForecast: { color: colors.muted },
+  // The subject sub-row — the selector (or member chips) + the ＋ chip,
+  // centered beneath the board header; wraps when a big group outgrows the
+  // line.
+  headingRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    marginBottom: 6,
+  },
+  // The player-name selector — the Dropdown trigger undressed to read as the
+  // board's main heading (centered name + ▾, no box), so the name atop the
+  // board IS the picker.
+  playerNameSelect: {
+    backgroundColor: 'transparent',
+    borderWidth: 0,
+    paddingVertical: 4,
+  },
+  // Player-name type — one size shared by the selector, member chips, and
+  // the ＋ chip (keep all three in lockstep when resizing).
+  playerNameSelectText: {
+    fontFamily: fonts.barlowCondensedHeavy,
+    fontSize: 16,
+    color: colors.text,
+    letterSpacing: 0.4,
+  },
+  // A group member's heading chip — name + ✕, tap to remove. Same name
+  // typography as the selector, boxed so the removal affordance reads.
+  memberChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: radius.cardSm,
+    borderWidth: 1,
+    borderColor: colors.border2,
+    backgroundColor: colors.surfaceTint,
+  },
+  memberChipText: {
+    fontFamily: fonts.barlowCondensedHeavy,
+    fontSize: 14,
+    color: colors.text,
+    letterSpacing: 0.4,
+  },
+  memberChipX: {
+    fontFamily: fonts.barlowCondensed,
+    fontSize: 12,
+    color: colors.muted,
+  },
+  // The ＋ chip — opens the Add Players sheet (dim when under 2 RSVP'd). A
+  // compact square button rather than a full-width chip so it yields
+  // horizontal room to the member chips / stats it sits beside.
+  addChip: {
+    width: 28,
+    height: 28,
+    paddingHorizontal: 0,
+    paddingVertical: 0,
+    borderRadius: radius.cardSm,
+    borderWidth: 1,
+    borderColor: colors.border2,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  addChipDim: { opacity: 0.4 },
+  // The lone ＋ glyph, sized to fill the compact square (its own affordance —
+  // no longer in lockstep with the player-name type).
+  addChipText: {
+    fontFamily: fonts.barlowCondensed,
+    fontSize: 18,
+    lineHeight: 20,
+    color: colors.accent,
+  },
+  // The board's ELI5 foot section — beneath the last line card, explaining
+  // the AVG-vs-FORECAST strip up top.
+  boardFootText: {
+    fontFamily: fonts.barlow,
+    fontSize: 11,
+    lineHeight: 15,
+    color: colors.muted,
+    textAlign: 'center',
+    marginTop: 10,
+    paddingHorizontal: 8,
+  },
+  // Scope-level in-progress warning — shown above the rows when any in-scope
+  // market is closed for betting.
   inProgressNote: {
     fontFamily: fonts.barlow,
     fontSize: 12,

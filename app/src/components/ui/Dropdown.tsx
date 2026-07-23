@@ -22,6 +22,9 @@ interface DropdownProps<T extends string = string> {
   // its host (e.g. the small-caps tag on the Pinsino balance card). Menu rows
   // keep the standard menu type regardless.
   triggerTextStyle?: StyleProp<TextStyle>
+  // Restyles the ▾ affordance — e.g. an accent, larger caret when the trigger
+  // needs a more prominent "this is tappable" cue.
+  caretStyle?: StyleProp<TextStyle>
 }
 
 // Compact anchored dropdown menu. Renders a bordered trigger showing the current
@@ -35,6 +38,7 @@ export default function Dropdown<T extends string = string>({
   disabled,
   style,
   triggerTextStyle,
+  caretStyle,
 }: DropdownProps<T>) {
   const triggerRef = useRef<View>(null)
   const { width: screenW } = useWindowDimensions()
@@ -72,7 +76,7 @@ export default function Dropdown<T extends string = string>({
         <Text style={[styles.triggerText, triggerTextStyle, selected?.color ? { color: selected.color } : null]} numberOfLines={1}>
           {selected?.label ?? '—'}
         </Text>
-        <Text style={[styles.caret, selected?.color ? { color: selected.color } : null]}>▾</Text>
+        <Text style={[styles.caret, selected?.color ? { color: selected.color } : null, caretStyle]}>▾</Text>
       </TouchableOpacity>
 
       <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
