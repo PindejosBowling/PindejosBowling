@@ -784,14 +784,12 @@ export default function SportsbookScreen() {
             switching the filters. */}
         {visibleLines.length > 0 || customLines.length > 0 ? (
           <View style={styles.board}>
-            {/* The board header — the projection strip's title promoted to
-                the board's MAIN HEADING, with the scope Dropdown sitting
-                where the "· WEEKLY" text qualifier used to be (⚰️ the
-                standalone filter row beneath the subject heading). */}
+            {/* The board header — the board's MAIN HEADING, with the scope
+                Dropdown as the title's live word (⚰️ the standalone filter
+                row beneath the subject heading; ⚰️ the "SEASON N AVG vs
+                FORECAST" title, demoted to the subtitle beneath). */}
             <View style={styles.boardHeaderRow}>
-              <Text style={styles.boardHeaderText}>
-                {seasonNumber != null ? `SEASON ${seasonNumber} AVG` : 'SEASON AVG'} vs FORECAST ·
-              </Text>
+              <Text style={styles.boardHeaderText}>TONIGHT'S LINES ·</Text>
               <Dropdown
                 options={scopeOptions}
                 value={scope}
@@ -800,6 +798,10 @@ export default function SportsbookScreen() {
                 triggerTextStyle={styles.scopeSelectText}
               />
             </View>
+            {/* What the stats strip beneath actually shows, in one breath. */}
+            <Text style={styles.boardSubtitle}>
+              Season {seasonNumber ?? '—'} Averages vs the Book's Forecast
+            </Text>
             {/* The subject selection, demoted to a sub-row beneath the
                 header. Solo: the anchored player-name selector (the ONE name
                 on the board) with a ＋ chip that opens the Add Players sheet
@@ -1103,6 +1105,15 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
     color: colors.accent,
     textTransform: 'uppercase',
+  },
+  // The demoted explainer line under the title — what the stats strip shows.
+  boardSubtitle: {
+    fontFamily: fonts.barlowCondensed,
+    fontSize: 12,
+    letterSpacing: 0.5,
+    color: colors.muted,
+    textAlign: 'center',
+    marginBottom: 8,
   },
   // The subject sub-row — the selector (or member chips) + the ＋ chip,
   // centered beneath the board header; wraps when a big group outgrows the
