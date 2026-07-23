@@ -82,8 +82,6 @@ interface SubjectLinesCardProps {
   relation?: 'with' | 'against' | null
   // Whole card closed for betting: dim it + every pill inert.
   inProgress?: boolean
-  // Helper line under the header (e.g. combo mode's 'PICK 2+ PLAYERS…').
-  hint?: string | null
   pills: StatPillSpec[]
   // Cosmetic dim (low balance) — still pressable so handlers can toast.
   dimmed?: boolean
@@ -97,7 +95,6 @@ export default function SubjectLinesCard({
   header,
   relation,
   inProgress,
-  hint,
   pills,
   dimmed,
 }: SubjectLinesCardProps) {
@@ -111,8 +108,7 @@ export default function SubjectLinesCard({
       ]}
     >
       {typeof header === 'string' ? <Text style={styles.lineName}>{header}</Text> : header}
-      {hint != null && <Text style={styles.hint}>{hint}</Text>}
-      <View style={[styles.pills, header == null && hint == null && styles.pillsHeaderless]}>
+      <View style={[styles.pills, header == null && styles.pillsHeaderless]}>
         {pills.map(spec => {
           const inert = !!inProgress || !!spec.inert
           const pressable = !inert && spec.onStage != null && spec.value != null
@@ -184,14 +180,6 @@ const styles = StyleSheet.create({
     color: colors.text,
     letterSpacing: 0.3,
     textAlign: 'center',
-  },
-  hint: {
-    fontFamily: fonts.barlowCondensed,
-    fontSize: 11,
-    letterSpacing: 1,
-    color: colors.muted2,
-    textAlign: 'center',
-    marginTop: 4,
   },
   pills: { marginTop: 8, gap: 8 },
   pillsHeaderless: { marginTop: 0 },

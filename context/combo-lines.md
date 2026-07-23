@@ -211,39 +211,43 @@ params->>clock.eq.lanetalk)` alongside props and legacy team props.
   entries through `bets.placeAtLines`, and specials through `bets.place`.
   `ODDS_MOVED` rejections drive the odds-moved confirm + bounded retry. Item
   toggles pass through when the slip is one bet.
-- `SportsbookScreen` — **inline combo mode** (2026-07-23, dissolving the ⚰️
-  full-board pivot + `BuilderBar` of 2026-07-21, which itself replaced the ⚰️
-  `ComboComposerSheet`): the COMBO chip in the board's filter row toggles the
-  mode (dim-and-toast under 2 RSVP'd; entering seeds the member set with the
-  viewed player — a single-player bet is a combo of one). The board keeps its
-  exact shape — the ONLY addition is the **player-picker rows at the bottom**
-  (per-member avg/forecast context + `+`/`✓` chips); the SAME
-  `BookProjectionCard` shows the group's summed rows for all four stats
-  (one standardized `SEASON AVG vs FORECAST` presentation — no combo-specific
-  header/caption); and the SAME mounted
-  `SubjectLinesCard` (⚰️ `ComboLineRow` folded into it — a mode toggle is a
-  props update, no remount/flash) renders one value-first pill per combinable
-  stat (the group's names filling the subject-name slot), the screen owning
-  four static `useLinePreview({kind:'combo'})` → `betMarkets.priceComboLine`
-  quotes; values anchor instantly on the client-computed seed (`clientSeedFor`,
-  the server's own Σ floor(proj × games) + 0.5 formula over the prefetched
+- `SportsbookScreen` — **group subjects, no combo mode** (2026-07-23,
+  dissolving the ⚰️ COMBO chip + `comboMode` flag of earlier the same day,
+  which dissolved the ⚰️ full-board pivot + `BuilderBar` of 2026-07-21, which
+  itself replaced the ⚰️ `ComboComposerSheet`): the board's subject is 1..N
+  players (`groupMembers: string[]`, empty = solo, never length 1). The
+  heading's **＋ chip** (dim-and-toast under 2 RSVP'd) opens `AddPlayersSheet`
+  — one row per RSVP'd-in player with avg/forecast context + `+`/`✓` chips;
+  toggles edit the group live (the first add seeds [current subject,
+  newcomer] — a single-player bet is a combo of one). With 2+ members the
+  heading becomes removable member chips (✕; shrinking to one dissolves back
+  to that player's solo board), the SAME `BookProjectionCard` shows the
+  group's summed rows for all four stats (one standardized `SEASON AVG vs
+  FORECAST` presentation — no group-specific header/caption), and the SAME
+  mounted `SubjectLinesCard` (⚰️ `ComboLineRow` folded into it — a subject
+  change is a props update, no remount/flash) renders one value-first pill
+  per combinable stat, the screen owning four static
+  `useLinePreview({kind:'combo'})` → `betMarkets.priceComboLine` quotes;
+  values anchor instantly on the client-computed seed (`clientSeedFor`, the
+  server's own Σ floor(proj × games) + 0.5 formula over the prefetched
   `poolStats`) until the quote lands (per-stat `comboValues` reset on
   combo-identity change).
   Pill-body tap stages/unstages straight into the ordinary slip bar (staged
-  fill, `stageCombo` key toggle — no BuilderBar, no mode exit); the value tap
-  opens the shared `LineEntrySheet`, and an accepted edit re-stages a staged
-  combo live. Combo scope follows the board's scope filter (Weekly → night,
-  Game N → that game; mid-build switches re-anchor + re-quote); an
-  in-progress scope makes the card inert.
-  **Average context (2026-07-23, reworked with the inline toggle)**: `poolStats`
-  prefetches `combo_member_averages` + `odds_engine_member_projections` for all
-  four stats × the whole RSVP pool **with the live board** (not on the toggle —
-  entering combo mode renders synchronously; member toggles are client-side
-  re-sums) — **season-scoped with an explicit fallback chain** the
-  RPC reports in its `source` column and the UI labels honestly: `SEASON AVG`
-  → `LIFETIME AVG` (→ `LEAGUE AVG`, total_pins only; no frame-stat data at all
-  → `NO STAT HISTORY`), shown per member (Total Pins, `· FORECAST` ▲/▼) on the
-  context rows under the line card. Display-only — the seed/pricing math keeps
+  fill, `stageCombo` key toggle); the value tap opens the shared
+  `LineEntrySheet`, and an accepted edit re-stages a staged combo live. Combo
+  scope follows the board's scope filter (Weekly → night, Game N → that game;
+  mid-build switches re-anchor + re-quote); an in-progress scope makes the
+  card inert.
+  **Average context (2026-07-23, reworked again with the group-subject
+  dissolution)**: `poolStats` prefetches `combo_member_averages` +
+  `odds_engine_member_projections` for all four stats × the whole RSVP pool
+  **with the live board** (not on any group action — the first add renders
+  synchronously; member toggles are client-side re-sums) — **season-scoped
+  with an explicit fallback chain** the RPC reports in its `source` column and
+  the UI labels honestly: `SEASON AVG` → `LIFETIME AVG` (→ `LEAGUE AVG`,
+  total_pins only; no frame-stat data at all → `NO STAT HISTORY`), shown per
+  member (Total Pins, `· FORECAST` ▲/▼) on the `AddPlayersSheet` rows.
+  Display-only — the seed/pricing math keeps
   its own windows (frame-stat seeds are lifetime), so the shown average can
   legitimately differ from the line the book anchors. The summed `groupRows`
   feed both the group projection card and the combo `LineEntrySheet`

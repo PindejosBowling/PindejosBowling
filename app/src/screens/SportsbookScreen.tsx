@@ -5,11 +5,12 @@ import {
   ScrollView,
   StyleSheet,
   RefreshControl,
+  TouchableOpacity,
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useNavigation } from '@react-navigation/native'
 import { NativeStackNavigationProp } from '@react-navigation/native-stack'
-import { colors, fonts } from '../theme'
+import { colors, fonts, radius } from '../theme'
 import ScreenHeader from '../components/ui/ScreenHeader'
 import ArtworkToggle from '../components/ui/ArtworkToggle'
 import SportsbookPokerTableBackdrop from '../components/pixelart/SportsbookPokerTableBackdrop'
@@ -23,7 +24,7 @@ import { useBetSlip, useBetSlipReload } from '../components/betting/BetSlipProvi
 import SubjectLinesCard, { conditionLabel, type StatPillSpec } from '../components/betting/SubjectLinesCard'
 import LineEntrySheet from '../components/betting/LineEntrySheet'
 import CustomLineRow from '../components/betting/CustomLineRow'
-import PickChip from '../components/betting/PickChip'
+import AddPlayersSheet from '../components/betting/AddPlayersSheet'
 import BookProjectionCard, { type ProjectionRow } from '../components/betting/BookProjectionCard'
 import ReadOnlySeasonBanner from '../components/betting/ReadOnlySeasonBanner'
 import ConfirmActionSheet from '../components/ui/ConfirmActionSheet'
@@ -98,14 +99,18 @@ export default function SportsbookScreen() {
   const [scope, setScope] = useState<string>('weekly')
   const [pickedPlayerId, setPickedPlayerId] = useState<string | null>(null)
 
-  // Combo mode — an inline board toggle, not a separate surface. On, the
-  // board keeps its exact shape and only the SUBJECT changes: the player
-  // dropdown becomes a multi-select member chip row, the projection card sums
-  // the picked group, and the line card offers one value-first pill per
-  // combinable stat (each with its own live quote). Scope follows the board's
-  // scope filter: Weekly → a night combo, Game N → that game.
-  const [comboMode, setComboMode] = useState(false)
-  const [comboMembers, setComboMembers] = useState<Set<string>>(new Set())
+  // The board's subject GROUP — combos are NOT a mode (⚰️ the COMBO chip +
+  // comboMode flag, 2026-07-23): the subject is simply 1..N players. Empty =
+  // the ordinary single-player board about the picked player; 2+ ids = the
+  // same board about the group (the projection card sums it, the line card
+  // offers one value-first pill per combinable stat, each with its own live
+  // quote). NEVER length 1 — collapsing a group to one member promotes them
+  // to the picked player and clears this. Members are added via the heading's
+  // ＋ chip (the Add Players sheet) and removed via their heading chip's ✕.
+  // Scope follows the board's scope filter: Weekly → a night combo, Game N →
+  // that game.
+  const [groupMembers, setGroupMembers] = useState<string[]>([])
+  const [addPlayersOpen, setAddPlayersOpen] = useState(false)
   // Per-stat values accepted in the LineEntrySheet (absent = the seed anchor).
   // Reset whenever the combo identity (members/scope) changes.
   const [comboValues, setComboValues] = useState<Record<string, number>>({})
@@ -246,8 +251,9 @@ export default function SportsbookScreen() {
     }
   }, [visibleLines, customLines, scope, pickedPlayerId, playerId, rsvpInPlayers])
 
-  // ── Combo mode derivations ────────────────────────────────────────────
-  const comboMemberIds = useMemo(() => [...comboMembers].sort(), [comboMembers])
+  // ── Group (combo) derivations ─────────────────────────────────────────
+  const groupMode = groupMembers.length >= 2
+  const comboMemberIds = useMemo(() => [...groupMembers].sort(), [groupMembers])
   const comboScopeGame = scope === 'weekly' ? null : Number(scope.slice('game-'.length))
   const comboNGames = scope === 'weekly' ? Math.max(weekGameNumbers.length, 1) : 1
   const comboScopeLabel = scope === 'weekly' ? 'NIGHT' : `GAME ${comboScopeGame}`
@@ -370,22 +376,38 @@ export default function SportsbookScreen() {
   )
   const groupRowFor = (stat: string) => groupRows.find(r => r.stat === stat)
 
-  // Leaving the Place view (or flipping read-only) abandons any in-flight combo.
+  // Leaving the Place view (or flipping read-only) abandons any in-flight group.
   useEffect(() => {
     if (effectiveView !== 'place' || readOnly) {
-      setComboMode(false)
-      setComboMembers(new Set())
+      setGroupMembers([])
       setComboValues({})
+      setAddPlayersOpen(false)
     }
   }, [effectiveView, readOnly])
 
-  function toggleComboMember(id: string) {
-    setComboMembers(prev => {
-      const members = new Set(prev)
-      if (members.has(id)) members.delete(id)
-      else members.add(id)
-      return members
-    })
+  // Add a player to the subject. From the solo board this CREATES the group:
+  // the current subject + the newcomer (a single-player bet is a combo of
+  // one; adding a second makes it a combo in fact).
+  function addGroupMember(id: string) {
+    if (groupMembers.includes(id)) return
+    if (groupMembers.length === 0) {
+      if (board.selectedPlayerId == null || id === board.selectedPlayerId) return
+      setGroupMembers([board.selectedPlayerId, id])
+    } else {
+      setGroupMembers([...groupMembers, id])
+    }
+  }
+
+  // Remove a member (heading chip ✕ / sheet toggle). Dropping to one member
+  // dissolves the group back into the ordinary board about that player.
+  function removeGroupMember(id: string) {
+    const next = groupMembers.filter(m => m !== id)
+    if (next.length === 1) {
+      setPickedPlayerId(next[0])
+      setGroupMembers([])
+    } else {
+      setGroupMembers(next)
+    }
   }
 
   // Pill-body tap on a combo stat: stage/unstage via the slip's canonical
@@ -426,9 +448,9 @@ export default function SportsbookScreen() {
     }
   }
 
-  // Combo-mode member pool: every RSVP'd-in player (the compose RPC's only
-  // eligibility rule — a player without an individual line still combines),
-  // viewer first, then the roster's name order.
+  // The Add Players sheet's candidate pool: every RSVP'd-in player (the
+  // compose RPC's only eligibility rule — a player without an individual line
+  // still combines), viewer first, then the roster's name order.
   const comboMemberPool = useMemo(() => {
     const rows = [...rsvpInPlayers]
     if (playerId) {
@@ -447,10 +469,10 @@ export default function SportsbookScreen() {
   // off — no idle fetching; useLinePreview additionally withholds quotes
   // below 2 members.
   const comboQuotes: Record<string, { quote: LineQuote | null; loading: boolean }> = {
-    total_pins: useLinePreview(comboMode ? comboSourceFor('total_pins') : null, comboValues['total_pins'] ?? null),
-    clean_frames: useLinePreview(comboMode ? comboSourceFor('clean_frames') : null, comboValues['clean_frames'] ?? null),
-    strikes: useLinePreview(comboMode ? comboSourceFor('strikes') : null, comboValues['strikes'] ?? null),
-    spares: useLinePreview(comboMode ? comboSourceFor('spares') : null, comboValues['spares'] ?? null),
+    total_pins: useLinePreview(groupMode ? comboSourceFor('total_pins') : null, comboValues['total_pins'] ?? null),
+    clean_frames: useLinePreview(groupMode ? comboSourceFor('clean_frames') : null, comboValues['clean_frames'] ?? null),
+    strikes: useLinePreview(groupMode ? comboSourceFor('strikes') : null, comboValues['strikes'] ?? null),
+    spares: useLinePreview(groupMode ? comboSourceFor('spares') : null, comboValues['spares'] ?? null),
   }
 
   // One combo stat → one pill spec: value = slip truth → accepted edit → the
@@ -637,11 +659,34 @@ export default function SportsbookScreen() {
   // specs each render: the selected player's posted markets, or the picked
   // group's four combo lines. Same slot keys either way, so the mounted card
   // updates each pill in place across a mode toggle.
-  const mainPills: StatPillSpec[] = comboMode
+  const mainPills: StatPillSpec[] = groupMode
     ? COMBO_STATS.map(comboSpecFor)
     : board.playerLines.map(l =>
         lineToSpec(l, board.scopeInProgress || board.playerLines.some(x => x.inProgress))
       )
+
+  // The heading's ＋ chip — opens the Add Players sheet (the combo builder).
+  // Dim-but-pressable below 2 RSVP'd players (house convention: still
+  // toasts); absent entirely when there's no current week/season to bet into.
+  function renderAddChip() {
+    if (readOnly || currentWeekId == null || currentSeasonId == null) return null
+    const short = rsvpInPlayers.length < 2
+    return (
+      <TouchableOpacity
+        style={[styles.addChip, short && styles.addChipDim]}
+        onPress={() => {
+          if (short) {
+            showToast("Not enough players RSVP'd in yet", 'error')
+            return
+          }
+          setAddPlayersOpen(true)
+        }}
+        activeOpacity={0.7}
+      >
+        <Text style={styles.addChipText}>＋</Text>
+      </TouchableOpacity>
+    )
+  }
 
   // The scope's custom lines as a stack of ticket cards leading the board. No
   // section header — the tickets' styling (gold for 'special') is the
@@ -724,34 +769,48 @@ export default function SportsbookScreen() {
 
         {/* ── Place Bets ──────────────────────────────────────── */}
         {effectiveView === 'place' && <>
-        {/* The flat board: the player-select heading leads, then the scope
-            dropdown + Combine chip, then the chosen player's available lines
-            for that scope. The filters ARE the navigation — no collapsible
-            sections. Staged picks live in the global slip bar, so building a
-            parlay across players/scopes is just switching the filters. */}
+        {/* The flat board: the subject heading leads, then the scope dropdown,
+            then the subject's available lines for that scope. The filters ARE
+            the navigation — no collapsible sections. Staged picks live in the
+            global slip bar, so building a parlay across players/scopes is
+            just switching the filters. */}
         {visibleLines.length > 0 || customLines.length > 0 ? (
           <View style={styles.board}>
-            {/* The subject-name slot — the board's MAIN HEADING, directly
-                under the Place/Active/Settled switcher. One position, same
-                typography either way: the anchored player-name selector (the
-                ONE name on the board, ⚰️ the old full-width dropdown menu
-                consolidated into it), or the picked group's names while
-                combining. */}
-            {comboMode ? (
-              <Text style={styles.groupNameHeader}>
-                {comboMemberShortNames.length > 0 ? comboMemberShortNames.join(' + ') : 'COMBO'}
-              </Text>
+            {/* The subject heading — the board's MAIN HEADING, directly under
+                the Place/Active/Settled switcher. Solo: the anchored
+                player-name selector (the ONE name on the board) with a ＋ chip
+                that opens the Add Players sheet — adding a second player turns
+                the subject into a group in place (⚰️ the COMBO mode chip).
+                Group: one removable chip per member (✕) plus the same ＋. */}
+            {groupMode ? (
+              <View style={styles.headingRow}>
+                {comboMemberIds.map((id, i) => (
+                  <TouchableOpacity
+                    key={id}
+                    style={styles.memberChip}
+                    onPress={() => removeGroupMember(id)}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.memberChipText}>{comboMemberShortNames[i]}</Text>
+                    <Text style={styles.memberChipX}>✕</Text>
+                  </TouchableOpacity>
+                ))}
+                {renderAddChip()}
+              </View>
             ) : board.selectedPlayerId != null ? (
-              <Dropdown
-                options={board.players.map(p => ({
-                  key: p.id,
-                  label: `${p.name}${p.id === playerId ? ' (you)' : ''}`,
-                }))}
-                value={board.selectedPlayerId}
-                onChange={setPickedPlayerId}
-                style={styles.playerNameSelect}
-                triggerTextStyle={styles.playerNameSelectText}
-              />
+              <View style={styles.headingRow}>
+                <Dropdown
+                  options={board.players.map(p => ({
+                    key: p.id,
+                    label: `${p.name}${p.id === playerId ? ' (you)' : ''}`,
+                  }))}
+                  value={board.selectedPlayerId}
+                  onChange={setPickedPlayerId}
+                  style={styles.playerNameSelect}
+                  triggerTextStyle={styles.playerNameSelectText}
+                />
+                {renderAddChip()}
+              </View>
             ) : null}
             <View style={styles.filterRow}>
               {/* Scope select — Weekly + the night's games collapsed into one
@@ -761,52 +820,21 @@ export default function SportsbookScreen() {
                 value={scope}
                 onChange={setScope}
               />
-              {/* Combo — the inline mode toggle. Dim-but-pressable below 2
-                  RSVP'd players (house convention: still toasts). Entering
-                  seeds the member set with the player being viewed — a
-                  single-player bet IS a combo of one; you then add more.
-                  Exiting restores that player's board (pickedPlayerId is
-                  untouched). */}
-              {currentWeekId != null && currentSeasonId != null && (
-                <PickChip
-                  label="COMBO"
-                  selected={comboMode}
-                  disabled={rsvpInPlayers.length < 2}
-                  onPress={() => {
-                    if (rsvpInPlayers.length < 2) {
-                      showToast("Not enough players RSVP'd in yet", 'error')
-                      return
-                    }
-                    setComboMode(prev => {
-                      if (prev) {
-                        setComboMembers(new Set())
-                        setComboValues({})
-                        return false
-                      }
-                      setComboMembers(
-                        new Set(board.selectedPlayerId != null ? [board.selectedPlayerId] : [])
-                      )
-                      return true
-                    })
-                  }}
-                />
-              )}
             </View>
-            {/* ── One board, one component tree, two subjects ─────────────
+            {/* ── One board, one component tree, one subject of 1..N ──────
                 The projection card and the main line card render ONCE at
-                stable positions (never inside a mode ternary), so a combo
-                toggle is a props update on already-mounted components — no
-                remount, no visual load. Only three things vary: whose data
-                the surfaces describe (player vs picked group), whether the
-                name slot is the player selector or the group's names, and
-                the player-picker rows appearing at the bottom. */}
+                stable positions (never inside a subject-count ternary), so
+                growing/shrinking the group is a props update on already-
+                mounted components — no remount, no visual load. Only two
+                things vary: whose data the surfaces describe (player vs
+                group), and whether the heading is the selector or chips. */}
             {/* What the book expects from the subject this week against what
                 it actually averages — scope-scaled like the lines beneath it
                 (Weekly = × the night's games). Self-hides when the engine has
                 no opinion. */}
-            {(comboMode || (board.selectedPlayerId != null && projCache[board.selectedPlayerId] != null)) && (
+            {(groupMode || (board.selectedPlayerId != null && projCache[board.selectedPlayerId] != null)) && (
               <BookProjectionCard
-                rows={comboMode ? groupRows : projCache[board.selectedPlayerId!]}
+                rows={groupMode ? groupRows : projCache[board.selectedPlayerId!]}
                 nGames={comboNGames}
                 scopeLabel={scope === 'weekly' ? 'WEEKLY' : `GAME ${comboScopeGame}`}
               />
@@ -816,21 +844,21 @@ export default function SportsbookScreen() {
                 {closedBettingNote(board.firstInProgress)}
               </Text>
             )}
-            {!comboMode && board.selectedPlayerId == null ? (
+            {!groupMode && board.selectedPlayerId == null ? (
               // Nobody has lines in this scope (they may in another — the
-              // pills stay tappable above).
+              // scope dropdown stays live above).
               <EmptyCard
                 text={`No ${scopeOptions.find(o => o.key === scope)?.label ?? ''} lines are open yet`}
               />
             ) : (
               <>
                 {/* Specials lead (their styling is the distinguishing mark);
-                    single-player mode only — a special is a curated bundle
-                    about one player, not a group draft. */}
-                {!comboMode && board.specials.length > 0 && renderSpecialsCard(board.specials, board.scopeInProgress)}
-                {/* THE line card — the same mounted SubjectLinesCard in both
-                    modes, its pills keyed by stat so each slot updates in
-                    place: the player's posted markets, or the group's four
+                    single-player subjects only — a special is a curated
+                    bundle about one player, not a group. */}
+                {!groupMode && board.specials.length > 0 && renderSpecialsCard(board.specials, board.scopeInProgress)}
+                {/* THE line card — the same mounted SubjectLinesCard for any
+                    subject size, its pills keyed by stat so each slot updates
+                    in place: the player's posted markets, or the group's four
                     combo lines (values anchored instantly by the client-side
                     seed; the live quote replaces the odds as it lands).
                     Staging several combo stats parlays them in the slip — one
@@ -838,27 +866,22 @@ export default function SportsbookScreen() {
                 {mainPills.length > 0 && (
                   <SubjectLinesCard
                     relation={
-                      comboMode || board.playerLines.length === 0
+                      groupMode || board.playerLines.length === 0
                         ? null
                         : subjectRelation(weekTeams, board.playerLines[0].subjectPlayerId, board.playerLines[0].gameNumber)
                     }
                     inProgress={
                       board.scopeInProgress ||
-                      (!comboMode && board.playerLines.some(l => l.inProgress))
-                    }
-                    hint={
-                      comboMode && comboMemberIds.length < 2
-                        ? 'PICK 2+ PLAYERS TO PRICE THESE LINES'
-                        : null
+                      (!groupMode && board.playerLines.some(l => l.inProgress))
                     }
                     dimmed={balance < 10}
                     pills={mainPills}
                   />
                 )}
                 {/* Posted combo markets the player belongs to — the same card
-                    component, one pill each (single-player mode only; the
-                    group draft above covers combining). */}
-                {!comboMode &&
+                    component, one pill each (single-player subjects only; a
+                    group's own lines render on the main card above). */}
+                {!groupMode &&
                   board.comboLines.map(cl => (
                     <SubjectLinesCard
                       key={cl.marketId}
@@ -868,71 +891,6 @@ export default function SportsbookScreen() {
                       pills={[lineToSpec(cl, board.scopeInProgress || cl.inProgress)]}
                     />
                   ))}
-                {/* The player pickers — the ONLY thing combo mode adds to the
-                    screen, at the bottom: one row per RSVP'd-in player (their
-                    scope-scaled Total Pins average with the book's forecast
-                    beside it — a member the book rates above their average (▲)
-                    makes the combo line richer than the averages suggest;
-                    below (▼), softer) with the +/✓ chip that adds them to the
-                    group. Everything above simply re-prices as they toggle. */}
-                {comboMode && (
-                  <>
-                    <Text style={styles.combineHint}>TAP PLAYERS TO COMBINE</Text>
-                    <View>
-                      {comboMemberPool.map(m => {
-                        const on = comboMembers.has(m.playerId)
-                        const entry = poolStats['total_pins']?.[m.playerId]
-                        const avgShown = entry?.avg != null ? entry.avg * comboNGames : null
-                        const projShown = entry?.proj != null ? entry.proj * comboNGames : null
-                        // The arrow rides the BOOK: ▲ = the book rates the member
-                        // above their average (same shared dead band).
-                        const projDir = deltaDir(projShown, avgShown)
-                        return (
-                          <View key={m.playerId} style={styles.memberRow}>
-                            <View style={styles.memberInfo}>
-                              <Text style={styles.memberName}>
-                                {m.name}{m.playerId === playerId ? ' (you)' : ''}
-                              </Text>
-                              {entry != null && (
-                                <Text style={styles.memberAvg}>
-                                  {avgShown == null
-                                    ? 'NO STAT HISTORY'
-                                    : entry.source === 'season'
-                                      ? `SEASON AVG ${avgShown.toFixed(1)}`
-                                      : entry.source === 'lifetime'
-                                        ? `LIFETIME AVG ${avgShown.toFixed(1)}`
-                                        : `LEAGUE AVG ${avgShown.toFixed(1)}`}
-                                  {projShown != null && (
-                                    <>
-                                      {'  ·  '}
-                                      <Text style={styles.memberProj}>FORECAST {projShown.toFixed(1)}</Text>
-                                      {projDir != null && (
-                                        <Text
-                                          style={
-                                            projDir === 'up'
-                                              ? styles.memberProjUp
-                                              : styles.memberProjDown
-                                          }
-                                        >
-                                          {projDir === 'up' ? ' ▲' : ' ▼'}
-                                        </Text>
-                                      )}
-                                    </>
-                                  )}
-                                </Text>
-                              )}
-                            </View>
-                            <PickChip
-                              label={on ? '✓' : '+'}
-                              selected={on}
-                              onPress={() => toggleComboMember(m.playerId)}
-                            />
-                          </View>
-                        )
-                      })}
-                    </View>
-                  </>
-                )}
               </>
             )}
           </View>
@@ -998,6 +956,48 @@ export default function SportsbookScreen() {
         )
       })()}
 
+      {/* Add Players — the combo builder sheet, raised from the heading's ＋
+          chip. Toggles edit the board's subject group LIVE (the board under
+          the sheet re-prices as members change); rows carry the same
+          scope-scaled Total Pins avg/forecast context the old picker rows
+          showed (the arrow rides the BOOK: ▲ = rated above their average).
+          Conditional-mount contract, like every sheet. */}
+      {addPlayersOpen && (
+        <AddPlayersSheet
+          rows={comboMemberPool.map(m => {
+            const entry = poolStats['total_pins']?.[m.playerId]
+            const avgShown = entry?.avg != null ? entry.avg * comboNGames : null
+            const projShown = entry?.proj != null ? entry.proj * comboNGames : null
+            const isSoloSubject = !groupMode && m.playerId === board.selectedPlayerId
+            return {
+              id: m.playerId,
+              name: `${m.name}${m.playerId === playerId ? ' (you)' : ''}`,
+              contextLabel:
+                entry == null
+                  ? null
+                  : avgShown == null
+                    ? 'NO STAT HISTORY'
+                    : entry.source === 'season'
+                      ? `SEASON AVG ${avgShown.toFixed(1)}`
+                      : entry.source === 'lifetime'
+                        ? `LIFETIME AVG ${avgShown.toFixed(1)}`
+                        : `LEAGUE AVG ${avgShown.toFixed(1)}`,
+              forecastLabel: projShown != null ? `FORECAST ${projShown.toFixed(1)}` : null,
+              dir: deltaDir(projShown, avgShown),
+              selected: groupMode ? groupMembers.includes(m.playerId) : isSoloSubject,
+              // The solo subject is already on the board — they leave it only
+              // by the group shrinking around them, not from this sheet.
+              locked: isSoloSubject,
+            }
+          })}
+          onToggle={id => {
+            if (groupMode && groupMembers.includes(id)) removeGroupMember(id)
+            else addGroupMember(id)
+          }}
+          onClose={() => setAddPlayersOpen(false)}
+        />
+      )}
+
       {/* Bet details modal */}
       <BetDetailModal
         bet={detailModal}
@@ -1053,8 +1053,7 @@ const styles = StyleSheet.create({
   // Separates the board from the mode toggle above it — the filters lead
   // directly (no section header of its own).
   board: { marginTop: 16 },
-  // The board filters: the scope dropdown + the trailing Combine chip, beneath
-  // the player-select heading.
+  // The board filter: the scope dropdown, beneath the subject heading.
   filterRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1062,15 +1061,23 @@ const styles = StyleSheet.create({
     gap: 8,
     marginBottom: 10,
   },
+  // The subject heading row — the selector (or member chips) + the ＋ chip,
+  // centered; wraps when a big group outgrows the line.
+  headingRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    marginBottom: 4,
+  },
   // The player-name selector — the Dropdown trigger undressed to read as the
   // board's main heading (centered name + ▾, no box), so the name atop the
   // board IS the picker.
   playerNameSelect: {
-    alignSelf: 'center',
     backgroundColor: 'transparent',
     borderWidth: 0,
     paddingVertical: 4,
-    marginBottom: 4,
   },
   playerNameSelectText: {
     fontFamily: fonts.barlowCondensed,
@@ -1078,61 +1085,46 @@ const styles = StyleSheet.create({
     color: colors.text,
     letterSpacing: 0.3,
   },
-  // Combo mode's occupant of the same name slot — the picked group's names,
-  // in the selector's exact typography/footprint (minus the ▾: the group is
-  // edited via the picker rows below, not a menu).
-  groupNameHeader: {
-    alignSelf: 'center',
-    paddingVertical: 4,
-    marginBottom: 4,
-    fontFamily: fonts.barlowCondensed,
-    fontSize: 15,
-    color: colors.text,
-    letterSpacing: 0.3,
-  },
-  // Combo-mode helper line above the bottom player-picker rows.
-  combineHint: {
-    fontFamily: fonts.barlowCondensed,
-    fontSize: 11,
-    letterSpacing: 1.5,
-    color: colors.accent,
-    marginTop: 2,
-    marginBottom: 10,
-    textAlign: 'center',
-  },
-  // Combo-mode player-picker rows — same tinted-row language as LineRow.
-  memberRow: {
+  // A group member's heading chip — name + ✕, tap to remove. Same name
+  // typography as the selector, boxed so the removal affordance reads.
+  memberChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 12,
+    gap: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: radius.cardSm,
+    borderWidth: 1,
+    borderColor: colors.border2,
     backgroundColor: colors.surfaceTint,
-    marginBottom: 8,
   },
-  memberInfo: { flex: 1 },
-  memberName: {
+  memberChipText: {
     fontFamily: fonts.barlowCondensed,
     fontSize: 15,
     color: colors.text,
     letterSpacing: 0.3,
   },
-  // The member's scope-scaled average (the number their share of a combo
-  // line is really priced against) — context under the name.
-  memberAvg: {
+  memberChipX: {
     fontFamily: fonts.barlowCondensed,
     fontSize: 11,
-    letterSpacing: 0.5,
     color: colors.muted,
-    marginTop: 1,
   },
-  // The book's projection segment of the average line (nested Texts) — the
-  // ▲/▼ colors by direction vs the average.
-  memberProj: { color: colors.text },
-  memberProjUp: { color: colors.success, fontSize: 9 },
-  memberProjDown: { color: colors.danger, fontSize: 9 },
+  // The ＋ chip — opens the Add Players sheet (dim when under 2 RSVP'd).
+  addChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: radius.cardSm,
+    borderWidth: 1,
+    borderColor: colors.border2,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  addChipDim: { opacity: 0.4 },
+  addChipText: {
+    fontFamily: fonts.barlowCondensed,
+    fontSize: 15,
+    color: colors.accent,
+  },
   // Scope-level in-progress warning — shown above the rows when any in-scope
   // market is closed for betting.
   inProgressNote: {
