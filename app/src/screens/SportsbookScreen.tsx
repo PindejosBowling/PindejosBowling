@@ -574,12 +574,13 @@ export default function SportsbookScreen() {
   // live price; tapping the body stages the displayed value (staged = filled);
   // an in-progress scope makes every pill inert. Combos tint neutral
   // automatically (subjectRelation of a null subject).
-  function renderLineSet(lines: LineView[], groupInProgress: boolean) {
+  function renderLineSet(lines: LineView[], groupInProgress: boolean, hideName = false) {
     return (
       <LineRow
         lines={lines}
         relation={subjectRelation(weekTeams, lines[0].subjectPlayerId, lines[0].gameNumber)}
         inProgress={groupInProgress}
+        hideName={hideName}
         renderPill={line => {
           const staged = slipPicks.find(p => p.marketId === line.marketId)
           const value = valueOf(line)
@@ -740,7 +741,10 @@ export default function SportsbookScreen() {
                 combo mode swaps the single-player dropdown for a multi-select
                 member chip row (pool = every RSVP'd-in player; combos need
                 only RSVP) and prices the picked group instead of one player. */}
-            {comboMode ? (
+            {/* Combo mode's subject selector — the member chip row. (The
+                single-player selector lives further down: the player's NAME
+                above their lines, consolidated with the line card's header.) */}
+            {comboMode && (
               <>
                 <Text style={styles.combineHint}>TAP PLAYERS TO COMBINE</Text>
                 <View style={styles.memberChipRow}>
@@ -754,20 +758,6 @@ export default function SportsbookScreen() {
                   ))}
                 </View>
               </>
-            ) : (
-              // Player filter — a full-width anchored dropdown of the
-              // players with in-scope availability.
-              board.selectedPlayerId != null && (
-                <Dropdown
-                  options={board.players.map(p => ({
-                    key: p.id,
-                    label: `${p.name}${p.id === playerId ? ' (you)' : ''}`,
-                  }))}
-                  value={board.selectedPlayerId}
-                  onChange={setPickedPlayerId}
-                  style={styles.playerSelect}
-                />
-              )
             )}
             {/* What the book expects from the subject this week against what
                 it actually averages — scope-scaled like the lines beneath it
@@ -878,6 +868,24 @@ export default function SportsbookScreen() {
               />
             ) : (
               <>
+                {/* The player-name selector — the ONE name on the board,
+                    heading the player's stack (specials → their consolidated
+                    row → their combos). The old full-width dropdown menu is
+                    consolidated into it: same anchored Dropdown, restyled as
+                    the line card's name header (+ ▾), so switching players
+                    happens right where the name already read. The player's
+                    own LineRow hides its duplicate header; combo rows keep
+                    theirs (their subject is the member set, not the player). */}
+                <Dropdown
+                  options={board.players.map(p => ({
+                    key: p.id,
+                    label: `${p.name}${p.id === playerId ? ' (you)' : ''}`,
+                  }))}
+                  value={board.selectedPlayerId}
+                  onChange={setPickedPlayerId}
+                  style={styles.playerNameSelect}
+                  triggerTextStyle={styles.playerNameSelectText}
+                />
                 {/* Specials lead (their styling is the distinguishing mark),
                     then the player's consolidated row, then their combos. */}
                 {board.specials.length > 0 && renderSpecialsCard(board.specials, board.scopeInProgress)}
@@ -888,7 +896,11 @@ export default function SportsbookScreen() {
                       ...board.comboLines.map(c => [c]),
                     ].map(lines => (
                       <View key={lines[0].subjectPlayerId ?? lines[0].marketId}>
-                        {renderLineSet(lines, board.scopeInProgress || lines.some(l => l.inProgress))}
+                        {renderLineSet(
+                          lines,
+                          board.scopeInProgress || lines.some(l => l.inProgress),
+                          lines === board.playerLines
+                        )}
                       </View>
                     ))}
                   </View>
@@ -1022,11 +1034,21 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   scopePills: { flex: 1, justifyContent: 'flex-start' },
-  // Full-width dropdown trigger (SeasonDropdown's spacing idiom).
-  playerSelect: {
-    justifyContent: 'space-between',
-    paddingVertical: 10,
-    marginBottom: 12,
+  // The player-name selector — the Dropdown trigger undressed to read as the
+  // line card's name header (centered name + ▾, no box), so the name above
+  // the lines IS the picker.
+  playerNameSelect: {
+    alignSelf: 'center',
+    backgroundColor: 'transparent',
+    borderWidth: 0,
+    paddingVertical: 4,
+    marginBottom: 4,
+  },
+  playerNameSelectText: {
+    fontFamily: fonts.barlowCondensed,
+    fontSize: 15,
+    color: colors.text,
+    letterSpacing: 0.3,
   },
   // Combo-mode helper line above the member chips.
   combineHint: {

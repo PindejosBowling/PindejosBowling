@@ -18,12 +18,15 @@ interface LineRowProps {
   // (the edited value, the live quote, staged status), so the card is just the
   // subject shell around them.
   renderPill: (line: LineView) => ReactNode
+  // Skip the name header — for the selected player's own card, whose name is
+  // the board's player-name SELECTOR rendered just above (one name, not two).
+  hideName?: boolean
 }
 
 // Presentational card for one betting subject. Generic over market_type — new
 // line kinds render through this same component; only the caller's renderPill
 // changes (mirrors BetRow's design).
-export default function LineRow({ lines, relation, inProgress, renderPill }: LineRowProps) {
+export default function LineRow({ lines, relation, inProgress, renderPill, hideName }: LineRowProps) {
   const first = lines[0]
 
   return (
@@ -37,8 +40,8 @@ export default function LineRow({ lines, relation, inProgress, renderPill }: Lin
     >
       {/* The subject's name (full form — the row header is one of the two
           full-name surfaces); each condition lives in its own pill below. */}
-      <Text style={styles.lineName}>{first.subjectFullName}</Text>
-      <View style={styles.pills}>
+      {!hideName && <Text style={styles.lineName}>{first.subjectFullName}</Text>}
+      <View style={[styles.pills, hideName && styles.pillsHeaderless]}>
         {lines.map(line => (
           <View key={line.marketId}>{renderPill(line)}</View>
         ))}
@@ -70,4 +73,5 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   pills: { marginTop: 8, gap: 8 },
+  pillsHeaderless: { marginTop: 0 },
 })
