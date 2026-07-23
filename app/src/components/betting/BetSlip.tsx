@@ -5,7 +5,7 @@ import BottomSheet from '../ui/BottomSheet'
 import Button from '../ui/Button'
 import ToggleGroup from '../ui/ToggleGroup'
 import TicketCard from './TicketCard'
-import WagerField, { WagerHint } from './WagerField'
+import WagerField from './WagerField'
 import TermsBlock from '../ui/TermsBlock'
 import { TERMS } from '../../data/pinsinoExplainers'
 import GoldenTicketToggle from '../auction/GoldenTicketToggle'
@@ -13,7 +13,11 @@ import WinnersCrutchToggle from '../auction/WinnersCrutchToggle'
 import EnergyDrinkToggle from '../auction/EnergyDrinkToggle'
 import { betLineSuffix, scopeSuffix } from '../../hooks/usePinsinoData'
 import { fmtOdds } from '../../utils/bets'
+import { formatPins } from '../../utils/formatting'
 import { bets } from '../../utils/supabase/db'
+
+// Minimum stake per bet — mirrored in stakeValid and shown in the slip header.
+const MIN_BET = 10
 
 // One individual pick staged in the slip — a chosen VALUE on a market (the
 // line the bettor intends to beat, with its quoted price). Combines with
@@ -296,7 +300,7 @@ export default function BetSlip({
   const wagerOf = (key: string): string =>
     wagers[key] ?? (key === loneKey ? wagers[PARLAY_KEY] ?? '' : '')
   const stakeOf = (key: string) => parseInt(wagerOf(key), 10)
-  const stakeValid = (key: string) => { const n = stakeOf(key); return !isNaN(n) && n >= 10 }
+  const stakeValid = (key: string) => { const n = stakeOf(key); return !isNaN(n) && n >= MIN_BET }
   const specialsTotal = specials.reduce((s, sp) => s + (stakeOf(sp.key) || 0), 0)
   const singlesPickTotal =
     picks.reduce((s, p) => s + (stakeOf(p.marketId) || 0), 0) +
@@ -494,8 +498,34 @@ export default function BetSlip({
             </View>
           )}
 
-          {/* Slip-level bettor info, once — not repeated per ticket. */}
-          <WagerHint balance={balance} />
+          {/* Prominent slip header — the bettor's spending power and the floor,
+              front and center. Remaining tracks the staged total live and goes
+              red the moment the slip would overdraw. Rendered ONCE (bettor
+              info, not per-ticket). */}
+          <View style={styles.slipHeader}>
+            <View style={styles.slipHeaderCell}>
+              <Text style={styles.slipHeaderLabel}>AVAILABLE BALANCE</Text>
+              <Text
+                style={[styles.slipHeaderValue, grandTotal > balance && styles.slipHeaderValueOver]}
+              >
+                {formatPins(Math.max(0, balance - grandTotal))}
+                <Text style={styles.slipHeaderUnit}> pins</Text>
+              </Text>
+              {grandTotal > 0 && (
+                <Text style={styles.slipHeaderSub}>
+                  {formatPins(balance)} balance − {formatPins(grandTotal)} staged
+                </Text>
+              )}
+            </View>
+            <View style={styles.slipHeaderDivider} />
+            <View style={styles.slipHeaderCell}>
+              <Text style={styles.slipHeaderLabel}>MIN BET</Text>
+              <Text style={styles.slipHeaderValue}>
+                {MIN_BET}
+                <Text style={styles.slipHeaderUnit}> pins</Text>
+              </Text>
+            </View>
+          </View>
 
           {/* ── One ticket card per resulting bet — ONE render path; the
               parlay is just the ticket with more legs. ── */}
@@ -586,6 +616,50 @@ const styles = StyleSheet.create({
   barReview: { paddingHorizontal: 16, paddingVertical: 10 },
 
   modeRow: { marginBottom: 12 },
+
+  // Prominent balance / min-bet banner at the top of the slip.
+  slipHeader: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    backgroundColor: colors.surface2,
+    borderRadius: radius.cardMd,
+    borderWidth: 1,
+    borderColor: colors.border2,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    marginBottom: 14,
+  },
+  slipHeaderCell: { flex: 1 },
+  slipHeaderDivider: {
+    width: StyleSheet.hairlineWidth,
+    backgroundColor: colors.border2,
+    marginHorizontal: 14,
+  },
+  slipHeaderLabel: {
+    fontFamily: fonts.barlowCondensed,
+    fontSize: 11,
+    letterSpacing: 1.2,
+    color: colors.muted,
+    marginBottom: 3,
+  },
+  slipHeaderValue: {
+    fontFamily: fonts.barlowCondensedHeavy,
+    fontSize: 22,
+    color: colors.accent,
+    letterSpacing: 0.3,
+  },
+  slipHeaderValueOver: { color: colors.danger },
+  slipHeaderUnit: {
+    fontFamily: fonts.barlowCondensed,
+    fontSize: 13,
+    color: colors.muted,
+  },
+  slipHeaderSub: {
+    fontFamily: fonts.barlow,
+    fontSize: 11,
+    color: colors.muted,
+    marginTop: 2,
+  },
 
   // A ticket's leg line: label + its ✕ remove.
   legRow: {

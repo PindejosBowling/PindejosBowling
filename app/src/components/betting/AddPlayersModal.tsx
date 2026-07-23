@@ -1,8 +1,7 @@
-import { View, Text, StyleSheet } from 'react-native'
-import { colors, fonts } from '../../theme'
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native'
+import { colors, fonts, radius } from '../../theme'
 import CenterModal from '../ui/CenterModal'
 import Button from '../ui/Button'
-import PickChip from './PickChip'
 
 // One candidate row, fully resolved by the screen (this modal stays
 // presentational): display name, the scope-scaled four-stat season-average
@@ -41,13 +40,30 @@ export default function AddPlayersModal({ rows, onToggle, onClose }: AddPlayersM
         <View key={r.id} style={styles.row}>
           <View style={styles.info}>
             <Text style={styles.name}>{r.name}</Text>
-            {r.contextLabel != null && <Text style={styles.context}>{r.contextLabel}</Text>}
+            {r.contextLabel != null && (
+              <Text style={styles.context}>
+                {/* Split so the numeric values pop in white against the
+                    accent-tinted stat labels. */}
+                {r.contextLabel.split(/(\d+(?:\.\d+)?)/).map((part, i) =>
+                  /^\d/.test(part)
+                    ? <Text key={i} style={styles.contextValue}>{part}</Text>
+                    : part
+                )}
+              </Text>
+            )}
           </View>
-          <PickChip
-            label={r.selected ? '✓' : '+'}
-            selected={r.selected}
+          {/* Compact square toggle — a minimal +/✓ so the stat line under each
+              name gets the horizontal room (the shared PickChip's 78px min
+              width crowded it out). */}
+          <TouchableOpacity
+            style={[styles.toggle, r.selected && styles.toggleSelected]}
             onPress={() => onToggle(r.id)}
-          />
+            activeOpacity={0.7}
+          >
+            <Text style={[styles.toggleText, r.selected && styles.toggleTextSelected]}>
+              {r.selected ? '✓' : '+'}
+            </Text>
+          </TouchableOpacity>
         </View>
       ))}
       {fallback && (
@@ -74,14 +90,39 @@ const styles = StyleSheet.create({
     letterSpacing: 0.3,
   },
   // Accent for legibility against the dark card (the muted grey read too
-  // faint for a four-stat line; gold stays reserved for specials).
+  // faint for a four-stat line; gold stays reserved for specials). Given the
+  // horizontal room freed by the compact toggle, the stat line reads a touch
+  // larger for prominence under each name.
   context: {
     fontFamily: fonts.barlowCondensed,
-    fontSize: 11,
+    fontSize: 12.5,
     letterSpacing: 0.5,
-    color: colors.accent,
-    marginTop: 1,
+    color: colors.text,
+    marginTop: 2,
   },
+  // The numeric values within the stat line — accent/yellow, to pop against
+  // the white stat names around them.
+  contextValue: { color: colors.accent },
+  // The compact add/remove toggle — a small square, neutral at rest, accent
+  // fill when the player is on the board.
+  toggle: {
+    width: 30,
+    height: 30,
+    borderRadius: radius.cardSm,
+    borderWidth: 1,
+    borderColor: colors.chipBorder,
+    backgroundColor: colors.surfaceTint,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  toggleSelected: { backgroundColor: colors.accent, borderColor: colors.accent },
+  toggleText: {
+    fontFamily: fonts.barlowCondensed,
+    fontSize: 18,
+    lineHeight: 20,
+    color: colors.accent,
+  },
+  toggleTextSelected: { color: colors.bg },
   footnote: {
     fontFamily: fonts.barlow,
     fontSize: 10,

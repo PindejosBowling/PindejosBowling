@@ -828,7 +828,7 @@ export default function SportsbookScreen() {
                 <Dropdown
                   options={board.players.map(p => ({
                     key: p.id,
-                    label: `${p.name}${p.id === playerId ? ' (you)' : ''}`,
+                    label: `${p.name}${p.id === playerId ? ' (You)' : ''}`,
                   }))}
                   value={board.selectedPlayerId}
                   onChange={setPickedPlayerId}
@@ -1003,7 +1003,7 @@ export default function SportsbookScreen() {
             const isSoloSubject = !groupMode && m.playerId === board.selectedPlayerId
             return {
               id: m.playerId,
-              name: `${m.name}${m.playerId === playerId ? ' (you)' : ''}`,
+              name: `${m.name}${m.playerId === playerId ? ' (You)' : ''}`,
               contextLabel: parts.length > 0 ? parts.join('  ·  ') : loaded ? 'NO STAT HISTORY' : null,
               selected: groupMode ? groupMembers.includes(m.playerId) : isSoloSubject,
             }
@@ -1166,10 +1166,14 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: colors.muted,
   },
-  // The ＋ chip — opens the Add Players sheet (dim when under 2 RSVP'd).
+  // The ＋ chip — opens the Add Players sheet (dim when under 2 RSVP'd). A
+  // compact square button rather than a full-width chip so it yields
+  // horizontal room to the member chips / stats it sits beside.
   addChip: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
+    width: 28,
+    height: 28,
+    paddingHorizontal: 0,
+    paddingVertical: 0,
     borderRadius: radius.cardSm,
     borderWidth: 1,
     borderColor: colors.border2,
@@ -1177,11 +1181,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   addChipDim: { opacity: 0.4 },
-  // Matches the player-name size (playerNameSelectText/memberChipText) — keep
-  // in lockstep whenever the names resize.
+  // The lone ＋ glyph, sized to fill the compact square (its own affordance —
+  // no longer in lockstep with the player-name type).
   addChipText: {
     fontFamily: fonts.barlowCondensed,
-    fontSize: 16,
+    fontSize: 18,
+    lineHeight: 20,
     color: colors.accent,
   },
   // The board's ELI5 foot section — beneath the last line card, explaining
