@@ -45,31 +45,64 @@ export default function BookProjectionCard({ rows, nGames }: BookProjectionCardP
 
   const fallback = shown.some(r => r.seasonAvg != null && r.avgSource !== 'season')
 
+  // Precompute each stat's scope-scaled cell so the two value rows (average /
+  // forecast) can be laid out as an aligned grid beside their left labels.
+  const cells = shown.map(r => {
+    const projected = r.projected! * nGames
+    const avg = r.seasonAvg != null ? r.seasonAvg * nGames : null
+    // The AVERAGE's position vs the book (shared dead band = "on form").
+    return { stat: r.stat, label: COLUMN_LABELS[r.stat] ?? r.stat.toUpperCase(), projected, avg, dir: deltaDir(avg, projected), avgSource: r.avgSource }
+  })
+
   return (
     <View style={styles.card}>
-      <View style={styles.columns}>
-        {shown.map(r => {
-          const projected = r.projected! * nGames
-          const avg = r.seasonAvg != null ? r.seasonAvg * nGames : null
-          // The AVERAGE's position vs the book (shared dead band = "on form").
-          const dir = deltaDir(avg, projected)
-          return (
-            <View key={r.stat} style={styles.column}>
-              <Text style={styles.statLabel}>{COLUMN_LABELS[r.stat] ?? r.stat.toUpperCase()}</Text>
-              <View style={styles.avgRow}>
-                <Text style={[styles.avgValue, avg == null && styles.avgNone]}>
-                  {avg == null ? '—' : `${avg.toFixed(1)}${r.avgSource !== 'season' ? '*' : ''}`}
-                </Text>
-                {/* Celebration-only: the ▲ marks an average running ahead of
-                    the book. No ▼ — an average under forecast just shows the
-                    numbers, never a red mark (nobody gets shamed here). */}
-                {dir === 'up' && <Text style={[styles.delta, styles.deltaUp]}>▲</Text>}
-              </View>
-              <Text style={styles.book}>FORECAST {projected.toFixed(1)}</Text>
-            </View>
-          )
-        })}
+      {/* Stat headers across the full width — each sized to one row (they
+          auto-shrink rather than wrap). */}
+      <View style={styles.valuesRow}>
+        {cells.map(c => (
+          <Text
+            key={c.stat}
+            style={styles.statLabel}
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.7}
+          >
+            {c.label}
+          </Text>
+        ))}
       </View>
+
+      {/* AVERAGE — a left label line (accent, matching the values) over the
+          season averages, which now span the full width. */}
+      <Text style={[styles.rowLabel, styles.rowLabelAvg]}>AVERAGE</Text>
+      <View style={styles.valuesRow}>
+        {cells.map(c => (
+          <View key={c.stat} style={styles.cell}>
+            <View style={styles.avgRow}>
+              <Text style={[styles.avgValue, c.avg == null && styles.avgNone]}>
+                {c.avg == null ? '—' : `${c.avg.toFixed(1)}${c.avgSource !== 'season' ? '*' : ''}`}
+              </Text>
+              {/* Celebration-only: the ▲ marks an average running ahead of the
+                  book, floating inline just after the value. No ▼: an average
+                  under forecast just shows the numbers, never a red mark
+                  (nobody gets shamed here). */}
+              {c.dir === 'up' && <Text style={[styles.delta, styles.deltaUp]}>▲</Text>}
+            </View>
+          </View>
+        ))}
+      </View>
+
+      {/* FORECAST — a left label line (grey, matching the values) over the
+          book's projections. */}
+      <Text style={[styles.rowLabel, styles.rowLabelForecast]}>FORECAST</Text>
+      <View style={styles.valuesRow}>
+        {cells.map(c => (
+          <View key={c.stat} style={styles.cell}>
+            <Text style={styles.book}>{c.projected.toFixed(1)}</Text>
+          </View>
+        ))}
+      </View>
+
       {fallback && (
         <Text style={styles.footnote}>* no season games yet — lifetime/league average shown</Text>
       )}
@@ -87,15 +120,29 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surfaceTint,
     marginBottom: spacing.sm,
   },
-  columns: {
-    flexDirection: 'row',
-  },
-  column: { flex: 1, alignItems: 'center' },
-  statLabel: {
+  // Width of the left label column; the empty header corner + both row labels
+  // share it so the value columns line up beneath the stat headers.
+  // A full-width row of equal columns — no left gutter, so the values (and
+  // headers) use the whole card width. gap opens space between columns.
+  valuesRow: { flexDirection: 'row', gap: 14 },
+  // The AVERAGE / FORECAST labels now ride their OWN left-aligned line above
+  // each value row (color-coded to the values) — no width reserved sideways.
+  rowLabel: {
     fontFamily: fonts.barlowCondensed,
-    fontSize: 10,
+    fontSize: 11,
     letterSpacing: 1,
-    color: colors.muted2,
+    marginTop: 10,
+    marginBottom: 2,
+  },
+  rowLabelAvg: { color: colors.accent },
+  rowLabelForecast: { color: colors.muted },
+  cell: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  statLabel: {
+    flex: 1,
+    fontFamily: fonts.barlowCondensed,
+    fontSize: 11,
+    letterSpacing: 1,
+    color: colors.text,
     textAlign: 'center',
   },
   // The player's AVERAGE gets the big accent treatment (the memberSoloValue
@@ -104,15 +151,16 @@ const styles = StyleSheet.create({
     ...type.value,
     color: colors.accent,
     letterSpacing: 0.5,
+    textAlign: 'center',
   },
   avgNone: { color: colors.muted2 },
-  avgRow: { flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 2 },
+  // Value + inline ▲, centered as a group within the cell.
+  avgRow: { flexDirection: 'row', alignItems: 'center', gap: 3 },
   book: {
     fontFamily: fonts.barlowCondensed,
     fontSize: 11,
     letterSpacing: 0.5,
     color: colors.muted,
-    marginTop: 2,
   },
   delta: { fontFamily: fonts.barlowCondensed, fontSize: 10 },
   deltaUp: { color: colors.success },

@@ -796,11 +796,17 @@ export default function SportsbookScreen() {
                 onChange={setScope}
                 style={styles.scopeSelect}
                 triggerTextStyle={styles.scopeSelectText}
+                caretStyle={styles.scopeCaret}
               />
             </View>
-            {/* What the stats strip beneath actually shows, in one breath. */}
+            {/* What the stats strip beneath actually shows, in one breath —
+                the AVERAGES span picks up the accent (matching the average
+                values), "vs" reads white, and "the Book's Forecast" keeps the
+                grey of the FORECAST subtext beneath each column. */}
             <Text style={styles.boardSubtitle}>
-              Season {seasonNumber ?? '—'} Averages vs the Book's Forecast
+              <Text style={styles.boardSubtitleAvg}>Season {seasonNumber ?? '—'} Averages</Text>
+              <Text style={styles.boardSubtitleVs}> vs </Text>
+              <Text style={styles.boardSubtitleForecast}>the Book's Forecast</Text>
             </Text>
             {/* The subject selection, demoted to a sub-row beneath the
                 header. Solo: the anchored player-name selector (the ONE name
@@ -1090,21 +1096,28 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
     color: colors.text,
   },
-  // The scope picker undressed to read as the header's tail — same type as
-  // the header text, accent so the one live word in the title is findable.
+  // The scope picker as the header's live word — white text with a prominent
+  // accent caret as the sole tappable cue (no border/fill needed).
   scopeSelect: {
     backgroundColor: 'transparent',
     borderWidth: 0,
     paddingHorizontal: 5,
     paddingVertical: 4,
-    gap: 3,
+    gap: 4,
   },
   scopeSelectText: {
     fontFamily: fonts.barlowCondensedHeavy,
     fontSize: 22,
     letterSpacing: 1,
-    color: colors.accent,
+    color: colors.text,
     textTransform: 'uppercase',
+  },
+  // The tappable caret — accent + larger than the default so the affordance
+  // pops next to the white label.
+  scopeCaret: {
+    fontSize: 16,
+    color: colors.accent,
+    marginTop: 2,
   },
   // The demoted explainer line under the title — what the stats strip shows.
   boardSubtitle: {
@@ -1115,6 +1128,12 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: 8,
   },
+  // "Season N Averages" — accent, matching the average values in the strip.
+  boardSubtitleAvg: { color: colors.accent },
+  // "vs" — white pivot between the two sides.
+  boardSubtitleVs: { color: colors.text },
+  // "the Book's Forecast" — the same grey as each column's FORECAST subtext.
+  boardSubtitleForecast: { color: colors.muted },
   // The subject sub-row — the selector (or member chips) + the ＋ chip,
   // centered beneath the board header; wraps when a big group outgrows the
   // line.
