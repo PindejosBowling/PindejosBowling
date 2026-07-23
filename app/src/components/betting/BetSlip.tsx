@@ -72,6 +72,12 @@ export interface SlipCombo {
 
 type SlipMode = 'singles' | 'parlay'
 
+// The parlay ticket's stable key in the shared wager map — the pick group
+// keeps this identity however many legs it carries, so leg add/remove never
+// moves the typed stake. Can't collide with the other keys (uuids / piped
+// combo keys).
+const PARLAY_KEY = 'parlay'
+
 // A normalized placement request: at most one parlay (the combined picks +
 // combo specs) plus a list of standalone single bets (singles-mode picks and
 // combos, and/or every special). Regular picks are referenced by MARKET id —
@@ -183,9 +189,8 @@ export default function BetSlip({
   const pickUnits = picks.length + combos.length
   const multiPicks = pickUnits > 1
   const [mode, setMode] = useState<SlipMode>('parlay')
-  const [parlayWager, setParlayWager] = useState('')
-  // One stake record for every single ticket — the keys (market id, combo key,
-  // special key) never collide across kinds.
+  // ONE stake record for every ticket — the keys (the PARLAY_KEY sentinel,
+  // market id, combo key, special key) never collide across kinds.
   const [wagers, setWagers] = useState<Record<string, string>>({})
   const [insure, setInsure] = useState(false)
   const [crutch, setCrutch] = useState(false)
@@ -195,7 +200,6 @@ export default function BetSlip({
   // always a deliberate act, and a fresh sheet shouldn't carry stale stakes.
   useEffect(() => {
     if (open) {
-      setParlayWager('')
       setWagers({})
       setInsure(false)
       setCrutch(false)
@@ -282,18 +286,26 @@ export default function BetSlip({
   const jointCurrent = jointQuote != null && jointQuote.key === parlayKey ? jointQuote : null
   const parlayOdds = jointCurrent?.odds ?? productOdds
 
-  const stakeOf = (key: string) => parseInt(wagers[key] ?? '', 10)
+  // Stake resolution — ONE rule for display, totals, validity, and submit.
+  // Every ticket reads its own key; the sole seam left by tickets changing
+  // shape is declared here: when the pick group collapses to a lone single
+  // (removing a parlay's second-to-last leg), that ticket falls back to the
+  // parlay's typed stake until the bettor edits it — the number they entered
+  // survives the ticket changing identity.
+  const loneKey = pickUnits === 1 ? (picks[0]?.marketId ?? combos[0]?.key ?? null) : null
+  const wagerOf = (key: string): string =>
+    wagers[key] ?? (key === loneKey ? wagers[PARLAY_KEY] ?? '' : '')
+  const stakeOf = (key: string) => parseInt(wagerOf(key), 10)
   const stakeValid = (key: string) => { const n = stakeOf(key); return !isNaN(n) && n >= 10 }
   const specialsTotal = specials.reduce((s, sp) => s + (stakeOf(sp.key) || 0), 0)
   const singlesPickTotal =
     picks.reduce((s, p) => s + (stakeOf(p.marketId) || 0), 0) +
     combos.reduce((s, c) => s + (stakeOf(c.key) || 0), 0)
-  const parlayNum = parseInt(parlayWager, 10)
-  const grandTotal = specialsTotal + (parlayPicks ? (parlayNum || 0) : singlesPickTotal)
+  const grandTotal = specialsTotal + (parlayPicks ? (stakeOf(PARLAY_KEY) || 0) : singlesPickTotal)
 
   const specialsValid = specials.every(sp => stakeValid(sp.key))
   const picksValid = parlayPicks
-    ? !isNaN(parlayNum) && parlayNum >= 10
+    ? stakeValid(PARLAY_KEY)
     : [...picks.map(p => p.marketId), ...combos.map(c => c.key)].every(stakeValid)
   const canPlace = count > 0 && specialsValid && picksValid && grandTotal <= balance
 
@@ -307,7 +319,7 @@ export default function BetSlip({
     for (const sp of specials) singles.push({ selectionIds: sp.selectionIds, lineId: sp.lineId, stake: stakeOf(sp.key) })
     onPlace({
       parlay: parlayPicks
-        ? { pickMarketIds: picks.map(p => p.marketId), comboKeys: combos.map(c => c.key), stake: parlayNum }
+        ? { pickMarketIds: picks.map(p => p.marketId), comboKeys: combos.map(c => c.key), stake: stakeOf(PARLAY_KEY) }
         : null,
       singles,
       insure: oneBet && insure,
@@ -365,44 +377,58 @@ export default function BetSlip({
   // Boost bonus preview attaches only when the slip resolves to ONE bet.
   const effectiveBoostPct = oneBet && boost ? boostPct : undefined
 
-  // Every standalone single as one uniform ticket descriptor: singles-mode
-  // combos + picks, then the specials (which stand alone in EVERY mode). One
-  // render path — a footer change happens once, not per kind.
-  const singleTickets: {
+  // EVERY resulting bet as one uniform ticket descriptor — the parlay (one
+  // multi-leg ticket under its stable PARLAY_KEY) or the singles-mode combos
+  // + picks, then the specials (which stand alone in EVERY mode). ONE render
+  // path: a footer change happens once, not per kind, and the parlay is just
+  // a ticket with more legs.
+  type TicketLeg = { key: string; text: string; onRemove: () => void; tag?: string; odds?: number | null }
+  const tickets: {
     key: string
     title: string
     gold: boolean
     odds: number
-    legText: string
-    onRemove: () => void
+    legs: TicketLeg[]
   }[] = [
-    ...(!parlayPicks
-      ? [
+    ...(parlayPicks
+      ? [{
+          key: PARLAY_KEY,
+          title: `${pickUnits}-LEG PARLAY`,
+          gold: false,
+          odds: parlayOdds,
+          legs: [
+            ...combos.map((c, j): TicketLeg => ({
+              key: c.key, text: comboLabel(c), onRemove: () => onRemoveCombo(c.key),
+              tag: 'COMBO', odds: comboLegOdds(j),
+            })),
+            ...picks.map((p, i): TicketLeg => ({
+              key: p.marketId, text: pickLabel(p), onRemove: () => onRemovePick(p.marketId),
+              odds: pickLegOdds(i),
+            })),
+          ],
+        }]
+      : [
           ...combos.map(c => ({
             key: c.key,
             title: 'COMBO',
             gold: false,
             odds: c.odds ?? 2,
-            legText: comboLabel(c),
-            onRemove: () => onRemoveCombo(c.key),
+            legs: [{ key: c.key, text: comboLabel(c), onRemove: () => onRemoveCombo(c.key) }],
           })),
           ...picks.map(p => ({
             key: p.marketId,
             title: p.subjectName,
             gold: false,
             odds: p.odds,
-            legText: pickCondition(p),
-            onRemove: () => onRemovePick(p.marketId),
+            legs: [{ key: p.marketId, text: pickCondition(p), onRemove: () => onRemovePick(p.marketId) }],
           })),
-        ]
-      : []),
+        ]),
     ...specials.map(sp => ({
       key: sp.key,
       title: sp.title,
       gold: sp.category === 'special',
       odds: sp.combinedOdds,
-      legText: sp.summary,
-      onRemove: () => onRemoveSpecial(sp.key),
+      legs: [{ key: sp.key, text: sp.summary, onRemove: () => onRemoveSpecial(sp.key) }],
     })),
   ]
 
@@ -468,65 +494,44 @@ export default function BetSlip({
             </View>
           )}
 
-          {/* ── One ticket card per resulting bet ── */}
-          {pickUnits > 0 && parlayPicks && (
-            <TicketCard
-              header={{
-                title: `${pickUnits}-LEG PARLAY`,
-                badge: { label: fmtOdds(parlayOdds), color: colors.accent },
-              }}
-              footer={
-                <>
-                  <WagerField
-                    wager={parlayWager}
-                    onChangeWager={setParlayWager}
-                    balance={balance}
-                    odds={parlayOdds}
-                    boostPct={effectiveBoostPct}
-                  />
-                  {itemToggles}
-                </>
-              }
-            >
-              <Text style={styles.allMustWin}>ALL LEGS MUST WIN</Text>
-              {jointCurrent?.correlated && (
-                <Text style={styles.correlatedNote}>
-                  These legs are correlated, which impacts the payout
-                </Text>
-              )}
-              {combos.map((c, j) => legLine(c.key, comboLabel(c), () => onRemoveCombo(c.key), 'COMBO', comboLegOdds(j)))}
-              {picks.map((p, i) => legLine(p.marketId, pickLabel(p), () => onRemovePick(p.marketId), undefined, pickLegOdds(i)))}
-            </TicketCard>
-          )}
-          {/* Standalone singles — singles-mode combos/picks + the specials
-              (always their own gold-trimmed tickets). */}
-          {singleTickets.map(t => (
-            <TicketCard
-              key={t.key}
-              gold={t.gold}
-              header={{
-                title: t.title,
-                titleGold: t.gold,
-                badge: { label: fmtOdds(t.odds), color: t.gold ? colors.gold : colors.accent },
-              }}
-              footer={
-                <>
-                  <WagerField
-                    wager={wagers[t.key] ?? ''}
-                    onChangeWager={v => setWagers(s => ({ ...s, [t.key]: v }))}
-                    balance={balance}
-                    odds={t.odds}
-                    boostPct={effectiveBoostPct}
-                    label="STAKE (pins)"
-                    compact
-                  />
-                  {itemToggles}
-                </>
-              }
-            >
-              {legLine(t.key, t.legText, t.onRemove)}
-            </TicketCard>
-          ))}
+          {/* ── One ticket card per resulting bet — ONE render path; the
+              parlay is just the ticket with more legs. ── */}
+          {tickets.map(t => {
+            const parlay = t.key === PARLAY_KEY
+            return (
+              <TicketCard
+                key={t.key}
+                gold={t.gold}
+                header={{
+                  title: t.title,
+                  titleGold: t.gold,
+                  badge: { label: fmtOdds(t.odds), color: t.gold ? colors.gold : colors.accent },
+                }}
+                footer={
+                  <>
+                    <WagerField
+                      wager={wagerOf(t.key)}
+                      onChangeWager={v => setWagers(s => ({ ...s, [t.key]: v }))}
+                      balance={balance}
+                      odds={t.odds}
+                      boostPct={effectiveBoostPct}
+                      label={parlay ? undefined : 'STAKE (pins)'}
+                      compact={!parlay}
+                    />
+                    {itemToggles}
+                  </>
+                }
+              >
+                {parlay && <Text style={styles.allMustWin}>ALL LEGS MUST WIN</Text>}
+                {parlay && jointCurrent?.correlated && (
+                  <Text style={styles.correlatedNote}>
+                    These legs are correlated, which impacts the payout
+                  </Text>
+                )}
+                {t.legs.map(l => legLine(l.key, l.text, l.onRemove, l.tag, l.odds))}
+              </TicketCard>
+            )
+          })}
 
           {/* Item availability note — items need a lone bet to attach to. */}
           {!oneBet && (ticketCount > 0 || boostCount > 0) && (
