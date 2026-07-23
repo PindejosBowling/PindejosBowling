@@ -1,4 +1,4 @@
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native'
+import { View, Text, StyleSheet } from 'react-native'
 import { colors, fonts, radius } from '../../theme'
 import Button from '../ui/Button'
 import { fmtOdds } from '../../utils/bets'
@@ -12,17 +12,10 @@ interface BuilderBarProps {
   // 'NIGHT' | 'GAME 2' — follows the board's scope filter.
   scopeLabel: string
   // The displayed line value (screen-owned; seeds from the quote's seed_line).
+  // The value EDITOR itself lives above the member list now (the screen's
+  // combo value card) — the bar only needs the value to gate Add on a live
+  // price for it.
   value: number | null
-  // The picked group's combined scope-scaled average — shown beside the value
-  // so the bettor sees where their line sits relative to expected production
-  // (lines below it are likely and pay short; above it pay longer).
-  groupAvg?: number | null
-  // The group's combined book projection (the engine's expectation the quoted
-  // odds center on) — shown beside the average so the bettor sees both
-  // yardsticks. Null when the engine is off (segment omitted).
-  groupProj?: number | null
-  // Tapping the value opens the LineEntrySheet for this combo.
-  onEditValue: () => void
   // The live quote for `value` (combo_price_line) — odds, band, seed anchor.
   quote: LineQuote | null
   // The preview RPC is in flight (debounce included) — shows the calculating
@@ -49,9 +42,6 @@ export default function BuilderBar({
   statLabel,
   scopeLabel,
   value,
-  groupAvg,
-  groupProj,
-  onEditValue,
   quote,
   quoteLoading,
   minMembers,
@@ -84,31 +74,13 @@ export default function BuilderBar({
         >
           {sub}
         </Text>
-        {/* The value — same interaction as a board pill: tap the number to
-            retype it in the sheet; the price follows the value. */}
+        {/* The value display moved above the member list (the screen's combo
+            value card) — the bar shows the staged price beside the tally so
+            the Add CTA reads against a number. */}
         {!blocked && minMembers && shownValue != null && (
-          <View style={styles.valueRow}>
-            {/* Same field affordance as the board pills: bordered chip +
-                edit glyph = "tap to type your own number". */}
-            <TouchableOpacity onPress={onEditValue} activeOpacity={0.7} style={styles.valueField}>
-              <Text style={styles.value}>{shownValue.toFixed(1)}+</Text>
-              <Text style={styles.editGlyph}>✎</Text>
-            </TouchableOpacity>
-            <Text style={styles.odds}>
-              {quoteLoading ? '…' : odds != null ? fmtOdds(odds) : '—'}
-            </Text>
-            {/* The two yardsticks: the group's combined average (what they
-                actually produce) and the book's combined projection (what the
-                quoted odds center on — lines above it pay longer). */}
-            {groupAvg != null && (
-              <Text style={styles.groupAvg} numberOfLines={1}>
-                AVG {groupAvg.toFixed(1)}
-                {groupProj != null && (
-                  <Text style={styles.groupProj}> · BOOK {groupProj.toFixed(1)}</Text>
-                )}
-              </Text>
-            )}
-          </View>
+          <Text style={styles.priceLine}>
+            {shownValue.toFixed(1)}+ · {quoteLoading ? '…' : odds != null ? fmtOdds(odds) : '—'}
+          </Text>
         )}
       </View>
       <Button variant="ghost" label="Cancel" onPress={onCancel} style={styles.cancel} />
@@ -153,37 +125,12 @@ const styles = StyleSheet.create({
     marginTop: 1,
   },
   subBlocked: { color: colors.gold },
-  valueRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 6 },
-  valueField: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: radius.cardSm,
-    borderWidth: 1,
-    borderColor: colors.chipBorder,
-    backgroundColor: colors.surfaceTint2,
-  },
-  value: {
+  priceLine: {
     fontFamily: fonts.barlowCondensedHeavy,
-    fontSize: 15,
+    fontSize: 14,
     color: colors.text,
+    marginTop: 4,
   },
-  editGlyph: { fontSize: 11, color: colors.accent },
-  odds: {
-    fontFamily: fonts.barlowCondensedHeavy,
-    fontSize: 15,
-    color: colors.accent,
-  },
-  groupAvg: {
-    fontFamily: fonts.barlowCondensed,
-    fontSize: 11,
-    letterSpacing: 0.5,
-    color: colors.muted,
-    flexShrink: 1,
-  },
-  groupProj: { color: colors.text },
   cancel: { paddingHorizontal: 8, paddingVertical: 8 },
   add: { paddingHorizontal: 16, paddingVertical: 10 },
 })

@@ -5,6 +5,7 @@ import {
   ScrollView,
   StyleSheet,
   RefreshControl,
+  TouchableOpacity,
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useNavigation } from '@react-navigation/native'
@@ -51,6 +52,7 @@ import { useRefresh } from '../hooks/useRefresh'
 import { useAuthStore } from '../stores/authStore'
 import { useUiStore } from '../stores/uiStore'
 import { betMarkets, haunts } from '../utils/supabase/db'
+import { fmtOdds } from '../utils/bets'
 import { shortName } from '../utils/helpers'
 import { PinsinoStackParamList } from '../navigation/types'
 import EmptyCard from '../components/ui/EmptyCard'
@@ -733,6 +735,36 @@ export default function SportsbookScreen() {
                     {closedBettingNote(board.firstInProgress)}
                   </Text>
                 )}
+                {/* The combo's value editor — relocated ABOVE the member list
+                    (the BuilderBar below keeps only the tally + Cancel/Add) so
+                    the number being shopped sits next to the players being
+                    picked. Same field affordance as a board pill: tap →
+                    LineEntrySheet; the live price and the two yardsticks
+                    (group average / book expectation) ride beside it. Appears
+                    once the combo is quotable (2+ members, scope open). */}
+                {!board.scopeInProgress && comboMemberIds.length >= 2 && shownComboValue != null && (
+                  <View style={styles.comboValueCard}>
+                    <TouchableOpacity
+                      onPress={() => setValueSheet({ kind: 'combo' })}
+                      activeOpacity={0.7}
+                      style={styles.comboValueField}
+                    >
+                      <Text style={styles.comboValueText}>{shownComboValue.toFixed(1)}+</Text>
+                      <Text style={styles.comboEditGlyph}>✎</Text>
+                    </TouchableOpacity>
+                    <Text style={styles.comboValueOdds}>
+                      {comboQuoteLoading ? '…' : comboOdds != null ? fmtOdds(comboOdds) : '—'}
+                    </Text>
+                    {comboGroupAvg != null && (
+                      <Text style={styles.comboYardstick} numberOfLines={1}>
+                        AVG {comboGroupAvg.toFixed(1)}
+                        {comboGroupProj != null && (
+                          <Text style={styles.comboYardstickBook}> · BOOK {comboGroupProj.toFixed(1)}</Text>
+                        )}
+                      </Text>
+                    )}
+                  </View>
+                )}
                 <View>
                   {comboMemberPool.map(m => {
                     const on = combo.members.has(m.playerId)
@@ -768,7 +800,10 @@ export default function SportsbookScreen() {
                                   : avgEntry.source === 'lifetime'
                                     ? `LIFETIME AVG ${avgShown.toFixed(1)}`
                                     : `LEAGUE AVG ${avgShown.toFixed(1)}`}
-                              {projShown != null && (
+                              {/* Sub-line BOOK only when the big slot holds a
+                                  solo line — line-less rows show BOOK big
+                                  instead (no duplicate). */}
+                              {projShown != null && solo?.line != null && (
                                 <>
                                   {'  ·  '}
                                   <Text style={styles.memberProj}>BOOK {projShown.toFixed(1)}</Text>
@@ -787,12 +822,25 @@ export default function SportsbookScreen() {
                               )}
                             </Text>
                           )}
-                          {solo?.line != null && <Text style={styles.memberSoloLabel}>SOLO LINE</Text>}
+                          {(solo?.line != null || projShown != null) && (
+                            <Text style={styles.memberSoloLabel}>
+                              {solo?.line != null ? 'SOLO LINE' : 'BOOK'}
+                            </Text>
+                          )}
                         </View>
-                        {/* The player's own line for this stat — the number a
-                            combiner is actually shopping on, so it reads big. */}
-                        <Text style={[styles.memberSoloValue, solo?.line == null && styles.memberSoloNone]}>
-                          {solo?.line != null ? `${solo.line.toFixed(1)}+` : '—'}
+                        {/* The big value a combiner shops on: the player's own
+                            line for this stat when one exists, else the book's
+                            projection (captioned BOOK above) — no more empty
+                            hyphen for line-less players. */}
+                        <Text
+                          style={[
+                            styles.memberSoloValue,
+                            solo?.line == null && projShown == null && styles.memberSoloNone,
+                          ]}
+                        >
+                          {solo?.line != null
+                            ? `${solo.line.toFixed(1)}+`
+                            : projShown != null ? projShown.toFixed(1) : '—'}
                         </Text>
                         <PickChip
                           label={on ? '✓' : '+'}
@@ -901,9 +949,6 @@ export default function SportsbookScreen() {
           statLabel={(STAT_LABELS[combo.stat] ?? combo.stat).toUpperCase()}
           scopeLabel={scope === 'weekly' ? 'NIGHT' : `GAME ${comboScopeGame}`}
           value={comboLineValue}
-          groupAvg={comboGroupAvg}
-          groupProj={comboGroupProj}
-          onEditValue={() => setValueSheet({ kind: 'combo' })}
           quote={comboQuote}
           quoteLoading={comboQuoteLoading}
           minMembers={comboMemberIds.length >= 2}
@@ -1035,6 +1080,50 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     textAlign: 'center',
   },
+  // Combine-mode value editor card — sits above the member list (the number
+  // being shopped next to the players being picked). Field chip mirrors the
+  // board pills' input-field affordance.
+  comboValueCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 12,
+    backgroundColor: colors.surfaceTint,
+    marginBottom: 8,
+  },
+  comboValueField: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.chipBorder,
+    backgroundColor: colors.surfaceTint2,
+  },
+  comboValueText: {
+    fontFamily: fonts.barlowCondensedHeavy,
+    fontSize: 17,
+    color: colors.text,
+  },
+  comboEditGlyph: { fontSize: 12, color: colors.accent },
+  comboValueOdds: {
+    fontFamily: fonts.barlowCondensedHeavy,
+    fontSize: 17,
+    color: colors.accent,
+  },
+  comboYardstick: {
+    flex: 1,
+    textAlign: 'right',
+    fontFamily: fonts.barlowCondensed,
+    fontSize: 11,
+    letterSpacing: 0.5,
+    color: colors.muted,
+  },
+  comboYardstickBook: { color: colors.text },
   // Stat-view member rows — same tinted-row language as the board's LineRow.
   memberRow: {
     flexDirection: 'row',
