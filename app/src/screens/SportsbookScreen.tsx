@@ -724,13 +724,35 @@ export default function SportsbookScreen() {
 
         {/* ── Place Bets ──────────────────────────────────────── */}
         {effectiveView === 'place' && <>
-        {/* The flat board: scope pills + Combine chip + player select, then
-            the chosen player's available lines for that scope. The filters
-            ARE the navigation — no collapsible sections. Staged picks live in
-            the global slip bar, so building a parlay across players/scopes is
-            just switching the filters. */}
+        {/* The flat board: the player-select heading leads, then scope pills +
+            Combine chip, then the chosen player's available lines for that
+            scope. The filters ARE the navigation — no collapsible sections.
+            Staged picks live in the global slip bar, so building a parlay
+            across players/scopes is just switching the filters. */}
         {visibleLines.length > 0 || customLines.length > 0 ? (
           <View style={styles.board}>
+            {/* The subject-name slot — the board's MAIN HEADING, directly
+                under the Place/Active/Settled switcher. One position, same
+                typography either way: the anchored player-name selector (the
+                ONE name on the board, ⚰️ the old full-width dropdown menu
+                consolidated into it), or the picked group's names while
+                combining. */}
+            {comboMode ? (
+              <Text style={styles.groupNameHeader}>
+                {comboMemberShortNames.length > 0 ? comboMemberShortNames.join(' + ') : 'COMBO'}
+              </Text>
+            ) : board.selectedPlayerId != null ? (
+              <Dropdown
+                options={board.players.map(p => ({
+                  key: p.id,
+                  label: `${p.name}${p.id === playerId ? ' (you)' : ''}`,
+                }))}
+                value={board.selectedPlayerId}
+                onChange={setPickedPlayerId}
+                style={styles.playerNameSelect}
+                triggerTextStyle={styles.playerNameSelectText}
+              />
+            ) : null}
             <View style={styles.filterRow}>
               <ToggleGroup
                 variant="pill"
@@ -794,26 +816,6 @@ export default function SportsbookScreen() {
                 {closedBettingNote(board.firstInProgress)}
               </Text>
             )}
-            {/* The subject-name slot — one position, same typography either
-                way: the anchored player-name selector (the ONE name on the
-                board, ⚰️ the old full-width dropdown menu consolidated into
-                it), or the picked group's names while combining. */}
-            {comboMode ? (
-              <Text style={styles.groupNameHeader}>
-                {comboMemberShortNames.length > 0 ? comboMemberShortNames.join(' + ') : 'COMBO'}
-              </Text>
-            ) : board.selectedPlayerId != null ? (
-              <Dropdown
-                options={board.players.map(p => ({
-                  key: p.id,
-                  label: `${p.name}${p.id === playerId ? ' (you)' : ''}`,
-                }))}
-                value={board.selectedPlayerId}
-                onChange={setPickedPlayerId}
-                style={styles.playerNameSelect}
-                triggerTextStyle={styles.playerNameSelectText}
-              />
-            ) : null}
             {!comboMode && board.selectedPlayerId == null ? (
               // Nobody has lines in this scope (they may in another — the
               // pills stay tappable above).
@@ -1051,8 +1053,8 @@ const styles = StyleSheet.create({
   // Separates the board from the mode toggle above it — the filters lead
   // directly (no section header of its own).
   board: { marginTop: 16 },
-  // The board filters: scope pills + the trailing Combine chip, then the
-  // player select field beneath.
+  // The board filters: scope pills + the trailing Combine chip, beneath the
+  // player-select heading.
   filterRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1061,8 +1063,8 @@ const styles = StyleSheet.create({
   },
   scopePills: { flex: 1, justifyContent: 'flex-start' },
   // The player-name selector — the Dropdown trigger undressed to read as the
-  // line card's name header (centered name + ▾, no box), so the name above
-  // the lines IS the picker.
+  // board's main heading (centered name + ▾, no box), so the name atop the
+  // board IS the picker.
   playerNameSelect: {
     alignSelf: 'center',
     backgroundColor: 'transparent',
