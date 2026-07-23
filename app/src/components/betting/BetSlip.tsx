@@ -475,33 +475,11 @@ export default function BetSlip({
             />
           }
         >
-          {/* Mode toggle — merging/splitting the pick tickets below. A 3+ leg
-              correlated cluster can't parlay (placement rejects it), so the
-              toggle hides and the tickets stay singles with an explanation. */}
-          {multiPicks && !parlayBlocked && (
-            <View style={styles.modeRow}>
-              <ToggleGroup
-                variant="bar"
-                options={[{ key: 'singles', label: 'Singles' }, { key: 'parlay', label: 'Parlay' }]}
-                value={mode}
-                onChange={(m: SlipMode) => setMode(m)}
-              />
-            </View>
-          )}
-          {multiPicks && parlayBlocked && (
-            <View style={styles.parlayBlockedBox}>
-              <Text style={styles.parlayBlockedText}>
-                ⚠ Too many correlated legs on the same player or group to
-                parlay — these will place as singles. Two legs on the same
-                subject can still combine (priced jointly).
-              </Text>
-            </View>
-          )}
-
           {/* Prominent slip header — the bettor's spending power and the floor,
-              front and center. Remaining tracks the staged total live and goes
-              red the moment the slip would overdraw. Rendered ONCE (bettor
-              info, not per-ticket). */}
+              pinned to the top of the sheet (above the mode selector) so it's
+              always the first thing read. Remaining tracks the staged total live
+              and goes red the moment the slip would overdraw. Rendered ONCE
+              (bettor info, not per-ticket). */}
           <View style={styles.slipHeader}>
             <View style={styles.slipHeaderCell}>
               <Text style={styles.slipHeaderLabel}>AVAILABLE BALANCE</Text>
@@ -527,6 +505,29 @@ export default function BetSlip({
             </View>
           </View>
 
+          {/* Mode toggle — merging/splitting the pick tickets below. A 3+ leg
+              correlated cluster can't parlay (placement rejects it), so the
+              toggle hides and the tickets stay singles with an explanation. */}
+          {multiPicks && !parlayBlocked && (
+            <View style={styles.modeRow}>
+              <ToggleGroup
+                variant="bar"
+                options={[{ key: 'singles', label: 'Singles' }, { key: 'parlay', label: 'Parlay' }]}
+                value={mode}
+                onChange={(m: SlipMode) => setMode(m)}
+              />
+            </View>
+          )}
+          {multiPicks && parlayBlocked && (
+            <View style={styles.parlayBlockedBox}>
+              <Text style={styles.parlayBlockedText}>
+                ⚠ Too many correlated legs on the same player or group to
+                parlay — these will place as singles. Two legs on the same
+                subject can still combine (priced jointly).
+              </Text>
+            </View>
+          )}
+
           {/* ── One ticket card per resulting bet — ONE render path; the
               parlay is just the ticket with more legs. ── */}
           {tickets.map(t => {
@@ -550,15 +551,15 @@ export default function BetSlip({
                       boostPct={effectiveBoostPct}
                     />
                     {itemToggles}
+                    {parlay && <Text style={styles.allMustWin}>ALL LEGS MUST WIN</Text>}
+                    {parlay && jointCurrent?.correlated && (
+                      <Text style={styles.correlatedNote}>
+                        These legs are correlated, which impacts the payout
+                      </Text>
+                    )}
                   </>
                 }
               >
-                {parlay && <Text style={styles.allMustWin}>ALL LEGS MUST WIN</Text>}
-                {parlay && jointCurrent?.correlated && (
-                  <Text style={styles.correlatedNote}>
-                    These legs are correlated, which impacts the payout
-                  </Text>
-                )}
                 {t.legs.map(l => legLine(l.key, l.text, l.onRemove, l.tag, l.odds))}
               </TicketCard>
             )
@@ -692,14 +693,13 @@ const styles = StyleSheet.create({
   },
   allMustWin: {
     ...type.label,
-    color: colors.muted,
-    marginBottom: spacing.sm,
+    color: colors.accent,
+    marginTop: spacing.sm,
   },
   correlatedNote: {
     ...type.label,
-    color: colors.gold,
-    marginTop: -6,
-    marginBottom: spacing.sm,
+    color: colors.text,
+    marginTop: 2,
   },
   itemToggles: { marginTop: spacing.xs },
   remove: {

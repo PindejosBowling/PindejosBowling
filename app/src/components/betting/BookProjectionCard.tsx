@@ -17,13 +17,14 @@ interface BookProjectionCardProps {
   nGames: number
 }
 
-// Column heads — compressed forms of the shared STAT_LABELS (four columns
-// have to share a phone width). `total_pins` is the combo vocabulary's spelling
-// of the score column (group rows sum member pinfall, not a posted score line).
+// Column heads — the full STAT_LABELS forms, matching the pill labels below
+// (they wrap to two lines within each column when needed). `total_pins` is the
+// combo vocabulary's spelling of the score column (group rows sum member
+// pinfall, not a posted score line).
 const COLUMN_LABELS: Record<string, string> = {
-  score: 'PINS',
-  total_pins: 'PINS',
-  clean_frames: 'CLEAN',
+  score: 'TOTAL PINS',
+  total_pins: 'TOTAL PINS',
+  clean_frames: 'CLEAN FRAMES',
   strikes: 'STRIKES',
   spares: 'SPARES',
 }
@@ -95,6 +96,7 @@ const styles = StyleSheet.create({
     fontSize: 10,
     letterSpacing: 1,
     color: colors.muted2,
+    textAlign: 'center',
   },
   // The player's AVERAGE gets the big accent treatment (the memberSoloValue
   // idiom) — it's the headline; the book reads as the comparison beneath.

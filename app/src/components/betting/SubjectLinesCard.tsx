@@ -24,10 +24,10 @@ export function ValueField({
       activeOpacity={0.7}
       style={[styles.valueField, size === 'lg' && styles.valueFieldLg, selected && styles.valueFieldSelected]}
     >
+      <Text style={[styles.editGlyph, size === 'lg' && styles.editGlyphLg, selected && styles.textSelected]}>✎</Text>
       <Text style={[styles.value, size === 'lg' && styles.valueLg, selected && styles.textSelected]}>
         {text}
       </Text>
-      <Text style={[styles.editGlyph, size === 'lg' && styles.editGlyphLg, selected && styles.textSelected]}>✎</Text>
     </TouchableOpacity>
   )
 }
