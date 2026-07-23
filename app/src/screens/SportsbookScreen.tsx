@@ -67,6 +67,15 @@ const VIEW_OPTIONS: { key: View2; label: string }[] = [
   { key: 'settled', label: 'Settled' },
 ]
 
+// The combo pane's line-type selector — the four combinable stats (the same
+// vocabulary comboStatOf seeds from a tapped board line).
+const COMBO_STAT_OPTIONS = [
+  { key: 'total_pins', label: 'Pins' },
+  { key: 'clean_frames', label: 'Clean' },
+  { key: 'strikes', label: 'Strikes' },
+  { key: 'spares', label: 'Spares' },
+]
+
 export default function SportsbookScreen() {
   const playerId = useAuthStore(s => s.playerId)
   const { showToast } = useUiStore()
@@ -501,6 +510,28 @@ export default function SportsbookScreen() {
     })
   }, [combining, comboMemberIds, projCache])
 
+  // The pane's single-stat readout: the CHOSEN stat's group average vs book
+  // projection (scope-scaled), sliced from the summed rows. Arrow semantics
+  // match the board strip — it rides the average and marks its position vs
+  // the book (▼ = the group averages below what the book projects).
+  const comboPaneStat = useMemo(() => {
+    if (!combining || combo?.stat == null || comboGroupRows == null) return null
+    const key = combo.stat === 'total_pins' ? 'score' : combo.stat
+    const row = comboGroupRows.find(r => r.stat === key)
+    if (row == null) return null
+    const avg = row.seasonAvg != null ? row.seasonAvg * comboNGames : null
+    const proj = row.projected != null ? row.projected * comboNGames : null
+    const delta = avg != null && proj != null ? avg - proj : null
+    return {
+      avg,
+      proj,
+      dir:
+        delta == null || Math.abs(delta) < 0.05
+          ? null
+          : delta > 0 ? ('up' as const) : ('down' as const),
+    }
+  }, [combining, combo?.stat, comboGroupRows, comboNGames])
+
   // ── Value-first editing (via the LineEntrySheet) ──────────────────────
   // Per-market value overrides (the number the bettor accepted in the sheet)
   // + the accepted quote per market so custom (non-posted) values keep their
@@ -777,54 +808,74 @@ export default function SportsbookScreen() {
               // member's own line for this stat shows as context when one
               // exists. Scope pills stay live — switching re-previews the line.
               <>
-                <Text style={styles.combineHint}>
-                  TAP PLAYERS TO COMBINE · {(STAT_LABELS[combo.stat] ?? combo.stat).toUpperCase()}
-                </Text>
-                {/* The same projection header the flat board leads with, summed
-                    across the chosen members — the group's book expectation vs
-                    their combined averages, all four stats, scope-scaled. */}
-                {comboGroupRows != null && (
-                  <BookProjectionCard
-                    rows={comboGroupRows}
-                    nGames={comboNGames}
-                    scopeLabel={scope === 'weekly' ? 'NIGHT' : `GAME ${comboScopeGame}`}
-                  />
-                )}
+                <Text style={styles.combineHint}>TAP PLAYERS TO COMBINE</Text>
                 {board.scopeInProgress && board.firstInProgress && (
                   <Text style={styles.inProgressNote}>
                     {closedBettingNote(board.firstInProgress)}
                   </Text>
                 )}
-                {/* The combo's value editor — relocated ABOVE the member list
-                    (the BuilderBar below keeps only the tally + Cancel/Add) so
-                    the number being shopped sits next to the players being
-                    picked. Same field affordance as a board pill: tap →
-                    LineEntrySheet; the live price and the two yardsticks
-                    (group average / book expectation) ride beside it. Appears
-                    once the combo is quotable (2+ members, scope open). */}
-                {!board.scopeInProgress && comboMemberIds.length >= 2 && shownComboValue != null && (
-                  <View style={styles.comboValueCard}>
-                    <TouchableOpacity
-                      onPress={() => setValueSheet({ kind: 'combo' })}
-                      activeOpacity={0.7}
-                      style={styles.comboValueField}
-                    >
-                      <Text style={styles.comboValueText}>{shownComboValue.toFixed(1)}+</Text>
-                      <Text style={styles.comboEditGlyph}>✎</Text>
-                    </TouchableOpacity>
-                    <Text style={styles.comboValueOdds}>
-                      {comboQuoteLoading ? '…' : comboOdds != null ? fmtOdds(comboOdds) : '—'}
-                    </Text>
-                    {comboGroupAvg != null && (
-                      <Text style={styles.comboYardstick} numberOfLines={1}>
-                        AVG {comboGroupAvg.toFixed(1)}
-                        {comboGroupProj != null && (
-                          <Text style={styles.comboYardstickBook}> · BOOK {comboGroupProj.toFixed(1)}</Text>
-                        )}
-                      </Text>
+                {/* The consolidated combo pane: pick the line type, see/edit
+                    the value with its live price, and read the group's
+                    Average vs Book for THAT stat only. Switching stat is a
+                    combo-identity change — the value re-anchors to the new
+                    seed, the quote/averages refetch, and the member rows'
+                    solo lines follow. */}
+                <View style={styles.comboPane}>
+                  <ToggleGroup
+                    variant="pill"
+                    options={COMBO_STAT_OPTIONS}
+                    value={combo.stat}
+                    onChange={k =>
+                      setCombo(prev => (prev?.stat != null ? { ...prev, stat: k } : prev))
+                    }
+                  />
+                  <View style={styles.comboPaneRow}>
+                    {!board.scopeInProgress &&
+                      (comboMemberIds.length >= 2 && shownComboValue != null ? (
+                        <>
+                          <TouchableOpacity
+                            onPress={() => setValueSheet({ kind: 'combo' })}
+                            activeOpacity={0.7}
+                            style={styles.comboValueField}
+                          >
+                            <Text style={styles.comboValueText}>{shownComboValue.toFixed(1)}+</Text>
+                            <Text style={styles.comboEditGlyph}>✎</Text>
+                          </TouchableOpacity>
+                          <Text style={styles.comboValueOdds}>
+                            {comboQuoteLoading ? '…' : comboOdds != null ? fmtOdds(comboOdds) : '—'}
+                          </Text>
+                        </>
+                      ) : (
+                        <Text style={styles.comboPanePlaceholder}>PICK 2+ PLAYERS</Text>
+                      ))}
+                    {/* The chosen stat's group Average vs Book (scope-scaled),
+                        same reading as the board strip: the arrow rides the
+                        average and marks its position vs the book. */}
+                    {comboPaneStat != null && (
+                      <View style={styles.comboPaneStats}>
+                        <View style={styles.comboPaneAvgRow}>
+                          <Text style={styles.comboPaneAvg}>
+                            AVG {comboPaneStat.avg != null ? comboPaneStat.avg.toFixed(1) : '—'}
+                          </Text>
+                          {comboPaneStat.dir != null && (
+                            <Text
+                              style={
+                                comboPaneStat.dir === 'up'
+                                  ? styles.comboPaneDeltaUp
+                                  : styles.comboPaneDeltaDown
+                              }
+                            >
+                              {comboPaneStat.dir === 'up' ? '▲' : '▼'}
+                            </Text>
+                          )}
+                        </View>
+                        <Text style={styles.comboPaneBook}>
+                          BOOK {comboPaneStat.proj != null ? comboPaneStat.proj.toFixed(1) : '—'}
+                        </Text>
+                      </View>
                     )}
                   </View>
-                )}
+                </View>
                 <View>
                   {comboMemberPool.map(m => {
                     const on = combo.members.has(m.playerId)
@@ -1140,18 +1191,44 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     textAlign: 'center',
   },
-  // Combine-mode value editor card — sits above the member list (the number
-  // being shopped next to the players being picked). Field chip mirrors the
+  // The consolidated combo pane — stat selector on top, then value field +
+  // odds + the chosen stat's AVG-vs-BOOK readout. Field chip mirrors the
   // board pills' input-field affordance.
-  comboValueCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
+  comboPane: {
     paddingHorizontal: 14,
-    paddingVertical: 10,
+    paddingVertical: 12,
     borderRadius: 12,
     backgroundColor: colors.surfaceTint,
     marginBottom: 8,
+    gap: 10,
+  },
+  comboPaneRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  comboPanePlaceholder: {
+    fontFamily: fonts.barlowCondensed,
+    fontSize: 12,
+    letterSpacing: 1,
+    color: colors.muted2,
+  },
+  comboPaneStats: { flex: 1, alignItems: 'flex-end' },
+  comboPaneAvgRow: { flexDirection: 'row', alignItems: 'center', gap: 3 },
+  comboPaneAvg: {
+    fontFamily: fonts.barlowCondensedHeavy,
+    fontSize: 14,
+    color: colors.text,
+    letterSpacing: 0.5,
+  },
+  comboPaneDeltaUp: { fontSize: 9, color: colors.success },
+  comboPaneDeltaDown: { fontSize: 9, color: colors.danger },
+  comboPaneBook: {
+    fontFamily: fonts.barlowCondensed,
+    fontSize: 11,
+    letterSpacing: 0.5,
+    color: colors.muted,
+    marginTop: 1,
   },
   comboValueField: {
     flexDirection: 'row',
@@ -1175,15 +1252,6 @@ const styles = StyleSheet.create({
     fontSize: 17,
     color: colors.accent,
   },
-  comboYardstick: {
-    flex: 1,
-    textAlign: 'right',
-    fontFamily: fonts.barlowCondensed,
-    fontSize: 11,
-    letterSpacing: 0.5,
-    color: colors.muted,
-  },
-  comboYardstickBook: { color: colors.text },
   // Stat-view member rows — same tinted-row language as the board's LineRow.
   memberRow: {
     flexDirection: 'row',

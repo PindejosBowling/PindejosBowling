@@ -26,42 +26,45 @@ const COLUMN_LABELS: Record<string, string> = {
   spares: 'SPARES',
 }
 
-// The board's projection strip: what the book expects from the selected player
-// this week (the OddsEngine mean) over what they actually average. Pure
-// display — the engine's variance/quote band stays server-side, and no
-// staging/pricing flows through here.
+// The board's averages-vs-book strip: what the player actually averages (the
+// headline) with the book's expectation beneath for comparison — the ▲/▼
+// rides the AVERAGE and describes ITS position vs the book (▲ = the average
+// sits above what the book projects; ▼ = below it — the book is calling for
+// more than the player has averaged, i.e. a hot week). Pure display — the
+// engine's variance/quote band stays server-side, and no staging/pricing
+// flows through here.
 export default function BookProjectionCard({ rows, nGames, scopeLabel }: BookProjectionCardProps) {
   const shown = rows.filter(r => r.projected != null)
-  // Engine off (or no rows yet): the book has no opinion to show.
+  // Engine off (or no rows yet): no book side to compare against.
   if (shown.length === 0) return null
 
   const fallback = shown.some(r => r.seasonAvg != null && r.avgSource !== 'season')
 
   return (
     <View style={styles.card}>
-      <Text style={styles.header}>BOOK PROJECTION · {scopeLabel}</Text>
+      <Text style={styles.header}>SEASON AVG vs BOOK · {scopeLabel}</Text>
       <View style={styles.columns}>
         {shown.map(r => {
           const projected = r.projected! * nGames
           const avg = r.seasonAvg != null ? r.seasonAvg * nGames : null
-          // Direction vs the player's own average — is the book calling for a
-          // hot or cold week? Sub-tenth deltas read as "on form".
-          const delta = avg != null ? projected - avg : null
+          // The AVERAGE's position vs the book — sub-tenth deltas read as
+          // "on form".
+          const delta = avg != null ? avg - projected : null
           const dir = delta == null || Math.abs(delta) < 0.05 ? null : delta > 0 ? 'up' : 'down'
           return (
             <View key={r.stat} style={styles.column}>
               <Text style={styles.statLabel}>{COLUMN_LABELS[r.stat] ?? r.stat.toUpperCase()}</Text>
-              <View style={styles.projectedRow}>
-                <Text style={styles.projected}>{projected.toFixed(1)}</Text>
+              <View style={styles.avgRow}>
+                <Text style={[styles.avgValue, avg == null && styles.avgNone]}>
+                  {avg == null ? '—' : `${avg.toFixed(1)}${r.avgSource !== 'season' ? '*' : ''}`}
+                </Text>
                 {dir != null && (
                   <Text style={[styles.delta, dir === 'up' ? styles.deltaUp : styles.deltaDown]}>
                     {dir === 'up' ? '▲' : '▼'}
                   </Text>
                 )}
               </View>
-              <Text style={styles.avg}>
-                {avg == null ? 'NO AVG' : `AVG ${avg.toFixed(1)}${r.avgSource !== 'season' ? '*' : ''}`}
-              </Text>
+              <Text style={styles.book}>BOOK {projected.toFixed(1)}</Text>
             </View>
           )
         })}
@@ -101,25 +104,26 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
     color: colors.muted2,
   },
-  projectedRow: { flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 2 },
-  // The book's number gets the big accent treatment (the memberSoloValue
-  // idiom) — it's the headline of the strip.
-  projected: {
+  // The player's AVERAGE gets the big accent treatment (the memberSoloValue
+  // idiom) — it's the headline; the book reads as the comparison beneath.
+  avgValue: {
     fontFamily: fonts.barlowCondensedHeavy,
     fontSize: 20,
     color: colors.accent,
     letterSpacing: 0.5,
   },
-  delta: { fontFamily: fonts.barlowCondensed, fontSize: 10 },
-  deltaUp: { color: colors.success },
-  deltaDown: { color: colors.danger },
-  avg: {
+  avgNone: { color: colors.muted2 },
+  avgRow: { flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 2 },
+  book: {
     fontFamily: fonts.barlowCondensed,
     fontSize: 11,
     letterSpacing: 0.5,
     color: colors.muted,
     marginTop: 2,
   },
+  delta: { fontFamily: fonts.barlowCondensed, fontSize: 10 },
+  deltaUp: { color: colors.success },
+  deltaDown: { color: colors.danger },
   footnote: {
     fontFamily: fonts.barlow,
     fontSize: 10,
