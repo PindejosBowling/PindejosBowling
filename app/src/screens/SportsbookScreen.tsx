@@ -789,7 +789,9 @@ export default function SportsbookScreen() {
                 where the "· WEEKLY" text qualifier used to be (⚰️ the
                 standalone filter row beneath the subject heading). */}
             <View style={styles.boardHeaderRow}>
-              <Text style={styles.boardHeaderText}>SEASON AVG vs FORECAST ·</Text>
+              <Text style={styles.boardHeaderText}>
+                {seasonNumber != null ? `SEASON ${seasonNumber} AVG` : 'SEASON AVG'} vs FORECAST ·
+              </Text>
               <Dropdown
                 options={scopeOptions}
                 value={scope}
@@ -906,6 +908,17 @@ export default function SportsbookScreen() {
                   ))}
               </>
             )}
+            {/* ELI5 foot section — why the strip up top shows BOTH numbers.
+                Voice rule: the gap between average and forecast is always
+                framed as the BOOK taking a position (an opportunity for the
+                bettor), never as the player trending well or badly — no
+                praising ▲ or shaming ▼. */}
+            <Text style={styles.boardFootText}>
+              The Sportsbook makes a forecast each week for all players based on the 
+              lifetime Official games that we have on record, and each players' current season averages are shown above it. 
+
+              All betting lines are priced based on the forecast. 
+            </Text>
           </View>
         ) : (
           <EmptyCard text="No open lines this week" />
@@ -1155,6 +1168,17 @@ const styles = StyleSheet.create({
     fontFamily: fonts.barlowCondensed,
     fontSize: 17,
     color: colors.accent,
+  },
+  // The board's ELI5 foot section — beneath the last line card, explaining
+  // the AVG-vs-FORECAST strip up top.
+  boardFootText: {
+    fontFamily: fonts.barlow,
+    fontSize: 11,
+    lineHeight: 15,
+    color: colors.muted,
+    textAlign: 'center',
+    marginTop: 10,
+    paddingHorizontal: 8,
   },
   // Scope-level in-progress warning — shown above the rows when any in-scope
   // market is closed for betting.

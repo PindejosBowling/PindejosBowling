@@ -29,10 +29,9 @@ const COLUMN_LABELS: Record<string, string> = {
 }
 
 // The board's averages-vs-book strip: what the player actually averages (the
-// headline) with the book's expectation beneath for comparison — the ▲/▼
-// rides the AVERAGE and describes ITS position vs the book (▲ = the average
-// sits above what the book projects; ▼ = below it — the book is calling for
-// more than the player has averaged, i.e. a hot week). Pure display — the
+// headline) with the book's expectation beneath for comparison — a ▲ rides
+// the AVERAGE when it sits above what the book projects (celebration-only;
+// an average under forecast gets no mark at all). Pure display — the
 // engine's variance/quote band stays server-side, and no staging/pricing
 // flows through here. One presentation for both board modes — combo mode
 // feeds the group's summed rows through the same card, no framing overrides.
@@ -60,11 +59,10 @@ export default function BookProjectionCard({ rows, nGames }: BookProjectionCardP
                 <Text style={[styles.avgValue, avg == null && styles.avgNone]}>
                   {avg == null ? '—' : `${avg.toFixed(1)}${r.avgSource !== 'season' ? '*' : ''}`}
                 </Text>
-                {dir != null && (
-                  <Text style={[styles.delta, dir === 'up' ? styles.deltaUp : styles.deltaDown]}>
-                    {dir === 'up' ? '▲' : '▼'}
-                  </Text>
-                )}
+                {/* Celebration-only: the ▲ marks an average running ahead of
+                    the book. No ▼ — an average under forecast just shows the
+                    numbers, never a red mark (nobody gets shamed here). */}
+                {dir === 'up' && <Text style={[styles.delta, styles.deltaUp]}>▲</Text>}
               </View>
               <Text style={styles.book}>FORECAST {projected.toFixed(1)}</Text>
             </View>
@@ -116,7 +114,6 @@ const styles = StyleSheet.create({
   },
   delta: { fontFamily: fonts.barlowCondensed, fontSize: 10 },
   deltaUp: { color: colors.success },
-  deltaDown: { color: colors.danger },
   footnote: {
     fontFamily: fonts.barlow,
     fontSize: 10,
