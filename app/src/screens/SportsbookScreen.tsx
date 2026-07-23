@@ -105,13 +105,13 @@ export default function SportsbookScreen() {
   const [scope, setScope] = useState<string>('weekly')
   const [pickedPlayerId, setPickedPlayerId] = useState<string | null>(null)
 
-  // Combine mode — board-native combo building. null = off; { stat: null } =
-  // armed (Combine chip on, waiting for a stat tap); stat set = the stat-view
-  // pivot is active (member picking). Scope follows the board's scope filter:
-  // Weekly → a night combo, Game N → that game.
-  const [combo, setCombo] = useState<{ stat: string | null; members: Set<string> } | null>(null)
-  const comboArmed = combo != null && combo.stat == null
-  const combining = combo != null && combo.stat != null
+  // Combine mode — board-native combo building. null = off; set = the pivot
+  // is active (member picking + the combo pane, whose selector switches the
+  // stat mid-build — there is no armed intermediate step anymore: the COMBO
+  // chip lands directly in the pivot). Scope follows the board's scope
+  // filter: Weekly → a night combo, Game N → that game.
+  const [combo, setCombo] = useState<{ stat: string; members: Set<string> } | null>(null)
+  const combining = combo != null
 
   // The bet slip (staged picks/specials, placement, item inventory, balance) is
   // owned by the app-level BetSlipProvider so it can also be raised from Bet
@@ -385,20 +385,12 @@ export default function SportsbookScreen() {
 
   function toggleComboMember(id: string) {
     setCombo(prev => {
-      if (prev?.stat == null) return prev
+      if (prev == null) return prev
       const members = new Set(prev.members)
       if (members.has(id)) members.delete(id)
       else members.add(id)
       return { ...prev, members }
     })
-  }
-
-  // An armed stat tap pivots the board into member picking, seeded with the
-  // tapped subject. Combos/specials chips can't seed a combo.
-  function enterStatView(line: LineView) {
-    const stat = comboStatOf(line)
-    if (!stat) { showToast('Combos build from player stat lines', 'error'); return }
-    setCombo({ stat, members: new Set(line.subjectPlayerId ? [line.subjectPlayerId] : []) })
   }
 
   // Add (or, when this exact combo is already staged, remove) via the slip's
@@ -655,16 +647,9 @@ export default function SportsbookScreen() {
               staged={staged != null}
               dimmed={balance < 10}
               inert={groupInProgress || line.inProgress || readOnly}
-              // Armed combine mode repurposes the body tap: it seeds the combo
-              // and pivots to member picking, so value editing hides while
-              // armed.
-              editable={!comboArmed}
+              editable
               onEditValue={() => setValueSheet({ kind: 'market', line })}
-              onStage={
-                comboArmed
-                  ? () => enterStatView(line)
-                  : () => stagePickAtValue(line, value, odds)
-              }
+              onStage={() => stagePickAtValue(line, value, odds)}
             />
           )
         }}
@@ -771,10 +756,12 @@ export default function SportsbookScreen() {
               />
               {/* Combine — board-native combo building. Dim-but-pressable
                   below 2 RSVP'd players (house convention: still toasts).
-                  A stat pick already staged in the slip pre-seeds the combo:
-                  the chip skips the armed state and jumps straight to member
-                  picking on that line's stat + subject (most recent staged
-                  pick wins when several qualify). */}
+                  The chip lands DIRECTLY in the pivot (no intermediate
+                  step): a stat pick already staged in the slip pre-seeds the
+                  stat + first member (most recent staged pick wins when
+                  several qualify), else the pane opens on Total Pins with
+                  nobody picked — the pane's selector switches stat either
+                  way. */}
               {currentWeekId != null && currentSeasonId != null && (
                 <PickChip
                   label="COMBO"
@@ -796,13 +783,13 @@ export default function SportsbookScreen() {
                           members: new Set(seed.subjectPlayerId ? [seed.subjectPlayerId] : []),
                         }
                       }
-                      return { stat: null, members: new Set() }
+                      return { stat: 'total_pins', members: new Set() }
                     })
                   }}
                 />
               )}
             </View>
-            {combining && combo?.stat != null ? (
+            {combo != null ? (
               // ── Stat-view pivot: pick the combo's members ──────────────
               // Pool = every RSVP'd-in player (combos need only RSVP); a
               // member's own line for this stat shows as context when one
@@ -933,26 +920,28 @@ export default function SportsbookScreen() {
                               )}
                             </Text>
                           )}
-                          {(solo?.line != null || projShown != null) && (
-                            <Text style={styles.memberSoloLabel}>
-                              {solo?.line != null ? 'SOLO LINE' : 'BOOK'}
-                            </Text>
-                          )}
                         </View>
                         {/* The big value a combiner shops on: the player's own
                             line for this stat when one exists, else the book's
-                            projection (captioned BOOK above) — no more empty
-                            hyphen for line-less players. */}
-                        <Text
-                          style={[
-                            styles.memberSoloValue,
-                            solo?.line == null && projShown == null && styles.memberSoloNone,
-                          ]}
-                        >
-                          {solo?.line != null
-                            ? `${solo.line.toFixed(1)}+`
-                            : projShown != null ? projShown.toFixed(1) : '—'}
-                        </Text>
+                            projection — each captioned directly above its
+                            number so a BOOK value can't read as a line. */}
+                        <View style={styles.memberValueCol}>
+                          {(solo?.line != null || projShown != null) && (
+                            <Text style={styles.memberValueLabel}>
+                              {solo?.line != null ? 'SOLO LINE' : 'BOOK PROJ.'}
+                            </Text>
+                          )}
+                          <Text
+                            style={[
+                              styles.memberSoloValue,
+                              solo?.line == null && projShown == null && styles.memberSoloNone,
+                            ]}
+                          >
+                            {solo?.line != null
+                              ? `${solo.line.toFixed(1)}+`
+                              : projShown != null ? projShown.toFixed(1) : '—'}
+                          </Text>
+                        </View>
                         <PickChip
                           label={on ? '✓' : '+'}
                           selected={on}
@@ -981,20 +970,14 @@ export default function SportsbookScreen() {
                 )}
                 {/* What the book expects from the selected player this week
                     against what they actually average — scope-scaled like the
-                    lines beneath it (Weekly = × the night's games). Hidden
-                    while a combo is armed (the board pivots to combo seeding)
-                    and self-hides when the engine has no opinion. */}
-                {!comboArmed && board.selectedPlayerId != null && projCache[board.selectedPlayerId] != null && (
+                    lines beneath it (Weekly = × the night's games). Self-hides
+                    when the engine has no opinion. */}
+                {board.selectedPlayerId != null && projCache[board.selectedPlayerId] != null && (
                   <BookProjectionCard
                     rows={projCache[board.selectedPlayerId]}
                     nGames={scope === 'weekly' ? Math.max(weekGameNumbers.length, 1) : 1}
                     scopeLabel={scope === 'weekly' ? 'WEEKLY' : `GAME ${scope.slice('game-'.length)}`}
                   />
-                )}
-                {comboArmed && (
-                  <Text style={styles.combineHint}>
-                    TAP ANY STAT LINE TO START A COMBO
-                  </Text>
                 )}
                 {board.selectedPlayerId == null ? (
                   // Nobody has lines in this scope (they may in another — the
@@ -1288,19 +1271,20 @@ const styles = StyleSheet.create({
   memberProj: { color: colors.text },
   memberProjUp: { color: colors.success, fontSize: 9 },
   memberProjDown: { color: colors.danger, fontSize: 9 },
-  memberSoloLabel: {
+  // The right-aligned value column: a tiny caption (SOLO LINE / BOOK PROJ.)
+  // directly over the big number it describes.
+  memberValueCol: { alignItems: 'flex-end', marginRight: 4 },
+  memberValueLabel: {
     fontFamily: fonts.barlowCondensed,
-    fontSize: 10,
-    letterSpacing: 1.5,
+    fontSize: 9,
+    letterSpacing: 1.2,
     color: colors.muted,
-    marginTop: 1,
   },
   memberSoloValue: {
     fontFamily: fonts.barlowCondensedHeavy,
     fontSize: 20,
     color: colors.accent,
     letterSpacing: 0.5,
-    marginRight: 4,
   },
   memberSoloNone: { color: colors.muted2 },
   // Scope-level in-progress warning — shown above the rows when any in-scope
