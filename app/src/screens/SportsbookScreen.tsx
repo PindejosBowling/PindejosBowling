@@ -1071,7 +1071,7 @@ const styles = StyleSheet.create({
   },
   boardHeaderText: {
     fontFamily: fonts.barlowCondensedHeavy,
-    fontSize: 15,
+    fontSize: 19,
     letterSpacing: 1,
     color: colors.text,
   },
@@ -1086,7 +1086,7 @@ const styles = StyleSheet.create({
   },
   scopeSelectText: {
     fontFamily: fonts.barlowCondensedHeavy,
-    fontSize: 15,
+    fontSize: 19,
     letterSpacing: 1,
     color: colors.accent,
     textTransform: 'uppercase',
@@ -1111,10 +1111,10 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
   },
   playerNameSelectText: {
-    fontFamily: fonts.barlowCondensed,
-    fontSize: 15,
+    fontFamily: fonts.barlowCondensedHeavy,
+    fontSize: 16,
     color: colors.text,
-    letterSpacing: 0.3,
+    letterSpacing: 0.4,
   },
   // A group member's heading chip — name + ✕, tap to remove. Same name
   // typography as the selector, boxed so the removal affordance reads.
@@ -1130,14 +1130,14 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surfaceTint,
   },
   memberChipText: {
-    fontFamily: fonts.barlowCondensed,
-    fontSize: 15,
+    fontFamily: fonts.barlowCondensedHeavy,
+    fontSize: 17,
     color: colors.text,
-    letterSpacing: 0.3,
+    letterSpacing: 0.4,
   },
   memberChipX: {
     fontFamily: fonts.barlowCondensed,
-    fontSize: 11,
+    fontSize: 12,
     color: colors.muted,
   },
   // The ＋ chip — opens the Add Players sheet (dim when under 2 RSVP'd).
@@ -1153,7 +1153,7 @@ const styles = StyleSheet.create({
   addChipDim: { opacity: 0.4 },
   addChipText: {
     fontFamily: fonts.barlowCondensed,
-    fontSize: 15,
+    fontSize: 17,
     color: colors.accent,
   },
   // Scope-level in-progress warning — shown above the rows when any in-scope
