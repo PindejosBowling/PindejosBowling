@@ -218,8 +218,9 @@ params->>clock.eq.lanetalk)` alongside props and legacy team props.
   viewed player — a single-player bet is a combo of one). The board keeps its
   exact shape — the ONLY addition is the **player-picker rows at the bottom**
   (per-member avg/forecast context + `+`/`✓` chips); the SAME
-  `BookProjectionCard` shows the group's summed
-  `GROUP AVG vs FORECAST` rows for all four stats; and the SAME mounted
+  `BookProjectionCard` shows the group's summed rows for all four stats
+  (one standardized `SEASON AVG vs FORECAST` presentation — no combo-specific
+  header/caption); and the SAME mounted
   `SubjectLinesCard` (⚰️ `ComboLineRow` folded into it — a mode toggle is a
   props update, no remount/flash) renders one value-first pill per combinable
   stat (the group's names filling the subject-name slot), the screen owning

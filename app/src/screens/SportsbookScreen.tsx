@@ -787,12 +787,6 @@ export default function SportsbookScreen() {
                 rows={comboMode ? groupRows : projCache[board.selectedPlayerId!]}
                 nGames={comboNGames}
                 scopeLabel={scope === 'weekly' ? 'WEEKLY' : `GAME ${comboScopeGame}`}
-                header={comboMode ? 'GROUP AVG vs FORECAST' : undefined}
-                caption={
-                  comboMode && comboMemberShortNames.length > 0
-                    ? comboMemberShortNames.join(' + ')
-                    : undefined
-                }
               />
             )}
             {board.scopeInProgress && board.firstInProgress && (
