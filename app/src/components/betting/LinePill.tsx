@@ -63,15 +63,25 @@ export default function LinePill({
       ]}
     >
       <View style={styles.mainRow}>
-        <TouchableOpacity
-          onPress={canEdit ? onEditValue : undefined}
-          disabled={!canEdit}
-          activeOpacity={0.7}
-        >
-          <Text style={[styles.value, staged && styles.textSelected]}>
+        {/* The value renders as a small FIELD (bordered chip + edit glyph)
+            when tappable, so it reads as "type your own number here" —
+            plain text when inert/armed. */}
+        {canEdit ? (
+          <TouchableOpacity
+            onPress={onEditValue}
+            activeOpacity={0.7}
+            style={[styles.valueField, staged && styles.valueFieldSelected]}
+          >
+            <Text style={[styles.value, staged && styles.textSelected]}>
+              {value.toFixed(1)}+
+            </Text>
+            <Text style={[styles.editGlyph, staged && styles.textSelected]}>✎</Text>
+          </TouchableOpacity>
+        ) : (
+          <Text style={[styles.value, styles.valueStatic, staged && styles.textSelected]}>
             {value.toFixed(1)}+
           </Text>
-        </TouchableOpacity>
+        )}
         <TouchableOpacity
           style={styles.body}
           onPress={pressable ? onStage : undefined}
@@ -103,13 +113,33 @@ const styles = StyleSheet.create({
   pillDisabled: { borderColor: colors.border2, opacity: 0.5 },
   mainRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   body: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8 },
+  // The tappable value field — styled like a small input (tinted fill,
+  // visible border, edit glyph) so the affordance is unmistakable.
+  valueField: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: radius.cardSm,
+    borderWidth: 1,
+    borderColor: colors.chipBorder,
+    backgroundColor: colors.surfaceTint2,
+  },
+  // On the staged accent fill, the field flips to a dark-on-accent inset.
+  valueFieldSelected: {
+    borderColor: 'rgba(10,10,12,0.45)',
+    backgroundColor: 'rgba(10,10,12,0.12)',
+  },
   value: {
     fontFamily: fonts.barlowCondensedHeavy,
     fontSize: 15,
-    minWidth: 44,
+    minWidth: 36,
     textAlign: 'center',
     color: colors.text,
   },
+  valueStatic: { minWidth: 44 },
+  editGlyph: { fontSize: 11, color: colors.accent },
   condition: { flex: 1, ...type.chip, color: 'rgba(240,240,240,0.85)' },
   odds: {
     fontFamily: fonts.barlowCondensedHeavy,

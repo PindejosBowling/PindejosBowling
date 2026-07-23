@@ -78,8 +78,11 @@ export default function BuilderBar({
             retype it in the sheet; the price follows the value. */}
         {!blocked && minMembers && shownValue != null && (
           <View style={styles.valueRow}>
-            <TouchableOpacity onPress={onEditValue} activeOpacity={0.7}>
+            {/* Same field affordance as the board pills: bordered chip +
+                edit glyph = "tap to type your own number". */}
+            <TouchableOpacity onPress={onEditValue} activeOpacity={0.7} style={styles.valueField}>
               <Text style={styles.value}>{shownValue.toFixed(1)}+</Text>
+              <Text style={styles.editGlyph}>✎</Text>
             </TouchableOpacity>
             <Text style={styles.odds}>
               {quoteLoading ? '…' : odds != null ? fmtOdds(odds) : '—'}
@@ -129,12 +132,24 @@ const styles = StyleSheet.create({
     marginTop: 1,
   },
   subBlocked: { color: colors.gold },
-  valueRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 4 },
+  valueRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 6 },
+  valueField: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: radius.cardSm,
+    borderWidth: 1,
+    borderColor: colors.chipBorder,
+    backgroundColor: colors.surfaceTint2,
+  },
   value: {
     fontFamily: fonts.barlowCondensedHeavy,
     fontSize: 15,
     color: colors.text,
   },
+  editGlyph: { fontSize: 11, color: colors.accent },
   odds: {
     fontFamily: fonts.barlowCondensedHeavy,
     fontSize: 15,
