@@ -95,12 +95,20 @@ book's standing offers).
   for a member set being composed. Return
   `{line, odds, posted, seed_line, seed_odds, min_line, max_line}` — `odds`
   null = "line unavailable". Posted rungs (incl. a frozen market's) echo
-  their posted odds **verbatim**; unposted lines price fresh inside the
-  **custom band** (`custom_odds_min/max`, NULL → `odds_min/max`). Band edges
-  come from `odds_engine_norm_ppf` (Acklam inverse CDF) in closed form,
-  snapped inward to half-points; an unposted SEED (fresh combo) force-prices
-  clamped, mirroring the minter. Engine off → only posted lines quote and the
-  band collapses onto the seed. Shared internals:
+  their posted odds **verbatim**; unposted lines price fresh at the **FAIR
+  zero-vig odds — no ceiling** (migrations `…231500_widen_value_line_bands`
+  + `…234500_fair_tail_odds` + `…20260723001500_min_offered_odds`). The
+  band's HIGH edge is the stat's physical cap — counts 9.5/game (night
+  10·g−0.5), score O/U **220 pins/game** (game 220.5, night 220·g+0.5,
+  combos 220/game/member) — and long-tail lines pay their true model price
+  (×dozens to ×millions — the normal tail; mind the House liability on
+  lifetime games). The LOW edge is the **offer floor**: the smallest line
+  paying `odds_min` (**×1.20**, custom_odds_min resolves first) — below it
+  quotes return NULL, the minter rejects, and ladders don't post rungs
+  (seed anchor exempt). Prices are never clamped — the floor gates
+  AVAILABILITY only. `odds_max`/`custom_odds_max` + `price_pair`'s `p_force`
+  are **INERT**. Engine off → only posted lines quote and the band collapses
+  onto the seed. Shared internals:
   `odds_engine_market_distribution(market_id)` (one market → the generators'
   exact mean/variance/n/range) + `odds_engine_quote_internal`.
 - **Placement = mint-on-demand**: `place_bet_at_lines(picks jsonb, stake,

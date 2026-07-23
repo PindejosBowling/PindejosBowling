@@ -407,7 +407,7 @@ CREATE TABLE odds_engine_config (
   prior_weight_games numeric NOT NULL DEFAULT 6,
   variance_floor_score numeric NOT NULL DEFAULT 225,
   variance_floor_count numeric NOT NULL DEFAULT 0.75,
-  odds_min numeric NOT NULL DEFAULT 1.10,
+  odds_min numeric NOT NULL DEFAULT 1.20,
   odds_max numeric NOT NULL DEFAULT 8.00,
   rungs_per_side integer NOT NULL DEFAULT 3,
   spacing_score numeric NOT NULL DEFAULT 10,
@@ -2652,6 +2652,15 @@ BEGIN
   IF v_line < v_d.range_lo OR v_line > v_d.range_hi THEN
     RAISE EXCEPTION 'That line is not available right now';
   END IF;
+  -- The offer floor: the smallest line paying the configured minimum
+  -- multiplier — the SAME edge odds_engine_quote_internal advertises as
+  -- min_line (posted rungs above were already reused verbatim; the seed is
+  -- always posted, so seed-containment needs no special case here).
+  IF v_line < ceil((v_d.mean * GREATEST(v_d.n_games, 1)
+                    + public.odds_engine_norm_ppf(1.0 - 1.0 / COALESCE(v_cfg.custom_odds_min, v_cfg.odds_min))
+                      * sqrt(v_d.variance * GREATEST(v_d.n_games, 1)))::numeric - 0.5) + 0.5 THEN
+    RAISE EXCEPTION 'That line is not available right now';
+  END IF;
   SELECT pp.over_odds, pp.under_odds INTO v_over, v_under
     FROM public.odds_engine_price_pair(v_d.mean, v_d.variance, v_d.n_games, v_line,
                                        COALESCE(v_cfg.custom_odds_min, v_cfg.odds_min),
@@ -3097,7 +3106,7 @@ BEGIN
     WHEN v_cn = 1 THEN v_cfg.spacing_score
     ELSE v_cfg.spacing_night_pins END;
   v_hi := CASE WHEN p_stat = 'total_pins'
-               THEN 300 * v_cn * array_length(v_members, 1) - 0.5
+               THEN 220 * v_cn * array_length(v_members, 1) + 0.5
                ELSE 10 * v_cn * array_length(v_members, 1) - 0.5 END;
 
   SELECT jsonb_agg(jsonb_build_object(
@@ -3185,7 +3194,7 @@ BEGIN
 
   v_cfg := public.odds_engine_get_config(p_season_id);
   v_hi := CASE WHEN p_stat = 'total_pins'
-               THEN 300 * v_cn * array_length(v_members, 1) - 0.5
+               THEN 220 * v_cn * array_length(v_members, 1) + 0.5
                ELSE 10 * v_cn * array_length(v_members, 1) - 0.5 END;
 
   RETURN public.odds_engine_quote_internal(
@@ -3453,7 +3462,7 @@ BEGIN
         WHEN v_scope = 'game' THEN v_cfg.spacing_score
         ELSE v_cfg.spacing_night_pins END;
       v_hi := CASE WHEN v_stat = 'total_pins'
-                   THEN 300 * v_cn * array_length(v_members, 1) - 0.5
+                   THEN 220 * v_cn * array_length(v_members, 1) + 0.5
                    ELSE 10 * v_cn * array_length(v_members, 1) - 0.5 END;
 
       PERFORM public.odds_engine_mint_ladder(
@@ -5239,8 +5248,9 @@ BEGIN
     SELECT pp.over_odds, pp.under_odds INTO v_over, v_under
       FROM public.odds_engine_price_pair(p_mean, p_variance, p_n_games, v_line,
                                          v_cfg.odds_min, v_cfg.odds_max, j = 0) pp;
-    IF v_over IS NULL THEN
-      CONTINUE;  -- rung priced outside the clamp: not offered
+    IF v_over IS NULL OR (j <> 0 AND v_over < v_cfg.odds_min) THEN
+      CONTINUE;  -- below the offer floor (odds_min): not posted; the seed
+                 -- anchor always posts.
     END IF;
 
     RETURN QUERY VALUES
@@ -5275,7 +5285,7 @@ BEGIN
     v_cfg.prior_weight_games   := 6;
     v_cfg.variance_floor_score := 225;
     v_cfg.variance_floor_count := 0.75;
-    v_cfg.odds_min             := 1.10;
+    v_cfg.odds_min             := 1.20;
     v_cfg.odds_max             := 8.00;
     v_cfg.rungs_per_side       := 3;
     v_cfg.spacing_score        := 10;
@@ -5372,9 +5382,9 @@ BEGIN
     SELECT ps.mean, ps.variance INTO mean, variance
       FROM public.odds_engine_player_stat(v_mkt.subject_player_id, season_id, 'score') ps;
     IF v_mkt.game_number IS NOT NULL THEN
-      n_games := 1;            range_lo := 0.5; range_hi := 299.5;
+      n_games := 1;            range_lo := 0.5; range_hi := 220.5;
     ELSE
-      n_games := v_week_games; range_lo := 0.5; range_hi := 300 * v_week_games - 0.5;
+      n_games := v_week_games; range_lo := 0.5; range_hi := 220 * v_week_games + 0.5;
     END IF;
 
   ELSIF v_mkt.market_type = 'prop' THEN
@@ -5409,7 +5419,7 @@ BEGIN
     n_games := CASE WHEN v_scope = 'game' THEN 1 ELSE v_week_games END;
     range_lo := 0.5;
     range_hi := CASE WHEN v_stat = 'total_pins'
-                     THEN 300 * n_games * array_length(v_members, 1) - 0.5
+                     THEN 220 * n_games * array_length(v_members, 1) + 0.5
                      ELSE 10 * n_games * array_length(v_members, 1) - 0.5 END;
 
   ELSE
@@ -5590,15 +5600,13 @@ BEGIN
   v_over  := 1.0 / v_p;
   v_under := 1.0 / (1.0 - v_p);
 
-  IF NOT p_force AND (v_over  < p_odds_min OR v_over  > p_odds_max
-                   OR v_under < p_odds_min OR v_under > p_odds_max) THEN
-    over_odds  := NULL;
-    under_odds := NULL;
-    RETURN;
-  END IF;
-
-  over_odds  := GREATEST(1.05, round(LEAST(p_odds_max, GREATEST(p_odds_min, v_over))  * 20) / 20);
-  under_odds := GREATEST(1.05, round(LEAST(p_odds_max, GREATEST(p_odds_min, v_under)) * 20) / 20);
+  -- No odds-feasibility clamp: every line prices FAIR (zero-vig), rounded to
+  -- the 0.05 grid; 1.05 is the smallest storable grid step (bet_selections
+  -- CHECK odds > 1.0). Availability is the CALLER's business (its acceptable
+  -- line range) — never this function's. p_odds_min / p_odds_max / p_force
+  -- are retained for signature compatibility and ignored.
+  over_odds  := GREATEST(1.05, round(v_over  * 20) / 20);
+  under_odds := GREATEST(1.05, round(v_under * 20) / 20);
 END;
 $function$
 ;
@@ -5633,16 +5641,14 @@ BEGIN
   v_mu    := p_mean * GREATEST(p_n_games, 1);
   v_sigma := sqrt(p_variance * GREATEST(p_n_games, 1));
 
-  -- Both sides of the zero-vig pair must land in [odds_min, odds_max]:
-  -- p_over ∈ [max(1/o_max, 1 − 1/o_min), min(1 − 1/o_max, 1/o_min)].
-  v_p_lo := GREATEST(1.0 / p_odds_max, 1.0 - 1.0 / p_odds_min);
-  v_p_hi := LEAST(1.0 - 1.0 / p_odds_max, 1.0 / p_odds_min);
-
-  -- p_over falls as the line rises: p_hi bounds the low edge, p_lo the high.
-  v_min_line := ceil((v_mu + public.odds_engine_norm_ppf(1.0 - v_p_hi) * v_sigma)::numeric - 0.5) + 0.5;
-  v_max_line := floor((v_mu + public.odds_engine_norm_ppf(1.0 - v_p_lo) * v_sigma)::numeric + 0.5) - 0.5;
+  -- The HIGH edge is the stat's physical cap; the LOW edge is the smallest
+  -- half-point paying the configured minimum multiplier (odds_min → 1.20):
+  -- p_over ≤ 1/odds_min ⇔ line ≥ μ + Φ⁻¹(1 − 1/odds_min)·σ. Prices stay
+  -- FAIR everywhere inside the band — this is an offer floor, not a clamp.
+  v_min_line := ceil((v_mu + public.odds_engine_norm_ppf(1.0 - 1.0 / p_odds_min) * v_sigma)::numeric - 0.5) + 0.5;
   v_min_line := GREATEST(v_min_line, p_range_lo);
-  v_max_line := LEAST(v_max_line, p_range_hi);
+  v_min_line := LEAST(v_min_line, p_range_hi);
+  v_max_line := p_range_hi;
   IF v_min_line > v_max_line THEN
     v_min_line := p_seed_line;
     v_max_line := p_seed_line;
@@ -5656,18 +5662,14 @@ BEGIN
     -- Posted rungs are the book's standing offer — echoed verbatim, never
     -- re-quoted (a frozen market's rungs keep their frozen price).
     v_odds := p_posted_odds;
-  ELSIF p_line < p_range_lo OR p_line > p_range_hi THEN
+  ELSIF p_line < v_min_line OR p_line > v_max_line THEN
+    -- Below the offer floor / outside the physical caps: not offered (the
+    -- seed-containment above keeps the seed itself quotable).
     v_odds := NULL;
   ELSE
     SELECT pp.over_odds, pp.under_odds INTO v_odds, v_under
       FROM public.odds_engine_price_pair(p_mean, p_variance, p_n_games, p_line,
                                          p_odds_min, p_odds_max, false) pp;
-    IF v_odds IS NULL AND p_line = p_seed_line THEN
-      -- Unposted seed (fresh combo): mirror the minter — force, clamp.
-      SELECT pp.over_odds, pp.under_odds INTO v_odds, v_under
-        FROM public.odds_engine_price_pair(p_mean, p_variance, p_n_games, p_line,
-                                           p_odds_min, p_odds_max, true) pp;
-    END IF;
   END IF;
 
   RETURN jsonb_build_object(

@@ -14,8 +14,9 @@
 --   O1  norm_cdf: Φ(0)=0.5, Φ(±1.96)≈0.975/0.025 (A&S 7.1.26 accuracy band).
 --   O2  price_pair at the median line → both sides ≈ evens; zero-vig identity
 --       1/over + 1/under ≈ 1 within rounding tolerance.
---   O3  clamp: a runaway-favorite rung returns NULL unforced; forced (seed)
---       returns odds clamped into [odds_min, odds_max].
+--   O3  fair tails (no feasibility clamp): a runaway-favorite line prices at
+--       the 1.05 grid floor while its under twin prices fair UNbounded
+--       (> 8); the force flag is inert (identical result).
 --   O4  monotonicity: over odds non-decreasing as the line rises.
 --   O5  mint_ladder: seed rung keeps canonical 'over'/'under' keys at the seed
 --       line; every over rung has an under twin at the same line; ≤ 7 pairs;
@@ -83,6 +84,7 @@ DECLARE
   v_t1 uuid; v_t2 uuid; v_slot1 uuid; v_slot2 uuid; v_game uuid;
   v_cdf double precision;
   v_over numeric; v_under numeric; v_prev numeric;
+  v_over2 numeric; v_under2 numeric;
   v_line numeric;
   v_mkt uuid; v_mkt2 uuid; v_mkt3 uuid;
   v_n int; v_n2 int;
@@ -153,16 +155,19 @@ BEGIN
     RAISE EXCEPTION 'PROBE_FAIL: vig detected: 1/% + 1/% <> 1', v_over, v_under;
   END IF;
 
-  ------------------------------------------------------------------ O3 clamp
-  SELECT pp.over_odds INTO v_over
-    FROM public.odds_engine_price_pair(100, 225, 1, 40.5, 1.10, 8.00, false) pp;
-  IF v_over IS NOT NULL THEN
-    RAISE EXCEPTION 'PROBE_FAIL: runaway-favorite rung minted unforced at odds %', v_over;
-  END IF;
+  ------------------------------------------------------------------ O3 fair tails
+  -- No feasibility clamp: the runaway favorite prices at the 1.05 grid floor
+  -- (bet_selections CHECK odds > 1.0) and its under twin prices FAIR,
+  -- unbounded above the old ×8 ceiling. p_force is inert.
   SELECT pp.over_odds, pp.under_odds INTO v_over, v_under
+    FROM public.odds_engine_price_pair(100, 225, 1, 40.5, 1.10, 8.00, false) pp;
+  IF v_over IS DISTINCT FROM 1.05 OR v_under IS NULL OR v_under <= 8.00 THEN
+    RAISE EXCEPTION 'PROBE_FAIL: far-favorite fair pair (%, %) expected (1.05, >8)', v_over, v_under;
+  END IF;
+  SELECT pp.over_odds, pp.under_odds INTO v_over2, v_under2
     FROM public.odds_engine_price_pair(100, 225, 1, 40.5, 1.10, 8.00, true) pp;
-  IF v_over IS DISTINCT FROM 1.10 OR v_under IS DISTINCT FROM 8.00 THEN
-    RAISE EXCEPTION 'PROBE_FAIL: forced clamp gave (%, %) expected (1.10, 8.00)', v_over, v_under;
+  IF v_over2 IS DISTINCT FROM v_over OR v_under2 IS DISTINCT FROM v_under THEN
+    RAISE EXCEPTION 'PROBE_FAIL: force flag not inert: (%, %) vs (%, %)', v_over2, v_under2, v_over, v_under;
   END IF;
 
   ------------------------------------------------------------------ O4 monotone
@@ -201,9 +206,9 @@ BEGIN
     RAISE EXCEPTION 'PROBE_FAIL: % over rungs missing their under twin', v_n;
   END IF;
   SELECT count(*) INTO v_n FROM public.bet_selections
-    WHERE market_id = v_mkt AND (odds < 1.05 OR odds > 8.00);
+    WHERE market_id = v_mkt AND odds < 1.05;
   IF v_n <> 0 THEN
-    RAISE EXCEPTION 'PROBE_FAIL: % selections priced outside the clamp', v_n;
+    RAISE EXCEPTION 'PROBE_FAIL: % selections priced below the 1.05 grid floor', v_n;
   END IF;
   SELECT count(*) - count(DISTINCT sort_order) INTO v_n FROM public.bet_selections WHERE market_id = v_mkt;
   IF v_n <> 0 THEN
@@ -339,7 +344,7 @@ BEGIN
       AND m.subject_player_id = v_p1 AND m.game_number IS NOT NULL
     ORDER BY m.game_number LIMIT 1;
   SELECT count(*) FILTER (WHERE side = 'over'),
-         count(*) FILTER (WHERE side IS NULL OR odds < 1.05 OR odds > 8.00),
+         count(*) FILTER (WHERE side IS NULL OR odds < 1.05),
          count(*) FILTER (WHERE key = 'over')
     INTO v_n, v_n2, v_n3
     FROM public.bet_selections WHERE market_id = v_gmkt;
@@ -510,6 +515,23 @@ BEGIN
   v_res := public.market_price_line(v_gmkt, 299.5);
   IF (v_res ->> 'odds') IS NOT NULL THEN
     RAISE EXCEPTION 'PROBE_FAIL: P4 out-of-band 299.5 priced at %', v_res ->> 'odds';
+  END IF;
+  -- Offer floor: the band's low edge pays at least odds_min (1.20), and an
+  -- UNPOSTED line just below it is not offered (posted rungs stay standing
+  -- offers, so skip the check if one happens to sit there).
+  v_res := public.market_price_line(v_gmkt, NULL);
+  v_line := (v_res ->> 'min_line')::numeric;
+  v_res := public.market_price_line(v_gmkt, v_line);
+  IF (v_res ->> 'odds') IS NULL OR (v_res ->> 'odds')::numeric < 1.20 THEN
+    RAISE EXCEPTION 'PROBE_FAIL: P4 min_line % pays % (expected ≥ 1.20)', v_line, v_res ->> 'odds';
+  END IF;
+  v_line := v_line - 1;
+  IF v_line >= 0.5 AND NOT EXISTS (SELECT 1 FROM public.bet_selections s
+                                   WHERE s.market_id = v_gmkt AND s.side = 'over' AND s.line = v_line) THEN
+    v_res := public.market_price_line(v_gmkt, v_line);
+    IF (v_res ->> 'odds') IS NOT NULL THEN
+      RAISE EXCEPTION 'PROBE_FAIL: P4 below-floor line % priced at %', v_line, v_res ->> 'odds';
+    END IF;
   END IF;
   BEGIN
     PERFORM public.market_price_line(v_mkt, NULL);  -- settled in O9
