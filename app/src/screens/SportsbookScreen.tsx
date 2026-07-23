@@ -923,10 +923,8 @@ export default function SportsbookScreen() {
                 bettor), never as the player trending well or badly — no
                 praising ▲ or shaming ▼. */}
             <Text style={styles.boardFootText}>
-              The Sportsbook makes a forecast each week for all players based on the 
-              lifetime Official games that we have on record, and each players' current season averages are shown above it. 
-
-              All betting lines are priced based on the forecast. 
+              The Sportsbook makes a forecast each week for all players based on their 
+              lifetime Official games.All betting lines are priced based on the forecast. 
             </Text>
           </View>
         ) : (
