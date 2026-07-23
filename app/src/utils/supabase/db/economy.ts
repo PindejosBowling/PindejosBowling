@@ -294,7 +294,7 @@ export const betMarkets = {
       p_market_id: marketId,
       ...(line != null ? { p_line: line } : {}),
     }),
-  // The same quote for a combo member set (BuilderBar's value editor). An
+  // The same quote for a combo member set (the combo stat pills' editor). An
   // existing open market's posted rungs echo verbatim and its seed anchors
   // the editor; unposted lines price fresh (the rung mints at compose time).
   priceComboLine: (
@@ -425,7 +425,7 @@ export const bets = {
       p_combos: combos.map(c => ({
         member_ids: c.memberIds, stat: c.stat, scope: c.scope,
         ...(c.gameNumber != null ? { game_number: c.gameNumber } : {}),
-        // Chosen value (the BuilderBar's editor); omitted = the seed rung.
+        // Chosen value (the combo pill/sheet editor); omitted = the seed rung.
         // With quoted_odds attached, an unposted line MINTS on demand
         // (tolerance-checked); without it, posted rungs only.
         ...(c.line != null ? { line: c.line } : {}),

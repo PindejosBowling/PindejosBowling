@@ -1,7 +1,7 @@
 # Combo Lines — player-composed member-set aggregate markets
 
 > **OddsEngine + value-first lines (2026-07-22):** combos are fair-priced and
-> **value-first** — the BuilderBar's value opens the shared `LineEntrySheet`
+> **value-first** — a combo stat pill's value opens the shared `LineEntrySheet`
 > editor, priced live by `combo_price_line` (posted rungs verbatim
 > when the combo_key already has an open market; ANY other half-point line
 > fresh). `compose_combo_bet` specs take optional `"line"` (NULL = seed) and
@@ -107,11 +107,11 @@ n_games)` + 0.5 (a no-history member contributes the prior-informed mean, not
 0); engine off, the legacy Σ per-member `floor(avg × n_games)` + 0.5 — each
 member contributes their solo whole-number base (their displayed line minus
 its half point), and the combo adds a single half point, so the combined line
-always equals the sum of the solo lines the combine-mode board shows, minus
+always equals the sum of the solo lines the board shows, minus
 the extra halves. (The original math floored the SUMMED raw averages —
 `floor(Σavg × n) + 0.5` — letting per-member fractions accumulate and
 overstate the line; owner-reported and fixed.) Granted to `authenticated`
-(STABLE, read-only) so the combine-mode BuilderBar previews the server number
+(STABLE, read-only) so combo mode's stat pills preview the server number
 (display-only; the RPC re-seeds at placement). The line freezes at market
 birth (a combo always carries a bet, and no sync ever reseeds combos) —
 combos composed before the fix keep their old lines.
@@ -197,9 +197,9 @@ params->>clock.eq.lanetalk)` alongside props and legacy team props.
   fetch — that's why compose snapshots names); `marketGroup` routes null-game
   combos to WEEKLY (the board's Weekly scope); `betLineSuffix` renders
   "OVER 12.5 STRIKES" on placed-bet surfaces; `rsvpInPlayers`
-  (RSVP'd-in id+name) is the combine-mode member pool.
+  (RSVP'd-in id+name) is combo mode's member pool.
 - **The slip is the placement surface** (`BetSlip` + `BetSlipProvider`):
-  combine mode does NOT place — its BuilderBar "Add" stages a `SlipCombo`
+  combo mode does NOT place — a combo stat pill's body tap stages a `SlipCombo`
   **spec** (canonical key = stat|scope|members, so re-staging toggles) via
   `stageCombo`. Combos render in the slip as their own ticket cards (COMBO
   header) or as tagged parlay-ticket legs, count as pick units for the
@@ -211,31 +211,38 @@ params->>clock.eq.lanetalk)` alongside props and legacy team props.
   entries through `bets.placeAtLines`, and specials through `bets.place`.
   `ODDS_MOVED` rejections drive the odds-moved confirm + bounded retry. Item
   toggles pass through when the slip is one bet.
-- `SportsbookScreen` — **board-native combine mode** (2026-07-21, replacing
-  the ⚰️ `ComboComposerSheet` + its "+ Build a Combo" CTA): a COMBINE chip in
-  the board's filter row arms the mode (dim-and-toast under 2 RSVP'd); the
-  next stat-pill tap seeds the combo (score O/U → `total_pins`, a prop → its
-  `statKey`) and pivots the board to a member-picking list (every RSVP'd-in
-  player, viewer first, solo line shown as context); the floating `BuilderBar`
-  (slip-bar footprint; the provider's `setSlipBarHidden` yields it) carries
-  the tap-to-type value editor priced live (`useLinePreview({kind:'combo'})` →
-  `betMarkets.priceComboLine`, seed-anchored, `comboLineValue` resets on
-  combo-identity change) and Add/Cancel — Add flips to "Remove" when the
-  exact key is already staged.
-  Combo scope follows the board's scope filter (Weekly → night, Game N → that
-  game; mid-build switches re-preview); an in-progress scope disables Add.
-  **Average context (2026-07-23)**: the member-pick rows show each player's
-  scope-scaled average (`combo_member_averages`, fetched once per stat view) —
-  **season-scoped with an explicit fallback chain** the RPC reports in its
-  `source` column and the UI labels honestly: `SEASON AVG` → `LIFETIME AVG`
-  (→ `LEAGUE AVG`, total_pins only; no frame-stat data at all →
-  `NO STAT HISTORY`). Display-only — the seed/pricing math keeps its own
-  windows (frame-stat seeds are lifetime), so the shown average can
-  legitimately differ from the line the book anchors. The BuilderBar shows the
-  picked group's combined `GROUP AVG`, and the combo `LineEntrySheet` gets a `contextNote` ("Group average: X —
-  lines above it pay longer odds") — making visible WHY adding members
-  compresses the fair odds (the seed = Σ floor(projected mean×games) + 0.5 sits at the
-  summed mean while spread grows only √N).
+- `SportsbookScreen` — **inline combo mode** (2026-07-23, dissolving the ⚰️
+  full-board pivot + `BuilderBar` of 2026-07-21, which itself replaced the ⚰️
+  `ComboComposerSheet`): the COMBO chip in the board's filter row toggles the
+  mode (dim-and-toast under 2 RSVP'd; entering seeds the member set with the
+  viewed player — a single-player bet is a combo of one). The board keeps its
+  exact shape: the player dropdown's slot becomes a multi-select member chip
+  row; the SAME `BookProjectionCard` shows the group's summed
+  `GROUP AVG vs FORECAST` rows for all four stats; and `ComboLineRow` renders
+  one value-first pill per combinable stat, each pill owning its own
+  `useLinePreview({kind:'combo'})` → `betMarkets.priceComboLine` quote
+  (seed-anchored; per-stat `comboValues` reset on combo-identity change).
+  Pill-body tap stages/unstages straight into the ordinary slip bar (staged
+  fill, `stageCombo` key toggle — no BuilderBar, no mode exit); the value tap
+  opens the shared `LineEntrySheet`, and an accepted edit re-stages a staged
+  combo live. Combo scope follows the board's scope filter (Weekly → night,
+  Game N → that game; mid-build switches re-anchor + re-quote); an
+  in-progress scope makes the card inert.
+  **Average context (2026-07-23, reworked with the inline toggle)**: `poolStats`
+  fetches `combo_member_averages` + `odds_engine_member_projections` for all
+  four stats × the whole RSVP pool once per combo session (member toggles are
+  client-side re-sums) — **season-scoped with an explicit fallback chain** the
+  RPC reports in its `source` column and the UI labels honestly: `SEASON AVG`
+  → `LIFETIME AVG` (→ `LEAGUE AVG`, total_pins only; no frame-stat data at all
+  → `NO STAT HISTORY`), shown per member (Total Pins, `· FORECAST` ▲/▼) on the
+  context rows under the line card. Display-only — the seed/pricing math keeps
+  its own windows (frame-stat seeds are lifetime), so the shown average can
+  legitimately differ from the line the book anchors. The summed `groupRows`
+  feed both the group projection card and the combo `LineEntrySheet`
+  `contextNote` ("Group Average X · Forecast Y") — one data path, making
+  visible WHY adding members compresses the fair odds (the seed =
+  Σ floor(projected mean×games) + 0.5 sits at the summed mean while spread
+  grows only √N).
   Placed combos still flow through the `LineView → LineRow` seam with zero
   row-component changes; BetDetail copy-bet works unchanged (`getByIds` is
   market-type-agnostic).

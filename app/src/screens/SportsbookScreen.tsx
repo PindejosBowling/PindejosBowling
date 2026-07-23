@@ -9,7 +9,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useNavigation } from '@react-navigation/native'
 import { NativeStackNavigationProp } from '@react-navigation/native-stack'
-import { colors, fonts, type } from '../theme'
+import { colors, fonts } from '../theme'
 import ScreenHeader from '../components/ui/ScreenHeader'
 import ArtworkToggle from '../components/ui/ArtworkToggle'
 import SportsbookPokerTableBackdrop from '../components/pixelart/SportsbookPokerTableBackdrop'
@@ -21,11 +21,11 @@ import SettledBetsView from '../components/betting/SettledBetsView'
 import BetDetailModal from '../components/betting/BetDetailModal'
 import { useBetSlip, useBetSlipReload } from '../components/betting/BetSlipProvider'
 import LineRow from '../components/betting/LineRow'
-import LinePill, { conditionLabel, ValueField } from '../components/betting/LinePill'
+import LinePill, { conditionLabel } from '../components/betting/LinePill'
 import LineEntrySheet from '../components/betting/LineEntrySheet'
 import CustomLineRow from '../components/betting/CustomLineRow'
 import PickChip from '../components/betting/PickChip'
-import BuilderBar from '../components/betting/BuilderBar'
+import ComboLineRow, { type ComboStatSpec } from '../components/betting/ComboLineRow'
 import BookProjectionCard, { type ProjectionRow } from '../components/betting/BookProjectionCard'
 import ReadOnlySeasonBanner from '../components/betting/ReadOnlySeasonBanner'
 import ConfirmActionSheet from '../components/ui/ConfirmActionSheet'
@@ -46,12 +46,12 @@ import {
   type LineView,
   type CustomLineView,
 } from '../hooks/usePinsinoData'
-import { useLinePreview, oddsForLine, type LineQuote } from '../hooks/useLinePreview'
+import { type LineQuote, type LinePreviewSource } from '../hooks/useLinePreview'
 import { useRefresh } from '../hooks/useRefresh'
 import { useAuthStore } from '../stores/authStore'
 import { useUiStore } from '../stores/uiStore'
 import { betMarkets, haunts } from '../utils/supabase/db'
-import { fmtOdds, deltaDir } from '../utils/bets'
+import { deltaDir } from '../utils/bets'
 import { shortName } from '../utils/helpers'
 import { PinsinoStackParamList } from '../navigation/types'
 import EmptyCard from '../components/ui/EmptyCard'
@@ -66,14 +66,10 @@ const VIEW_OPTIONS: { key: View2; label: string }[] = [
   { key: 'settled', label: 'Settled' },
 ]
 
-// The combo pane's line-type selector — the four combinable stats (the same
-// vocabulary comboStatOf seeds from a tapped board line).
-const COMBO_STAT_OPTIONS = [
-  { key: 'total_pins', label: 'Pins' },
-  { key: 'clean_frames', label: 'Clean' },
-  { key: 'strikes', label: 'Strikes' },
-  { key: 'spares', label: 'Spares' },
-]
+// The four combinable stats, in board column order — combo mode renders one
+// value-first pill (and one group-projection column) per entry.
+const COMBO_STATS = ['total_pins', 'clean_frames', 'strikes', 'spares']
+const comboStatLabel = (stat: string) => (STAT_LABELS[stat] ?? stat).toUpperCase()
 
 export default function SportsbookScreen() {
   const playerId = useAuthStore(s => s.playerId)
@@ -104,13 +100,17 @@ export default function SportsbookScreen() {
   const [scope, setScope] = useState<string>('weekly')
   const [pickedPlayerId, setPickedPlayerId] = useState<string | null>(null)
 
-  // Combine mode — board-native combo building. null = off; set = the pivot
-  // is active (member picking + the combo pane, whose selector switches the
-  // stat mid-build — there is no armed intermediate step anymore: the COMBO
-  // chip lands directly in the pivot). Scope follows the board's scope
-  // filter: Weekly → a night combo, Game N → that game.
-  const [combo, setCombo] = useState<{ stat: string; members: Set<string> } | null>(null)
-  const combining = combo != null
+  // Combo mode — an inline board toggle, not a separate surface. On, the
+  // board keeps its exact shape and only the SUBJECT changes: the player
+  // dropdown becomes a multi-select member chip row, the projection card sums
+  // the picked group, and the line card offers one value-first pill per
+  // combinable stat (each with its own live quote). Scope follows the board's
+  // scope filter: Weekly → a night combo, Game N → that game.
+  const [comboMode, setComboMode] = useState(false)
+  const [comboMembers, setComboMembers] = useState<Set<string>>(new Set())
+  // Per-stat values accepted in the LineEntrySheet (absent = the seed anchor).
+  // Reset whenever the combo identity (members/scope) changes.
+  const [comboValues, setComboValues] = useState<Record<string, number>>({})
 
   // The bet slip (staged picks/specials, placement, item inventory, balance) is
   // owned by the app-level BetSlipProvider so it can also be raised from Bet
@@ -125,7 +125,7 @@ export default function SportsbookScreen() {
     updateSlipPick,
     stageSpecial: stageSlipSpecial,
     stageCombo,
-    setSlipBarHidden,
+    removeSlipCombo,
     ghosts,
     reloadInventory,
   } = useBetSlip()
@@ -241,8 +241,6 @@ export default function SportsbookScreen() {
       playerLines,
       comboLines,
       specials,
-      // All in-scope lines — combine mode's solo-line lookups read these.
-      scopeLines,
       // A closed market anywhere in scope locks the whole scope (a started
       // game closes all its markets together), mirroring the old group lock.
       firstInProgress,
@@ -250,185 +248,169 @@ export default function SportsbookScreen() {
     }
   }, [visibleLines, customLines, scope, pickedPlayerId, playerId, rsvpInPlayers])
 
-  // ── Combine mode derivations ──────────────────────────────────────────
-  // The combo stat a board line seeds: the score O/U builds a total-pins
-  // combo; a stat prop builds its own stat. Combos/specials can't seed.
-  const comboStatOf = (l: LineView): string | null =>
-    l.marketType === 'over_under' ? 'total_pins' : l.marketType === 'prop' ? l.statKey : null
-
-  const comboMemberIds = useMemo(
-    () => (combo != null ? [...combo.members].sort() : []),
-    [combo]
-  )
+  // ── Combo mode derivations ────────────────────────────────────────────
+  const comboMemberIds = useMemo(() => [...comboMembers].sort(), [comboMembers])
   const comboScopeGame = scope === 'weekly' ? null : Number(scope.slice('game-'.length))
   const comboNGames = scope === 'weekly' ? Math.max(weekGameNumbers.length, 1) : 1
-  // Shared display derivations for the combine surfaces (bar + value sheet).
   const comboScopeLabel = scope === 'weekly' ? 'NIGHT' : `GAME ${comboScopeGame}`
-  const comboStatLabel =
-    combo != null ? (STAT_LABELS[combo.stat] ?? combo.stat).toUpperCase() : ''
   const comboMemberShortNames = useMemo(() => {
     const nameById = new Map(rsvpInPlayers.map(m => [m.playerId, m.name]))
     return comboMemberIds.map(id => shortName(nameById.get(id)))
   }, [comboMemberIds, rsvpInPlayers])
-  // Canonical staging key — the same format ComboComposerSheet used, so
-  // toggle-off dedup works against anything previously staged.
-  const comboKey =
-    combo != null
-      ? `${combo.stat}|${scope === 'weekly' ? 'night' : comboScopeGame}|${comboMemberIds.join(',')}`
-      : ''
-  const comboAlreadyStaged = combining && slipCombos.some(c => c.key === comboKey)
 
-  // The combo's edited value (null = the seed anchor) — resets whenever the
-  // combo identity changes. Priced live by combo_price_line; the BuilderBar
-  // shows it, the LineEntrySheet edits it.
-  const [comboLineValue, setComboLineValue] = useState<number | null>(null)
-  useEffect(() => { setComboLineValue(null) }, [comboKey])
-  // Shared with the value sheet, which prices its draft off the same source.
-  const comboSource = useMemo(
-    () =>
-      combo != null && currentSeasonId != null
-        ? {
-            kind: 'combo' as const,
-            memberIds: comboMemberIds,
-            stat: combo.stat,
-            seasonId: currentSeasonId,
-            nGames: comboNGames,
-            weekId: currentWeekId,
-            gameNumber: comboScopeGame,
-          }
-        : null,
-    [combo?.stat, currentSeasonId, comboMemberIds, comboNGames, currentWeekId, comboScopeGame]
-  )
-  const { quote: comboQuote, loading: comboQuoteLoading } = useLinePreview(comboSource, comboLineValue)
-  const shownComboValue = comboLineValue ?? comboQuote?.seedLine ?? null
+  // Canonical staging key per stat — the same format the composer always used,
+  // so toggle-off dedup works against anything previously staged.
+  const comboMembersKey = comboMemberIds.join(',')
+  const comboKeyFor = (stat: string) =>
+    `${stat}|${scope === 'weekly' ? 'night' : comboScopeGame}|${comboMembersKey}`
+  const stagedComboFor = (stat: string) => slipCombos.find(c => c.key === comboKeyFor(stat))
 
-  // Per-member per-game averages for the combine stat — the context that makes
-  // combo pricing legible: the seed line anchors on the group's BOOK projection
-  // (Σ floor(projected × games) + 0.5), so the averages show where the group's
-  // actual production sits against that default. Display-only (server RPC).
-  // `games` 0 = the avg shown is a fallback, not the player's own history.
-  const [memberAvgs, setMemberAvgs] = useState<
-    Record<string, { avg: number | null; source: string | null }>
+  // A combo-identity change (members or scope) re-anchors every stat's value
+  // to its fresh seed.
+  useEffect(() => { setComboValues({}) }, [comboMembersKey, scope])
+
+  // The pricing source for one stat's pill/sheet — each ComboStatPill owns its
+  // own useLinePreview over this, so the four stats quote independently.
+  const comboSourceFor = (stat: string): LinePreviewSource =>
+    currentSeasonId != null
+      ? {
+          kind: 'combo',
+          memberIds: comboMemberIds,
+          stat,
+          seasonId: currentSeasonId,
+          nGames: comboNGames,
+          weekId: currentWeekId,
+          gameNumber: comboScopeGame,
+        }
+      : null
+
+  // Per-member per-game averages + book projections for ALL four combinable
+  // stats across the whole RSVP pool, fetched once when combo mode opens (8
+  // parallel STABLE reads). Member toggles and stat switches are then pure
+  // client-side re-sums — no refetch. The averages make combo pricing legible:
+  // the seed line anchors on the group's BOOK projection, so they show where
+  // actual production sits against that default. Display-only (server RPCs
+  // stay authoritative for money).
+  const [poolStats, setPoolStats] = useState<
+    Record<string, Record<string, { avg: number | null; source: string | null; proj: number | null }>>
   >({})
-  // The book's per-game projection for the same members + stat — the second
-  // number a combiner shops on: a member the book rates ABOVE their average
-  // makes the combo line richer than the averages suggest. NULL when the
-  // engine is off (the display just omits BOOK). Display-only.
-  const [memberProjs, setMemberProjs] = useState<Record<string, number | null>>({})
   useEffect(() => {
-    if (combo == null || currentSeasonId == null || rsvpInPlayers.length === 0) {
-      setMemberAvgs({})
-      setMemberProjs({})
+    if (!comboMode || currentSeasonId == null || rsvpInPlayers.length === 0) {
+      setPoolStats({})
       return
     }
     let cancelled = false
     const ids = rsvpInPlayers.map(m => m.playerId)
-    betMarkets
-      .comboMemberAverages(ids, combo.stat, currentSeasonId)
-      .then(({ data }) => {
-        if (cancelled || !data) return
-        const next: Record<string, { avg: number | null; source: string | null }> = {}
-        for (const r of data as { player_id: string; avg_per_game: number | null; source: string | null }[]) {
-          next[r.player_id] = { avg: r.avg_per_game, source: r.source }
+    for (const stat of COMBO_STATS) {
+      Promise.all([
+        betMarkets.comboMemberAverages(ids, stat, currentSeasonId),
+        betMarkets.memberProjections(ids, stat, currentSeasonId),
+      ]).then(([avgRes, projRes]) => {
+        if (cancelled) return
+        const entry: Record<string, { avg: number | null; source: string | null; proj: number | null }> = {}
+        for (const r of (avgRes.data ?? []) as { player_id: string; avg_per_game: number | null; source: string | null }[]) {
+          entry[r.player_id] = { avg: r.avg_per_game, source: r.source, proj: null }
         }
-        setMemberAvgs(next)
-      })
-    betMarkets
-      .memberProjections(ids, combo.stat, currentSeasonId)
-      .then(({ data }) => {
-        if (cancelled || !data) return
-        const next: Record<string, number | null> = {}
-        for (const r of data as { player_id: string; projected: number | null }[]) {
-          next[r.player_id] = r.projected
+        for (const r of (projRes.data ?? []) as { player_id: string; projected: number | null }[]) {
+          entry[r.player_id] = { ...(entry[r.player_id] ?? { avg: null, source: null }), proj: r.projected }
         }
-        setMemberProjs(next)
+        setPoolStats(prev => ({ ...prev, [stat]: entry }))
       })
+    }
     return () => { cancelled = true }
-  }, [combo?.stat, currentSeasonId, rsvpInPlayers]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [comboMode, currentSeasonId, rsvpInPlayers])
 
-  // A member's average scaled to the combo's scope (night → × games bowled).
-  const scopedAvg = (playerId2: string): number | null => {
-    const a = memberAvgs[playerId2]?.avg
-    return a == null ? null : a * comboNGames
-  }
-  // The book's projection for a member, scaled the same way.
-  const scopedProj = (playerId2: string): number | null => {
-    const p = memberProjs[playerId2]
-    return p == null ? null : p * comboNGames
-  }
-  // The picked group's combined scope-scaled average. A no-history member
-  // contributes 0 here (nothing to average); the seed/pricing math instead
-  // uses their prior-informed projection — the BOOK number beside it.
-  const comboGroupAvg =
-    comboMemberIds.length > 0 && Object.keys(memberAvgs).length > 0
-      ? comboMemberIds.reduce((sum, id) => sum + (scopedAvg(id) ?? 0), 0)
-      : null
-  // The group's combined book projection — what the engine actually expects
-  // the member set to produce (the number the quoted odds center on). Engine
-  // on → every member has a projection (the prior covers cold starts), so a
-  // null here means the engine is off and the display omits it.
-  const comboGroupProj =
-    comboMemberIds.length > 0 && comboMemberIds.every(id => scopedProj(id) != null)
-      ? comboMemberIds.reduce((sum, id) => sum + scopedProj(id)!, 0)
-      : null
-  const comboOdds = oddsForLine(comboQuote, shownComboValue)
-
-  // The pane's single-stat readout: the CHOSEN stat's group average vs book
-  // projection — the SAME scope-scaled numbers the LineEntrySheet's
-  // contextNote reads, so the two surfaces can never disagree. Arrow
-  // semantics match the board strip — it rides the average and marks its
-  // position vs the book (▼ = the group averages below what the book projects).
-  const comboPaneStat =
-    combining && (comboGroupAvg != null || comboGroupProj != null)
-      ? { avg: comboGroupAvg, proj: comboGroupProj, dir: deltaDir(comboGroupAvg, comboGroupProj) }
-      : null
-
-  // The BuilderBar takes over the slip bar's footprint while combining.
-  useEffect(() => {
-    setSlipBarHidden(combining)
-    return () => setSlipBarHidden(false)
-  }, [combining, setSlipBarHidden])
+  // The picked group's per-game sums, one ProjectionRow per combinable stat —
+  // the SINGLE source both the group BookProjectionCard and the LineEntrySheet
+  // contextNote read, so the two surfaces can never disagree. Average: a
+  // no-history member contributes 0 (nothing to average); the pricing math
+  // instead uses their prior-informed projection — the FORECAST beside it.
+  // Projection: engine on → every member has one (the prior covers cold
+  // starts), so a null means the engine is off (the card then self-hides).
+  const groupRows = useMemo<ProjectionRow[]>(
+    () =>
+      COMBO_STATS.map(stat => {
+        const entry = poolStats[stat] ?? {}
+        const avgs = comboMemberIds.map(id => entry[id]?.avg ?? null)
+        const projs = comboMemberIds.map(id => entry[id]?.proj ?? null)
+        return {
+          stat,
+          seasonAvg:
+            comboMemberIds.length > 0 && avgs.some(a => a != null)
+              ? avgs.reduce((s: number, a) => s + (a ?? 0), 0)
+              : null,
+          projected:
+            comboMemberIds.length > 0 && projs.every(p => p != null)
+              ? projs.reduce((s: number, p) => s + p!, 0)
+              : null,
+          avgSource: comboMemberIds.some(
+            id => entry[id]?.avg != null && entry[id]?.source !== 'season'
+          )
+            ? 'fallback'
+            : 'season',
+        }
+      }),
+    [poolStats, comboMemberIds]
+  )
+  const groupRowFor = (stat: string) => groupRows.find(r => r.stat === stat)
 
   // Leaving the Place view (or flipping read-only) abandons any in-flight combo.
   useEffect(() => {
     if (effectiveView !== 'place' || readOnly) {
-      setCombo(null)
+      setComboMode(false)
+      setComboMembers(new Set())
+      setComboValues({})
     }
   }, [effectiveView, readOnly])
 
   function toggleComboMember(id: string) {
-    setCombo(prev => {
-      if (prev == null) return prev
-      const members = new Set(prev.members)
+    setComboMembers(prev => {
+      const members = new Set(prev)
       if (members.has(id)) members.delete(id)
       else members.add(id)
-      return { ...prev, members }
+      return members
     })
   }
 
-  // Add (or, when this exact combo is already staged, remove) via the slip's
-  // canonical toggle. Adding exits combine mode; the combo just lands in the
-  // slip bar like any staged pick (no auto-raise of the placement sheet).
-  function addComboToSlip() {
-    if (combo == null || currentWeekId == null) return
+  // Pill-body tap on a combo stat: stage/unstage via the slip's canonical
+  // toggle — the combo lands in the ordinary slip bar like any staged pick
+  // (no auto-raise, no mode exit; parlays form there by default).
+  function stageComboAt(stat: string, value: number, odds: number | null) {
+    if (readOnly || currentWeekId == null) return
+    const staged = stagedComboFor(stat)
+    if (staged == null && odds == null) {
+      showToast('That line is unavailable', 'error')
+      return
+    }
     stageCombo({
-      key: comboKey,
+      key: comboKeyFor(stat),
       weekId: currentWeekId,
       memberIds: comboMemberIds,
       memberNames: comboMemberShortNames,
-      stat: combo.stat,
+      stat,
       scope: scope === 'weekly' ? 'night' : 'game',
       gameNumber: comboScopeGame,
       // The chosen VALUE + its quoted price — compose_combo_bet re-prices the
       // line authoritatively (quote_tolerance) and mints the rung if the
       // market doesn't carry it yet.
-      line: shownComboValue,
-      odds: comboOdds,
+      line: value,
+      odds,
     })
-    setCombo(null)
   }
 
-  // Combine-mode member pool: every RSVP'd-in player (the compose RPC's only
+  // An accepted sheet value for a combo stat: record it and, when that exact
+  // combo is already staged at a different value, re-stage it live (the slip
+  // chip/ticket re-render) — same invariant as acceptLineValue on a pick.
+  function acceptComboValue(stat: string, v: number, quote: LineQuote) {
+    setComboValues(prev => ({ ...prev, [stat]: v }))
+    const staged = stagedComboFor(stat)
+    if (staged && staged.line !== v) {
+      removeSlipCombo(staged.key)
+      stageCombo({ ...staged, line: v, odds: quote.odds ?? staged.odds })
+    }
+  }
+
+  // Combo-mode member pool: every RSVP'd-in player (the compose RPC's only
   // eligibility rule — a player without an individual line still combines),
   // viewer first, then the roster's name order.
   const comboMemberPool = useMemo(() => {
@@ -442,6 +424,26 @@ export default function SportsbookScreen() {
     }
     return rows
   }, [rsvpInPlayers, playerId])
+
+  // The stat pill specs the combo line card renders — staging state from the
+  // slip (canonical key), the accepted edit, and each pill's own quote source.
+  const comboStatSpecs = useMemo<ComboStatSpec[]>(
+    () =>
+      COMBO_STATS.map(stat => {
+        const staged = stagedComboFor(stat)
+        return {
+          stat,
+          label: comboStatLabel(stat),
+          source: comboSourceFor(stat),
+          editedValue: comboValues[stat] ?? null,
+          stagedLine: staged?.line ?? null,
+          stagedOdds: staged?.odds ?? null,
+          staged: staged != null,
+        }
+      }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [slipCombos, comboValues, comboMembersKey, scope, currentSeasonId, currentWeekId, comboNGames]
+  )
 
   // ── Book projection vs season average ─────────────────────────────────
   // The selected player's per-game engine projection (rounded mean) beside
@@ -474,9 +476,10 @@ export default function SportsbookScreen() {
   // re-anchor.
   const [lineValues, setLineValues] = useState<Record<string, number>>({})
   const [quoteCache, setQuoteCache] = useState<Record<string, LineQuote>>({})
-  // The open value editor: a board market's pill, or the combine bar's combo.
+  // The open value editor: a board market's pill, or one combo stat's pill
+  // (carrying the value it showed, as the sheet's starting draft).
   const [valueSheet, setValueSheet] = useState<
-    { kind: 'market'; line: LineView } | { kind: 'combo' } | null
+    { kind: 'market'; line: LineView } | { kind: 'combo'; stat: string; value: number } | null
   >(null)
   // Keyed on a CONTENT signature, not the array identity — useAsyncData
   // returns a fresh payload object every reload (pull-to-refresh, placement),
@@ -639,7 +642,7 @@ export default function SportsbookScreen() {
           styles.content,
           { paddingTop: insets.top },
           effectiveView === 'place' &&
-            (slipPicks.length > 0 || slipSpecials.length > 0 || slipCombos.length > 0 || combining) &&
+            (slipPicks.length > 0 || slipSpecials.length > 0 || slipCombos.length > 0) &&
             { paddingBottom: 96 },
         ]}
         refreshControl={
@@ -700,126 +703,127 @@ export default function SportsbookScreen() {
                 onChange={setScope}
                 style={styles.scopePills}
               />
-              {/* Combine — board-native combo building. Dim-but-pressable
-                  below 2 RSVP'd players (house convention: still toasts).
-                  The chip lands DIRECTLY in the pivot (no intermediate
-                  step): a stat pick already staged in the slip pre-seeds the
-                  stat + first member (most recent staged pick wins when
-                  several qualify), else the pane opens on Total Pins with
-                  nobody picked — the pane's selector switches stat either
-                  way. */}
+              {/* Combo — the inline mode toggle. Dim-but-pressable below 2
+                  RSVP'd players (house convention: still toasts). Entering
+                  seeds the member set with the player being viewed — a
+                  single-player bet IS a combo of one; you then add more.
+                  Exiting restores that player's board (pickedPlayerId is
+                  untouched). */}
               {currentWeekId != null && currentSeasonId != null && (
                 <PickChip
                   label="COMBO"
-                  selected={combo != null}
+                  selected={comboMode}
                   disabled={rsvpInPlayers.length < 2}
                   onPress={() => {
                     if (rsvpInPlayers.length < 2) {
                       showToast("Not enough players RSVP'd in yet", 'error')
                       return
                     }
-                    setCombo(prev => {
-                      if (prev) return null
-                      const seed = [...slipPicks].reverse().find(
-                        p => p.marketType === 'over_under' || (p.marketType === 'prop' && p.statKey != null)
-                      )
-                      if (seed) {
-                        return {
-                          stat: seed.marketType === 'over_under' ? 'total_pins' : seed.statKey!,
-                          members: new Set(seed.subjectPlayerId ? [seed.subjectPlayerId] : []),
-                        }
+                    setComboMode(prev => {
+                      if (prev) {
+                        setComboMembers(new Set())
+                        setComboValues({})
+                        return false
                       }
-                      return { stat: 'total_pins', members: new Set() }
+                      setComboMembers(
+                        new Set(board.selectedPlayerId != null ? [board.selectedPlayerId] : [])
+                      )
+                      return true
                     })
                   }}
                 />
               )}
             </View>
-            {combo != null ? (
-              // ── Stat-view pivot: pick the combo's members ──────────────
-              // Pool = every RSVP'd-in player (combos need only RSVP); a
-              // member's own line for this stat shows as context when one
-              // exists. Scope pills stay live — switching re-previews the line.
+            {/* ── One board, two subjects ─────────────────────────────────
+                The layout is identical in both modes — subject selector,
+                projection card, line card(s) — only the SUBJECT changes:
+                combo mode swaps the single-player dropdown for a multi-select
+                member chip row (pool = every RSVP'd-in player; combos need
+                only RSVP) and prices the picked group instead of one player. */}
+            {comboMode ? (
               <>
                 <Text style={styles.combineHint}>TAP PLAYERS TO COMBINE</Text>
-                {board.scopeInProgress && board.firstInProgress && (
-                  <Text style={styles.inProgressNote}>
-                    {closedBettingNote(board.firstInProgress)}
-                  </Text>
-                )}
-                {/* The consolidated combo pane: pick the line type, see/edit
-                    the value with its live price, and read the group's
-                    Average vs Book for THAT stat only. Switching stat is a
-                    combo-identity change — the value re-anchors to the new
-                    seed, the quote/averages refetch, and the member rows'
-                    solo lines follow. */}
-                <View style={styles.comboPane}>
-                  <ToggleGroup
-                    variant="pill"
-                    options={COMBO_STAT_OPTIONS}
-                    value={combo.stat}
-                    onChange={k => setCombo(prev => prev && { ...prev, stat: k })}
-                  />
-                  <View style={styles.comboPaneRow}>
-                    {!board.scopeInProgress &&
-                      (comboMemberIds.length >= 2 && shownComboValue != null ? (
-                        <>
-                          <ValueField
-                            text={`${shownComboValue.toFixed(1)}+`}
-                            size="lg"
-                            onPress={() => setValueSheet({ kind: 'combo' })}
-                          />
-                          <Text style={styles.comboValueOdds}>
-                            {comboQuoteLoading ? '…' : comboOdds != null ? fmtOdds(comboOdds) : '—'}
-                          </Text>
-                        </>
-                      ) : (
-                        <Text style={styles.comboPanePlaceholder}>PICK 2+ PLAYERS</Text>
-                      ))}
-                    {/* The chosen stat's group Average vs Book (scope-scaled),
-                        same reading as the board strip: the arrow rides the
-                        average and marks its position vs the book. */}
-                    {comboPaneStat != null && (
-                      <View style={styles.comboPaneStats}>
-                        <View style={styles.comboPaneAvgRow}>
-                          <Text style={styles.comboPaneAvg}>
-                            AVG {comboPaneStat.avg != null ? comboPaneStat.avg.toFixed(1) : '—'}
-                          </Text>
-                          {comboPaneStat.dir != null && (
-                            <Text
-                              style={
-                                comboPaneStat.dir === 'up'
-                                  ? styles.comboPaneDeltaUp
-                                  : styles.comboPaneDeltaDown
-                              }
-                            >
-                              {comboPaneStat.dir === 'up' ? '▲' : '▼'}
-                            </Text>
-                          )}
-                        </View>
-                        <Text style={styles.comboPaneBook}>
-                          FORECAST {comboPaneStat.proj != null ? comboPaneStat.proj.toFixed(1) : '—'}
-                        </Text>
-                      </View>
-                    )}
-                  </View>
+                <View style={styles.memberChipRow}>
+                  {comboMemberPool.map(m => (
+                    <PickChip
+                      key={m.playerId}
+                      label={shortName(m.name)}
+                      selected={comboMembers.has(m.playerId)}
+                      onPress={() => toggleComboMember(m.playerId)}
+                    />
+                  ))}
                 </View>
+              </>
+            ) : (
+              // Player filter — a full-width anchored dropdown of the
+              // players with in-scope availability.
+              board.selectedPlayerId != null && (
+                <Dropdown
+                  options={board.players.map(p => ({
+                    key: p.id,
+                    label: `${p.name}${p.id === playerId ? ' (you)' : ''}`,
+                  }))}
+                  value={board.selectedPlayerId}
+                  onChange={setPickedPlayerId}
+                  style={styles.playerSelect}
+                />
+              )
+            )}
+            {/* What the book expects from the subject this week against what
+                it actually averages — scope-scaled like the lines beneath it
+                (Weekly = × the night's games). The same card serves both
+                modes: combo mode feeds it the picked group's summed rows.
+                Self-hides when the engine has no opinion. */}
+            {comboMode ? (
+              <BookProjectionCard
+                rows={groupRows}
+                nGames={comboNGames}
+                scopeLabel={scope === 'weekly' ? 'WEEKLY' : `GAME ${comboScopeGame}`}
+                header="GROUP AVG vs FORECAST"
+                caption={
+                  comboMemberShortNames.length > 0 ? comboMemberShortNames.join(' + ') : undefined
+                }
+              />
+            ) : (
+              board.selectedPlayerId != null && projCache[board.selectedPlayerId] != null && (
+                <BookProjectionCard
+                  rows={projCache[board.selectedPlayerId]}
+                  nGames={comboNGames}
+                  scopeLabel={scope === 'weekly' ? 'WEEKLY' : `GAME ${comboScopeGame}`}
+                />
+              )
+            )}
+            {board.scopeInProgress && board.firstInProgress && (
+              <Text style={styles.inProgressNote}>
+                {closedBettingNote(board.firstInProgress)}
+              </Text>
+            )}
+            {comboMode ? (
+              <>
+                {/* The group's line card — one value-first pill per combinable
+                    stat, each with its own live quote. Tap the value to retype
+                    it; tap the body to stage into the ordinary slip bar. */}
+                <ComboLineRow
+                  memberNames={comboMemberShortNames}
+                  stats={comboStatSpecs}
+                  minMembers={comboMemberIds.length >= 2}
+                  inert={board.scopeInProgress || readOnly}
+                  dimmed={balance < 10}
+                  onEditValue={(stat, value) => setValueSheet({ kind: 'combo', stat, value })}
+                  onStage={(spec, value, odds) => stageComboAt(spec.stat, value, odds)}
+                />
+                {/* Shopping context per pool member: their scope-scaled Total
+                    Pins average with the book's forecast beside it — a member
+                    the book rates above their average (▲) makes the combo line
+                    richer than the averages suggest; below (▼), softer. */}
                 <View>
                   {comboMemberPool.map(m => {
-                    const on = combo.members.has(m.playerId)
-                    const solo = board.scopeLines.find(
-                      l => l.subjectPlayerId === m.playerId && comboStatOf(l) === combo.stat
-                    )
-                    // The player's scope-scaled average — the number their
-                    // share of a combo line is really priced against — and the
-                    // book's projection beside it: a member the book rates
-                    // above their average (▲) makes the combo line richer than
-                    // the averages suggest; below (▼), softer.
-                    const avgEntry = memberAvgs[m.playerId]
-                    const avgShown = scopedAvg(m.playerId)
-                    const projShown = scopedProj(m.playerId)
-                    // Here the arrow rides the BOOK: ▲ = the book rates the
-                    // member above their average (same shared dead band).
+                    const on = comboMembers.has(m.playerId)
+                    const entry = poolStats['total_pins']?.[m.playerId]
+                    const avgShown = entry?.avg != null ? entry.avg * comboNGames : null
+                    const projShown = entry?.proj != null ? entry.proj * comboNGames : null
+                    // The arrow rides the BOOK: ▲ = the book rates the member
+                    // above their average (same shared dead band).
                     const projDir = deltaDir(projShown, avgShown)
                     return (
                       <View key={m.playerId} style={styles.memberRow}>
@@ -827,19 +831,16 @@ export default function SportsbookScreen() {
                           <Text style={styles.memberName}>
                             {m.name}{m.playerId === playerId ? ' (you)' : ''}
                           </Text>
-                          {avgEntry != null && (
+                          {entry != null && (
                             <Text style={styles.memberAvg}>
                               {avgShown == null
                                 ? 'NO STAT HISTORY'
-                                : avgEntry.source === 'season'
+                                : entry.source === 'season'
                                   ? `SEASON AVG ${avgShown.toFixed(1)}`
-                                  : avgEntry.source === 'lifetime'
+                                  : entry.source === 'lifetime'
                                     ? `LIFETIME AVG ${avgShown.toFixed(1)}`
                                     : `LEAGUE AVG ${avgShown.toFixed(1)}`}
-                              {/* Sub-line FORECAST only when the big slot holds a
-                                  solo line — line-less rows show the forecast big
-                                  instead (no duplicate). */}
-                              {projShown != null && solo?.line != null && (
+                              {projShown != null && (
                                 <>
                                   {'  ·  '}
                                   <Text style={styles.memberProj}>FORECAST {projShown.toFixed(1)}</Text>
@@ -859,27 +860,6 @@ export default function SportsbookScreen() {
                             </Text>
                           )}
                         </View>
-                        {/* The big value a combiner shops on: the player's own
-                            line for this stat when one exists, else the book's
-                            projection — each captioned directly above its
-                            number so a BOOK value can't read as a line. */}
-                        <View style={styles.memberValueCol}>
-                          {(solo?.line != null || projShown != null) && (
-                            <Text style={styles.memberValueLabel}>
-                              {solo?.line != null ? 'SOLO LINE' : 'FORECAST'}
-                            </Text>
-                          )}
-                          <Text
-                            style={[
-                              styles.memberSoloValue,
-                              solo?.line == null && projShown == null && styles.memberSoloNone,
-                            ]}
-                          >
-                            {solo?.line != null
-                              ? `${solo.line.toFixed(1)}+`
-                              : projShown != null ? projShown.toFixed(1) : '—'}
-                          </Text>
-                        </View>
                         <PickChip
                           label={on ? '✓' : '+'}
                           selected={on}
@@ -890,62 +870,28 @@ export default function SportsbookScreen() {
                   })}
                 </View>
               </>
+            ) : board.selectedPlayerId == null ? (
+              // Nobody has lines in this scope (they may in another — the
+              // pills stay tappable above).
+              <EmptyCard
+                text={`No ${scopeOptions.find(o => o.key === scope)?.label ?? ''} lines are open yet`}
+              />
             ) : (
-              // ── The player-filtered board ──────────────────────────────
               <>
-                {/* Player filter — a full-width anchored dropdown of the
-                    players with in-scope availability. */}
-                {board.selectedPlayerId != null && (
-                  <Dropdown
-                    options={board.players.map(p => ({
-                      key: p.id,
-                      label: `${p.name}${p.id === playerId ? ' (you)' : ''}`,
-                    }))}
-                    value={board.selectedPlayerId}
-                    onChange={setPickedPlayerId}
-                    style={styles.playerSelect}
-                  />
-                )}
-                {/* What the book expects from the selected player this week
-                    against what they actually average — scope-scaled like the
-                    lines beneath it (Weekly = × the night's games). Self-hides
-                    when the engine has no opinion. */}
-                {board.selectedPlayerId != null && projCache[board.selectedPlayerId] != null && (
-                  <BookProjectionCard
-                    rows={projCache[board.selectedPlayerId]}
-                    nGames={comboNGames}
-                    scopeLabel={scope === 'weekly' ? 'WEEKLY' : `GAME ${comboScopeGame}`}
-                  />
-                )}
-                {board.selectedPlayerId == null ? (
-                  // Nobody has lines in this scope (they may in another — the
-                  // pills stay tappable above).
-                  <EmptyCard
-                    text={`No ${scopeOptions.find(o => o.key === scope)?.label ?? ''} lines are open yet`}
-                  />
-                ) : (
-                  <>
-                    {board.scopeInProgress && board.firstInProgress && (
-                      <Text style={styles.inProgressNote}>
-                        {closedBettingNote(board.firstInProgress)}
-                      </Text>
-                    )}
-                    {/* Specials lead (their styling is the distinguishing mark),
-                        then the player's consolidated row, then their combos. */}
-                    {board.specials.length > 0 && renderSpecialsCard(board.specials, board.scopeInProgress)}
-                    {(board.playerLines.length > 0 || board.comboLines.length > 0) && (
-                      <View>
-                        {[
-                          ...(board.playerLines.length > 0 ? [board.playerLines] : []),
-                          ...board.comboLines.map(c => [c]),
-                        ].map(lines => (
-                          <View key={lines[0].subjectPlayerId ?? lines[0].marketId}>
-                            {renderLineSet(lines, board.scopeInProgress || lines.some(l => l.inProgress))}
-                          </View>
-                        ))}
+                {/* Specials lead (their styling is the distinguishing mark),
+                    then the player's consolidated row, then their combos. */}
+                {board.specials.length > 0 && renderSpecialsCard(board.specials, board.scopeInProgress)}
+                {(board.playerLines.length > 0 || board.comboLines.length > 0) && (
+                  <View>
+                    {[
+                      ...(board.playerLines.length > 0 ? [board.playerLines] : []),
+                      ...board.comboLines.map(c => [c]),
+                    ].map(lines => (
+                      <View key={lines[0].subjectPlayerId ?? lines[0].marketId}>
+                        {renderLineSet(lines, board.scopeInProgress || lines.some(l => l.inProgress))}
                       </View>
-                    )}
-                  </>
+                    ))}
+                  </View>
                 )}
               </>
             )}
@@ -967,27 +913,8 @@ export default function SportsbookScreen() {
           the app-level BetSlipProvider, so it can be raised from Bet Details on
           any screen. The board just feeds/reads it. */}
 
-      {/* Combine-mode builder bar — takes the slip bar's footprint while a
-          combo is being built (the provider hides the slip bar meanwhile). */}
-      {combining && (
-        <BuilderBar
-          memberNames={comboMemberShortNames}
-          statLabel={comboStatLabel}
-          scopeLabel={comboScopeLabel}
-          value={shownComboValue}
-          odds={comboOdds}
-          noQuote={comboQuote == null}
-          quoteLoading={comboQuoteLoading}
-          minMembers={comboMemberIds.length >= 2}
-          alreadyStaged={comboAlreadyStaged}
-          blocked={board.scopeInProgress}
-          onAdd={addComboToSlip}
-          onCancel={() => setCombo(null)}
-        />
-      )}
-
       {/* Value-entry sheet — one instance serves both board pills and the
-          combine bar (conditional-mount so state resets between opens). */}
+          combo stat pills (conditional-mount so state resets between opens). */}
       {valueSheet?.kind === 'market' && (
         <LineEntrySheet
           title={valueSheet.line.subjectFullName}
@@ -1002,27 +929,34 @@ export default function SportsbookScreen() {
           onClose={() => setValueSheet(null)}
         />
       )}
-      {valueSheet?.kind === 'combo' && comboSource != null && shownComboValue != null && (
-        <LineEntrySheet
-          title={comboMemberShortNames.join(' + ')}
-          conditionLabel={comboStatLabel}
-          scopeLabel={comboScopeLabel}
-          contextNote={
-            comboGroupAvg != null
-              ? comboGroupProj != null
-                ? `Group Average ${comboGroupAvg.toFixed(1)} · Forecast ${comboGroupProj.toFixed(1)}`
-                : `Group Average: ${comboGroupAvg.toFixed(1)} — lines above it pay longer odds`
-              : undefined
-          }
-          source={comboSource}
-          initialValue={shownComboValue}
-          onAccept={v => {
-            setComboLineValue(v)
-            setValueSheet(null)
-          }}
-          onClose={() => setValueSheet(null)}
-        />
-      )}
+      {valueSheet?.kind === 'combo' && currentSeasonId != null && (() => {
+        // The same groupRows the projection card renders — the two surfaces
+        // can never disagree (per-game sums, scope-scaled here).
+        const row = groupRowFor(valueSheet.stat)
+        const avg = row?.seasonAvg != null ? row.seasonAvg * comboNGames : null
+        const proj = row?.projected != null ? row.projected * comboNGames : null
+        return (
+          <LineEntrySheet
+            title={comboMemberShortNames.join(' + ')}
+            conditionLabel={comboStatLabel(valueSheet.stat)}
+            scopeLabel={comboScopeLabel}
+            contextNote={
+              avg != null
+                ? proj != null
+                  ? `Group Average ${avg.toFixed(1)} · Forecast ${proj.toFixed(1)}`
+                  : `Group Average: ${avg.toFixed(1)} — lines above it pay longer odds`
+                : undefined
+            }
+            source={comboSourceFor(valueSheet.stat)!}
+            initialValue={valueSheet.value}
+            onAccept={(v, quote) => {
+              acceptComboValue(valueSheet.stat, v, quote)
+              setValueSheet(null)
+            }}
+            onClose={() => setValueSheet(null)}
+          />
+        )
+      })()}
 
       {/* Bet details modal */}
       <BetDetailModal
@@ -1094,7 +1028,7 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     marginBottom: 12,
   },
-  // Combine-mode helper line (armed hint / stat-view heading).
+  // Combo-mode helper line above the member chips.
   combineHint: {
     fontFamily: fonts.barlowCondensed,
     fontSize: 11,
@@ -1103,51 +1037,15 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     textAlign: 'center',
   },
-  // The consolidated combo pane — stat selector on top, then value field +
-  // odds + the chosen stat's AVG-vs-BOOK readout. Field chip mirrors the
-  // board pills' input-field affordance.
-  comboPane: {
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    borderRadius: 12,
-    backgroundColor: colors.surfaceTint,
-    marginBottom: 8,
-    gap: 10,
-  },
-  comboPaneRow: {
+  // The member picker — a wrapped row of short-name chips in the player
+  // dropdown's slot (the subject selector keeps its position in both modes).
+  memberChipRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 12,
   },
-  comboPanePlaceholder: {
-    fontFamily: fonts.barlowCondensed,
-    fontSize: 12,
-    letterSpacing: 1,
-    color: colors.muted2,
-  },
-  comboPaneStats: { flex: 1, alignItems: 'flex-end' },
-  comboPaneAvgRow: { flexDirection: 'row', alignItems: 'center', gap: 3 },
-  comboPaneAvg: {
-    fontFamily: fonts.barlowCondensedHeavy,
-    fontSize: 14,
-    color: colors.text,
-    letterSpacing: 0.5,
-  },
-  comboPaneDeltaUp: { fontSize: 9, color: colors.success },
-  comboPaneDeltaDown: { fontSize: 9, color: colors.danger },
-  comboPaneBook: {
-    fontFamily: fonts.barlowCondensed,
-    fontSize: 11,
-    letterSpacing: 0.5,
-    color: colors.muted,
-    marginTop: 1,
-  },
-  comboValueOdds: {
-    fontFamily: fonts.barlowCondensedHeavy,
-    fontSize: 17,
-    color: colors.accent,
-  },
-  // Stat-view member rows — same tinted-row language as the board's LineRow.
+  // Combo-mode member context rows — same tinted-row language as LineRow.
   memberRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1166,11 +1064,8 @@ const styles = StyleSheet.create({
     color: colors.text,
     letterSpacing: 0.3,
   },
-  // The member's own line for the combo's stat — the deciding number, so it
-  // gets the big accent value treatment; "—" (muted size stays) when the
-  // player has no individual market for this stat.
-  // The member's scope-scaled average (the number their share of the combo
-  // line prices against) — context under the name.
+  // The member's scope-scaled average (the number their share of a combo
+  // line is really priced against) — context under the name.
   memberAvg: {
     fontFamily: fonts.barlowCondensed,
     fontSize: 11,
@@ -1183,21 +1078,6 @@ const styles = StyleSheet.create({
   memberProj: { color: colors.text },
   memberProjUp: { color: colors.success, fontSize: 9 },
   memberProjDown: { color: colors.danger, fontSize: 9 },
-  // The right-aligned value column: a tiny caption (SOLO LINE / BOOK PROJ.)
-  // directly over the big number it describes.
-  memberValueCol: { alignItems: 'flex-end', marginRight: 4 },
-  memberValueLabel: {
-    fontFamily: fonts.barlowCondensed,
-    fontSize: 9,
-    letterSpacing: 1.2,
-    color: colors.muted,
-  },
-  memberSoloValue: {
-    ...type.value,
-    color: colors.accent,
-    letterSpacing: 0.5,
-  },
-  memberSoloNone: { color: colors.muted2 },
   // Scope-level in-progress warning — shown above the rows when any in-scope
   // market is closed for betting.
   inProgressNote: {

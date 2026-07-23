@@ -16,12 +16,18 @@ interface BookProjectionCardProps {
   // night expectation (× the scheduled game count), Game N shows per game.
   nGames: number
   scopeLabel: string
+  // Group (combo-mode) framing: an override headline ("GROUP AVG vs FORECAST")
+  // plus a caption naming the summed members. Absent = the single-player card.
+  header?: string
+  caption?: string
 }
 
 // Column heads — compressed forms of the shared STAT_LABELS (four columns
-// have to share a phone width).
+// have to share a phone width). `total_pins` is the combo vocabulary's spelling
+// of the score column (group rows sum member pinfall, not a posted score line).
 const COLUMN_LABELS: Record<string, string> = {
   score: 'PINS',
+  total_pins: 'PINS',
   clean_frames: 'CLEAN',
   strikes: 'STRIKES',
   spares: 'SPARES',
@@ -34,7 +40,7 @@ const COLUMN_LABELS: Record<string, string> = {
 // more than the player has averaged, i.e. a hot week). Pure display — the
 // engine's variance/quote band stays server-side, and no staging/pricing
 // flows through here.
-export default function BookProjectionCard({ rows, nGames, scopeLabel }: BookProjectionCardProps) {
+export default function BookProjectionCard({ rows, nGames, scopeLabel, header, caption }: BookProjectionCardProps) {
   const shown = rows.filter(r => r.projected != null)
   // Engine off (or no rows yet): no book side to compare against.
   if (shown.length === 0) return null
@@ -43,7 +49,8 @@ export default function BookProjectionCard({ rows, nGames, scopeLabel }: BookPro
 
   return (
     <View style={styles.card}>
-      <Text style={styles.header}>SEASON AVG vs FORECAST · {scopeLabel}</Text>
+      <Text style={styles.header}>{header ?? 'SEASON AVG vs FORECAST'} · {scopeLabel}</Text>
+      {caption != null && <Text style={styles.caption}>{caption}</Text>}
       <View style={styles.columns}>
         {shown.map(r => {
           const projected = r.projected! * nGames
@@ -89,6 +96,15 @@ const styles = StyleSheet.create({
     ...type.label,
     color: colors.muted,
     textAlign: 'center',
+  },
+  // The group caption — the summed members, directly under the headline.
+  caption: {
+    fontFamily: fonts.barlowCondensed,
+    fontSize: 11,
+    letterSpacing: 0.5,
+    color: colors.muted2,
+    textAlign: 'center',
+    marginTop: 2,
   },
   columns: {
     flexDirection: 'row',

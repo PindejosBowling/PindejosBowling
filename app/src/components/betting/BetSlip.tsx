@@ -63,7 +63,7 @@ export interface SlipCombo {
   stat: string
   scope: 'game' | 'night'
   gameNumber: number | null
-  // The CHOSEN rung from the BuilderBar's previewed ladder. compose_combo_bet
+  // The CHOSEN value from the combo stat pill's live preview. compose_combo_bet
   // takes `line` verbatim (it must match a posted/mintable rung) and the leg
   // snapshots the rung's odds; `odds` here is the previewed price for display.
   line: number | null
