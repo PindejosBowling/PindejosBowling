@@ -5851,6 +5851,8 @@ DECLARE
   v_floor  numeric;
   v_pm     numeric;
   v_pv     numeric;
+  v_n      integer;  -- raw (undecayed) count of the player's official games
+  v_fade   numeric;  -- the prior's remaining pseudo-count on the mean
 BEGIN
   v_cfg := public.odds_engine_get_config(p_season_id);
   v_floor := CASE WHEN p_stat = 'score' THEN v_cfg.variance_floor_score ELSE v_cfg.variance_floor_count END;
@@ -5869,11 +5871,11 @@ BEGIN
     ), weighted AS (
       SELECT v, power(0.5, rk / v_cfg.half_life_games) AS wt FROM ordered
     ), agg AS (
-      SELECT SUM(wt) AS w, SUM(wt * v) / NULLIF(SUM(wt), 0) AS m FROM weighted
+      SELECT SUM(wt) AS w, SUM(wt * v) / NULLIF(SUM(wt), 0) AS m, COUNT(*)::integer AS n FROM weighted
     )
-    SELECT a.w, a.m,
+    SELECT a.w, a.m, a.n,
            (SELECT SUM(wt * (v - a.m) ^ 2) / NULLIF(a.w, 0) FROM weighted)
-      INTO w_total, v_mean_w, v_var_w
+      INTO w_total, v_mean_w, v_n, v_var_w
     FROM agg a;
 
   ELSIF p_stat IN ('strikes', 'spares', 'clean_frames') THEN
@@ -5889,11 +5891,11 @@ BEGIN
     ), weighted AS (
       SELECT v, power(0.5, rk / v_cfg.half_life_games) AS wt FROM ordered
     ), agg AS (
-      SELECT SUM(wt) AS w, SUM(wt * v) / NULLIF(SUM(wt), 0) AS m FROM weighted
+      SELECT SUM(wt) AS w, SUM(wt * v) / NULLIF(SUM(wt), 0) AS m, COUNT(*)::integer AS n FROM weighted
     )
-    SELECT a.w, a.m,
+    SELECT a.w, a.m, a.n,
            (SELECT SUM(wt * (v - a.m) ^ 2) / NULLIF(a.w, 0) FROM weighted)
-      INTO w_total, v_mean_w, v_var_w
+      INTO w_total, v_mean_w, v_n, v_var_w
     FROM agg a;
 
   ELSE
@@ -5901,13 +5903,19 @@ BEGIN
   END IF;
 
   w_total := COALESCE(w_total, 0);
+  v_n     := COALESCE(v_n, 0);
   SELECT lp.mean, lp.variance INTO v_pm, v_pv FROM public.odds_engine_league_prior(p_season_id, p_stat) lp;
 
   IF w_total = 0 THEN
     mean     := v_pm;
     variance := GREATEST(v_floor, v_pv);
   ELSE
-    mean     := (w_total * v_mean_w + v_cfg.prior_weight_games * v_pm) / (w_total + v_cfg.prior_weight_games);
+    -- MEAN: the prior fades with experience — max(0, prior_weight − n games).
+    -- Established players (n ≥ prior_weight_games) price purely off their own
+    -- recency-weighted history.
+    v_fade := GREATEST(0, v_cfg.prior_weight_games - v_n);
+    mean   := (w_total * v_mean_w + v_fade * v_pm) / (w_total + v_fade);
+    -- VARIANCE: full-weight league blend, unchanged (tail-liability guard).
     variance := GREATEST(v_floor,
                   (w_total * COALESCE(v_var_w, 0) + v_cfg.prior_weight_games * v_pv)
                   / (w_total + v_cfg.prior_weight_games));

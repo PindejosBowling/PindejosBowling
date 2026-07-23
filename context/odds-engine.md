@@ -23,11 +23,25 @@ Shipped enabled (config seed row). Three migrations: `odds_engine_core`,
   `'score'` → archived `scores` (lifetime, all seasons — skill persists across
   pin resets); `'strikes' | 'spares' | 'clean_frames'` → `lanetalk_game_imports`
   with `classification = 'official' AND frames > 0` (clean frame ≈ strike or
-  spare, matching `lanetalk_seed_lines`). Estimates are **empirical-Bayes
-  shrunk** toward league priors (`odds_engine_league_prior`) with pseudo-count
-  `prior_weight_games` (default 6), and variance is floored
-  (`variance_floor_score` 225 pins², `variance_floor_count` 0.75). No history
-  → pure league prior (near-evens, wide variance).
+  spare, matching `lanetalk_seed_lines`). **The league prior FADES out of the
+  mean** (`…130032_fade_league_prior_mean`, grilled 2026-07-23): the prior's
+  pseudo-count on the mean is `max(0, prior_weight_games − own_official_games)`
+  — a rookie runway (default 6 games), NOT permanent skepticism. Rationale:
+  recency decay caps a player's evidence weight at `1/(1−0.5^(1/half_life))
+  ≈ 9.2` games-worth, so a fixed pseudo-count held ≥ ~40% of every estimate
+  forever, systematically underpricing top players' overs and overpricing
+  underperformers' — an asymmetry the owner rejected ("reward outperformance
+  relative to your own skill set"). Established players (≥ `prior_weight_games`
+  official games) now price purely off their recency-weighted own history.
+  **VARIANCE keeps the full-weight league blend + floors — deliberately**
+  (`variance_floor_score` 225 pins², `variance_floor_count` 0.75): variance
+  blending has no directional favorite, and with fair uncapped tails a noisy
+  own-history variance would misprice long-tail quotes with real House
+  liability. No history → pure league prior (near-evens, wide variance —
+  cold start unchanged). Sandbagging (tank your line, back your own over) was
+  grilled and **accepted as a risk, no guard** — real league nights are
+  publicly costly to tank and big self-bets hit the Activity Feed; revisit
+  only if observed.
 - **Pricing** (`odds_engine_price_pair`): stat ~ Normal(mean, var); night
   scope scales both by n games; combos sum member means/variances
   (independence). `P(over)` via `odds_engine_norm_cdf` (Abramowitz–Stegun
@@ -243,8 +257,11 @@ pushing.
 
 ## Tuning / debugging recipes
 
-- **Book feels too jumpy/slow**: adjust `half_life_games` (higher = calmer)
-  or `prior_weight_games` (higher = more league-average).
+- **Book feels too jumpy/slow**: adjust `half_life_games` (higher = calmer).
+  `prior_weight_games` is now the ROOKIE RUNWAY length (how many official
+  games until the league prior leaves the mean) plus the variance blend's
+  pseudo-count — it no longer applies permanent league-average pull to
+  established players' means.
 - **Odds look wrong for one player**: `SELECT * FROM
   odds_engine_player_stat('<player>', '<season>', 'strikes')` and compare
   against their `lanetalk_game_imports` official rows; remember recreational

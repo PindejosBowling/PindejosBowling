@@ -26,6 +26,10 @@
 --       over/under pair — byte-for-byte the legacy shape.
 --   O7  estimation: cold start = league prior mean; a hot recent streak pulls
 --       the recency-weighted mean above the unweighted lifetime average.
+--   O7b fading prior: an established player's MEAN equals the pure
+--       recency-weighted own mean (prior fully faded at ≥ prior_weight_games
+--       games) while the VARIANCE keeps the league blend; a 3-game player's
+--       mean blends the prior at exactly prior_weight_games − 3.
 --   O8  side backfill: no over/under-keyed selection anywhere disagrees with
 --       its side column.
 --   O9  side-aware grading: settle a laddered market; each over rung grades
@@ -36,8 +40,9 @@
 --       odds in clamp) for a cold-start player; no LaneTalk props before any
 --       official import exists (the gate).
 --   G2  resync after imports mints stat-prop ladders; the hot-streak player's
---       seed strikes rung (line 3.5 = lifetime formula) prices ABOVE evens —
---       the recency-weighted mean (≈2.4) sits under the unweighted seed line.
+--       seed strikes rung (line 3.5 = lifetime formula) posts the engine's own
+--       fair price for that line (post-fade the pure recency mean ≈3.56 sits
+--       just above the unweighted seed line).
 --   G3  id stability: a no-change resync leaves every selection id untouched
 --       (churn guard), so staged-but-unplaced slips survive quiet resyncs.
 --   G4  freeze: once a bet lands on any rung, new imports + resync leave the
@@ -100,6 +105,13 @@ DECLARE
   v_cold_mean numeric;
   v_hot_mean numeric;
   v_cold_order_mean numeric;
+  -- O7b fading-prior vectors
+  v_cfg public.odds_engine_config;
+  v_p3 uuid;
+  v_pure_mean numeric; v_pure_var numeric;
+  v_mid_mean numeric; v_mid_exp numeric; v_mid_w numeric; v_mid_m numeric;
+  v_mid_prior numeric;
+  v_g2_exp numeric;
   v_alt_key text; v_alt_line numeric;
   v_challenge uuid; v_cp_sel text;
   v_ladder_pairs int;
@@ -293,6 +305,66 @@ BEGIN
     RAISE EXCEPTION 'PROBE_FAIL: estimation invariants (w_total=%, var=%)', v_w, v_var;
   END IF;
 
+  ------------------------------------------------------------------ O7b fading prior
+  -- Established player (p1 has 10 ≥ prior_weight_games official games): the
+  -- MEAN must equal the pure recency-weighted own mean — zero league pull —
+  -- while the VARIANCE must still be the league blend (deliberately unfaded).
+  v_cfg := public.odds_engine_get_config(v_season);
+  WITH ordered AS (
+    SELECT i.strikes::numeric AS v,
+           row_number() OVER (ORDER BY i.played_at DESC NULLS LAST, i.created_at DESC) - 1 AS rk
+    FROM public.lanetalk_game_imports i
+    WHERE i.player_id = v_p1 AND i.classification = 'official' AND i.frames > 0
+  ), weighted AS (
+    SELECT v, power(0.5, rk / v_cfg.half_life_games) AS wt FROM ordered
+  ), agg AS (
+    SELECT SUM(wt) AS w, SUM(wt * v) / NULLIF(SUM(wt), 0) AS m FROM weighted
+  )
+  SELECT a.m, (SELECT SUM(wt * (v - a.m) ^ 2) / NULLIF(a.w, 0) FROM weighted)
+    INTO v_pure_mean, v_pure_var FROM agg a;
+  IF abs(v_hot_mean - v_pure_mean) > 1e-9 THEN
+    RAISE EXCEPTION 'PROBE_FAIL: fade: established mean % <> pure own mean % (prior not fully faded)',
+      v_hot_mean, v_pure_mean;
+  END IF;
+  IF abs(v_var - GREATEST(0.75, v_pure_var)) <= 1e-9 THEN
+    RAISE EXCEPTION 'PROBE_FAIL: fade: established variance % equals pure own variance % (league blend must remain)',
+      v_var, v_pure_var;
+  END IF;
+
+  -- Mid-fade player (3 games < prior_weight_games): the prior's remaining
+  -- pseudo-count must be exactly prior_weight_games − 3.
+  INSERT INTO public.players (first_name, last_name, phone)
+    VALUES ('Probe', 'OddsMidFade', '+10000000083') RETURNING id INTO v_p3;
+  FOR i IN 1..3 LOOP
+    INSERT INTO public.lanetalk_game_imports
+        (source_url, player_id, week_id, game_number, classification, score, played_at, payload)
+      VALUES ('probe://odds-engine/midfade/' || i, v_p3, v_week, 1, 'official', 100,
+              now() - (10 - i) * interval '1 day',
+              (SELECT jsonb_build_object('frames', jsonb_agg(
+                 CASE WHEN f <= i + 1 THEN jsonb_build_object('is_strike', true)
+                      ELSE jsonb_build_object() END))
+               FROM generate_series(1, 10) f));
+  END LOOP;
+  -- Re-fetch the prior AFTER the inserts (the league pool now includes them).
+  SELECT lp.mean INTO v_mid_prior FROM public.odds_engine_league_prior(v_season, 'strikes') lp;
+  WITH ordered AS (
+    SELECT i.strikes::numeric AS v,
+           row_number() OVER (ORDER BY i.played_at DESC NULLS LAST, i.created_at DESC) - 1 AS rk
+    FROM public.lanetalk_game_imports i
+    WHERE i.player_id = v_p3 AND i.classification = 'official' AND i.frames > 0
+  ), weighted AS (
+    SELECT v, power(0.5, rk / v_cfg.half_life_games) AS wt FROM ordered
+  )
+  SELECT SUM(wt), SUM(wt * v) / NULLIF(SUM(wt), 0) INTO v_mid_w, v_mid_m FROM weighted;
+  v_mid_exp := (v_mid_w * v_mid_m + (v_cfg.prior_weight_games - 3) * v_mid_prior)
+               / (v_mid_w + (v_cfg.prior_weight_games - 3));
+  SELECT ps.mean INTO v_mid_mean
+    FROM public.odds_engine_player_stat(v_p3, v_season, 'strikes') ps;
+  IF abs(v_mid_mean - v_mid_exp) > 1e-9 THEN
+    RAISE EXCEPTION 'PROBE_FAIL: fade: mid-fade mean % <> expected % (fade weight should be prior_weight − 3)',
+      v_mid_mean, v_mid_exp;
+  END IF;
+
   ------------------------------------------------------------------ O8 side backfill
   SELECT count(*) INTO v_n FROM public.bet_selections
     WHERE key IN ('over', 'under') AND side IS DISTINCT FROM key;
@@ -381,8 +453,18 @@ BEGIN
   IF v_line <> 3.5 THEN
     RAISE EXCEPTION 'PROBE_FAIL: G2 seed strikes line % (expected 3.5 = floor(3.0)+0.5)', v_line;
   END IF;
-  IF v_over <= 2.0 THEN
-    RAISE EXCEPTION 'PROBE_FAIL: G2 seed over odds % — recency mean under the seed line must price above evens', v_over;
+  -- The posted seed odds must be the engine's own fair price for the seed
+  -- line under the CURRENT model. (Pre-fade this asserted "above evens"
+  -- because the league blend held the hot mean under the 3.5 seed; with the
+  -- fading prior the pure recency mean ≈3.56 sits ABOVE it, so the fair seed
+  -- price is the invariant, not its direction.)
+  SELECT ps.mean, ps.variance INTO v_mean, v_var
+    FROM public.odds_engine_player_stat(v_p1, v_season, 'strikes') ps;
+  SELECT pp.over_odds INTO v_g2_exp
+    FROM public.odds_engine_price_pair(v_mean, v_var, 1, v_line,
+           v_cfg.odds_min, v_cfg.odds_max, true) pp;
+  IF abs(v_over - v_g2_exp) > 0.051 THEN
+    RAISE EXCEPTION 'PROBE_FAIL: G2 seed over odds % <> model fair price % at the seed line', v_over, v_g2_exp;
   END IF;
 
   ------------------------------------------------------------------ G3 id stability
@@ -925,6 +1007,8 @@ BEGIN
     'league_prior_mean', round(v_prior_mean, 3),
     'hot_streak_mean', round(v_hot_mean, 3),
     'hot_streak_w_total', round(v_w, 2),
+    'fade_established_mean', round(v_hot_mean, 3),
+    'fade_partial_mean', round(v_mid_mean, 3),
     'grading', 'per_rung_ok',
     'pvp_counterparty', v_cp_sel,
     'disabled_legacy_shape', true,
