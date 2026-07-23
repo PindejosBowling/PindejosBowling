@@ -1086,7 +1086,7 @@ const styles = StyleSheet.create({
   },
   boardHeaderText: {
     fontFamily: fonts.barlowCondensedHeavy,
-    fontSize: 19,
+    fontSize: 22,
     letterSpacing: 1,
     color: colors.text,
   },
@@ -1101,7 +1101,7 @@ const styles = StyleSheet.create({
   },
   scopeSelectText: {
     fontFamily: fonts.barlowCondensedHeavy,
-    fontSize: 19,
+    fontSize: 22,
     letterSpacing: 1,
     color: colors.accent,
     textTransform: 'uppercase',
@@ -1109,7 +1109,7 @@ const styles = StyleSheet.create({
   // The demoted explainer line under the title — what the stats strip shows.
   boardSubtitle: {
     fontFamily: fonts.barlowCondensed,
-    fontSize: 12,
+    fontSize: 14,
     letterSpacing: 0.5,
     color: colors.muted,
     textAlign: 'center',
@@ -1134,6 +1134,8 @@ const styles = StyleSheet.create({
     borderWidth: 0,
     paddingVertical: 4,
   },
+  // Player-name type — one size shared by the selector, member chips, and
+  // the ＋ chip (keep all three in lockstep when resizing).
   playerNameSelectText: {
     fontFamily: fonts.barlowCondensedHeavy,
     fontSize: 16,
@@ -1155,7 +1157,7 @@ const styles = StyleSheet.create({
   },
   memberChipText: {
     fontFamily: fonts.barlowCondensedHeavy,
-    fontSize: 17,
+    fontSize: 14,
     color: colors.text,
     letterSpacing: 0.4,
   },
@@ -1175,9 +1177,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   addChipDim: { opacity: 0.4 },
+  // Matches the player-name size (playerNameSelectText/memberChipText) — keep
+  // in lockstep whenever the names resize.
   addChipText: {
     fontFamily: fonts.barlowCondensed,
-    fontSize: 17,
+    fontSize: 16,
     color: colors.accent,
   },
   // The board's ELI5 foot section — beneath the last line card, explaining
