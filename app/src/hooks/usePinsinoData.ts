@@ -1,7 +1,7 @@
 import { weeks, seasons, betMarkets, bets, pinLedger, loanLedger, loans, pvpChallenges, bountyPosts, teamSlots, customLines, games, players, rsvp, auctionHouseState } from '../utils/supabase/db'
 import { computeBalance } from '../utils/ledger'
 import { shortName } from '../utils/helpers'
-import { betPayout, fmtOdds } from '../utils/bets'
+import { betPayout } from '../utils/bets'
 import { useAsyncData } from './useAsyncData'
 
 // One bettable side of a market (a single `bet_selections` row, flattened).
@@ -46,9 +46,6 @@ export interface LineView {
   // forms for the player dropdown's name resolution.
   comboMemberNames: string[] | null
   comboMemberFullNames: string[] | null
-  // Optional left-column metadata line, shown where O/U renders "LINE 142.5".
-  // Lets lineless markets (moneyline → "MONEYLINE · vs Team 3") carry context.
-  subtitle?: string
   selections: SelectionView[]
   // Game in progress: market closed for betting, still shown but not bettable.
   inProgress: boolean
@@ -109,27 +106,6 @@ export const STAT_LABELS: Record<string, string> = {
   first_ball_avg: 'First-Ball Avg',
 }
 
-// The pick button IS the line being agreed to. Every side offered on the board
-// is an over (unders are UI-hidden — all bets are over by definition), so the
-// button reads as the full condition: threshold + what's being counted —
-// "142.5+ PINS" on a score line, "4.5+ STRIKES" / "62.5+ CLEAN %" on a stat
-// prop. Lineless sides (moneyline "WIN") keep their label.
-export function selectionButtonLabel(line: LineView, sel: SelectionView): string {
-  const threshold = sel.line ?? line.line
-  if (sel.side === 'over' && threshold != null) {
-    const what =
-      line.marketType === 'prop' || line.marketType === 'team_prop' || line.marketType === 'combo'
-        ? line.statKey ? STAT_LABELS[line.statKey] ?? line.statKey : null
-        // Score lines: a game row reads "PINS"; the night line matches the
-        // team row's "TOTAL PINS" wording (it IS the night total).
-        : line.marketType === 'over_under' ? (line.gameNumber != null ? 'Pins' : 'Total Pins') : null
-    // Engine-priced boards carry the rung's payout on the button itself
-    // ("4.5+ STRIKES ×2.40") — the odds ARE part of the offer now.
-    return `${threshold.toFixed(1)}+${what ? ` ${what.toUpperCase()}` : ''} ${fmtOdds(sel.odds)}`
-  }
-  return (sel.label || sel.key).toUpperCase()
-}
-
 // The line suffix placed-bet surfaces append after the pick ("OVER 4.5 STRIKES",
 // "OVER 142.5"). One helper so every gate (BetRow, detail/settle modals, parlay
 // slips) treats stat props and score O/U the same way.
@@ -141,6 +117,16 @@ export function betLineSuffix(marketType: string, line: number | null, statKey?:
     return ` ${line.toFixed(1)}${label ? ` ${label.toUpperCase()}` : ''}`
   }
   return ''
+}
+
+// The "where does this leg score" suffix betLineSuffix's consumers append after
+// the line: G<n> for a game leg, the night word for a whole-week leg
+// (moneylines are game-implicit, so they carry nothing). `nightWord`
+// parameterizes the per-surface wording ('NIGHT' on placed/special legs,
+// 'THIS WEEK' in the slip) while keeping the dispatch itself in one place.
+export function scopeSuffix(marketType: string, gameNumber: number | null, nightWord = 'NIGHT'): string {
+  if (gameNumber != null) return ` · G${gameNumber}`
+  return marketType === 'moneyline' ? '' : ` · ${nightWord}`
 }
 
 // One resolved special leg as a display string — shared by the board row and
@@ -156,9 +142,7 @@ export function customLegLabel(leg: {
   gameNumber: number | null
 }): string {
   const suffix = betLineSuffix(leg.marketType, leg.line, leg.statKey)
-  const where =
-    leg.gameNumber != null ? ` · G${leg.gameNumber}` : leg.marketType === 'moneyline' ? '' : ' · NIGHT'
-  return `${leg.subjectName} · ${leg.pick.toUpperCase()}${suffix}${where}`
+  return `${leg.subjectName} · ${leg.pick.toUpperCase()}${suffix}${scopeSuffix(leg.marketType, leg.gameNumber)}`
 }
 
 // The section a line is bucketed under on the Place Bets board. Per-game markets
@@ -318,6 +302,24 @@ export interface ActiveLoanSummary {
   outstanding: number
 }
 
+// A market's subject display name — the one fallback chain every normalized
+// surface shares: named subject → combo member-name snapshot → anchored team
+// number → market title. Player names follow the Sportsbook convention
+// ("First L." via shortName); `full: true` keeps the full forms for the two
+// full-name surfaces (board row header + player dropdown). New market types
+// add their naming rule HERE, not per call site.
+function marketSubjectName(mkt: any, opts?: { full?: boolean }): string {
+  const full = opts?.full ?? false
+  if (mkt?.subject?.name != null) return full ? mkt.subject.name : shortName(mkt.subject.name)
+  const members: string[] | null =
+    Array.isArray(mkt?.params?.member_names) && mkt.params.member_names.length
+      ? mkt.params.member_names : null
+  if (members) return (full ? members : members.map(shortName)).join(' + ')
+  const teamNumber = mkt?.market_type === 'team_prop' ? mkt?.params?.team_number ?? null : null
+  if (teamNumber != null) return `Team ${teamNumber}`
+  return mkt?.title ?? '—'
+}
+
 // Collapse bet → legs → selections → markets into a flat row. A single O/U bet
 // has one leg; a parlay has many (combined odds = Π of the legs' odds).
 export function normalizeBet(b: any): BetView {
@@ -329,13 +331,7 @@ export function normalizeBet(b: any): BetView {
       selectionId: sel?.id ?? '',
       marketId: mkt?.id ?? '',
       marketType: mkt?.market_type ?? '',
-      // Sportsbook convention: player names render as "First L." (shortName);
-      // combo titles embed full names, so rebuild from the member snapshot.
-      subjectName:
-        mkt?.subject?.name != null ? shortName(mkt.subject.name)
-          : Array.isArray(mkt?.params?.member_names) && mkt.params.member_names.length
-            ? mkt.params.member_names.map(shortName).join(' + ')
-            : mkt?.title ?? '—',
+      subjectName: marketSubjectName(mkt),
       // Prefer the selection label (readable for every market type — a team name
       // for moneylines, whose `key` is a team uuid) over the raw key.
       pick: sel?.label ?? sel?.key ?? '',
@@ -362,11 +358,7 @@ export function normalizeBet(b: any): BetView {
     line: Number(firstLeg?.line_at_placement ?? firstSel?.line ?? 0),
     statKey: firstMkt?.params?.stat ?? null,
     gameNumber: firstMkt?.game_number ?? null,
-    subjectName:
-      firstMkt?.subject?.name != null ? shortName(firstMkt.subject.name)
-        : Array.isArray(firstMkt?.params?.member_names) && firstMkt.params.member_names.length
-          ? firstMkt.params.member_names.map(shortName).join(' + ')
-          : firstMkt?.title ?? '—',
+    subjectName: marketSubjectName(firstMkt),
     marketId: firstMkt?.id ?? '',
     marketType: firstMkt?.market_type ?? '',
     marketStatus: firstMkt?.status ?? '',
@@ -411,15 +403,14 @@ export function normalizeMarket(m: any): LineView {
     lineVals.length > 0 && lineVals.every(v => v === lineVals[0]) ? lineVals[0] : null
 
   // Stat props (player + team + combo) carry their kind in params.stat; the
-  // full condition (threshold + stat) renders in the pick button
-  // (selectionButtonLabel), so no subtitle.
+  // full condition (threshold + stat) renders on the pill itself.
   const statKey: string | null =
     m.market_type === 'prop' || m.market_type === 'team_prop' || m.market_type === 'combo'
       ? m.params?.stat ?? null : null
   // team_prop rows are anchored to a team, not a player: params carries the
-  // team id (ownership checks) + team number (display label).
+  // team id (ownership checks) + team number (the display label, resolved in
+  // marketSubjectName).
   const teamId: string | null = m.market_type === 'team_prop' ? m.params?.team_id ?? null : null
-  const teamNumber: number | null = m.market_type === 'team_prop' ? m.params?.team_number ?? null : null
   // combo rows are anchored to an explicit member set: params carries the ids
   // (anti-tank self-inclusion checks) + the names snapshot (display label).
   const comboMemberIds: string[] | null =
@@ -439,14 +430,8 @@ export function normalizeMarket(m: any): LineView {
     // O/U markets name a player (subject); team props name their team; combos
     // name their member set; moneylines name a matchup via the market title
     // (subject is a game, so the player embed resolves null).
-    subjectName:
-      m.subject?.name != null ? shortName(m.subject.name)
-        : comboMemberNames?.length ? comboMemberNames.join(' + ')
-          : teamNumber != null ? `Team ${teamNumber}` : m.title ?? '—',
-    subjectFullName:
-      m.subject?.name ??
-      (comboMemberFullNames?.length ? comboMemberFullNames.join(' + ')
-        : teamNumber != null ? `Team ${teamNumber}` : m.title ?? '—'),
+    subjectName: marketSubjectName(m),
+    subjectFullName: marketSubjectName(m, { full: true }),
     gameNumber: m.game_number ?? null,
     line: sharedLine,
     statKey,
@@ -1083,11 +1068,6 @@ export function usePinsinoData(playerId: string | null, viewSeasonId?: string | 
       const myDebt = playerId ? (debtByPlayer[playerId] ?? 0) : 0
       const myActiveLoan = myLoansData.find((l: any) => l.status === 'active')
 
-      // Build the board: every fetched line passes through as-is (the
-      // moneyline "Your Team" reshaping and team_prop relabel died with their
-      // market generation — combos carry their own member-name labels).
-      const openLinesResolved: LineView[] = [...rawLineViews]
-
       // The week's RSVP'd-in players (id + name), for the combo composer's
       // member picker — the same eligibility rule the compose RPC enforces.
       const rsvpInPlayers = rsvpData
@@ -1097,7 +1077,10 @@ export function usePinsinoData(playerId: string | null, viewSeasonId?: string | 
 
       return {
         balance: computeBalance(ledgerData),
-        openLines: openLinesResolved,
+        // Every fetched line passes through as-is (the moneyline "Your Team"
+        // reshaping and team_prop relabel died with their market generation —
+        // combos carry their own member-name labels).
+        openLines: rawLineViews,
         myBets: myBetViews,
         weekBets: weekBetViews,
         settledBets: settledBetsData.map(normalizeBet).map(brandBet),

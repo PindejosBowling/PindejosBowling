@@ -76,11 +76,10 @@ export default function ActiveBetsView({
         <View>
           <Text style={styles.gameLabel}>MY BETS</Text>
           <View>
-            {myBets.map((bet, idx) => (
+            {myBets.map(bet => (
               <BetRow
                 key={bet.id}
                 bet={bet}
-                isLast={idx === myBets.length - 1}
                 badge={resultBadge(bet.status)}
                 betReturnText={betReturnText(bet, perspective)}
                 onPress={onBetPress ? () => onBetPress(bet) : undefined}
@@ -113,11 +112,10 @@ export default function ActiveBetsView({
         <View key={group.key}>
           <Text style={styles.gameLabel}>{group.label}</Text>
           <View>
-            {groupBets.map((bet, idx) => (
+            {groupBets.map(bet => (
               <BetRow
                 key={bet.id}
                 bet={bet}
-                isLast={idx === groupBets.length - 1}
                 badge={resultBadge(bet.status)}
                 betReturnText={betReturnText(bet, perspective)}
                 onPress={onBetPress ? () => onBetPress(bet) : undefined}
@@ -133,11 +131,10 @@ export default function ActiveBetsView({
         <View>
           <Text style={styles.gameLabel}>PARLAYS</Text>
           <View>
-            {parlays.map((bet, idx) => (
+            {parlays.map(bet => (
               <BetRow
                 key={bet.id}
                 bet={bet}
-                isLast={idx === parlays.length - 1}
                 badge={resultBadge(bet.status)}
                 betReturnText={betReturnText(bet, perspective)}
                 onPress={onParlayPress ? () => onParlayPress(bet) : undefined}

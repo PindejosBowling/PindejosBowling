@@ -5,9 +5,6 @@ import { betLineSuffix, type BetView } from '../../hooks/usePinsinoData'
 
 interface BetRowProps {
   bet: BetView
-  // Vestigial since the ticket restyle (cards carry their own margins) — kept
-  // so callers don't churn.
-  isLast: boolean
   badge: { label: string; color: string } | null
   betReturnText: string
   onPress?: () => void

@@ -101,7 +101,10 @@ semantics.
 **Line seeding**: `combo_seed_line(member_ids[], stat, season, n_games)` —
 `team_prop_seed_line` generalized from a roster scan to `unnest(member_ids)`.
 **One half point total** (since `…234333_fix_combo_seed_line_single_half_point`,
-2026-07-21): the line = Σ per-member `floor(avg × n_games)` + 0.5 — each
+2026-07-21; projection-anchored since `…190000_seed_lines_from_projection`,
+2026-07-23): engine on, the line = Σ per-member `floor(projected mean ×
+n_games)` + 0.5 (a no-history member contributes the prior-informed mean, not
+0); engine off, the legacy Σ per-member `floor(avg × n_games)` + 0.5 — each
 member contributes their solo whole-number base (their displayed line minus
 its half point), and the combo adds a single half point, so the combined line
 always equals the sum of the solo lines the combine-mode board shows, minus
@@ -182,7 +185,7 @@ params->>clock.eq.lanetalk)` alongside props and legacy team props.
 
 ## App layer
 
-- `db/economy.ts`: `betMarkets.listActiveComboByWeek`, `betMarkets.previewComboLine`
+- `db/economy.ts`: `betMarkets.listActiveComboByWeek` (the `previewComboLine`/`previewComboLadder` client wrappers were dropped — `useLinePreview` → `priceComboLine` is the live preview path; the RPCs remain server-side)
   (rpc `combo_seed_line`), `betMarkets.comboMemberAverages` (rpc
   `combo_member_averages` — per-player per-game avg + counted games for a stat,
   same sources as the seed math; display-only), `bets.composeCombo(weekId,
@@ -192,8 +195,8 @@ params->>clock.eq.lanetalk)` alongside props and legacy team props.
 - `usePinsinoData`: `LineView.comboMemberIds/comboMemberNames`;
   `normalizeMarket` labels a combo by its joined `member_names` (no N-name
   fetch — that's why compose snapshots names); `marketGroup` routes null-game
-  combos to WEEKLY (the board's Weekly scope); `betLineSuffix`/
-  `selectionButtonLabel` render "OVER 12.5 STRIKES"; `rsvpInPlayers`
+  combos to WEEKLY (the board's Weekly scope); `betLineSuffix` renders
+  "OVER 12.5 STRIKES" on placed-bet surfaces; `rsvpInPlayers`
   (RSVP'd-in id+name) is the combine-mode member pool.
 - **The slip is the placement surface** (`BetSlip` + `BetSlipProvider`):
   combine mode does NOT place — its BuilderBar "Add" stages a `SlipCombo`
@@ -231,7 +234,7 @@ params->>clock.eq.lanetalk)` alongside props and legacy team props.
   legitimately differ from the line the book anchors. The BuilderBar shows the
   picked group's combined `GROUP AVG`, and the combo `LineEntrySheet` gets a `contextNote` ("Group average: X —
   lines above it pay longer odds") — making visible WHY adding members
-  compresses the fair odds (the seed = Σ floor(avg×games) + 0.5 sits under the
+  compresses the fair odds (the seed = Σ floor(projected mean×games) + 0.5 sits at the
   summed mean while spread grows only √N).
   Placed combos still flow through the `LineView → LineRow` seam with zero
   row-component changes; BetDetail copy-bet works unchanged (`getByIds` is

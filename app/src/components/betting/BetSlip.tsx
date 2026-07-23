@@ -11,7 +11,7 @@ import { TERMS } from '../../data/pinsinoExplainers'
 import GoldenTicketToggle from '../auction/GoldenTicketToggle'
 import WinnersCrutchToggle from '../auction/WinnersCrutchToggle'
 import EnergyDrinkToggle from '../auction/EnergyDrinkToggle'
-import { betLineSuffix } from '../../hooks/usePinsinoData'
+import { betLineSuffix, scopeSuffix } from '../../hooks/usePinsinoData'
 import { fmtOdds } from '../../utils/bets'
 import { bets } from '../../utils/supabase/db'
 
@@ -106,12 +106,10 @@ interface BetSlipProps {
   onPlace: (submit: SlipSubmit) => void
 }
 
-// Scope tag mirrors betLegSummary's convention (placed-bet rows): G<n> for a
-// game leg, NIGHT for a whole-week leg (moneylines are game-implicit).
-function scopeTag(marketType: string, gameNumber: number | null): string {
-  if (gameNumber != null) return ` · G${gameNumber}`
-  return marketType === 'moneyline' ? '' : ' · THIS WEEK'
-}
+// The shared scope dispatch (usePinsinoData.scopeSuffix) with the slip's own
+// night wording.
+const scopeTag = (marketType: string, gameNumber: number | null) =>
+  scopeSuffix(marketType, gameNumber, 'THIS WEEK')
 
 function pickLabel(p: SlipPick): string {
   return (
@@ -186,8 +184,9 @@ export default function BetSlip({
   const multiPicks = pickUnits > 1
   const [mode, setMode] = useState<SlipMode>('parlay')
   const [parlayWager, setParlayWager] = useState('')
-  const [singleWagers, setSingleWagers] = useState<Record<string, string>>({})
-  const [specialWagers, setSpecialWagers] = useState<Record<string, string>>({})
+  // One stake record for every single ticket — the keys (market id, combo key,
+  // special key) never collide across kinds.
+  const [wagers, setWagers] = useState<Record<string, string>>({})
   const [insure, setInsure] = useState(false)
   const [crutch, setCrutch] = useState(false)
   const [boost, setBoost] = useState(false)
@@ -197,8 +196,7 @@ export default function BetSlip({
   useEffect(() => {
     if (open) {
       setParlayWager('')
-      setSingleWagers({})
-      setSpecialWagers({})
+      setWagers({})
       setInsure(false)
       setCrutch(false)
       setBoost(false)
@@ -284,33 +282,29 @@ export default function BetSlip({
   const jointCurrent = jointQuote != null && jointQuote.key === parlayKey ? jointQuote : null
   const parlayOdds = jointCurrent?.odds ?? productOdds
 
-  const specialsTotal = specials.reduce((s, sp) => s + (parseInt(specialWagers[sp.key] ?? '', 10) || 0), 0)
+  const stakeOf = (key: string) => parseInt(wagers[key] ?? '', 10)
+  const stakeValid = (key: string) => { const n = stakeOf(key); return !isNaN(n) && n >= 10 }
+  const specialsTotal = specials.reduce((s, sp) => s + (stakeOf(sp.key) || 0), 0)
   const singlesPickTotal =
-    picks.reduce((s, p) => s + (parseInt(singleWagers[p.marketId] ?? '', 10) || 0), 0) +
-    combos.reduce((s, c) => s + (parseInt(singleWagers[c.key] ?? '', 10) || 0), 0)
+    picks.reduce((s, p) => s + (stakeOf(p.marketId) || 0), 0) +
+    combos.reduce((s, c) => s + (stakeOf(c.key) || 0), 0)
   const parlayNum = parseInt(parlayWager, 10)
   const grandTotal = specialsTotal + (parlayPicks ? (parlayNum || 0) : singlesPickTotal)
 
-  const specialsValid = specials.every(sp => {
-    const n = parseInt(specialWagers[sp.key] ?? '', 10)
-    return !isNaN(n) && n >= 10
-  })
+  const specialsValid = specials.every(sp => stakeValid(sp.key))
   const picksValid = parlayPicks
     ? !isNaN(parlayNum) && parlayNum >= 10
-    : [...picks.map(p => p.marketId), ...combos.map(c => c.key)].every(k => {
-        const n = parseInt(singleWagers[k] ?? '', 10)
-        return !isNaN(n) && n >= 10
-      })
+    : [...picks.map(p => p.marketId), ...combos.map(c => c.key)].every(stakeValid)
   const canPlace = count > 0 && specialsValid && picksValid && grandTotal <= balance
 
   function submit() {
     if (!canPlace) return
     const singles: SlipSubmit['singles'] = []
     if (!parlayPicks) {
-      for (const p of picks) singles.push({ pickMarketIds: [p.marketId], stake: parseInt(singleWagers[p.marketId], 10) })
-      for (const c of combos) singles.push({ comboKey: c.key, stake: parseInt(singleWagers[c.key], 10) })
+      for (const p of picks) singles.push({ pickMarketIds: [p.marketId], stake: stakeOf(p.marketId) })
+      for (const c of combos) singles.push({ comboKey: c.key, stake: stakeOf(c.key) })
     }
-    for (const sp of specials) singles.push({ selectionIds: sp.selectionIds, lineId: sp.lineId, stake: parseInt(specialWagers[sp.key], 10) })
+    for (const sp of specials) singles.push({ selectionIds: sp.selectionIds, lineId: sp.lineId, stake: stakeOf(sp.key) })
     onPlace({
       parlay: parlayPicks
         ? { pickMarketIds: picks.map(p => p.marketId), comboKeys: combos.map(c => c.key), stake: parlayNum }
@@ -367,6 +361,50 @@ export default function BetSlip({
     p.selectionLabel.toUpperCase() +
     betLineSuffix(p.marketType, p.line, p.statKey) +
     scopeTag(p.marketType, p.gameNumber)
+
+  // Boost bonus preview attaches only when the slip resolves to ONE bet.
+  const effectiveBoostPct = oneBet && boost ? boostPct : undefined
+
+  // Every standalone single as one uniform ticket descriptor: singles-mode
+  // combos + picks, then the specials (which stand alone in EVERY mode). One
+  // render path — a footer change happens once, not per kind.
+  const singleTickets: {
+    key: string
+    title: string
+    gold: boolean
+    odds: number
+    legText: string
+    onRemove: () => void
+  }[] = [
+    ...(!parlayPicks
+      ? [
+          ...combos.map(c => ({
+            key: c.key,
+            title: 'COMBO',
+            gold: false,
+            odds: c.odds ?? 2,
+            legText: comboLabel(c),
+            onRemove: () => onRemoveCombo(c.key),
+          })),
+          ...picks.map(p => ({
+            key: p.marketId,
+            title: p.subjectName,
+            gold: false,
+            odds: p.odds,
+            legText: pickCondition(p),
+            onRemove: () => onRemovePick(p.marketId),
+          })),
+        ]
+      : []),
+    ...specials.map(sp => ({
+      key: sp.key,
+      title: sp.title,
+      gold: sp.category === 'special',
+      odds: sp.combinedOdds,
+      legText: sp.summary,
+      onRemove: () => onRemoveSpecial(sp.key),
+    })),
+  ]
 
   return (
     <>
@@ -442,7 +480,7 @@ export default function BetSlip({
                     onChangeWager={setParlayWager}
                     balance={balance}
                     odds={parlayOdds}
-                    boostPct={oneBet && boost ? boostPct : undefined}
+                    boostPct={effectiveBoostPct}
                   />
                   {itemToggles}
                 </>
@@ -458,76 +496,25 @@ export default function BetSlip({
               {picks.map((p, i) => legLine(p.marketId, pickLabel(p), () => onRemovePick(p.marketId), undefined, pickLegOdds(i)))}
             </TicketCard>
           )}
-          {pickUnits > 0 && !parlayPicks && (
-            <>
-              {combos.map(c => (
-                <TicketCard
-                  key={c.key}
-                  header={{ title: 'COMBO', badge: { label: fmtOdds(c.odds ?? 2), color: colors.accent } }}
-                  footer={
-                    <>
-                      <WagerField
-                        wager={singleWagers[c.key] ?? ''}
-                        onChangeWager={v => setSingleWagers(s => ({ ...s, [c.key]: v }))}
-                        balance={balance}
-                        odds={c.odds ?? 2}
-                        boostPct={oneBet && boost ? boostPct : undefined}
-                        label="STAKE (pins)"
-                        compact
-                      />
-                      {itemToggles}
-                    </>
-                  }
-                >
-                  {legLine(c.key, comboLabel(c), () => onRemoveCombo(c.key))}
-                </TicketCard>
-              ))}
-              {picks.map(p => (
-                <TicketCard
-                  key={p.marketId}
-                  header={{ title: p.subjectName, badge: { label: fmtOdds(p.odds), color: colors.accent } }}
-                  footer={
-                    <>
-                      <WagerField
-                        wager={singleWagers[p.marketId] ?? ''}
-                        onChangeWager={v => setSingleWagers(s => ({ ...s, [p.marketId]: v }))}
-                        balance={balance}
-                        odds={p.odds}
-                        boostPct={oneBet && boost ? boostPct : undefined}
-                        label="STAKE (pins)"
-                        compact
-                      />
-                      {itemToggles}
-                    </>
-                  }
-                >
-                  {legLine(p.marketId, pickCondition(p), () => onRemovePick(p.marketId))}
-                </TicketCard>
-              ))}
-            </>
-          )}
-
-          {/* Specials — always their own (gold-trimmed) tickets. */}
-          {specials.map(sp => (
+          {/* Standalone singles — singles-mode combos/picks + the specials
+              (always their own gold-trimmed tickets). */}
+          {singleTickets.map(t => (
             <TicketCard
-              key={sp.key}
-              gold={sp.category === 'special'}
+              key={t.key}
+              gold={t.gold}
               header={{
-                title: sp.title,
-                titleGold: sp.category === 'special',
-                badge: {
-                  label: fmtOdds(sp.combinedOdds),
-                  color: sp.category === 'special' ? colors.gold : colors.accent,
-                },
+                title: t.title,
+                titleGold: t.gold,
+                badge: { label: fmtOdds(t.odds), color: t.gold ? colors.gold : colors.accent },
               }}
               footer={
                 <>
                   <WagerField
-                    wager={specialWagers[sp.key] ?? ''}
-                    onChangeWager={v => setSpecialWagers(s => ({ ...s, [sp.key]: v }))}
+                    wager={wagers[t.key] ?? ''}
+                    onChangeWager={v => setWagers(s => ({ ...s, [t.key]: v }))}
                     balance={balance}
-                    odds={sp.combinedOdds}
-                    boostPct={oneBet && boost ? boostPct : undefined}
+                    odds={t.odds}
+                    boostPct={effectiveBoostPct}
                     label="STAKE (pins)"
                     compact
                   />
@@ -535,7 +522,7 @@ export default function BetSlip({
                 </>
               }
             >
-              {legLine(sp.key, sp.summary, () => onRemoveSpecial(sp.key))}
+              {legLine(t.key, t.legText, t.onRemove)}
             </TicketCard>
           ))}
 

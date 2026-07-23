@@ -11,6 +11,17 @@ export { signed }
 // Shared by the slip, ticket cards, and the board's priced pick chips.
 export const fmtOdds = (n: number) => `×${n.toFixed(n % 1 === 0 ? 0 : 2)}`
 
+// The ▲/▼ direction of `value` relative to `baseline`, with the shared ±0.05
+// "on form" dead band — the arrow rides `value` and marks its position vs the
+// baseline. One helper so every AVG-vs-BOOK readout (the board strip, the
+// combo pane, the combine-mode member rows) shares the same threshold and
+// semantics.
+export function deltaDir(value: number | null, baseline: number | null): 'up' | 'down' | null {
+  if (value == null || baseline == null) return null
+  const delta = value - baseline
+  return Math.abs(delta) < 0.05 ? null : delta > 0 ? 'up' : 'down'
+}
+
 // Badge from the bet's own status (the target model resolves outcome per bet),
 // or from an individual leg's result (which adds 'crutched').
 export function resultBadge(status: string) {

@@ -3330,9 +3330,31 @@ AS $function$
 DECLARE
   v_n_members integer;
   v_sum       numeric;
+  v_cfg       public.odds_engine_config;
 BEGIN
+  IF p_stat NOT IN ('clean_frames', 'strikes', 'spares', 'total_pins') THEN
+    RAISE EXCEPTION 'Unknown combo stat %', p_stat;
+  END IF;
+
   SELECT count(DISTINCT m) INTO v_n_members FROM unnest(p_member_ids) m;
   IF v_n_members = 0 THEN v_n_members := 1; END IF;
+
+  v_cfg := public.odds_engine_get_config(p_season_id);
+
+  IF v_cfg.is_enabled THEN
+    -- Seed = the book's projection: Σ floor(mean × games) + 0.5.
+    SELECT COALESCE(SUM(floor(ps.mean * p_n_games)), 0) INTO v_sum
+    FROM (SELECT DISTINCT m AS player_id FROM unnest(p_member_ids) m) mem
+    CROSS JOIN LATERAL public.odds_engine_player_stat(
+      mem.player_id, p_season_id,
+      CASE WHEN p_stat = 'total_pins' THEN 'score' ELSE p_stat END) ps;
+    IF p_stat = 'total_pins' THEN
+      RETURN GREATEST(0.5, v_sum + 0.5);
+    END IF;
+    -- Clamp to [0.5, 10 frames/game × games × members − 0.5].
+    RETURN LEAST(10 * p_n_games * v_n_members - 0.5,
+                 GREATEST(0.5, v_sum + 0.5));
+  END IF;
 
   IF p_stat IN ('clean_frames', 'strikes', 'spares') THEN
     -- Per member: floor(per-game avg × games) = their solo whole-number base
@@ -3351,15 +3373,12 @@ BEGIN
     -- Clamp to [0.5, 10 frames/game × games × members − 0.5].
     RETURN LEAST(10 * p_n_games * v_n_members - 0.5,
                  GREATEST(0.5, v_sum + 0.5));
-
-  ELSIF p_stat = 'total_pins' THEN
-    SELECT COALESCE(SUM(floor(public.player_raw_avg_score(mem.player_id, p_season_id) * p_n_games)), 0) INTO v_sum
-    FROM (SELECT DISTINCT m AS player_id FROM unnest(p_member_ids) m) mem;
-    RETURN GREATEST(0.5, v_sum + 0.5);
-
-  ELSE
-    RAISE EXCEPTION 'Unknown combo stat %', p_stat;
   END IF;
+
+  -- total_pins
+  SELECT COALESCE(SUM(floor(public.player_raw_avg_score(mem.player_id, p_season_id) * p_n_games)), 0) INTO v_sum
+  FROM (SELECT DISTINCT m AS player_id FROM unnest(p_member_ids) m) mem;
+  RETURN GREATEST(0.5, v_sum + 0.5);
 END;
 $function$
 ;
@@ -6111,6 +6130,20 @@ BEGIN
   END IF;
   RETURN v_changed;
 END;
+$function$
+;
+
+CREATE OR REPLACE FUNCTION public.odds_engine_seed_line(p_enabled boolean, p_mean numeric, p_n_games integer, p_fallback numeric, p_range_lo numeric, p_range_hi numeric)
+ RETURNS numeric
+ LANGUAGE sql
+ IMMUTABLE
+ SET search_path TO ''
+AS $function$
+  SELECT CASE
+    WHEN p_enabled AND p_mean IS NOT NULL
+      THEN LEAST(p_range_hi, GREATEST(p_range_lo, floor(p_mean * p_n_games) + 0.5))
+    ELSE p_fallback
+  END;
 $function$
 ;
 
@@ -10051,6 +10084,9 @@ BEGIN
      );
 
   -- --- Create missing per-game markets (strikes + spares + clean frames) ----
+  -- Seeds anchor on the book projection (engine mean, floor + 0.5); the
+  -- lanetalk_seed_lines averages remain the engine-off fallback and the
+  -- eligibility gate (zero seed rows = no official history → no markets).
   FOR v_rec IN
     SELECT ep.player_id, ep.game_number, p.name,
            sl.strikes_line, sl.spares_line, sl.clean_frames_per_game
@@ -10090,13 +10126,15 @@ BEGIN
     ) THEN
       SELECT ps.mean, ps.variance INTO v_mean, v_var
         FROM public.odds_engine_player_stat(v_rec.player_id, v_season_id, 'strikes') ps;
+      v_line := public.odds_engine_seed_line(v_cfg.is_enabled, v_mean, 1,
+                  v_rec.strikes_line, 0.5, 9.5);
       INSERT INTO public.bet_markets (market_type, title, week_id, game_number, subject_player_id, params, status)
         VALUES ('prop', v_rec.name || ' Strikes — Game ' || v_rec.game_number,
                 p_week_id, v_rec.game_number, v_rec.player_id,
                 jsonb_build_object('source', 'lanetalk', 'stat', 'strikes', 'scope', 'game'), 'open')
         RETURNING id INTO v_market_id;
       PERFORM public.odds_engine_mint_ladder(
-        v_market_id, v_rec.strikes_line, v_mean, v_var, 1, v_cfg.spacing_count, 0.5, 9.5, v_season_id);
+        v_market_id, v_line, v_mean, v_var, 1, v_cfg.spacing_count, 0.5, 9.5, v_season_id);
     END IF;
 
     IF NOT EXISTS (
@@ -10107,13 +10145,15 @@ BEGIN
     ) THEN
       SELECT ps.mean, ps.variance INTO v_mean, v_var
         FROM public.odds_engine_player_stat(v_rec.player_id, v_season_id, 'spares') ps;
+      v_line := public.odds_engine_seed_line(v_cfg.is_enabled, v_mean, 1,
+                  v_rec.spares_line, 0.5, 9.5);
       INSERT INTO public.bet_markets (market_type, title, week_id, game_number, subject_player_id, params, status)
         VALUES ('prop', v_rec.name || ' Spares — Game ' || v_rec.game_number,
                 p_week_id, v_rec.game_number, v_rec.player_id,
                 jsonb_build_object('source', 'lanetalk', 'stat', 'spares', 'scope', 'game'), 'open')
         RETURNING id INTO v_market_id;
       PERFORM public.odds_engine_mint_ladder(
-        v_market_id, v_rec.spares_line, v_mean, v_var, 1, v_cfg.spacing_count, 0.5, 9.5, v_season_id);
+        v_market_id, v_line, v_mean, v_var, 1, v_cfg.spacing_count, 0.5, 9.5, v_season_id);
     END IF;
 
     IF NOT EXISTS (
@@ -10122,11 +10162,10 @@ BEGIN
         AND m.params ->> 'source' = 'lanetalk' AND m.params ->> 'stat' = 'clean_frames'
         AND m.game_number = v_rec.game_number AND m.subject_player_id = v_rec.player_id
     ) THEN
-      -- Per-game clean seed line: floor+0.5 on the per-game average, clamped
-      -- inside the possible range (10 frames a game).
-      v_line := LEAST(9.5, GREATEST(0.5, floor(v_rec.clean_frames_per_game) + 0.5));
       SELECT ps.mean, ps.variance INTO v_mean, v_var
         FROM public.odds_engine_player_stat(v_rec.player_id, v_season_id, 'clean_frames') ps;
+      v_line := public.odds_engine_seed_line(v_cfg.is_enabled, v_mean, 1,
+                  LEAST(9.5, GREATEST(0.5, floor(v_rec.clean_frames_per_game) + 0.5)), 0.5, 9.5);
       INSERT INTO public.bet_markets (market_type, title, week_id, game_number, subject_player_id, params, status)
         VALUES ('prop', v_rec.name || ' Clean Frames — Game ' || v_rec.game_number,
                 p_week_id, v_rec.game_number, v_rec.player_id,
@@ -10163,20 +10202,23 @@ BEGIN
     JOIN public.players p ON p.id = ep.player_id
     JOIN LATERAL public.lanetalk_seed_lines(ep.player_id) sl ON true
   LOOP
-    -- Night seed lines: per-game average scaled to this week's schedule,
-    -- floored ONCE to a half so it can't push, clamped inside the possible
-    -- range (10 frames a game — the money definitions count FRAMES, so 10·n
-    -- is the true ceiling for strikes, spares, and clean frames alike).
+    -- Night seeds: the book's per-game projection scaled to this week's
+    -- schedule, floored ONCE to a half so it can't push, clamped inside the
+    -- possible range (10 frames a game — the money definitions count FRAMES,
+    -- so 10·n is the true ceiling for strikes, spares, and clean frames
+    -- alike). Engine off → the per-game average scaled the same way.
     IF NOT EXISTS (
       SELECT 1 FROM public.bet_markets m
       WHERE m.week_id = p_week_id AND m.market_type = 'prop'
         AND m.params ->> 'source' = 'lanetalk' AND m.params ->> 'stat' = 'clean_frames'
         AND m.game_number IS NULL AND m.subject_player_id = v_rec.player_id
     ) THEN
-      v_line := LEAST(10 * v_n_games - 0.5,
-                GREATEST(0.5, floor(v_rec.clean_frames_per_game * v_n_games) + 0.5));
       SELECT ps.mean, ps.variance INTO v_mean, v_var
         FROM public.odds_engine_player_stat(v_rec.player_id, v_season_id, 'clean_frames') ps;
+      v_line := public.odds_engine_seed_line(v_cfg.is_enabled, v_mean, v_n_games,
+                  LEAST(10 * v_n_games - 0.5,
+                    GREATEST(0.5, floor(v_rec.clean_frames_per_game * v_n_games) + 0.5)),
+                  0.5, 10 * v_n_games - 0.5);
       INSERT INTO public.bet_markets (market_type, title, week_id, game_number, subject_player_id, params, status)
         VALUES ('prop', v_rec.name || ' Clean Frames — Night',
                 p_week_id, NULL, v_rec.player_id,
@@ -10192,10 +10234,12 @@ BEGIN
         AND m.params ->> 'source' = 'lanetalk' AND m.params ->> 'stat' = 'strikes'
         AND m.game_number IS NULL AND m.subject_player_id = v_rec.player_id
     ) THEN
-      v_line := LEAST(10 * v_n_games - 0.5,
-                GREATEST(0.5, floor(v_rec.strikes_per_game * v_n_games) + 0.5));
       SELECT ps.mean, ps.variance INTO v_mean, v_var
         FROM public.odds_engine_player_stat(v_rec.player_id, v_season_id, 'strikes') ps;
+      v_line := public.odds_engine_seed_line(v_cfg.is_enabled, v_mean, v_n_games,
+                  LEAST(10 * v_n_games - 0.5,
+                    GREATEST(0.5, floor(v_rec.strikes_per_game * v_n_games) + 0.5)),
+                  0.5, 10 * v_n_games - 0.5);
       INSERT INTO public.bet_markets (market_type, title, week_id, game_number, subject_player_id, params, status)
         VALUES ('prop', v_rec.name || ' Strikes — Night',
                 p_week_id, NULL, v_rec.player_id,
@@ -10211,10 +10255,12 @@ BEGIN
         AND m.params ->> 'source' = 'lanetalk' AND m.params ->> 'stat' = 'spares'
         AND m.game_number IS NULL AND m.subject_player_id = v_rec.player_id
     ) THEN
-      v_line := LEAST(10 * v_n_games - 0.5,
-                GREATEST(0.5, floor(v_rec.spares_per_game * v_n_games) + 0.5));
       SELECT ps.mean, ps.variance INTO v_mean, v_var
         FROM public.odds_engine_player_stat(v_rec.player_id, v_season_id, 'spares') ps;
+      v_line := public.odds_engine_seed_line(v_cfg.is_enabled, v_mean, v_n_games,
+                  LEAST(10 * v_n_games - 0.5,
+                    GREATEST(0.5, floor(v_rec.spares_per_game * v_n_games) + 0.5)),
+                  0.5, 10 * v_n_games - 0.5);
       INSERT INTO public.bet_markets (market_type, title, week_id, game_number, subject_player_id, params, status)
         VALUES ('prop', v_rec.name || ' Spares — Night',
                 p_week_id, NULL, v_rec.player_id,
@@ -10248,6 +10294,11 @@ BEGIN
       CONTINUE;  -- no official history (the prune above handles removal)
     END IF;
 
+    SELECT ps.mean, ps.variance INTO v_mean, v_var
+      FROM public.odds_engine_player_stat(v_rec.subject_player_id, v_season_id, v_rec.stat) ps;
+
+    -- Fallback (engine off): the legacy average-anchored line for this
+    -- stat/scope; engine on: the projection seed.
     v_line := CASE
       WHEN v_rec.stat = 'strikes' AND v_rec.game_number IS NOT NULL THEN v_sl.strikes_line
       WHEN v_rec.stat = 'strikes' THEN LEAST(10 * v_n_games - 0.5,
@@ -10261,13 +10312,13 @@ BEGIN
              GREATEST(0.5, floor(v_sl.clean_frames_per_game * v_n_games) + 0.5))
     END;
 
-    SELECT ps.mean, ps.variance INTO v_mean, v_var
-      FROM public.odds_engine_player_stat(v_rec.subject_player_id, v_season_id, v_rec.stat) ps;
-
     IF v_rec.game_number IS NOT NULL THEN
+      v_line := public.odds_engine_seed_line(v_cfg.is_enabled, v_mean, 1, v_line, 0.5, 9.5);
       PERFORM public.odds_engine_reladder_if_changed(
         v_rec.market_id, v_line, v_mean, v_var, 1, v_cfg.spacing_count, 0.5, 9.5, v_season_id);
     ELSE
+      v_line := public.odds_engine_seed_line(v_cfg.is_enabled, v_mean, v_n_games, v_line,
+                  0.5, 10 * v_n_games - 0.5);
       PERFORM public.odds_engine_reladder_if_changed(
         v_rec.market_id, v_line, v_mean, v_var, v_n_games, v_cfg.spacing_count, 0.5, 10 * v_n_games - 0.5, v_season_id);
     END IF;
@@ -10393,6 +10444,7 @@ BEGIN
   -- bets, so re-syncs pick up new history AND fresh recency-weighted odds.
   -- Selection ids only churn when the posted ladder actually changed
   -- (odds_engine_reladder_if_changed). Markets with any bet stay frozen.
+  -- Seed = the book projection (engine mean); legacy average when engine off.
   FOR v_rec IN
     SELECT m.id AS market_id, m.subject_player_id, m.game_number
     FROM public.bet_markets m
@@ -10409,11 +10461,14 @@ BEGIN
     SELECT ps.mean, ps.variance INTO v_mean, v_var
       FROM public.odds_engine_player_stat(v_rec.subject_player_id, v_season_id, 'score') ps;
     IF v_rec.game_number IS NOT NULL THEN
-      v_line := public.pvp_player_line(v_rec.subject_player_id, v_season_id);
+      v_line := public.odds_engine_seed_line(v_cfg.is_enabled, v_mean, 1,
+                  public.pvp_player_line(v_rec.subject_player_id, v_season_id), 0.5, 299.5);
       PERFORM public.odds_engine_reladder_if_changed(
         v_rec.market_id, v_line, v_mean, v_var, 1, v_cfg.spacing_score, 0.5, 299.5, v_season_id);
     ELSE
-      v_line := GREATEST(0.5, floor(public.player_raw_avg_score(v_rec.subject_player_id, v_season_id) * v_n_games) + 0.5);
+      v_line := public.odds_engine_seed_line(v_cfg.is_enabled, v_mean, v_n_games,
+                  GREATEST(0.5, floor(public.player_raw_avg_score(v_rec.subject_player_id, v_season_id) * v_n_games) + 0.5),
+                  0.5, 300 * v_n_games - 0.5);
       PERFORM public.odds_engine_reladder_if_changed(
         v_rec.market_id, v_line, v_mean, v_var, v_n_games, v_cfg.spacing_night_pins, 0.5, 300 * v_n_games - 0.5, v_season_id);
     END IF;
@@ -10453,10 +10508,12 @@ BEGIN
         AND m.game_number = ep.game_number AND m.subject_player_id = ep.player_id
     )
   LOOP
-    -- Season → lifetime → league ladder, shared with PvP lines (seed rung).
-    v_line := public.pvp_player_line(v_rec.player_id, v_season_id);
+    -- Seed = the book projection; the season → lifetime → league PvP ladder is
+    -- the engine-off fallback only.
     SELECT ps.mean, ps.variance INTO v_mean, v_var
       FROM public.odds_engine_player_stat(v_rec.player_id, v_season_id, 'score') ps;
+    v_line := public.odds_engine_seed_line(v_cfg.is_enabled, v_mean, 1,
+                public.pvp_player_line(v_rec.player_id, v_season_id), 0.5, 299.5);
 
     INSERT INTO public.bet_markets (market_type, title, week_id, game_number, subject_player_id, status)
       VALUES ('over_under', v_rec.name || ' · Game ' || v_rec.game_number,
@@ -10496,9 +10553,11 @@ BEGIN
         AND m.game_number IS NULL AND m.subject_player_id = ep.player_id
     )
   LOOP
-    v_line := GREATEST(0.5, floor(public.player_raw_avg_score(v_rec.player_id, v_season_id) * v_n_games) + 0.5);
     SELECT ps.mean, ps.variance INTO v_mean, v_var
       FROM public.odds_engine_player_stat(v_rec.player_id, v_season_id, 'score') ps;
+    v_line := public.odds_engine_seed_line(v_cfg.is_enabled, v_mean, v_n_games,
+                GREATEST(0.5, floor(public.player_raw_avg_score(v_rec.player_id, v_season_id) * v_n_games) + 0.5),
+                0.5, 300 * v_n_games - 0.5);
 
     INSERT INTO public.bet_markets (market_type, title, week_id, game_number, subject_player_id, params, status)
       VALUES ('over_under', v_rec.name || ' Total Pins — Night',

@@ -45,17 +45,6 @@ export const betMarkets = {
       .select('game_number, status')
       .eq('week_id', weekId)
       .eq('market_type', 'over_under'),
-  // Active (open + closed-for-betting) moneyline markets for a week. Subject is a
-  // game (the matchup), so the player-subject embed in MARKET_GRAPH resolves null;
-  // the row label comes from the market title + the team-named selections.
-  listActiveMoneylineByWeek: (weekId: string) =>
-    supabase
-      .from('bet_markets')
-      .select(MARKET_GRAPH)
-      .eq('week_id', weekId)
-      .eq('market_type', 'moneyline')
-      .in('status', ['open', 'closed'])
-      .order('game_number'),
   // Active (open + closed-for-betting) prop markets for a week — the LaneTalk
   // stat lines (strikes/spares per game, clean%/first-ball avg per night).
   // Night markets carry game_number null and group under WEEKLY on the board.
@@ -68,19 +57,6 @@ export const betMarkets = {
       .in('status', ['open', 'closed'])
       .order('game_number', { nullsFirst: false })
       .order('subject_player_id'),
-  // Active (open + closed-for-betting) team_prop markets for a week — team
-  // aggregate lines (clean frames / strikes / spares / total pins per game).
-  // Anchored by subject_game_id + params.team_id, so the player-subject embed
-  // resolves null (like moneyline); the row label comes from params.team_number.
-  listActiveTeamPropByWeek: (weekId: string) =>
-    supabase
-      .from('bet_markets')
-      .select(MARKET_GRAPH)
-      .eq('week_id', weekId)
-      .eq('market_type', 'team_prop')
-      .in('status', ['open', 'closed'])
-      .order('game_number')
-      .order('title'),
   // Active (open + closed-for-betting) combo markets for a week — player-composed
   // aggregate lines over an explicit member set (params.member_ids/member_names),
   // with no team/game anchor. The player-subject embed resolves null; the row
@@ -276,23 +252,6 @@ export const betMarkets = {
   // Returns one summary row { settled, voided, left_pending } for the toast.
   settleLanetalkProps: (weekId: string, voidMissing = false) =>
     supabase.rpc('settle_lanetalk_props_for_week', { p_week_id: weekId, p_void_missing: voidMissing }),
-  // The exact line a combo would be seeded with (STABLE, read-only) — the
-  // composer sheet previews the server's number rather than re-deriving it.
-  previewComboLine: (memberIds: string[], stat: string, seasonId: string, nGames = 1) =>
-    supabase.rpc('combo_seed_line', { p_member_ids: memberIds, p_stat: stat, p_season_id: seasonId, p_n_games: nGames }),
-  // The full priced rung ladder a combo would mint (STABLE, read-only) — the
-  // BuilderBar's stepper walks this. When weekId is given and the combo
-  // already has an open market, returns THAT market's posted rungs (a second
-  // bettor can only take lines the market carries). jsonb array of
-  // { line, odds, is_seed }, sorted by line ascending.
-  previewComboLadder: (
-    memberIds: string[], stat: string, seasonId: string, nGames = 1,
-    weekId?: string | null, gameNumber?: number | null,
-  ) =>
-    supabase.rpc('combo_preview_ladder', {
-      p_member_ids: memberIds, p_stat: stat, p_season_id: seasonId, p_n_games: nGames,
-      p_week_id: weekId ?? undefined, p_game_number: gameNumber ?? undefined,
-    }),
   // Per-player per-game averages for a stat (STABLE, read-only) — the
   // combine-mode member list shows these so a bettor can see where the combo
   // line sits relative to the group's actual production. Season-scoped with

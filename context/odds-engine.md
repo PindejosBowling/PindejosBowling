@@ -49,9 +49,15 @@ Shipped enabled (config seed row). Three migrations: `odds_engine_core`,
   complements. Posted odds round to the nearest 0.05, min 1.05 (the
   `odds > 1.0` CHECK).
 - **Ladders** (`odds_engine_build_ladder` → `odds_engine_mint_ladder`):
-  the legacy seed-line formulas are UNCHANGED and become the ladder's center —
-  `pvp_player_line` (game score), floored night mean (night pins),
-  `lanetalk_seed_lines` (stat props), `combo_seed_line` (combos). Up to
+  **the seed line anchors on the BOOK PROJECTION**
+  (`…190000_seed_lines_from_projection`, 2026-07-23): the ladder's center is
+  `floor(engine mean × games) + 0.5` via `odds_engine_seed_line` — the same
+  number the board strip shows as FORECAST (the projection label), so the default offer is the book's own
+  opinion (≈ evens by construction). Engine off (or no mean) falls back to the
+  legacy average formulas — `pvp_player_line` (game score), floored night mean
+  (night pins), `lanetalk_seed_lines` (stat props), the average-anchored
+  `combo_seed_line` branch (combos). (`pvp_player_line` itself is unchanged —
+  PvP duel lines deliberately stay average-anchored.) Up to
   `rungs_per_side` (3) rungs each way: counts step 1.0, game score 10, night
   pins 20 (`spacing_*` config). A rung is minted only if BOTH sides' raw fair
   odds land inside `[odds_min, odds_max]` ([1.10, 8.00]) and the line stays in
@@ -170,8 +176,8 @@ p_season_id)` (STABLE, authenticated; COMBO stat vocabulary — `total_pins`
 maps to `score`) returns `{player_id, projected}` per member, mirroring
 `combo_member_averages`' shape so combine mode fetches both with the same
 arguments (`betMarkets.memberProjections`). The member-picking rows show
-`AVG … · BOOK …` with a ▲/▼ vs the average, the BuilderBar shows the group's
-combined `AVG · BOOK` sums, and the combo `LineEntrySheet` contextNote reads
+`AVG … · FORECAST …` with a ▲/▼ vs the average, the BuilderBar shows the group's
+combined `AVG · FORECAST` sums, and the combo `LineEntrySheet` contextNote reads
 "Group avg X · book expects Y". Same NULL-when-disabled + per-game/×games
 scaling contract.
 

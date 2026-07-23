@@ -2,17 +2,23 @@ import { useEffect, useState } from 'react'
 import { betMarkets } from '../utils/supabase/db'
 
 // One quote off market_price_line / combo_price_line: the requested line's
-// odds (null = out of the priceable band, "line unavailable"), whether it sits
-// on a posted rung, the seed anchor, and the half-point band the steppers may
-// roam. The underlying distribution never reaches the client.
+// odds (null = out of the priceable band, "line unavailable"), the seed
+// anchor, and the half-point band the editor may roam. The underlying
+// distribution never reaches the client. (The RPC also returns posted /
+// seed_odds — unused client-side, so not carried.)
 export interface LineQuote {
   line: number
   odds: number | null
-  posted: boolean
   seedLine: number
-  seedOdds: number | null
   minLine: number
   maxLine: number
+}
+
+// A quote only prices the line it was asked about — any other displayed value
+// has no odds until re-quoted. One helper so the board, the combine bar, and
+// the value sheet all encode that invariant the same way.
+export function oddsForLine(quote: LineQuote | null, value: number | null): number | null {
+  return quote != null && value != null && quote.line === value ? quote.odds : null
 }
 
 // What the value editor is pricing: a posted board market, or a combo member
@@ -80,9 +86,7 @@ export function useLinePreview(
         quote: {
           line: Number(q.line),
           odds: q.odds == null ? null : Number(q.odds),
-          posted: !!q.posted,
           seedLine: Number(q.seed_line),
-          seedOdds: q.seed_odds == null ? null : Number(q.seed_odds),
           minLine: Number(q.min_line),
           maxLine: Number(q.max_line),
         },

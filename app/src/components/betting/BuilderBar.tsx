@@ -2,7 +2,6 @@ import { View, Text, StyleSheet } from 'react-native'
 import { colors, fonts, radius } from '../../theme'
 import Button from '../ui/Button'
 import { fmtOdds } from '../../utils/bets'
-import type { LineQuote } from '../../hooks/useLinePreview'
 
 interface BuilderBarProps {
   // Ordered display names of the members picked so far.
@@ -11,13 +10,15 @@ interface BuilderBarProps {
   statLabel: string
   // 'NIGHT' | 'GAME 2' — follows the board's scope filter.
   scopeLabel: string
-  // The displayed line value (screen-owned; seeds from the quote's seed_line).
-  // The value EDITOR itself lives above the member list now (the screen's
-  // combo value card) — the bar only needs the value to gate Add on a live
-  // price for it.
+  // The RESOLVED display value + its price, both owned by the screen (the one
+  // place the quote is interpreted — the bar never re-derives them). The value
+  // EDITOR itself lives above the member list (the screen's combo value card);
+  // the bar only needs the pair to gate Add on a live price.
   value: number | null
-  // The live quote for `value` (combo_price_line) — odds, band, seed anchor.
-  quote: LineQuote | null
+  odds: number | null
+  // No quote is held at all (fetch failed / not yet fetched) — distinguishes
+  // the retry state from a quote that simply doesn't price this value.
+  noQuote?: boolean
   // The preview RPC is in flight (debounce included) — shows the calculating
   // state instead of the fetch-failed one while the quote is still null.
   quoteLoading?: boolean
@@ -42,7 +43,8 @@ export default function BuilderBar({
   statLabel,
   scopeLabel,
   value,
-  quote,
+  odds,
+  noQuote,
   quoteLoading,
   minMembers,
   alreadyStaged,
@@ -50,9 +52,7 @@ export default function BuilderBar({
   onAdd,
   onCancel,
 }: BuilderBarProps) {
-  const shownValue = value ?? quote?.seedLine ?? null
-  const odds = quote != null && shownValue != null && quote.line === shownValue ? quote.odds : null
-  const quoteFailed = minMembers && quote == null && !quoteLoading && !blocked
+  const quoteFailed = minMembers && !!noQuote && !quoteLoading && !blocked
 
   const sub = blocked
     ? 'This scope is closed for betting'
@@ -77,9 +77,9 @@ export default function BuilderBar({
         {/* The value display moved above the member list (the screen's combo
             value card) — the bar shows the staged price beside the tally so
             the Add CTA reads against a number. */}
-        {!blocked && minMembers && shownValue != null && (
+        {!blocked && minMembers && value != null && (
           <Text style={styles.priceLine}>
-            {shownValue.toFixed(1)}+ · {quoteLoading ? '…' : odds != null ? fmtOdds(odds) : '—'}
+            {value.toFixed(1)}+ · {quoteLoading ? '…' : odds != null ? fmtOdds(odds) : '—'}
           </Text>
         )}
       </View>

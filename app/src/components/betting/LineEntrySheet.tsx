@@ -4,7 +4,7 @@ import BottomSheet from '../ui/BottomSheet'
 import Button from '../ui/Button'
 import { colors, fonts, radius, type } from '../../theme'
 import { fmtOdds } from '../../utils/bets'
-import { useLinePreview, type LinePreviewSource, type LineQuote } from '../../hooks/useLinePreview'
+import { useLinePreview, oddsForLine, type LinePreviewSource, type LineQuote } from '../../hooks/useLinePreview'
 
 interface LineEntrySheetProps {
   // Sheet header: the subject ("Garrett Blinkhorn", "A + B + C").
@@ -57,7 +57,7 @@ export default function LineEntrySheet({
   const { quote, loading } = useLinePreview(source, draft)
 
   const priced = draft != null && quote != null && quote.line === draft
-  const odds = priced ? quote.odds : null
+  const odds = oddsForLine(quote, draft)
   const inBand =
     draft != null && quote != null && draft >= quote.minLine && draft <= quote.maxLine
 

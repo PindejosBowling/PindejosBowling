@@ -3,12 +3,10 @@ import { colors, fonts } from '../../theme'
 import TicketCard from './TicketCard'
 import PickChip from './PickChip'
 import { customLegLabel, type CustomLineView } from '../../hooks/usePinsinoData'
+import { fmtOdds } from '../../utils/bets'
 
 interface CustomLineRowProps {
   line: CustomLineView
-  // Vestigial since the ticket restyle (cards carry their own margins) — kept
-  // so callers don't churn.
-  isLast: boolean
   // Whole line closed for betting (any leg's game in progress): dim + inert.
   inProgress?: boolean
   // Dimmed but still pressable, so the screen's handler can toast (anti-tank /
@@ -43,7 +41,7 @@ export default function CustomLineRow({ line, inProgress, disabled, selected, on
         </View>
         {/* The multiplier IS the button — oversized for scanability. */}
         <PickChip
-          label={`×${line.combinedOdds.toFixed(line.combinedOdds % 1 === 0 ? 0 : 2)}`}
+          label={fmtOdds(line.combinedOdds)}
           size="lg"
           gold={special}
           selected={selected}

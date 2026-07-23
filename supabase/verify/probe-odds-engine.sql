@@ -40,9 +40,8 @@
 --       odds in clamp) for a cold-start player; no LaneTalk props before any
 --       official import exists (the gate).
 --   G2  resync after imports mints stat-prop ladders; the hot-streak player's
---       seed strikes rung (line 3.5 = lifetime formula) posts the engine's own
---       fair price for that line (post-fade the pure recency mean ≈3.56 sits
---       just above the unweighted seed line).
+--       seed strikes rung sits at floor(engine mean)+0.5 (projection-anchored
+--       seeds) and posts the engine's own fair price for that line.
 --   G3  id stability: a no-change resync leaves every selection id untouched
 --       (churn guard), so staged-but-unplaced slips survive quiet resyncs.
 --   G4  freeze: once a bet lands on any rung, new imports + resync leave the
@@ -450,16 +449,18 @@ BEGIN
   END IF;
   SELECT s.odds, s.line INTO v_over, v_line FROM public.bet_selections s
     WHERE s.market_id = v_pmkt AND s.key = 'over';
-  IF v_line <> 3.5 THEN
-    RAISE EXCEPTION 'PROBE_FAIL: G2 seed strikes line % (expected 3.5 = floor(3.0)+0.5)', v_line;
-  END IF;
-  -- The posted seed odds must be the engine's own fair price for the seed
-  -- line under the CURRENT model. (Pre-fade this asserted "above evens"
-  -- because the league blend held the hot mean under the 3.5 seed; with the
-  -- fading prior the pure recency mean ≈3.56 sits ABOVE it, so the fair seed
-  -- price is the invariant, not its direction.)
   SELECT ps.mean, ps.variance INTO v_mean, v_var
     FROM public.odds_engine_player_stat(v_p1, v_season, 'strikes') ps;
+  -- Projection-anchored seeds (…190000_seed_lines_from_projection): the seed
+  -- line is floor(engine mean) + 0.5 — the book's own expectation, not the
+  -- raw average.
+  IF v_line <> floor(v_mean) + 0.5 THEN
+    RAISE EXCEPTION 'PROBE_FAIL: G2 seed strikes line % (expected floor(mean %)+0.5)', v_line, v_mean;
+  END IF;
+  -- The posted seed odds must be the engine's own fair price for the seed
+  -- line under the CURRENT model. (Seed = floor(mean)+0.5 straddles the mean,
+  -- so this lands near evens — but the fair price is the invariant, not its
+  -- direction.)
   SELECT pp.over_odds INTO v_g2_exp
     FROM public.odds_engine_price_pair(v_mean, v_var, 1, v_line,
            v_cfg.odds_min, v_cfg.odds_max, true) pp;

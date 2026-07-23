@@ -152,7 +152,9 @@ sit alongside the `syncOUForWeek` belt-and-braces call sites. Idempotent.
 - **Scope matrix (standardized 2026-07-01):** strikes, spares, and clean
   frames are all generated at **both** scopes — per game (`scope='game'`,
   `game_number` set) and night (`scope='night'`, `game_number` null).
-- **Rounding:** per-game counts → `floor(avg)+0.5` clamped [0.5, 9.5]; night
+- **Rounding:** seeds are projection-anchored (`floor(engine mean × games)+0.5`,
+  see odds-engine.md) since 2026-07-23; engine off falls back to the legacy
+  averages: per-game counts → `floor(avg)+0.5` clamped [0.5, 9.5]; night
   counts → `floor(avg-per-game × scheduled-games)+0.5` clamped
   [0.5, 10·games−0.5] (all frame counts max 10/game — the money definitions
   count FRAMES, so a triple-strike 10th is one frame). No pushes anywhere.
@@ -167,7 +169,7 @@ row per player (a unified button set: `142.5+ PINS · 4.5+ STRIKES · 2.5+ SPARE
 **Night Props** section under a
 **WEEKLY** group that leads the board, above the game groups (shared with the
 week-level specials' header). `LineView.statKey` carries the stat, and the pick button is the full condition
-itself (`4.5+ STRIKES`, via `selectionButtonLabel` — all board bets are overs
+itself (`4.5+ STRIKES` — all board bets are overs
 by definition; score lines read `142.5+ PINS`); **unders are UI-hidden**
 (same social policy + trivial revert as score O/U). Game start/stop toggles
 (`setPropStatusByWeekGame` + `setTeamPropStatusByWeekGame`) close a game's

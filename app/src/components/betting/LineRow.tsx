@@ -8,9 +8,6 @@ interface LineRowProps {
   // as a header, then ONE full-width LinePill per market — each pill gets its
   // own horizontal row so the value editor has the whole width.
   lines: LineView[]
-  // Vestigial since the spaced-row restyle (rows carry their own margins, no
-  // dividers) — kept so callers don't churn.
-  isLast: boolean
   // The viewer's relationship to the subject ('with' = teammate this week,
   // 'against' = matchup opponent) — a subtle background tint, nothing more.
   relation?: 'with' | 'against' | null
@@ -41,7 +38,6 @@ export default function LineRow({ lines, relation, inProgress, renderPill }: Lin
       {/* The subject's name (full form — the row header is one of the two
           full-name surfaces); each condition lives in its own pill below. */}
       <Text style={styles.lineName}>{first.subjectFullName}</Text>
-      {first.subtitle != null && <Text style={styles.lineValue}>{first.subtitle}</Text>}
       <View style={styles.pills}>
         {lines.map(line => (
           <View key={line.marketId}>{renderPill(line)}</View>
@@ -71,14 +67,6 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: colors.text,
     letterSpacing: 0.3,
-    textAlign: 'center',
-  },
-  lineValue: {
-    fontFamily: fonts.barlowCondensed,
-    fontSize: 12,
-    color: colors.muted,
-    marginTop: 1,
-    letterSpacing: 0.5,
     textAlign: 'center',
   },
   pills: { marginTop: 8, gap: 8 },

@@ -21,8 +21,35 @@ interface LinePillProps {
   dimmed?: boolean
   // Market/scope closed — fully inert.
   inert?: boolean
-  // Armed combine mode repurposes taps to seed a combo — no value editing.
-  editable?: boolean
+}
+
+// The shared "type your own number" chip — tinted fill + border + ✎ glyph, the
+// one recognizable editable-value affordance across value-first surfaces (the
+// board pills here, the combo pane's value field). `lg` is the pane's slightly
+// bigger cut; `selected` flips to the dark-on-accent inset used on staged pills.
+export function ValueField({
+  text,
+  onPress,
+  selected,
+  size = 'md',
+}: {
+  text: string
+  onPress?: () => void
+  selected?: boolean
+  size?: 'md' | 'lg'
+}) {
+  return (
+    <TouchableOpacity
+      onPress={onPress}
+      activeOpacity={0.7}
+      style={[styles.valueField, size === 'lg' && styles.valueFieldLg, selected && styles.valueFieldSelected]}
+    >
+      <Text style={[styles.value, size === 'lg' && styles.valueLg, selected && styles.textSelected]}>
+        {text}
+      </Text>
+      <Text style={[styles.editGlyph, size === 'lg' && styles.editGlyphLg, selected && styles.textSelected]}>✎</Text>
+    </TouchableOpacity>
+  )
 }
 
 // What's being counted, sans the number (the value carries the number):
@@ -49,10 +76,9 @@ export default function LinePill({
   staged,
   dimmed,
   inert,
-  editable = true,
 }: LinePillProps) {
   const pressable = !inert && !!onStage
-  const canEdit = pressable && editable && !!onEditValue
+  const canEdit = pressable && !!onEditValue
 
   return (
     <View
@@ -65,18 +91,9 @@ export default function LinePill({
       <View style={styles.mainRow}>
         {/* The value renders as a small FIELD (bordered chip + edit glyph)
             when tappable, so it reads as "type your own number here" —
-            plain text when inert/armed. */}
+            plain text when inert. */}
         {canEdit ? (
-          <TouchableOpacity
-            onPress={onEditValue}
-            activeOpacity={0.7}
-            style={[styles.valueField, staged && styles.valueFieldSelected]}
-          >
-            <Text style={[styles.value, staged && styles.textSelected]}>
-              {value.toFixed(1)}+
-            </Text>
-            <Text style={[styles.editGlyph, staged && styles.textSelected]}>✎</Text>
-          </TouchableOpacity>
+          <ValueField text={`${value.toFixed(1)}+`} onPress={onEditValue} selected={staged} />
         ) : (
           <Text style={[styles.value, styles.valueStatic, staged && styles.textSelected]}>
             {value.toFixed(1)}+
@@ -126,6 +143,7 @@ const styles = StyleSheet.create({
     borderColor: colors.chipBorder,
     backgroundColor: colors.surfaceTint2,
   },
+  valueFieldLg: { paddingHorizontal: 10, paddingVertical: 6 },
   // On the staged accent fill, the field flips to a dark-on-accent inset.
   valueFieldSelected: {
     borderColor: 'rgba(10,10,12,0.45)',
@@ -138,8 +156,10 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     color: colors.text,
   },
+  valueLg: { fontSize: 17, minWidth: 0 },
   valueStatic: { minWidth: 44 },
   editGlyph: { fontSize: 11, color: colors.accent },
+  editGlyphLg: { fontSize: 12 },
   condition: { flex: 1, ...type.chip, color: 'rgba(240,240,240,0.85)' },
   odds: {
     fontFamily: fonts.barlowCondensedHeavy,

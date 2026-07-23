@@ -145,6 +145,12 @@ export function BetSlipProvider({ children }: { children: ReactNode }) {
     hostReload.current = fn
   }, [])
 
+  // The current season id, fetched once per session (it changes once a season)
+  // so every context refresh skips the extra serial round trip. Cleared when
+  // the viewer/season-view changes.
+  const seasonIdRef = useRef<string | null>(null)
+  useEffect(() => { seasonIdRef.current = null }, [playerId, pinsinoViewSeasonId])
+
   // Load the balance + attachable-item inventory the placement sheet needs.
   // Live-season only (items don't exist in a past-season view); mirrors the old
   // SportsbookScreen reloadTickets + ledger-balance logic in one place.
@@ -153,14 +159,18 @@ export function BetSlipProvider({ children }: { children: ReactNode }) {
       setBalance(0); setTickets([]); setCrutches([]); setBoosts([]); setBoostPct(1); setGhosts([])
       return
     }
-    const { data: season } = await seasons.getCurrent()
-    if (!season) {
+    if (seasonIdRef.current == null) {
+      const { data: season } = await seasons.getCurrent()
+      seasonIdRef.current = season?.id ?? null
+    }
+    const seasonId = seasonIdRef.current
+    if (!seasonId) {
       setBalance(0); setTickets([]); setCrutches([]); setBoosts([]); setBoostPct(1); setGhosts([])
       return
     }
     const [{ data: ledgerData }, { data: invData }] = await Promise.all([
-      pinLedger.listByPlayerSeason(playerId, season.id),
-      inventoryItems.listByPlayerSeason(playerId, season.id),
+      pinLedger.listByPlayerSeason(playerId, seasonId),
+      inventoryItems.listByPlayerSeason(playerId, seasonId),
     ])
     setBalance(computeBalance((ledgerData ?? []) as any))
     const unconsumed = (invData ?? [])
@@ -284,6 +294,9 @@ export function BetSlipProvider({ children }: { children: ReactNode }) {
     }
 
     await refreshContext()
+    // The staging below flips the slip empty→filled; mark the lazy-load guard
+    // satisfied so its effect doesn't immediately re-run the same 3 fetches.
+    wasEmpty.current = false
     setSlipCombos([])
     if (isSpecial) {
       setSlipPicks([])
@@ -452,8 +465,10 @@ export function BetSlipProvider({ children }: { children: ReactNode }) {
       showToast('Failed to place bets', 'error')
     } finally {
       setPlacing(false)
-      await refreshContext()
+      // Independent refreshes — the host board reload shouldn't wait out the
+      // slip's own balance/inventory fetches.
       hostReload.current?.()
+      await refreshContext()
     }
   }, [enabled, balance, slipPicks, slipCombos, tickets, crutches, boosts, showToast, clearSlip, refreshContext, updateSlipPick])
 

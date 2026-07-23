@@ -196,13 +196,17 @@ export default function MatchupsScreen() {
     if (!weekId) return
     setStartingGame(gameNum)
     try {
-      await betMarkets.setOUStatusByWeekGame(weekId, gameNum, started ? 'closed' : 'open')
-      await betMarkets.setMoneylineStatusByWeekGame(weekId, gameNum, started ? 'closed' : 'open')
-      // Stat props + combos suspend with the game too (game 1 also flips the
-      // night-scoped markets).
-      await betMarkets.setPropStatusByWeekGame(weekId, gameNum, started ? 'closed' : 'open')
-      await betMarkets.setTeamPropStatusByWeekGame(weekId, gameNum, started ? 'closed' : 'open')
-      await betMarkets.setComboStatusByWeekGame(weekId, gameNum, started ? 'closed' : 'open')
+      // The per-market-type toggles hit disjoint rows and are order-independent
+      // — run them together instead of serially. (Stat props + combos suspend
+      // with the game too; game 1 also flips the night-scoped markets.)
+      const status = started ? 'closed' as const : 'open' as const
+      await Promise.all([
+        betMarkets.setOUStatusByWeekGame(weekId, gameNum, status),
+        betMarkets.setMoneylineStatusByWeekGame(weekId, gameNum, status),
+        betMarkets.setPropStatusByWeekGame(weekId, gameNum, status),
+        betMarkets.setTeamPropStatusByWeekGame(weekId, gameNum, status),
+        betMarkets.setComboStatusByWeekGame(weekId, gameNum, status),
+      ])
       if (started) {
         await pvpChallenges.closeOpenForGame(weekId, gameNum)
         setOpenGames(prev => ({ ...prev, [gameNum]: true }))
@@ -319,12 +323,14 @@ export default function MatchupsScreen() {
             .map(k => parseInt(k.split('|')[1]))
         )).filter(num => !inProgressGames.includes(num))
         for (const num of scoredGameNums) {
-          await betMarkets.setOUStatusByWeekGame(weekId, num, 'closed')
-          await betMarkets.setMoneylineStatusByWeekGame(weekId, num, 'closed')
-          await betMarkets.setPropStatusByWeekGame(weekId, num, 'closed')
-          await betMarkets.setTeamPropStatusByWeekGame(weekId, num, 'closed')
-          await betMarkets.setComboStatusByWeekGame(weekId, num, 'closed')
-          await pvpChallenges.closeOpenForGame(weekId, num)
+          await Promise.all([
+            betMarkets.setOUStatusByWeekGame(weekId, num, 'closed'),
+            betMarkets.setMoneylineStatusByWeekGame(weekId, num, 'closed'),
+            betMarkets.setPropStatusByWeekGame(weekId, num, 'closed'),
+            betMarkets.setTeamPropStatusByWeekGame(weekId, num, 'closed'),
+            betMarkets.setComboStatusByWeekGame(weekId, num, 'closed'),
+            pvpChallenges.closeOpenForGame(weekId, num),
+          ])
         }
       }
 

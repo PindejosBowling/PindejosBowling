@@ -49,11 +49,10 @@ export default function SettledBetsView({ bets, perspective = 'player', onBetPre
         <View key={wk}>
           <Text style={styles.gameLabel}>WEEK {wk}</Text>
           <View>
-            {byWeek[wk].map((bet, idx) => (
+            {byWeek[wk].map(bet => (
               <BetRow
                 key={bet.id}
                 bet={bet}
-                isLast={idx === byWeek[wk].length - 1}
                 badge={resultBadge(bet.status)}
                 betReturnText={betReturnText(bet, perspective)}
                 onPress={onBetPress ? () => onBetPress(bet) : undefined}

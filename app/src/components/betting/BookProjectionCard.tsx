@@ -1,5 +1,6 @@
 import { View, Text, StyleSheet } from 'react-native'
-import { colors, fonts, radius, spacing } from '../../theme'
+import { colors, fonts, radius, spacing, type } from '../../theme'
+import { deltaDir } from '../../utils/bets'
 
 // One row of odds_engine_player_projection, camel-cased by the screen's fetch.
 export interface ProjectionRow {
@@ -42,15 +43,13 @@ export default function BookProjectionCard({ rows, nGames, scopeLabel }: BookPro
 
   return (
     <View style={styles.card}>
-      <Text style={styles.header}>SEASON AVG vs BOOK · {scopeLabel}</Text>
+      <Text style={styles.header}>SEASON AVG vs FORECAST · {scopeLabel}</Text>
       <View style={styles.columns}>
         {shown.map(r => {
           const projected = r.projected! * nGames
           const avg = r.seasonAvg != null ? r.seasonAvg * nGames : null
-          // The AVERAGE's position vs the book — sub-tenth deltas read as
-          // "on form".
-          const delta = avg != null ? avg - projected : null
-          const dir = delta == null || Math.abs(delta) < 0.05 ? null : delta > 0 ? 'up' : 'down'
+          // The AVERAGE's position vs the book (shared dead band = "on form").
+          const dir = deltaDir(avg, projected)
           return (
             <View key={r.stat} style={styles.column}>
               <Text style={styles.statLabel}>{COLUMN_LABELS[r.stat] ?? r.stat.toUpperCase()}</Text>
@@ -64,7 +63,7 @@ export default function BookProjectionCard({ rows, nGames, scopeLabel }: BookPro
                   </Text>
                 )}
               </View>
-              <Text style={styles.book}>BOOK {projected.toFixed(1)}</Text>
+              <Text style={styles.book}>FORECAST {projected.toFixed(1)}</Text>
             </View>
           )
         })}
@@ -87,9 +86,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
   },
   header: {
-    fontFamily: fonts.barlowCondensed,
-    fontSize: 11,
-    letterSpacing: 1.5,
+    ...type.label,
     color: colors.muted,
     textAlign: 'center',
   },
@@ -107,8 +104,7 @@ const styles = StyleSheet.create({
   // The player's AVERAGE gets the big accent treatment (the memberSoloValue
   // idiom) — it's the headline; the book reads as the comparison beneath.
   avgValue: {
-    fontFamily: fonts.barlowCondensedHeavy,
-    fontSize: 20,
+    ...type.value,
     color: colors.accent,
     letterSpacing: 0.5,
   },
