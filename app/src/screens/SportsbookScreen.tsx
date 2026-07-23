@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   View,
   Text,
@@ -436,21 +436,70 @@ export default function SportsbookScreen() {
   // strip never stages or prices anything. Cache resets with the board
   // reload effect below so new history re-projects.
   const [projCache, setProjCache] = useState<Record<string, ProjectionRow[]>>({})
+  const toProjectionRows = (data: unknown): ProjectionRow[] =>
+    (data as {
+      stat: string; projected: number | null; season_avg: number | null; avg_source: string | null
+    }[]).map(r => ({
+      stat: r.stat, projected: r.projected, seasonAvg: r.season_avg, avgSource: r.avg_source,
+    }))
   const projPlayerId = effectiveView === 'place' && !readOnly ? board.selectedPlayerId : null
   useEffect(() => {
     if (projPlayerId == null || currentSeasonId == null || projCache[projPlayerId] != null) return
     let cancelled = false
     betMarkets.playerProjection(projPlayerId, currentSeasonId).then(({ data }) => {
       if (cancelled || !data) return
-      const rows = (data as {
-        stat: string; projected: number | null; season_avg: number | null; avg_source: string | null
-      }[]).map(r => ({
-        stat: r.stat, projected: r.projected, seasonAvg: r.season_avg, avgSource: r.avg_source,
-      }))
-      setProjCache(prev => ({ ...prev, [projPlayerId]: rows }))
+      setProjCache(prev => ({ ...prev, [projPlayerId]: toProjectionRows(data) }))
     })
     return () => { cancelled = true }
   }, [projPlayerId, currentSeasonId, projCache])
+
+  // Combine mode fills the same cache for every picked member (a member the
+  // flat board already showed comes free), so the group projection card can
+  // sum client-side. `projRequested` dedups in-flight fetches across the
+  // cache-update re-runs; it resets with the cache.
+  const projRequested = useRef<Set<string>>(new Set())
+  useEffect(() => {
+    if (!combining || currentSeasonId == null) return
+    const missing = comboMemberIds.filter(
+      id => projCache[id] == null && !projRequested.current.has(id)
+    )
+    if (missing.length === 0) return
+    let cancelled = false
+    for (const id of missing) {
+      projRequested.current.add(id)
+      betMarkets.playerProjection(id, currentSeasonId).then(({ data }) => {
+        if (cancelled || !data) return
+        setProjCache(prev => ({ ...prev, [id]: toProjectionRows(data) }))
+      })
+    }
+    return () => { cancelled = true }
+  }, [combining, comboMemberIds, currentSeasonId, projCache])
+
+  // The group's projection rows — the SAME BookProjectionCard the flat board
+  // heads with, summed across the chosen members (all four stats, per game;
+  // the card scales to scope). Null while any member's fetch is in flight.
+  const comboGroupRows = useMemo<ProjectionRow[] | null>(() => {
+    if (!combining || comboMemberIds.length === 0) return null
+    const members = comboMemberIds.map(id => projCache[id])
+    if (members.some(rows => rows == null)) return null
+    return ['score', 'clean_frames', 'strikes', 'spares'].map(stat => {
+      const rows = members.map(m => m!.find(r => r.stat === stat)).filter(
+        (r): r is ProjectionRow => r != null
+      )
+      const projected = rows.length > 0 && rows.every(r => r.projected != null)
+        ? rows.reduce((sum, r) => sum + r.projected!, 0)
+        : null
+      // Average sums mirror the group-avg semantics: a no-history member
+      // contributes 0 (their share of the line is priced off the prior).
+      const avgs = rows.map(r => r.seasonAvg).filter((v): v is number => v != null)
+      return {
+        stat,
+        projected,
+        seasonAvg: avgs.length > 0 ? avgs.reduce((sum, v) => sum + v, 0) : null,
+        avgSource: rows.every(r => r.avgSource === 'season') ? 'season' : 'lifetime',
+      }
+    })
+  }, [combining, comboMemberIds, projCache])
 
   // ── Value-first editing (via the LineEntrySheet) ──────────────────────
   // Per-market value overrides (the number the bettor accepted in the sheet)
@@ -469,6 +518,7 @@ export default function SportsbookScreen() {
     setQuoteCache({})
     setValueSheet(null)
     setProjCache({})
+    projRequested.current = new Set()
   }, [openLines])
 
   // The pill's anchor: the market's posted seed rung (canonical 'over' key).
@@ -730,6 +780,16 @@ export default function SportsbookScreen() {
                 <Text style={styles.combineHint}>
                   TAP PLAYERS TO COMBINE · {(STAT_LABELS[combo.stat] ?? combo.stat).toUpperCase()}
                 </Text>
+                {/* The same projection header the flat board leads with, summed
+                    across the chosen members — the group's book expectation vs
+                    their combined averages, all four stats, scope-scaled. */}
+                {comboGroupRows != null && (
+                  <BookProjectionCard
+                    rows={comboGroupRows}
+                    nGames={comboNGames}
+                    scopeLabel={scope === 'weekly' ? 'NIGHT' : `GAME ${comboScopeGame}`}
+                  />
+                )}
                 {board.scopeInProgress && board.firstInProgress && (
                   <Text style={styles.inProgressNote}>
                     {closedBettingNote(board.firstInProgress)}
