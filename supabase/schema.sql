@@ -3061,6 +3061,97 @@ END;
 $function$
 ;
 
+CREATE OR REPLACE FUNCTION public.combo_member_averages(p_player_ids uuid[], p_stat text, p_season_id uuid)
+ RETURNS TABLE(player_id uuid, avg_per_game numeric, games integer, source text)
+ LANGUAGE plpgsql
+ STABLE SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+DECLARE
+  v_league_avg numeric;
+BEGIN
+  IF p_stat IN ('clean_frames', 'strikes', 'spares') THEN
+    RETURN QUERY
+    SELECT mem.pid,
+           CASE WHEN ssn.n > 0 THEN ssn.avg_stat
+                WHEN life.n > 0 THEN life.avg_stat END,
+           CASE WHEN ssn.n > 0 THEN ssn.n
+                WHEN life.n > 0 THEN life.n
+                ELSE 0 END,
+           CASE WHEN ssn.n > 0 THEN 'season'
+                WHEN life.n > 0 THEN 'lifetime' END
+    FROM (SELECT DISTINCT m AS pid FROM unnest(p_player_ids) m) mem
+    CROSS JOIN LATERAL (
+      SELECT CASE p_stat
+               WHEN 'strikes' THEN avg(i.strikes)
+               WHEN 'spares'  THEN avg(i.spares)
+               ELSE avg(i.strikes + i.spares)
+             END AS avg_stat,
+             count(*)::integer AS n
+      FROM public.lanetalk_game_imports i
+      JOIN public.weeks w ON w.id = i.week_id
+      WHERE i.player_id = mem.pid
+        AND i.classification = 'official' AND i.frames > 0
+        AND w.season_id = p_season_id
+    ) ssn
+    CROSS JOIN LATERAL (
+      SELECT CASE p_stat
+               WHEN 'strikes' THEN avg(i.strikes)
+               WHEN 'spares'  THEN avg(i.spares)
+               ELSE avg(i.strikes + i.spares)
+             END AS avg_stat,
+             count(*)::integer AS n
+      FROM public.lanetalk_game_imports i
+      WHERE i.player_id = mem.pid
+        AND i.classification = 'official' AND i.frames > 0
+    ) life;
+
+  ELSIF p_stat = 'total_pins' THEN
+    -- player_raw_avg_score's league rung, computed once for the batch.
+    SELECT COALESCE(avg(s.score), 130) INTO v_league_avg
+    FROM public.scores s
+    JOIN public.team_slots ts ON ts.id = s.team_slot_id
+    JOIN public.teams t       ON t.id = ts.team_id
+    JOIN public.weeks w       ON w.id = t.week_id
+    WHERE w.is_archived = true AND ts.player_id IS NOT NULL AND s.score > 0;
+
+    RETURN QUERY
+    SELECT mem.pid,
+           CASE WHEN ssn.n > 0 THEN ssn.avg_score
+                WHEN life.n > 0 THEN life.avg_score
+                ELSE v_league_avg END,
+           CASE WHEN ssn.n > 0 THEN ssn.n
+                WHEN life.n > 0 THEN life.n
+                ELSE 0 END,
+           CASE WHEN ssn.n > 0 THEN 'season'
+                WHEN life.n > 0 THEN 'lifetime'
+                ELSE 'league' END
+    FROM (SELECT DISTINCT m AS pid FROM unnest(p_player_ids) m) mem
+    CROSS JOIN LATERAL (
+      SELECT avg(s.score) AS avg_score, count(*)::integer AS n
+      FROM public.scores s
+      JOIN public.team_slots ts ON ts.id = s.team_slot_id
+      JOIN public.teams t       ON t.id = ts.team_id
+      JOIN public.weeks w       ON w.id = t.week_id
+      WHERE w.season_id = p_season_id AND w.is_archived = true
+        AND ts.player_id = mem.pid AND s.score > 0
+    ) ssn
+    CROSS JOIN LATERAL (
+      SELECT avg(s.score) AS avg_score, count(*)::integer AS n
+      FROM public.scores s
+      JOIN public.team_slots ts ON ts.id = s.team_slot_id
+      JOIN public.teams t       ON t.id = ts.team_id
+      JOIN public.weeks w       ON w.id = t.week_id
+      WHERE w.is_archived = true AND ts.player_id = mem.pid AND s.score > 0
+    ) life;
+
+  ELSE
+    RAISE EXCEPTION 'Unknown combo stat %', p_stat;
+  END IF;
+END;
+$function$
+;
+
 CREATE OR REPLACE FUNCTION public.combo_preview_ladder(p_member_ids uuid[], p_stat text, p_season_id uuid, p_n_games integer DEFAULT 1, p_week_id uuid DEFAULT NULL::uuid, p_game_number integer DEFAULT NULL::integer)
  RETURNS jsonb
  LANGUAGE plpgsql

@@ -293,6 +293,17 @@ export const betMarkets = {
       p_member_ids: memberIds, p_stat: stat, p_season_id: seasonId, p_n_games: nGames,
       p_week_id: weekId ?? undefined, p_game_number: gameNumber ?? undefined,
     }),
+  // Per-player per-game averages for a stat (STABLE, read-only) — the
+  // combine-mode member list shows these so a bettor can see where the combo
+  // line sits relative to the group's actual production. Season-scoped with
+  // an explicit fallback chain reported in `source`: 'season' → 'lifetime'
+  // (→ 'league' for total_pins only). `games` = the counted-game denominator
+  // of the rung that answered (0 for the league fallback). Display-only;
+  // the seed/pricing math reads its own windows.
+  comboMemberAverages: (playerIds: string[], stat: string, seasonId: string) =>
+    supabase.rpc('combo_member_averages', {
+      p_player_ids: playerIds, p_stat: stat, p_season_id: seasonId,
+    }),
   // Value-first pricing: quote ANY half-point line on one market (STABLE,
   // read-only). NULL line → the seed rung (the pill's anchor). Posted rungs
   // echo their posted odds verbatim; unposted lines price fresh inside the

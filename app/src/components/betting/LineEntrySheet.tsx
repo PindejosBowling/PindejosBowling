@@ -13,6 +13,9 @@ interface LineEntrySheetProps {
   conditionLabel: string
   // 'GAME 2' / 'NIGHT' scope tag for the subtitle.
   scopeLabel?: string
+  // Optional yardstick line under the band — e.g. the combo's group average,
+  // so the typed value reads against expected production, not just the band.
+  contextNote?: string
   // What the preview RPC prices: the pill's market or the combo member set.
   source: NonNullable<LinePreviewSource>
   // The value the editor opens on (staged pick / prior edit / seed rung).
@@ -37,6 +40,7 @@ export default function LineEntrySheet({
   title,
   conditionLabel,
   scopeLabel,
+  contextNote,
   source,
   initialValue,
   onAccept,
@@ -96,6 +100,7 @@ export default function LineEntrySheet({
             ? `Acceptable: ${Math.floor(quote.minLine)} – ${Math.floor(quote.maxLine)}`
             : 'Finding the acceptable range…'}
         </Text>
+        {contextNote != null && <Text style={styles.range}>{contextNote}</Text>}
 
         {/* The modified line, re-priced live as the input changes. */}
         <View style={styles.preview}>

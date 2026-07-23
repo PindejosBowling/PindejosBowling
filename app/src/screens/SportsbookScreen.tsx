@@ -49,7 +49,7 @@ import { useLinePreview, type LineQuote } from '../hooks/useLinePreview'
 import { useRefresh } from '../hooks/useRefresh'
 import { useAuthStore } from '../stores/authStore'
 import { useUiStore } from '../stores/uiStore'
-import { haunts } from '../utils/supabase/db'
+import { betMarkets, haunts } from '../utils/supabase/db'
 import { shortName } from '../utils/helpers'
 import { PinsinoStackParamList } from '../navigation/types'
 import EmptyCard from '../components/ui/EmptyCard'
@@ -281,6 +281,46 @@ export default function SportsbookScreen() {
   )
   const { quote: comboQuote, loading: comboQuoteLoading } = useLinePreview(comboSource, comboLineValue)
   const shownComboValue = comboLineValue ?? comboQuote?.seedLine ?? null
+
+  // Per-member per-game averages for the combine stat — the context that makes
+  // combo pricing legible: the seed line is Σ floor(avg × games) + 0.5, so a
+  // combo line at/below the group's combined average is LIKELY and pays short.
+  // Same sources the seed math reads (server RPC); display-only. `games` 0 =
+  // the avg shown is a fallback, not the player's own history.
+  const [memberAvgs, setMemberAvgs] = useState<
+    Record<string, { avg: number | null; source: string | null }>
+  >({})
+  useEffect(() => {
+    if (!combining || combo?.stat == null || currentSeasonId == null || rsvpInPlayers.length === 0) {
+      setMemberAvgs({})
+      return
+    }
+    let cancelled = false
+    betMarkets
+      .comboMemberAverages(rsvpInPlayers.map(m => m.playerId), combo.stat, currentSeasonId)
+      .then(({ data }) => {
+        if (cancelled || !data) return
+        const next: Record<string, { avg: number | null; source: string | null }> = {}
+        for (const r of data as { player_id: string; avg_per_game: number | null; source: string | null }[]) {
+          next[r.player_id] = { avg: r.avg_per_game, source: r.source }
+        }
+        setMemberAvgs(next)
+      })
+    return () => { cancelled = true }
+  }, [combining, combo?.stat, currentSeasonId, rsvpInPlayers])
+
+  // A member's average scaled to the combo's scope (night → × games bowled).
+  const scopedAvg = (playerId2: string): number | null => {
+    const a = memberAvgs[playerId2]?.avg
+    return a == null ? null : a * comboNGames
+  }
+  // The picked group's combined scope-scaled average — what the chosen line is
+  // really being measured against. Mirrors the seed math's treatment of a
+  // no-data member (contributes 0).
+  const comboGroupAvg =
+    comboMemberIds.length > 0 && Object.keys(memberAvgs).length > 0
+      ? comboMemberIds.reduce((sum, id) => sum + (scopedAvg(id) ?? 0), 0)
+      : null
   const comboOdds =
     comboQuote != null && shownComboValue != null && comboQuote.line === shownComboValue
       ? comboQuote.odds
@@ -643,12 +683,27 @@ export default function SportsbookScreen() {
                     const solo = board.scopeLines.find(
                       l => l.subjectPlayerId === m.playerId && comboStatOf(l) === combo.stat
                     )
+                    // The player's scope-scaled average — the number their
+                    // share of a combo line is really priced against.
+                    const avgEntry = memberAvgs[m.playerId]
+                    const avgShown = scopedAvg(m.playerId)
                     return (
                       <View key={m.playerId} style={styles.memberRow}>
                         <View style={styles.memberInfo}>
                           <Text style={styles.memberName}>
                             {m.name}{m.playerId === playerId ? ' (you)' : ''}
                           </Text>
+                          {avgEntry != null && (
+                            <Text style={styles.memberAvg}>
+                              {avgShown == null
+                                ? 'NO STAT HISTORY'
+                                : avgEntry.source === 'season'
+                                  ? `SEASON AVG ${avgShown.toFixed(1)}`
+                                  : avgEntry.source === 'lifetime'
+                                    ? `LIFETIME AVG ${avgShown.toFixed(1)}`
+                                    : `LEAGUE AVG ${avgShown.toFixed(1)}`}
+                            </Text>
+                          )}
                           {solo?.line != null && <Text style={styles.memberSoloLabel}>SOLO LINE</Text>}
                         </View>
                         {/* The player's own line for this stat — the number a
@@ -751,6 +806,7 @@ export default function SportsbookScreen() {
           statLabel={(STAT_LABELS[combo.stat] ?? combo.stat).toUpperCase()}
           scopeLabel={scope === 'weekly' ? 'NIGHT' : `GAME ${comboScopeGame}`}
           value={comboLineValue}
+          groupAvg={comboGroupAvg}
           onEditValue={() => setValueSheet({ kind: 'combo' })}
           quote={comboQuote}
           quoteLoading={comboQuoteLoading}
@@ -785,6 +841,11 @@ export default function SportsbookScreen() {
             .join(' + ')}
           conditionLabel={(STAT_LABELS[combo.stat] ?? combo.stat).toUpperCase()}
           scopeLabel={scope === 'weekly' ? 'NIGHT' : `GAME ${comboScopeGame}`}
+          contextNote={
+            comboGroupAvg != null
+              ? `Group average: ${comboGroupAvg.toFixed(1)} — lines above it pay longer odds`
+              : undefined
+          }
           source={comboSource}
           initialValue={shownComboValue}
           onAccept={v => {
@@ -898,6 +959,15 @@ const styles = StyleSheet.create({
   // The member's own line for the combo's stat — the deciding number, so it
   // gets the big accent value treatment; "—" (muted size stays) when the
   // player has no individual market for this stat.
+  // The member's scope-scaled average (the number their share of the combo
+  // line prices against) — context under the name.
+  memberAvg: {
+    fontFamily: fonts.barlowCondensed,
+    fontSize: 11,
+    letterSpacing: 0.5,
+    color: colors.muted,
+    marginTop: 1,
+  },
   memberSoloLabel: {
     fontFamily: fonts.barlowCondensed,
     fontSize: 10,

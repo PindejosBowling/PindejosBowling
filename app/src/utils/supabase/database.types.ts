@@ -3274,6 +3274,15 @@ export type Database = {
         Args: { p_game_number: number; p_week_id: string }
         Returns: undefined
       }
+      combo_member_averages: {
+        Args: { p_player_ids: string[]; p_season_id: string; p_stat: string }
+        Returns: {
+          avg_per_game: number
+          games: number
+          player_id: string
+          source: string
+        }[]
+      }
       combo_preview_ladder: {
         Args: {
           p_game_number?: number

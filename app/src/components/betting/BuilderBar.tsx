@@ -13,6 +13,10 @@ interface BuilderBarProps {
   scopeLabel: string
   // The displayed line value (screen-owned; seeds from the quote's seed_line).
   value: number | null
+  // The picked group's combined scope-scaled average — shown beside the value
+  // so the bettor sees where their line sits relative to expected production
+  // (lines below it are likely and pay short; above it pay longer).
+  groupAvg?: number | null
   // Tapping the value opens the LineEntrySheet for this combo.
   onEditValue: () => void
   // The live quote for `value` (combo_price_line) — odds, band, seed anchor.
@@ -41,6 +45,7 @@ export default function BuilderBar({
   statLabel,
   scopeLabel,
   value,
+  groupAvg,
   onEditValue,
   quote,
   quoteLoading,
@@ -87,6 +92,11 @@ export default function BuilderBar({
             <Text style={styles.odds}>
               {quoteLoading ? '…' : odds != null ? fmtOdds(odds) : '—'}
             </Text>
+            {/* The group's combined average — the yardstick the line is
+                priced against (below it = likely = short odds). */}
+            {groupAvg != null && (
+              <Text style={styles.groupAvg}>GROUP AVG {groupAvg.toFixed(1)}</Text>
+            )}
           </View>
         )}
       </View>
@@ -154,6 +164,12 @@ const styles = StyleSheet.create({
     fontFamily: fonts.barlowCondensedHeavy,
     fontSize: 15,
     color: colors.accent,
+  },
+  groupAvg: {
+    fontFamily: fonts.barlowCondensed,
+    fontSize: 11,
+    letterSpacing: 0.5,
+    color: colors.muted,
   },
   cancel: { paddingHorizontal: 8, paddingVertical: 8 },
   add: { paddingHorizontal: 16, paddingVertical: 10 },

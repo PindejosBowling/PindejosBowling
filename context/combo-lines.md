@@ -183,9 +183,12 @@ params->>clock.eq.lanetalk)` alongside props and legacy team props.
 ## App layer
 
 - `db/economy.ts`: `betMarkets.listActiveComboByWeek`, `betMarkets.previewComboLine`
-  (rpc `combo_seed_line`), `bets.composeCombo(weekId, specs[], stake, extras?,
-  items…)` (rpc `compose_combo_bet`), `betMarkets.setComboStatusByWeekGame`
-  (game-start toggle; night combos ride game 1), `'combo'` in `reopenOUForWeek`.
+  (rpc `combo_seed_line`), `betMarkets.comboMemberAverages` (rpc
+  `combo_member_averages` — per-player per-game avg + counted games for a stat,
+  same sources as the seed math; display-only), `bets.composeCombo(weekId,
+  specs[], stake, extras?, items…)` (rpc `compose_combo_bet`),
+  `betMarkets.setComboStatusByWeekGame` (game-start toggle; night combos ride
+  game 1), `'combo'` in `reopenOUForWeek`.
 - `usePinsinoData`: `LineView.comboMemberIds/comboMemberNames`;
   `normalizeMarket` labels a combo by its joined `member_names` (no N-name
   fetch — that's why compose snapshots names); `marketGroup` routes null-game
@@ -218,6 +221,18 @@ params->>clock.eq.lanetalk)` alongside props and legacy team props.
   exact key is already staged.
   Combo scope follows the board's scope filter (Weekly → night, Game N → that
   game; mid-build switches re-preview); an in-progress scope disables Add.
+  **Average context (2026-07-23)**: the member-pick rows show each player's
+  scope-scaled average (`combo_member_averages`, fetched once per stat view) —
+  **season-scoped with an explicit fallback chain** the RPC reports in its
+  `source` column and the UI labels honestly: `SEASON AVG` → `LIFETIME AVG`
+  (→ `LEAGUE AVG`, total_pins only; no frame-stat data at all →
+  `NO STAT HISTORY`). Display-only — the seed/pricing math keeps its own
+  windows (frame-stat seeds are lifetime), so the shown average can
+  legitimately differ from the line the book anchors. The BuilderBar shows the
+  picked group's combined `GROUP AVG`, and the combo `LineEntrySheet` gets a `contextNote` ("Group average: X —
+  lines above it pay longer odds") — making visible WHY adding members
+  compresses the fair odds (the seed = Σ floor(avg×games) + 0.5 sits under the
+  summed mean while spread grows only √N).
   Placed combos still flow through the `LineView → LineRow` seam with zero
   row-component changes; BetDetail copy-bet works unchanged (`getByIds` is
   market-type-agnostic).
