@@ -741,24 +741,6 @@ export default function SportsbookScreen() {
                 combo mode swaps the single-player dropdown for a multi-select
                 member chip row (pool = every RSVP'd-in player; combos need
                 only RSVP) and prices the picked group instead of one player. */}
-            {/* Combo mode's subject selector — the member chip row. (The
-                single-player selector lives further down: the player's NAME
-                above their lines, consolidated with the line card's header.) */}
-            {comboMode && (
-              <>
-                <Text style={styles.combineHint}>TAP PLAYERS TO COMBINE</Text>
-                <View style={styles.memberChipRow}>
-                  {comboMemberPool.map(m => (
-                    <PickChip
-                      key={m.playerId}
-                      label={shortName(m.name)}
-                      selected={comboMembers.has(m.playerId)}
-                      onPress={() => toggleComboMember(m.playerId)}
-                    />
-                  ))}
-                </View>
-              </>
-            )}
             {/* What the book expects from the subject this week against what
                 it actually averages — scope-scaled like the lines beneath it
                 (Weekly = × the night's games). The same card serves both
@@ -790,9 +772,14 @@ export default function SportsbookScreen() {
             )}
             {comboMode ? (
               <>
-                {/* The group's line card — one value-first pill per combinable
-                    stat, each with its own live quote. Tap the value to retype
-                    it; tap the body to stage into the ordinary slip bar. */}
+                {/* The group's line card — the board's ONE visual constant
+                    across modes: the same four lines, in place, adjusted to
+                    the picked group (each stat pill carries its own live combo
+                    quote; the group name is the card's header, playing the
+                    role the name selector plays in single-player mode). Tap a
+                    value to retype it; tap a body to stage into the ordinary
+                    slip bar — staging several stats parlays them, so one group
+                    can carry a combo parlay across different bet types. */}
                 <ComboLineRow
                   memberNames={comboMemberShortNames}
                   stats={comboStatSpecs}
@@ -802,10 +789,14 @@ export default function SportsbookScreen() {
                   onEditValue={(stat, value) => setValueSheet({ kind: 'combo', stat, value })}
                   onStage={(spec, value, odds) => stageComboAt(spec.stat, value, odds)}
                 />
-                {/* Shopping context per pool member: their scope-scaled Total
-                    Pins average with the book's forecast beside it — a member
-                    the book rates above their average (▲) makes the combo line
-                    richer than the averages suggest; below (▼), softer. */}
+                {/* The player pickers — the ONLY thing combo mode adds to the
+                    screen, at the bottom: one row per RSVP'd-in player (their
+                    scope-scaled Total Pins average with the book's forecast
+                    beside it — a member the book rates above their average (▲)
+                    makes the combo line richer than the averages suggest;
+                    below (▼), softer) with the +/✓ chip that adds them to the
+                    group. Everything above simply re-prices as they toggle. */}
+                <Text style={styles.combineHint}>TAP PLAYERS TO COMBINE</Text>
                 <View>
                   {comboMemberPool.map(m => {
                     const on = comboMembers.has(m.playerId)
@@ -1050,24 +1041,17 @@ const styles = StyleSheet.create({
     color: colors.text,
     letterSpacing: 0.3,
   },
-  // Combo-mode helper line above the member chips.
+  // Combo-mode helper line above the bottom player-picker rows.
   combineHint: {
     fontFamily: fonts.barlowCondensed,
     fontSize: 11,
     letterSpacing: 1.5,
     color: colors.accent,
+    marginTop: 2,
     marginBottom: 10,
     textAlign: 'center',
   },
-  // The member picker — a wrapped row of short-name chips in the player
-  // dropdown's slot (the subject selector keeps its position in both modes).
-  memberChipRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginBottom: 12,
-  },
-  // Combo-mode member context rows — same tinted-row language as LineRow.
+  // Combo-mode player-picker rows — same tinted-row language as LineRow.
   memberRow: {
     flexDirection: 'row',
     alignItems: 'center',

@@ -216,10 +216,12 @@ params->>clock.eq.lanetalk)` alongside props and legacy team props.
   `ComboComposerSheet`): the COMBO chip in the board's filter row toggles the
   mode (dim-and-toast under 2 RSVP'd; entering seeds the member set with the
   viewed player — a single-player bet is a combo of one). The board keeps its
-  exact shape: the player dropdown's slot becomes a multi-select member chip
-  row; the SAME `BookProjectionCard` shows the group's summed
+  exact shape — the ONLY addition is the **player-picker rows at the bottom**
+  (per-member avg/forecast context + `+`/`✓` chips); the SAME
+  `BookProjectionCard` shows the group's summed
   `GROUP AVG vs FORECAST` rows for all four stats; and `ComboLineRow` renders
-  one value-first pill per combinable stat, each pill owning its own
+  one value-first pill per combinable stat (the group name as its header —
+  the counterpart of the player-name selector), each pill owning its own
   `useLinePreview({kind:'combo'})` → `betMarkets.priceComboLine` quote
   (seed-anchored; per-stat `comboValues` reset on combo-identity change).
   Pill-body tap stages/unstages straight into the ordinary slip bar (staged
