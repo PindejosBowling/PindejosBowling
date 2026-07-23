@@ -459,11 +459,13 @@ export default function BetSlip({
             </View>
           )}
           {multiPicks && parlayBlocked && (
-            <Text style={styles.itemNote}>
-              Too many correlated legs on one player to parlay — these place as
-              singles. Two legs on the same player can still combine (priced
-              jointly).
-            </Text>
+            <View style={styles.parlayBlockedBox}>
+              <Text style={styles.parlayBlockedText}>
+                ⚠ Too many correlated legs on the same player or group to
+                parlay — these will place as singles. Two legs on the same
+                subject can still combine (priced jointly).
+              </Text>
+            </View>
           )}
 
           {/* ── One ticket card per resulting bet ── */}
@@ -632,6 +634,23 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
     color: colors.muted,
     marginTop: 10,
+  },
+  // The parlay-blocked callout — a gold warning box (not the plain italic
+  // note idiom): the slip is refusing a mode, and the box explains why.
+  parlayBlockedBox: {
+    borderRadius: radius.cardSm,
+    borderWidth: 1,
+    borderColor: colors.gold,
+    backgroundColor: colors.goldDim,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginBottom: spacing.sm,
+  },
+  parlayBlockedText: {
+    fontFamily: fonts.barlow,
+    fontSize: 12,
+    lineHeight: 17,
+    color: colors.gold,
   },
   warning: {
     fontFamily: fonts.barlow,
