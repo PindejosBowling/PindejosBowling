@@ -159,7 +159,7 @@ export default function SportsbookScreen() {
     [openLines]
   )
 
-  // Scope pills: Weekly (night-scoped markets) + one per scheduled game. The
+  // Scope options: Weekly (night-scoped markets) + one per scheduled game. The
   // keys are lineGroup keys, so matching a line to the scope reuses the
   // existing market-type seam (`lineGroup(line).key === scope`).
   const scopeOptions = useMemo(
@@ -724,11 +724,11 @@ export default function SportsbookScreen() {
 
         {/* ── Place Bets ──────────────────────────────────────── */}
         {effectiveView === 'place' && <>
-        {/* The flat board: the player-select heading leads, then scope pills +
-            Combine chip, then the chosen player's available lines for that
-            scope. The filters ARE the navigation — no collapsible sections.
-            Staged picks live in the global slip bar, so building a parlay
-            across players/scopes is just switching the filters. */}
+        {/* The flat board: the player-select heading leads, then the scope
+            dropdown + Combine chip, then the chosen player's available lines
+            for that scope. The filters ARE the navigation — no collapsible
+            sections. Staged picks live in the global slip bar, so building a
+            parlay across players/scopes is just switching the filters. */}
         {visibleLines.length > 0 || customLines.length > 0 ? (
           <View style={styles.board}>
             {/* The subject-name slot — the board's MAIN HEADING, directly
@@ -754,12 +754,12 @@ export default function SportsbookScreen() {
               />
             ) : null}
             <View style={styles.filterRow}>
-              <ToggleGroup
-                variant="pill"
+              {/* Scope select — Weekly + the night's games collapsed into one
+                  anchored dropdown (⚰️ the Weekly/Game 1/Game 2 pill row). */}
+              <Dropdown
                 options={scopeOptions}
                 value={scope}
                 onChange={setScope}
-                style={styles.scopePills}
               />
               {/* Combo — the inline mode toggle. Dim-but-pressable below 2
                   RSVP'd players (house convention: still toasts). Entering
@@ -1053,15 +1053,15 @@ const styles = StyleSheet.create({
   // Separates the board from the mode toggle above it — the filters lead
   // directly (no section header of its own).
   board: { marginTop: 16 },
-  // The board filters: scope pills + the trailing Combine chip, beneath the
-  // player-select heading.
+  // The board filters: the scope dropdown + the trailing Combine chip, beneath
+  // the player-select heading.
   filterRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     gap: 8,
     marginBottom: 10,
   },
-  scopePills: { flex: 1, justifyContent: 'flex-start' },
   // The player-name selector — the Dropdown trigger undressed to read as the
   // board's main heading (centered name + ▾, no box), so the name atop the
   // board IS the picker.
