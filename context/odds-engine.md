@@ -165,6 +165,16 @@ never-expose posture otherwise unchanged), plus `season_avg`/`avg_source`/
 (under the player select, per-player cached, scope-scaled × games for
 Weekly) showing "book projection vs season avg" with a ▲/▼ delta.
 
+Batch companion `odds_engine_member_projections(p_player_ids, p_stat,
+p_season_id)` (STABLE, authenticated; COMBO stat vocabulary — `total_pins`
+maps to `score`) returns `{player_id, projected}` per member, mirroring
+`combo_member_averages`' shape so combine mode fetches both with the same
+arguments (`betMarkets.memberProjections`). The member-picking rows show
+`AVG … · BOOK …` with a ▲/▼ vs the average, the BuilderBar shows the group's
+combined `AVG · BOOK` sums, and the combo `LineEntrySheet` contextNote reads
+"Group avg X · book expects Y". Same NULL-when-disabled + per-game/×games
+scaling contract.
+
 ## Correlated parlays — joint pricing (2026-07-23, `…014500_correlated_parlay_pricing` + `…040000_parlay_quote_implied_joint`)
 
 Parlays paid `Π(leg odds)` even for same-player legs ("over 219.5 pins G1" ×

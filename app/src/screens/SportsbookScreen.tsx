@@ -291,14 +291,21 @@ export default function SportsbookScreen() {
   const [memberAvgs, setMemberAvgs] = useState<
     Record<string, { avg: number | null; source: string | null }>
   >({})
+  // The book's per-game projection for the same members + stat — the second
+  // number a combiner shops on: a member the book rates ABOVE their average
+  // makes the combo line richer than the averages suggest. NULL when the
+  // engine is off (the display just omits BOOK). Display-only.
+  const [memberProjs, setMemberProjs] = useState<Record<string, number | null>>({})
   useEffect(() => {
     if (!combining || combo?.stat == null || currentSeasonId == null || rsvpInPlayers.length === 0) {
       setMemberAvgs({})
+      setMemberProjs({})
       return
     }
     let cancelled = false
+    const ids = rsvpInPlayers.map(m => m.playerId)
     betMarkets
-      .comboMemberAverages(rsvpInPlayers.map(m => m.playerId), combo.stat, currentSeasonId)
+      .comboMemberAverages(ids, combo.stat, currentSeasonId)
       .then(({ data }) => {
         if (cancelled || !data) return
         const next: Record<string, { avg: number | null; source: string | null }> = {}
@@ -306,6 +313,16 @@ export default function SportsbookScreen() {
           next[r.player_id] = { avg: r.avg_per_game, source: r.source }
         }
         setMemberAvgs(next)
+      })
+    betMarkets
+      .memberProjections(ids, combo.stat, currentSeasonId)
+      .then(({ data }) => {
+        if (cancelled || !data) return
+        const next: Record<string, number | null> = {}
+        for (const r of data as { player_id: string; projected: number | null }[]) {
+          next[r.player_id] = r.projected
+        }
+        setMemberProjs(next)
       })
     return () => { cancelled = true }
   }, [combining, combo?.stat, currentSeasonId, rsvpInPlayers])
@@ -315,12 +332,27 @@ export default function SportsbookScreen() {
     const a = memberAvgs[playerId2]?.avg
     return a == null ? null : a * comboNGames
   }
+  // The book's projection for a member, scaled the same way.
+  const scopedProj = (playerId2: string): number | null => {
+    const p = memberProjs[playerId2]
+    return p == null ? null : p * comboNGames
+  }
   // The picked group's combined scope-scaled average — what the chosen line is
   // really being measured against. Mirrors the seed math's treatment of a
   // no-data member (contributes 0).
   const comboGroupAvg =
     comboMemberIds.length > 0 && Object.keys(memberAvgs).length > 0
       ? comboMemberIds.reduce((sum, id) => sum + (scopedAvg(id) ?? 0), 0)
+      : null
+  // The group's combined book projection — what the engine actually expects
+  // the member set to produce (the number the quoted odds center on). Engine
+  // on → every member has a projection (the prior covers cold starts), so a
+  // null here means the engine is off and the display omits it.
+  const comboGroupProj =
+    comboMemberIds.length > 0 &&
+    Object.keys(memberProjs).length > 0 &&
+    comboMemberIds.every(id => scopedProj(id) != null)
+      ? comboMemberIds.reduce((sum, id) => sum + scopedProj(id)!, 0)
       : null
   const comboOdds =
     comboQuote != null && shownComboValue != null && comboQuote.line === shownComboValue
@@ -708,9 +740,19 @@ export default function SportsbookScreen() {
                       l => l.subjectPlayerId === m.playerId && comboStatOf(l) === combo.stat
                     )
                     // The player's scope-scaled average — the number their
-                    // share of a combo line is really priced against.
+                    // share of a combo line is really priced against — and the
+                    // book's projection beside it: a member the book rates
+                    // above their average (▲) makes the combo line richer than
+                    // the averages suggest; below (▼), softer.
                     const avgEntry = memberAvgs[m.playerId]
                     const avgShown = scopedAvg(m.playerId)
+                    const projShown = scopedProj(m.playerId)
+                    const projDelta =
+                      projShown != null && avgShown != null ? projShown - avgShown : null
+                    const projDir =
+                      projDelta == null || Math.abs(projDelta) < 0.05
+                        ? null
+                        : projDelta > 0 ? 'up' : 'down'
                     return (
                       <View key={m.playerId} style={styles.memberRow}>
                         <View style={styles.memberInfo}>
@@ -726,6 +768,23 @@ export default function SportsbookScreen() {
                                   : avgEntry.source === 'lifetime'
                                     ? `LIFETIME AVG ${avgShown.toFixed(1)}`
                                     : `LEAGUE AVG ${avgShown.toFixed(1)}`}
+                              {projShown != null && (
+                                <>
+                                  {'  ·  '}
+                                  <Text style={styles.memberProj}>BOOK {projShown.toFixed(1)}</Text>
+                                  {projDir != null && (
+                                    <Text
+                                      style={
+                                        projDir === 'up'
+                                          ? styles.memberProjUp
+                                          : styles.memberProjDown
+                                      }
+                                    >
+                                      {projDir === 'up' ? ' ▲' : ' ▼'}
+                                    </Text>
+                                  )}
+                                </>
+                              )}
                             </Text>
                           )}
                           {solo?.line != null && <Text style={styles.memberSoloLabel}>SOLO LINE</Text>}
@@ -843,6 +902,7 @@ export default function SportsbookScreen() {
           scopeLabel={scope === 'weekly' ? 'NIGHT' : `GAME ${comboScopeGame}`}
           value={comboLineValue}
           groupAvg={comboGroupAvg}
+          groupProj={comboGroupProj}
           onEditValue={() => setValueSheet({ kind: 'combo' })}
           quote={comboQuote}
           quoteLoading={comboQuoteLoading}
@@ -879,7 +939,9 @@ export default function SportsbookScreen() {
           scopeLabel={scope === 'weekly' ? 'NIGHT' : `GAME ${comboScopeGame}`}
           contextNote={
             comboGroupAvg != null
-              ? `Group average: ${comboGroupAvg.toFixed(1)} — lines above it pay longer odds`
+              ? comboGroupProj != null
+                ? `Group avg ${comboGroupAvg.toFixed(1)} · book expects ${comboGroupProj.toFixed(1)} — lines above the book pay longer odds`
+                : `Group average: ${comboGroupAvg.toFixed(1)} — lines above it pay longer odds`
               : undefined
           }
           source={comboSource}
@@ -1004,6 +1066,11 @@ const styles = StyleSheet.create({
     color: colors.muted,
     marginTop: 1,
   },
+  // The book's projection segment of the average line (nested Texts) — the
+  // ▲/▼ colors by direction vs the average.
+  memberProj: { color: colors.text },
+  memberProjUp: { color: colors.success, fontSize: 9 },
+  memberProjDown: { color: colors.danger, fontSize: 9 },
   memberSoloLabel: {
     fontFamily: fonts.barlowCondensed,
     fontSize: 10,

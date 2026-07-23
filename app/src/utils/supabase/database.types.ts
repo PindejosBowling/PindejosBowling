@@ -3565,6 +3565,13 @@ export type Database = {
         Args: { p_market_id: string }
         Returns: Record<string, unknown>
       }
+      odds_engine_member_projections: {
+        Args: { p_player_ids: string[]; p_season_id: string; p_stat: string }
+        Returns: {
+          player_id: string
+          projected: number
+        }[]
+      }
       odds_engine_mint_ladder: {
         Args: {
           p_market_id: string

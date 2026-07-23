@@ -5576,6 +5576,28 @@ END;
 $function$
 ;
 
+CREATE OR REPLACE FUNCTION public.odds_engine_member_projections(p_player_ids uuid[], p_stat text, p_season_id uuid)
+ RETURNS TABLE(player_id uuid, projected numeric)
+ LANGUAGE plpgsql
+ STABLE SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+DECLARE
+  v_enabled boolean;
+  v_stat    text := CASE WHEN p_stat = 'total_pins' THEN 'score' ELSE p_stat END;
+BEGIN
+  SELECT c.is_enabled INTO v_enabled
+  FROM public.odds_engine_get_config(p_season_id) c;
+
+  RETURN QUERY
+  SELECT mem.pid,
+         CASE WHEN v_enabled THEN round(ps.mean, 1) END
+  FROM (SELECT DISTINCT m AS pid FROM unnest(p_player_ids) m) mem
+  CROSS JOIN LATERAL public.odds_engine_player_stat(mem.pid, p_season_id, v_stat) ps;
+END;
+$function$
+;
+
 CREATE OR REPLACE FUNCTION public.odds_engine_mint_ladder(p_market_id uuid, p_seed_line numeric, p_mean numeric, p_variance numeric, p_n_games integer, p_spacing numeric, p_range_lo numeric, p_range_hi numeric, p_season_id uuid)
  RETURNS void
  LANGUAGE plpgsql

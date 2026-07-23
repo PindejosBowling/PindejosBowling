@@ -315,6 +315,15 @@ export const betMarkets = {
     supabase.rpc('odds_engine_player_projection', {
       p_player_id: playerId, p_season_id: seasonId,
     }),
+  // Batched book projections for one COMBO stat ('total_pins' maps to the
+  // engine's 'score') — the combine-mode member list shows these beside the
+  // averages so a bettor can pick members the book rates above/below their
+  // average. PER-GAME values, `projected` NULL when the engine is disabled.
+  // Display-only; the compose/pricing path reads its own model.
+  memberProjections: (playerIds: string[], stat: string, seasonId: string) =>
+    supabase.rpc('odds_engine_member_projections', {
+      p_player_ids: playerIds, p_stat: stat, p_season_id: seasonId,
+    }),
   // Value-first pricing: quote ANY half-point line on one market (STABLE,
   // read-only). NULL line → the seed rung (the pill's anchor). Posted rungs
   // echo their posted odds verbatim; unposted lines price fresh inside the

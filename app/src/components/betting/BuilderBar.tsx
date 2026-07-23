@@ -17,6 +17,10 @@ interface BuilderBarProps {
   // so the bettor sees where their line sits relative to expected production
   // (lines below it are likely and pay short; above it pay longer).
   groupAvg?: number | null
+  // The group's combined book projection (the engine's expectation the quoted
+  // odds center on) — shown beside the average so the bettor sees both
+  // yardsticks. Null when the engine is off (segment omitted).
+  groupProj?: number | null
   // Tapping the value opens the LineEntrySheet for this combo.
   onEditValue: () => void
   // The live quote for `value` (combo_price_line) — odds, band, seed anchor.
@@ -46,6 +50,7 @@ export default function BuilderBar({
   scopeLabel,
   value,
   groupAvg,
+  groupProj,
   onEditValue,
   quote,
   quoteLoading,
@@ -92,10 +97,16 @@ export default function BuilderBar({
             <Text style={styles.odds}>
               {quoteLoading ? '…' : odds != null ? fmtOdds(odds) : '—'}
             </Text>
-            {/* The group's combined average — the yardstick the line is
-                priced against (below it = likely = short odds). */}
+            {/* The two yardsticks: the group's combined average (what they
+                actually produce) and the book's combined projection (what the
+                quoted odds center on — lines above it pay longer). */}
             {groupAvg != null && (
-              <Text style={styles.groupAvg}>GROUP AVG {groupAvg.toFixed(1)}</Text>
+              <Text style={styles.groupAvg} numberOfLines={1}>
+                AVG {groupAvg.toFixed(1)}
+                {groupProj != null && (
+                  <Text style={styles.groupProj}> · BOOK {groupProj.toFixed(1)}</Text>
+                )}
+              </Text>
             )}
           </View>
         )}
@@ -170,7 +181,9 @@ const styles = StyleSheet.create({
     fontSize: 11,
     letterSpacing: 0.5,
     color: colors.muted,
+    flexShrink: 1,
   },
+  groupProj: { color: colors.text },
   cancel: { paddingHorizontal: 8, paddingVertical: 8 },
   add: { paddingHorizontal: 16, paddingVertical: 10 },
 })
