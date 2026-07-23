@@ -72,10 +72,8 @@ export default function BookProjectionCard({ rows, nGames }: BookProjectionCardP
         ))}
       </View>
 
-      {/* AVERAGE — a left label line (accent, matching the values) over the
-          season averages, which now span the full width. */}
-      <Text style={[styles.rowLabel, styles.rowLabelAvg]}>AVERAGE</Text>
-      <View style={styles.valuesRow}>
+      {/* Season averages (accent) across the full width. */}
+      <View style={[styles.valuesRow, styles.valueRowGap]}>
         {cells.map(c => (
           <View key={c.stat} style={styles.cell}>
             <View style={styles.avgRow}>
@@ -92,10 +90,8 @@ export default function BookProjectionCard({ rows, nGames }: BookProjectionCardP
         ))}
       </View>
 
-      {/* FORECAST — a left label line (grey, matching the values) over the
-          book's projections. */}
-      <Text style={[styles.rowLabel, styles.rowLabelForecast]}>FORECAST</Text>
-      <View style={styles.valuesRow}>
+      {/* The book's projections (grey), sized to match the averages above. */}
+      <View style={[styles.valuesRow, styles.valueRowGap]}>
         {cells.map(c => (
           <View key={c.stat} style={styles.cell}>
             <Text style={styles.book}>{c.projected.toFixed(1)}</Text>
@@ -120,22 +116,13 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surfaceTint,
     marginBottom: spacing.sm,
   },
-  // Width of the left label column; the empty header corner + both row labels
-  // share it so the value columns line up beneath the stat headers.
   // A full-width row of equal columns — no left gutter, so the values (and
   // headers) use the whole card width. gap opens space between columns.
   valuesRow: { flexDirection: 'row', gap: 14 },
-  // The AVERAGE / FORECAST labels now ride their OWN left-aligned line above
-  // each value row (color-coded to the values) — no width reserved sideways.
-  rowLabel: {
-    fontFamily: fonts.barlowCondensed,
-    fontSize: 11,
-    letterSpacing: 1,
-    marginTop: 10,
-    marginBottom: 2,
-  },
-  rowLabelAvg: { color: colors.accent },
-  rowLabelForecast: { color: colors.muted },
+  // Vertical breathing room between the header and the two value rows (the
+  // AVERAGE/FORECAST labels that used to provide it are gone; colour alone
+  // distinguishes the accent averages from the grey projections).
+  valueRowGap: { marginTop: 8 },
   cell: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   statLabel: {
     flex: 1,
@@ -156,11 +143,13 @@ const styles = StyleSheet.create({
   avgNone: { color: colors.muted2 },
   // Value + inline ▲, centered as a group within the cell.
   avgRow: { flexDirection: 'row', alignItems: 'center', gap: 3 },
+  // The projection reads at the SAME size as the average — grey vs the accent
+  // average is the only distinction now that the row labels are gone.
   book: {
-    fontFamily: fonts.barlowCondensed,
-    fontSize: 11,
+    ...type.value,
     letterSpacing: 0.5,
     color: colors.muted,
+    textAlign: 'center',
   },
   delta: { fontFamily: fonts.barlowCondensed, fontSize: 10 },
   deltaUp: { color: colors.success },
