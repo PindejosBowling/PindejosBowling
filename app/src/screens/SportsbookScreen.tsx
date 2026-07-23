@@ -776,19 +776,34 @@ export default function SportsbookScreen() {
 
         {/* ── Place Bets ──────────────────────────────────────── */}
         {effectiveView === 'place' && <>
-        {/* The flat board: the subject heading leads, then the scope dropdown,
-            then the subject's available lines for that scope. The filters ARE
-            the navigation — no collapsible sections. Staged picks live in the
-            global slip bar, so building a parlay across players/scopes is
-            just switching the filters. */}
+        {/* The flat board: the stats-strip header leads (with the scope
+            picker inline), then the subject selector, then the subject's
+            available lines for that scope. The filters ARE the navigation —
+            no collapsible sections. Staged picks live in the global slip
+            bar, so building a parlay across players/scopes is just
+            switching the filters. */}
         {visibleLines.length > 0 || customLines.length > 0 ? (
           <View style={styles.board}>
-            {/* The subject heading — the board's MAIN HEADING, directly under
-                the Place/Active/Settled switcher. Solo: the anchored
-                player-name selector (the ONE name on the board) with a ＋ chip
-                that opens the Add Players sheet — adding a second player turns
-                the subject into a group in place (⚰️ the COMBO mode chip).
-                Group: one removable chip per member (✕) plus the same ＋. */}
+            {/* The board header — the projection strip's title promoted to
+                the board's MAIN HEADING, with the scope Dropdown sitting
+                where the "· WEEKLY" text qualifier used to be (⚰️ the
+                standalone filter row beneath the subject heading). */}
+            <View style={styles.boardHeaderRow}>
+              <Text style={styles.boardHeaderText}>SEASON AVG vs FORECAST ·</Text>
+              <Dropdown
+                options={scopeOptions}
+                value={scope}
+                onChange={setScope}
+                style={styles.scopeSelect}
+                triggerTextStyle={styles.scopeSelectText}
+              />
+            </View>
+            {/* The subject selection, demoted to a sub-row beneath the
+                header. Solo: the anchored player-name selector (the ONE name
+                on the board) with a ＋ chip that opens the Add Players sheet
+                — adding a second player turns the subject into a group in
+                place (⚰️ the COMBO mode chip). Group: one removable chip per
+                member (✕) plus the same ＋. */}
             {groupMode ? (
               <View style={styles.headingRow}>
                 {comboMemberIds.map((id, i) => (
@@ -819,15 +834,6 @@ export default function SportsbookScreen() {
                 {renderAddChip()}
               </View>
             ) : null}
-            <View style={styles.filterRow}>
-              {/* Scope select — Weekly + the night's games collapsed into one
-                  anchored dropdown (⚰️ the Weekly/Game 1/Game 2 pill row). */}
-              <Dropdown
-                options={scopeOptions}
-                value={scope}
-                onChange={setScope}
-              />
-            </View>
             {/* ── One board, one component tree, one subject of 1..N ──────
                 The projection card and the main line card render ONCE at
                 stable positions (never inside a subject-count ternary), so
@@ -837,13 +843,13 @@ export default function SportsbookScreen() {
                 group), and whether the heading is the selector or chips. */}
             {/* What the book expects from the subject this week against what
                 it actually averages — scope-scaled like the lines beneath it
-                (Weekly = × the night's games). Self-hides when the engine has
-                no opinion. */}
+                (Weekly = × the night's games). Headerless — the board header
+                above is its title. Self-hides when the engine has no
+                opinion. */}
             {(groupMode || (board.selectedPlayerId != null && projCache[board.selectedPlayerId] != null)) && (
               <BookProjectionCard
                 rows={groupMode ? groupRows : projCache[board.selectedPlayerId!]}
                 nGames={comboNGames}
-                scopeLabel={scope === 'weekly' ? 'WEEKLY' : `GAME ${comboScopeGame}`}
               />
             )}
             {board.scopeInProgress && board.firstInProgress && (
@@ -1052,26 +1058,49 @@ const styles = StyleSheet.create({
 
   viewToggle: { marginBottom: 20 },
 
-  // Separates the board from the mode toggle above it — the filters lead
-  // directly (no section header of its own).
+  // Separates the board from the mode toggle above it.
   board: { marginTop: 16 },
-  // The board filter: the scope dropdown, beneath the subject heading.
-  filterRow: {
+  // The board header — the projection strip's title as the board's main
+  // heading, with the scope Dropdown inline as the qualifier (one row doing
+  // the work of the old card title + filter row).
+  boardHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 8,
-    marginBottom: 10,
+    justifyContent: 'center',
+    marginBottom: 2,
   },
-  // The subject heading row — the selector (or member chips) + the ＋ chip,
-  // centered; wraps when a big group outgrows the line.
+  boardHeaderText: {
+    fontFamily: fonts.barlowCondensedHeavy,
+    fontSize: 15,
+    letterSpacing: 1,
+    color: colors.text,
+  },
+  // The scope picker undressed to read as the header's tail — same type as
+  // the header text, accent so the one live word in the title is findable.
+  scopeSelect: {
+    backgroundColor: 'transparent',
+    borderWidth: 0,
+    paddingHorizontal: 5,
+    paddingVertical: 4,
+    gap: 3,
+  },
+  scopeSelectText: {
+    fontFamily: fonts.barlowCondensedHeavy,
+    fontSize: 15,
+    letterSpacing: 1,
+    color: colors.accent,
+    textTransform: 'uppercase',
+  },
+  // The subject sub-row — the selector (or member chips) + the ＋ chip,
+  // centered beneath the board header; wraps when a big group outgrows the
+  // line.
   headingRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    marginBottom: 4,
+    marginBottom: 6,
   },
   // The player-name selector — the Dropdown trigger undressed to read as the
   // board's main heading (centered name + ▾, no box), so the name atop the

@@ -15,7 +15,6 @@ interface BookProjectionCardProps {
   // Scope scaling: the RPC returns PER-GAME values; Weekly scope shows the
   // night expectation (× the scheduled game count), Game N shows per game.
   nGames: number
-  scopeLabel: string
 }
 
 // Column heads — compressed forms of the shared STAT_LABELS (four columns
@@ -37,7 +36,9 @@ const COLUMN_LABELS: Record<string, string> = {
 // engine's variance/quote band stays server-side, and no staging/pricing
 // flows through here. One presentation for both board modes — combo mode
 // feeds the group's summed rows through the same card, no framing overrides.
-export default function BookProjectionCard({ rows, nGames, scopeLabel }: BookProjectionCardProps) {
+// Headerless: the card's title lives in the board header above it (which
+// also hosts the scope picker), so the card is just the stats table.
+export default function BookProjectionCard({ rows, nGames }: BookProjectionCardProps) {
   const shown = rows.filter(r => r.projected != null)
   // Engine off (or no rows yet): no book side to compare against.
   if (shown.length === 0) return null
@@ -46,7 +47,6 @@ export default function BookProjectionCard({ rows, nGames, scopeLabel }: BookPro
 
   return (
     <View style={styles.card}>
-      <Text style={styles.header}>SEASON AVG vs FORECAST · {scopeLabel}</Text>
       <View style={styles.columns}>
         {shown.map(r => {
           const projected = r.projected! * nGames
@@ -88,14 +88,8 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surfaceTint,
     marginBottom: spacing.sm,
   },
-  header: {
-    ...type.label,
-    color: colors.muted,
-    textAlign: 'center',
-  },
   columns: {
     flexDirection: 'row',
-    marginTop: 8,
   },
   column: { flex: 1, alignItems: 'center' },
   statLabel: {
