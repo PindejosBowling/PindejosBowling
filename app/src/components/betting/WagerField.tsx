@@ -15,23 +15,26 @@ interface WagerFieldProps {
   // total payout (floor(payout × boostPct), paid on top). Undefined = no boost.
   // Drives a highlighted, boosted "To win" preview mirroring the server's settlement.
   boostPct?: number
-  // Optional label override (defaults to "WAGER (pins)"). Compact hides the
-  // balance/min hint (used in dense per-pick rows).
-  label?: string
-  compact?: boolean
 }
 
-// The shared wager input + live to-win preview. Extracted from WagerSheet so the
-// single/parlay/special take sheets AND the unified BetSlip share one money-math
-// surface (floor(wager × odds), plus the Energy Drink profit boost).
+// The slip-level "Balance · Min" line — rendered ONCE per sheet by the caller
+// (it's information about the bettor, not any one ticket), so every
+// WagerField can carry the same single presentation.
+export function WagerHint({ balance }: { balance: number }) {
+  return <Text style={styles.wagerHint}>Balance: {balance} pins  ·  Min: 10</Text>
+}
+
+// The shared wager input + live to-win preview — ONE presentation everywhere
+// (⚰️ the `compact`/`label` variants, 2026-07-23: the slip reads as a single
+// unified interface). Extracted from WagerSheet so the single/parlay/special
+// take sheets AND the unified BetSlip share one money-math surface
+// (floor(wager × odds), plus the Energy Drink profit boost).
 export default function WagerField({
   wager,
   onChangeWager,
   balance,
   odds,
   boostPct,
-  label = 'WAGER (pins)',
-  compact,
 }: WagerFieldProps) {
   const wagerNum = parseInt(wager, 10)
   const payout = !isNaN(wagerNum) ? Math.floor(wagerNum * odds) : 0
@@ -41,25 +44,23 @@ export default function WagerField({
 
   return (
     <>
-      <Text style={styles.wagerLabel}>{label}</Text>
+      <Text style={styles.wagerLabel}>WAGER (pins)</Text>
       <PinAmountInput
-        style={compact && styles.wagerInputCompact}
         variant="wager"
         value={wager}
         onChangeText={onChangeWager}
         placeholder={`10 – ${balance}`}
         maxLength={6}
       />
-      <Text style={styles.wagerHint}>
-        {!compact && `Balance: ${balance} pins  ·  Min: 10`}
-        {!isNaN(wagerNum) ? `${compact ? '' : '  ·  '}To win: ` : ''}
-        {!isNaN(wagerNum) && (
+      {!isNaN(wagerNum) && (
+        <Text style={styles.wagerHint}>
+          To win:{' '}
           <Text style={boosted ? styles.toWinBoosted : styles.toWin}>
             {formatPins(toWin)}{boosted ? ' ⚡️' : ''}
           </Text>
-        )}
-      </Text>
-      {boosted && !compact && (
+        </Text>
+      )}
+      {boosted && (
         <Text style={styles.boostNote}>
           Energy Drink ⚡️ doubles your total payout — {formatPins(payout)} payout + {formatPins(boostBonus)} bonus.
         </Text>
@@ -75,7 +76,6 @@ const styles = StyleSheet.create({
     marginTop: 6,
     marginBottom: 6,
   },
-  wagerInputCompact: { paddingVertical: 8, fontSize: 16 },
   wagerHint: {
     fontFamily: fonts.barlow,
     fontSize: 12,

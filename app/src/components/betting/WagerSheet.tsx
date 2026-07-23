@@ -3,7 +3,7 @@ import { Text, StyleSheet } from 'react-native'
 import { colors, fonts } from '../../theme'
 import BottomSheet from '../ui/BottomSheet'
 import Button from '../ui/Button'
-import WagerField from './WagerField'
+import WagerField, { WagerHint } from './WagerField'
 
 interface WagerSheetProps {
   title: string
@@ -79,6 +79,7 @@ export default function WagerSheet({
         odds={odds}
         boostPct={boostPct}
       />
+      <WagerHint balance={balance} />
       <Text style={styles.warning}>⚠ Bets can't be canceled once placed.</Text>
     </BottomSheet>
   )

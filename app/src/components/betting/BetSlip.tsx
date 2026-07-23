@@ -5,7 +5,7 @@ import BottomSheet from '../ui/BottomSheet'
 import Button from '../ui/Button'
 import ToggleGroup from '../ui/ToggleGroup'
 import TicketCard from './TicketCard'
-import WagerField from './WagerField'
+import WagerField, { WagerHint } from './WagerField'
 import TermsBlock from '../ui/TermsBlock'
 import { TERMS } from '../../data/pinsinoExplainers'
 import GoldenTicketToggle from '../auction/GoldenTicketToggle'
@@ -494,6 +494,9 @@ export default function BetSlip({
             </View>
           )}
 
+          {/* Slip-level bettor info, once — not repeated per ticket. */}
+          <WagerHint balance={balance} />
+
           {/* ── One ticket card per resulting bet — ONE render path; the
               parlay is just the ticket with more legs. ── */}
           {tickets.map(t => {
@@ -515,8 +518,6 @@ export default function BetSlip({
                       balance={balance}
                       odds={t.odds}
                       boostPct={effectiveBoostPct}
-                      label={parlay ? undefined : 'STAKE (pins)'}
-                      compact={!parlay}
                     />
                     {itemToggles}
                   </>
