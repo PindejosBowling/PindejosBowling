@@ -796,7 +796,7 @@ export default function SportsbookScreen() {
                 onChange={setScope}
                 style={styles.scopeSelect}
                 triggerTextStyle={styles.scopeSelectText}
-                caretStyle={styles.scopeCaret}
+                caretStyle={styles.selectCaret}
               />
             </View>
             {/* What the stats strip beneath actually shows, in one breath —
@@ -840,6 +840,7 @@ export default function SportsbookScreen() {
                   onChange={setPickedPlayerId}
                   style={styles.playerNameSelect}
                   triggerTextStyle={styles.playerNameSelectText}
+                  caretStyle={styles.selectCaret}
                 />
                 {renderAddChip()}
               </View>
@@ -1075,12 +1076,14 @@ const styles = StyleSheet.create({
   artHidden: { opacity: 0 },
   // flexGrow keeps the scroll content (and the poker-table border measured
   // from it) at least viewport-height when every group is collapsed.
-  content: { paddingHorizontal: 16, paddingBottom: 40, flexGrow: 1 },
+  content: { paddingHorizontal: 16, paddingBottom: 24, flexGrow: 1 },
 
-  viewToggle: { marginBottom: 20 },
+  viewToggle: { marginBottom: 12 },
 
-  // Separates the board from the mode toggle above it.
-  board: { marginTop: 16 },
+  // The toggle's own bottom margin is the whole separation — the board adds
+  // none of its own (the two used to stack into ~36px of dead space above the
+  // "TONIGHT'S LINES" header).
+  board: { marginTop: 0 },
   // The board header — the projection strip's title as the board's main
   // heading, with the scope Dropdown inline as the qualifier (one row doing
   // the work of the old card title + filter row).
@@ -1113,8 +1116,9 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
   },
   // The tappable caret — accent + larger than the default so the affordance
-  // pops next to the white label.
-  scopeCaret: {
+  // pops next to the white label. Shared by BOTH header selectors (scope and
+  // player) so the one yellow ▾ reads as "this word is pickable".
+  selectCaret: {
     fontSize: 16,
     color: colors.accent,
     marginTop: 2,
