@@ -26,6 +26,7 @@ import LineEntrySheet from '../components/betting/LineEntrySheet'
 import CustomLineRow from '../components/betting/CustomLineRow'
 import PickChip from '../components/betting/PickChip'
 import BuilderBar from '../components/betting/BuilderBar'
+import BookProjectionCard, { type ProjectionRow } from '../components/betting/BookProjectionCard'
 import ReadOnlySeasonBanner from '../components/betting/ReadOnlySeasonBanner'
 import ConfirmActionSheet from '../components/ui/ConfirmActionSheet'
 import Dropdown from '../components/ui/Dropdown'
@@ -395,6 +396,28 @@ export default function SportsbookScreen() {
     return rows
   }, [rsvpInPlayers, playerId])
 
+  // ── Book projection vs season average ─────────────────────────────────
+  // The selected player's per-game engine projection (rounded mean) beside
+  // their season average, cached per player. Display-only context — the
+  // strip never stages or prices anything. Cache resets with the board
+  // reload effect below so new history re-projects.
+  const [projCache, setProjCache] = useState<Record<string, ProjectionRow[]>>({})
+  const projPlayerId = effectiveView === 'place' && !readOnly ? board.selectedPlayerId : null
+  useEffect(() => {
+    if (projPlayerId == null || currentSeasonId == null || projCache[projPlayerId] != null) return
+    let cancelled = false
+    betMarkets.playerProjection(projPlayerId, currentSeasonId).then(({ data }) => {
+      if (cancelled || !data) return
+      const rows = (data as {
+        stat: string; projected: number | null; season_avg: number | null; avg_source: string | null
+      }[]).map(r => ({
+        stat: r.stat, projected: r.projected, seasonAvg: r.season_avg, avgSource: r.avg_source,
+      }))
+      setProjCache(prev => ({ ...prev, [projPlayerId]: rows }))
+    })
+    return () => { cancelled = true }
+  }, [projPlayerId, currentSeasonId, projCache])
+
   // ── Value-first editing (via the LineEntrySheet) ──────────────────────
   // Per-market value overrides (the number the bettor accepted in the sheet)
   // + the accepted quote per market so custom (non-posted) values keep their
@@ -411,6 +434,7 @@ export default function SportsbookScreen() {
     setLineValues({})
     setQuoteCache({})
     setValueSheet(null)
+    setProjCache({})
   }, [openLines])
 
   // The pill's anchor: the market's posted seed rung (canonical 'over' key).
@@ -735,6 +759,18 @@ export default function SportsbookScreen() {
                     value={board.selectedPlayerId}
                     onChange={setPickedPlayerId}
                     style={styles.playerSelect}
+                  />
+                )}
+                {/* What the book expects from the selected player this week
+                    against what they actually average — scope-scaled like the
+                    lines beneath it (Weekly = × the night's games). Hidden
+                    while a combo is armed (the board pivots to combo seeding)
+                    and self-hides when the engine has no opinion. */}
+                {!comboArmed && board.selectedPlayerId != null && projCache[board.selectedPlayerId] != null && (
+                  <BookProjectionCard
+                    rows={projCache[board.selectedPlayerId]}
+                    nGames={scope === 'weekly' ? Math.max(weekGameNumbers.length, 1) : 1}
+                    scopeLabel={scope === 'weekly' ? 'WEEKLY' : `GAME ${scope.slice('game-'.length)}`}
                   />
                 )}
                 {comboArmed && (

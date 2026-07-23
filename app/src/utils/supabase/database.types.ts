@@ -12,6 +12,31 @@ export type Database = {
   __InternalSupabase: {
     PostgrestVersion: "14.5"
   }
+  graphql_public: {
+    Tables: {
+      [_ in never]: never
+    }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      graphql: {
+        Args: {
+          extensions?: Json
+          operationName?: string
+          query?: string
+          variables?: Json
+        }
+        Returns: Json
+      }
+    }
+    Enums: {
+      [_ in never]: never
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
+  }
   public: {
     Tables: {
       activity_event_catalog: {
@@ -3569,6 +3594,16 @@ export type Database = {
         }
         Returns: number[]
       }
+      odds_engine_player_projection: {
+        Args: { p_player_id: string; p_season_id: string }
+        Returns: {
+          avg_games: number
+          avg_source: string
+          projected: number
+          season_avg: number
+          stat: string
+        }[]
+      }
       odds_engine_player_stat: {
         Args: { p_player_id: string; p_season_id: string; p_stat: string }
         Returns: Record<string, unknown>
@@ -4022,6 +4057,9 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
+  graphql_public: {
+    Enums: {},
+  },
   public: {
     Enums: {},
   },

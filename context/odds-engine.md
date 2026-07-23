@@ -150,6 +150,21 @@ book's standing offers).
   the CURRENT model while its posted neighbors keep frozen odds — the book
   is honest; the band still bounds it.
 
+## Player projection display (2026-07-23, `…150000_odds_engine_player_projection`)
+
+`odds_engine_player_projection(p_player_id, p_season_id)` (STABLE,
+authenticated) returns one row per stat (`score`, `clean_frames`, `strikes`,
+`spares`): `projected` = the engine's PER-GAME mean **rounded to 0.1**
+(deliberate owner decision to surface the mean — the posted seed lines already
+telegraph the center; VARIANCE and the quote band stay server-side, the
+never-expose posture otherwise unchanged), plus `season_avg`/`avg_source`/
+`avg_games` via `combo_member_averages`' fallback chain (`score` maps to its
+`total_pins` branch). Engine disabled → `projected` NULL on every row
+(averages still return). Display-only — no pricing path reads it. App:
+`betMarkets.playerProjection` → the board's `BookProjectionCard` strip
+(under the player select, per-player cached, scope-scaled × games for
+Weekly) showing "book projection vs season avg" with a ▲/▼ delta.
+
 ## Correlated parlays — joint pricing (2026-07-23, `…014500_correlated_parlay_pricing` + `…040000_parlay_quote_implied_joint`)
 
 Parlays paid `Π(leg odds)` even for same-player legs ("over 219.5 pins G1" ×

@@ -304,6 +304,17 @@ export const betMarkets = {
     supabase.rpc('combo_member_averages', {
       p_player_ids: playerIds, p_stat: stat, p_season_id: seasonId,
     }),
+  // The book's per-stat projection for one player next to their current-season
+  // average (STABLE, read-only) — one row per stat ('score' / 'clean_frames' /
+  // 'strikes' / 'spares'), all values PER GAME (the client scales night scope
+  // × games). `projected` is the engine's rounded mean — NULL when the engine
+  // is disabled; `season_avg` resolves through combo_member_averages' fallback
+  // chain with `avg_source` ('season'/'lifetime'/'league') + `avg_games` so
+  // the display can label honestly. Display-only; no pricing path reads it.
+  playerProjection: (playerId: string, seasonId: string) =>
+    supabase.rpc('odds_engine_player_projection', {
+      p_player_id: playerId, p_season_id: seasonId,
+    }),
   // Value-first pricing: quote ANY half-point line on one market (STABLE,
   // read-only). NULL line → the seed rung (the pill's anchor). Posted rungs
   // echo their posted odds verbatim; unposted lines price fresh inside the

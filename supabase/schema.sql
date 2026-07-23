@@ -5838,6 +5838,37 @@ END;
 $function$
 ;
 
+CREATE OR REPLACE FUNCTION public.odds_engine_player_projection(p_player_id uuid, p_season_id uuid)
+ RETURNS TABLE(stat text, projected numeric, season_avg numeric, avg_source text, avg_games integer)
+ LANGUAGE plpgsql
+ STABLE SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+DECLARE
+  v_enabled boolean;
+BEGIN
+  SELECT c.is_enabled INTO v_enabled
+  FROM public.odds_engine_get_config(p_season_id) c;
+
+  RETURN QUERY
+  SELECT s.stat_key,
+         CASE WHEN v_enabled THEN round(ps.mean, 1) END,
+         round(a.avg_per_game, 1),
+         a.source,
+         COALESCE(a.games, 0)
+  FROM (VALUES
+          ('score',        'total_pins',   1),
+          ('clean_frames', 'clean_frames', 2),
+          ('strikes',      'strikes',      3),
+          ('spares',       'spares',       4)
+       ) AS s(stat_key, avg_stat, ord)
+  CROSS JOIN LATERAL public.odds_engine_player_stat(p_player_id, p_season_id, s.stat_key) ps
+  LEFT JOIN LATERAL public.combo_member_averages(ARRAY[p_player_id], s.avg_stat, p_season_id) a ON true
+  ORDER BY s.ord;
+END;
+$function$
+;
+
 CREATE OR REPLACE FUNCTION public.odds_engine_player_stat(p_player_id uuid, p_season_id uuid, p_stat text, OUT mean numeric, OUT variance numeric, OUT w_total numeric)
  RETURNS record
  LANGUAGE plpgsql
