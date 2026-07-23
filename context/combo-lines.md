@@ -219,11 +219,15 @@ params->>clock.eq.lanetalk)` alongside props and legacy team props.
   exact shape — the ONLY addition is the **player-picker rows at the bottom**
   (per-member avg/forecast context + `+`/`✓` chips); the SAME
   `BookProjectionCard` shows the group's summed
-  `GROUP AVG vs FORECAST` rows for all four stats; and `ComboLineRow` renders
-  one value-first pill per combinable stat (the group name as its header —
-  the counterpart of the player-name selector), each pill owning its own
-  `useLinePreview({kind:'combo'})` → `betMarkets.priceComboLine` quote
-  (seed-anchored; per-stat `comboValues` reset on combo-identity change).
+  `GROUP AVG vs FORECAST` rows for all four stats; and the SAME mounted
+  `SubjectLinesCard` (⚰️ `ComboLineRow` folded into it — a mode toggle is a
+  props update, no remount/flash) renders one value-first pill per combinable
+  stat (the group's names filling the subject-name slot), the screen owning
+  four static `useLinePreview({kind:'combo'})` → `betMarkets.priceComboLine`
+  quotes; values anchor instantly on the client-computed seed (`clientSeedFor`,
+  the server's own Σ floor(proj × games) + 0.5 formula over the prefetched
+  `poolStats`) until the quote lands (per-stat `comboValues` reset on
+  combo-identity change).
   Pill-body tap stages/unstages straight into the ordinary slip bar (staged
   fill, `stageCombo` key toggle — no BuilderBar, no mode exit); the value tap
   opens the shared `LineEntrySheet`, and an accepted edit re-stages a staged
@@ -231,9 +235,10 @@ params->>clock.eq.lanetalk)` alongside props and legacy team props.
   Game N → that game; mid-build switches re-anchor + re-quote); an
   in-progress scope makes the card inert.
   **Average context (2026-07-23, reworked with the inline toggle)**: `poolStats`
-  fetches `combo_member_averages` + `odds_engine_member_projections` for all
-  four stats × the whole RSVP pool once per combo session (member toggles are
-  client-side re-sums) — **season-scoped with an explicit fallback chain** the
+  prefetches `combo_member_averages` + `odds_engine_member_projections` for all
+  four stats × the whole RSVP pool **with the live board** (not on the toggle —
+  entering combo mode renders synchronously; member toggles are client-side
+  re-sums) — **season-scoped with an explicit fallback chain** the
   RPC reports in its `source` column and the UI labels honestly: `SEASON AVG`
   → `LIFETIME AVG` (→ `LEAGUE AVG`, total_pins only; no frame-stat data at all
   → `NO STAT HISTORY`), shown per member (Total Pins, `· FORECAST` ▲/▼) on the
@@ -245,9 +250,9 @@ params->>clock.eq.lanetalk)` alongside props and legacy team props.
   visible WHY adding members compresses the fair odds (the seed =
   Σ floor(projected mean×games) + 0.5 sits at the summed mean while spread
   grows only √N).
-  Placed combos still flow through the `LineView → LineRow` seam with zero
-  row-component changes; BetDetail copy-bet works unchanged (`getByIds` is
-  market-type-agnostic).
+  Placed combos still flow through the `LineView → SubjectLinesCard` seam
+  with zero row-component changes; BetDetail copy-bet works unchanged
+  (`getByIds` is market-type-agnostic).
 - Feed renderer `sportsbook.combo_composed` in `activityFeedTemplates.ts`;
   explainer bullet + `TERMS.combo` in `data/pinsinoExplainers.ts`.
 
