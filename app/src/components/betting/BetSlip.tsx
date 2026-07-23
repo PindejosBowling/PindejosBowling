@@ -105,11 +105,18 @@ interface BetSlipProps {
   onPlace: (submit: SlipSubmit) => void
 }
 
+// Scope tag mirrors betLegSummary's convention (placed-bet rows): G<n> for a
+// game leg, NIGHT for a whole-week leg (moneylines are game-implicit).
+function scopeTag(marketType: string, gameNumber: number | null): string {
+  if (gameNumber != null) return ` · G${gameNumber}`
+  return marketType === 'moneyline' ? '' : ' · THIS WEEK'
+}
+
 function pickLabel(p: SlipPick): string {
   return (
     `${p.subjectName} · ${p.selectionLabel.toUpperCase()}` +
     betLineSuffix(p.marketType, p.line, p.statKey) +
-    (p.gameNumber != null ? ` · G${p.gameNumber}` : '')
+    scopeTag(p.marketType, p.gameNumber)
   )
 }
 
@@ -117,7 +124,7 @@ function comboLabel(c: SlipCombo): string {
   return (
     `${c.memberNames.join(' + ')} · OVER` +
     betLineSuffix('combo', c.line, c.stat) +
-    (c.gameNumber != null ? ` · G${c.gameNumber}` : ' · NIGHT')
+    scopeTag('combo', c.gameNumber)
   )
 }
 
@@ -265,7 +272,7 @@ export default function BetSlip({
   const pickCondition = (p: SlipPick) =>
     p.selectionLabel.toUpperCase() +
     betLineSuffix(p.marketType, p.line, p.statKey) +
-    (p.gameNumber != null ? ` · G${p.gameNumber}` : '')
+    scopeTag(p.marketType, p.gameNumber)
 
   return (
     <>
