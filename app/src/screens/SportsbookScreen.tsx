@@ -24,7 +24,7 @@ import { useBetSlip, useBetSlipReload } from '../components/betting/BetSlipProvi
 import SubjectLinesCard, { conditionLabel, type StatPillSpec } from '../components/betting/SubjectLinesCard'
 import LineEntrySheet from '../components/betting/LineEntrySheet'
 import CustomLineRow from '../components/betting/CustomLineRow'
-import AddPlayersSheet from '../components/betting/AddPlayersSheet'
+import AddPlayersModal from '../components/betting/AddPlayersModal'
 import BookProjectionCard, { type ProjectionRow } from '../components/betting/BookProjectionCard'
 import ReadOnlySeasonBanner from '../components/betting/ReadOnlySeasonBanner'
 import ConfirmActionSheet from '../components/ui/ConfirmActionSheet'
@@ -969,14 +969,14 @@ export default function SportsbookScreen() {
         )
       })()}
 
-      {/* Add Players — the combo builder sheet, raised from the heading's ＋
+      {/* Add Players — the combo builder popup, raised from the heading's ＋
           chip. Toggles edit the board's subject group LIVE (the board under
-          the sheet re-prices as members change); rows carry the player's four
+          the popup re-prices as members change); rows carry the player's four
           scope-scaled season averages, one per combinable stat (`*` = the
-          lifetime/league fallback, footnoted in the sheet).
-          Conditional-mount contract, like every sheet. */}
+          lifetime/league fallback, footnoted in the modal).
+          Conditional-mount contract, like every sheet/modal. */}
       {addPlayersOpen && (
-        <AddPlayersSheet
+        <AddPlayersModal
           rows={comboMemberPool.map(m => {
             const parts = COMBO_STATS.flatMap(stat => {
               const entry = poolStats[stat]?.[m.playerId]

@@ -216,7 +216,8 @@ params->>clock.eq.lanetalk)` alongside props and legacy team props.
   which dissolved the ⚰️ full-board pivot + `BuilderBar` of 2026-07-21, which
   itself replaced the ⚰️ `ComboComposerSheet`): the board's subject is 1..N
   players (`groupMembers: string[]`, empty = solo, never length 1). The
-  heading's **＋ chip** (dim-and-toast under 2 RSVP'd) opens `AddPlayersSheet`
+  heading's **＋ chip** (dim-and-toast under 2 RSVP'd) opens `AddPlayersModal`
+  (a centered `CenterModal` popup; ⚰️ `AddPlayersSheet`/`BottomSheet` 2026-07-23)
   — one row per RSVP'd-in player with avg/forecast context + `+`/`✓` chips;
   toggles edit the group live (the first add seeds [current subject,
   newcomer] — a single-player bet is a combo of one). With 2+ members the
@@ -248,7 +249,7 @@ params->>clock.eq.lanetalk)` alongside props and legacy team props.
   data at all → `NO STAT HISTORY`), shown per member as **four scope-scaled
   season averages** (`PINS · CLEAN · STRIKES · SPARES`; `*` + footnote = the
   fallback; ⚰️ the FORECAST value + ▲/▼, dropped for space) on the
-  `AddPlayersSheet` rows.
+  `AddPlayersModal` rows.
   Display-only — the seed/pricing math keeps
   its own windows (frame-stat seeds are lifetime), so the shown average can
   legitimately differ from the line the book anchors. The summed `groupRows`

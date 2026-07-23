@@ -1,10 +1,10 @@
 import { View, Text, StyleSheet } from 'react-native'
 import { colors, fonts } from '../../theme'
-import BottomSheet from '../ui/BottomSheet'
+import CenterModal from '../ui/CenterModal'
 import Button from '../ui/Button'
 import PickChip from './PickChip'
 
-// One candidate row, fully resolved by the screen (this sheet stays
+// One candidate row, fully resolved by the screen (this modal stays
 // presentational): display name, the scope-scaled four-stat season-average
 // line, and whether they're already on the board.
 export interface AddPlayerRow {
@@ -17,21 +17,21 @@ export interface AddPlayerRow {
   selected: boolean
 }
 
-interface AddPlayersSheetProps {
+interface AddPlayersModalProps {
   rows: AddPlayerRow[]
   onToggle: (id: string) => void
   onClose: () => void
 }
 
-// The combo builder — raised from the board heading's ＋ chip. Every RSVP'd-in
-// player, each with their four scope-scaled season averages for context;
-// toggling adds them to (or removes them from) the board's subject group live
-// — the board underneath re-prices as the group changes, and Done just
-// dismisses.
-export default function AddPlayersSheet({ rows, onToggle, onClose }: AddPlayersSheetProps) {
+// The combo builder — raised from the board heading's ＋ chip, as a centered
+// popup (CenterModal, not a bottom sheet). Every RSVP'd-in player, each with
+// their four scope-scaled season averages for context; toggling adds them to
+// (or removes them from) the board's subject group live — the board
+// underneath re-prices as the group changes, and Done just dismisses.
+export default function AddPlayersModal({ rows, onToggle, onClose }: AddPlayersModalProps) {
   const fallback = rows.some(r => r.contextLabel?.includes('*'))
   return (
-    <BottomSheet
+    <CenterModal
       title="Combo Bet"
       subtitle="Combine players into a single over/under bet"
       onClose={onClose}
@@ -53,7 +53,7 @@ export default function AddPlayersSheet({ rows, onToggle, onClose }: AddPlayersS
       {fallback && (
         <Text style={styles.footnote}>* no season games yet — lifetime/league average shown</Text>
       )}
-    </BottomSheet>
+    </CenterModal>
   )
 }
 
@@ -73,7 +73,7 @@ const styles = StyleSheet.create({
     color: colors.text,
     letterSpacing: 0.3,
   },
-  // Accent for legibility against the dark sheet (the muted grey read too
+  // Accent for legibility against the dark card (the muted grey read too
   // faint for a four-stat line; gold stays reserved for specials).
   context: {
     fontFamily: fonts.barlowCondensed,
