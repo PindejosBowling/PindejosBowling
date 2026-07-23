@@ -389,6 +389,26 @@ export const bets = {
       p_crutch_item_id: crutchItemId,
       p_boost_item_id: boostItemId,
     }),
+  // Parlay preview: the joint (correlation-repriced) price for a prospective
+  // ticket — picks {marketId, line, quotedOdds} + marketless combo specs.
+  // Returns {odds, correlated, factors} or {blocked_player_id} when a 3+ leg
+  // correlated cluster would be rejected at placement. Display only —
+  // place_house_bet reprices authoritatively.
+  parlayPrice: (
+    weekId: string | null,
+    picks: { marketId: string; line: number; quotedOdds: number }[],
+    combos: { memberIds: string[]; stat: string; scope: 'game' | 'night'; gameNumber: number | null; line: number; quotedOdds: number }[],
+  ) =>
+    supabase.rpc('parlay_price', {
+      p_week_id: weekId ?? undefined,
+      p_picks: picks.map(p => ({
+        market_id: p.marketId, line: p.line, quoted_odds: p.quotedOdds,
+      })) as unknown as Json,
+      p_combos: combos.map(c => ({
+        member_ids: c.memberIds, stat: c.stat, scope: c.scope,
+        game_number: c.gameNumber, line: c.line, quoted_odds: c.quotedOdds,
+      })) as unknown as Json,
+    }),
   // Admin: total undo of a placed bet (removes ledger rows + bet, re-opens market).
   cancel: (betId: string) =>
     supabase.rpc('cancel_bet', { p_bet_id: betId }),

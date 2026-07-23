@@ -9,7 +9,10 @@
 > paths); new `p_extra_picks` parlays line-shaped regular legs on the same
 > bet. `combo_seed_line` is unchanged as the anchor; ⚰️ `combo_preview_ladder`
 > + `LineValueSheet` + `useComboLinePreview` retired (RPC kept one release).
-> See [odds-engine.md](odds-engine.md).
+> See [odds-engine.md](odds-engine.md). **2026-07-23:** a combo parlayed with
+> a pick on one of its OWN members (overlapping scope) is now repriced
+> jointly — correlated-parlay pricing clusters combo `member_ids` with pick
+> subjects (odds-engine.md § Correlated parlays).
 
 The replacement for team props (and the reason moneyline generation retired with
 them). A **combo line** is an over/under on the **summed stat of an explicit set

@@ -396,7 +396,14 @@ export function BetSlipProvider({ children }: { children: ReactNode }) {
         if (!error) return null
 
         const moved = parseOddsMoved(error.message)
-        if (!moved) return error.message
+        if (!moved) {
+          // Machine contract from place_house_bet: a 3+ leg correlated
+          // cluster can't be jointly priced — the slip should re-offer as
+          // singles.
+          return error.message.startsWith('CORRELATED_LEGS|')
+            ? 'Too many correlated legs on one player — place those as singles'
+            : error.message
+        }
 
         // Patch the drifted leg (market match) or, failing that, the combo
         // spec carrying the rejected quote (a dedup-mint reports the combo's

@@ -136,6 +136,55 @@ book's standing offers).
   the CURRENT model while its posted neighbors keep frozen odds — the book
   is honest; the band still bounds it.
 
+## Correlated parlays — joint pricing (2026-07-23, `…014500_correlated_parlay_pricing` + `…040000_parlay_quote_implied_joint`)
+
+Parlays paid `Π(leg odds)` even for same-player legs ("over 219.5 pins G1" ×
+"over 4.5 clean frames G1" — the first implies the second), an unbounded +EV
+exploit once tails went fair. Now, in `place_house_bet` (every placement path
+funnels through it):
+
+- **Clusters**: legs sharing a subject player with overlapping scope (same
+  game, or night↔game — night contains every game; combo `params.member_ids`
+  count). Cross-cluster stays independent → product.
+- **2-leg cluster**: repriced off the joint bivariate normal. Covariance is
+  closed-form under the engine's independence assumptions: Σ over shared
+  (player, game) cells of `ρ(stat_a, stat_b)·σa·σb`; league stat-pair ρ lives
+  in **`odds_engine_stat_corr`** (empirically seeded from official imports —
+  live score↔clean_frames came out 0.947 — admin-tunable, `total_pins`
+  canonicalizes to `score`). `odds_engine_bvn_cdf` = Φ₂ via Simpson on the
+  tetrachoric integral, Fréchet-clamped. The pair's orthant thresholds are
+  **QUOTE-implied** (`p̂ = 1/quoted`, `ẑ = odds_engine_norm_ppf(p̂)`; the
+  model's `(line−μ)/σ` is only the fallback for a missing quote; ρ stays
+  model-derived) — so the Fréchet bound guarantees joint ≥ max(quoted legs)
+  even when a leg's quote sits below model fair (legacy `odds_max`-clamped
+  seed rungs, frozen ladders, grid rounding). Model-derived thresholds caused
+  the 2026-07-23 impossible-odds bug: cf 14.5 ×93.55 alone DROPPED to ×90.08
+  parlayed with tp 283.5 (posted ×8.000, fair ×8.29 — the discount survived
+  the product at ρ≈0.95). The remaining pre-fair-tails clamped ladders were
+  swept the same day by `…043000_reprice_stale_ladders` (one-time
+  `resync_week_markets` over open weeks — sync is trigger-coupled and nothing
+  had fired since the policy rewrite). The ratio joint/product is folded
+  into the STORED `bet_legs.odds_at_placement` (geometric √f per leg — every
+  scaled leg stays > 1), so settlement's product recompute, Winner's Crutch
+  leg drops, and unsettle/resettle need no changes. Anti-correlated pairs
+  (strikes↔spares, ρ<0) get a fair BOOST — symmetric.
+- **≥3-leg cluster**: rejected with `CORRELATED_LEGS|<player_id>` (exact ≥3-dim
+  orthants need numeric integration; the slip forces singles early via the
+  same cluster rule client-side in `BetSlip.maxCorrelatedCluster`).
+- **Preview**: `parlay_price(week, picks, combos)` (authenticated) returns the
+  joint `{odds, correlated, factors}` (or `{blocked_player_id}`); `BetSlip`
+  debounces it to replace the client product on the parlay ticket (fallback:
+  product while in flight) and shows each leg's CONTRIBUTING odds (quoted ×
+  its factor, picks-then-combos alignment) on the leg rows so the ticket
+  badge visibly equals their product. Placement reprices authoritatively.
+- **Exemptions**: specials (`p_custom_line_id`, admin-priced bundles); engine
+  off → legacy product (probe-combo-lines' even-money math relies on this);
+  moneyline/team_prop legs are inert subjectless legs.
+- Fns: `odds_engine_parlay_market_factors` (market-shaped wrapper; takes the
+  legs' quoted odds as `p_odds`) → `odds_engine_parlay_factors_internal`
+  (cluster + factor engine, jsonb leg descriptors incl. `quoted`) →
+  `odds_engine_bvn_cdf` / `odds_engine_norm_ppf` / `odds_engine_stat_rho`.
+
 ## Config — `odds_engine_config`
 
 Global row (`season_id NULL`) + optional per-season override
@@ -185,7 +234,10 @@ half-point + out-of-band + settled rejections / engine-off degradation,
 placement (pair mint at the fresh price with convention keys, rung reuse,
 `ODDS_MOVED` contract with nothing minted, rollback leaves no orphan rung,
 custom-rung settlement, combo quoted-mint dedup, combo + extra-pick one-bet
-ticket). Run the full suite before AND after any push touching these
+ticket), and the correlated-parlay vectors (independence control, haircut +
+preview parity, ≥3-cluster contract, combo↔pick clustering, M7 quote-implied
+joint floor: a leg deliberately quoted below fair must still parlay ≥ the
+best single). Run the full suite before AND after any push touching these
 functions; regenerate `supabase/schema.sql` + `database.types.ts` after
 pushing.
 

@@ -1802,6 +1802,30 @@ export type Database = {
           },
         ]
       }
+      odds_engine_stat_corr: {
+        Row: {
+          created_at: string
+          rho: number
+          stat_a: string
+          stat_b: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          rho: number
+          stat_a: string
+          stat_b: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          rho?: number
+          stat_a?: string
+          stat_b?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       pin_ledger: {
         Row: {
           amount: number
@@ -3465,6 +3489,10 @@ export type Database = {
           sort_order: number
         }[]
       }
+      odds_engine_bvn_cdf: {
+        Args: { p_h: number; p_k: number; p_rho: number }
+        Returns: number
+      }
       odds_engine_get_config: {
         Args: { p_season_id: string }
         Returns: {
@@ -3519,6 +3547,19 @@ export type Database = {
       }
       odds_engine_norm_cdf: { Args: { z: number }; Returns: number }
       odds_engine_norm_ppf: { Args: { p: number }; Returns: number }
+      odds_engine_parlay_factors_internal: {
+        Args: { p_legs: Json; p_season_id: string }
+        Returns: number[]
+      }
+      odds_engine_parlay_market_factors: {
+        Args: {
+          p_lines: number[]
+          p_market_ids: string[]
+          p_odds: number[]
+          p_sides: string[]
+        }
+        Returns: number[]
+      }
       odds_engine_player_stat: {
         Args: { p_player_id: string; p_season_id: string; p_stat: string }
         Returns: Record<string, unknown>
@@ -3566,11 +3607,19 @@ export type Database = {
         }
         Returns: boolean
       }
+      odds_engine_stat_rho: {
+        Args: { p_a: string; p_b: string }
+        Returns: number
+      }
       open_auction_internal: {
         Args: { p_auction_id: string }
         Returns: undefined
       }
       open_auction_now: { Args: { p_auction_id: string }; Returns: undefined }
+      parlay_price: {
+        Args: { p_combos?: Json; p_picks?: Json; p_week_id?: string }
+        Returns: Json
+      }
       pin_balance: {
         Args: { p_player_id: string; p_season_id: string }
         Returns: number

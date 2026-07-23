@@ -459,6 +459,18 @@ upserting null, never deleting the row.
 - **Min stake 10** (CHECK).
 - **One bet per selection per bet** (`UNIQUE (bet_id, selection_id)`).
 - **Balance never goes negative** — enforced in the placement RPC, not the DB.
+- **Correlated parlays price jointly** — `place_house_bet` clusters legs by
+  shared subject + overlapping scope (same game, or night↔game; combo
+  `member_ids` count) and reprices each 2-leg cluster off the joint bivariate
+  model (`odds_engine_parlay_market_factors` → `…_factors_internal` +
+  `odds_engine_bvn_cdf` + `odds_engine_stat_corr`), folding the ratio into the
+  stored `bet_legs.odds_at_placement`. The pair's orthant thresholds are
+  **quote-implied** (`p̂ = 1/quoted odds`, `ẑ = norm_ppf(p̂)`; ρ stays
+  model-derived — `…040000_parlay_quote_implied_joint`), so the Fréchet bound
+  guarantees the joint price ≥ the best single even when a posted quote is
+  stale or legacy-ceiling-clamped. Clusters of 3+ REJECT
+  (`CORRELATED_LEGS|<player_id>`). Specials exempt; engine off → legacy
+  product. Preview RPC: `parlay_price(week, picks, combos)` (authenticated).
 
 ---
 
@@ -543,13 +555,12 @@ bets shipped as a pure-UI addition on top of the existing model:
 >   scores — an estimate of a skewed, non-stationary distribution. A leg whose true
 >   `P(win)` ≠ 0.5 is mildly +EV as a single but its edge compounds **exponentially**
 >   in a parlay.
-> - **Correlated legs.** The `Π(odds)` rule is only fair for *independent* legs. A
->   single player's Overs **across multiple games in one night** are positively
->   correlated (hot/cold night, lane condition), so `P(all over)` exceeds `Π(0.5)`
->   while the parlay still only pays `×2^N` → underpriced → +EV. (A cross-market
->   correlation — a player's Over + their team's moneyline — is the textbook case
->   real books block, and **moneyline is now live**, so this parlay *can* be built
->   today. It's an open integrity item, not blocked in code.)
+> - **Correlated legs — RESOLVED (2026-07-23, `…014500_correlated_parlay_pricing`).**
+>   The `Π(odds)` rule is only fair for *independent* legs; same-player
+>   overlapping-scope legs are now **repriced jointly** in `place_house_bet`
+>   (see §5 hard rules). The one remaining un-modeled correlation is a player
+>   leg × their game's *moneyline* (moneyline generation is retired; legacy
+>   moneyline legs are inert subjectless legs in the cluster engine).
 
 **Next (schema already supports it):**
 
@@ -562,9 +573,19 @@ bets shipped as a pure-UI addition on top of the existing model:
   ships fair `2.000`). Pricing parlay legs below `2.000` (e.g. `1.90` → `×1.9^N`)
   is the lever that turns the compounding parlay margin in the house's favor, the
   way real books do.
-- **Parlay correlation guard:** whether to forbid multiple legs with the same
-  `subject_player_id` in one bet (kills the same-player-across-games +EV play). Not
-  yet enforced — parlays currently allow any distinct selections.
+- **Parlay correlation guard — RESOLVED as joint pricing (2026-07-23):** rather
+  than forbidding same-player legs, `place_house_bet` reprices correlated pairs
+  off the joint bivariate model (clusters = shared subject + overlapping scope:
+  same game or night↔game; combo `member_ids` count). The correction is folded
+  into the stored `bet_legs.odds_at_placement` (geometric √f per leg), so the
+  settlement product recompute, Winner's Crutch drops, and unsettle/resettle are
+  untouched. Anti-correlated pairs (strikes↔spares) get a fair boost. Clusters
+  of 3+ correlated legs REJECT with `CORRELATED_LEGS|<player_id>` (the slip
+  forces singles). Stat-pair ρ lives in `odds_engine_stat_corr` (empirically
+  seeded; admin-tunable). Specials are exempt; engine off → legacy product.
+  Preview: `parlay_price(week, picks, combos)` (authenticated) returns the
+  joint `{odds, correlated, factors}` or `{blocked_player_id}` for the slip.
+  Same-player legs across *different games* remain independent by design.
 
 ---
 
@@ -604,6 +625,9 @@ bets shipped as a pure-UI addition on top of the existing model:
 | `migrations/20260722231500_widen_value_line_bands.sql` | **Wide bands** — the quote/mint band's HIGH edge runs to the stat's physical cap (counts 9.5/game; score O/U capped 220 pins/game: game 220.5, night 220·g+0.5, combos 220/game/member — was 300-based) with past-the-odds-window lines force-priced clamped at odds_max in quote AND minter; the LOW edge stays odds-feasible (no sure-thing overs). `odds_engine_market_distribution` / `odds_engine_quote_internal` / `bet_mint_rung_internal` / `combo_preview_ladder` / `combo_price_line` / `compose_combo_bet`. |
 | `migrations/20260722234500_fair_tail_odds.sql` | **Fair long-tail odds** — the odds-feasibility clamp is REMOVED: availability = the physical line range only; every in-range half-point prices at the fair zero-vig odds (no ×8 ceiling — long tails pay true model price; ×1.05 grid floor at the certain end per `bet_selections CHECK odds > 1.0`). `odds_min`/`odds_max`/`custom_odds_min`/`custom_odds_max` + `p_force` are inert (kept for compat); ladders post their full rung spread. `odds_engine_price_pair` / `odds_engine_quote_internal` / `bet_mint_rung_internal`. |
 | `migrations/20260723001500_min_offered_odds.sql` | **Offer floor ×1.20** — `odds_min` repurposed as the minimum offered multiplier (config UPDATE + column default 1.20, `odds_engine_get_config` fallback): the band's `min_line` = the smallest line whose fair odds ≥ odds_min; below it quotes return NULL (`odds_engine_quote_internal`), placement rejects (`bet_mint_rung_internal` — closes the near-certainty ~×1.05 dribble at the RPC layer), and ladders skip sub-floor rungs (`odds_engine_build_ladder`, seed anchor exempt). Prices stay fair — availability gate only. |
+| `migrations/20260723014500_correlated_parlay_pricing.sql` | **Correlated-parlay joint pricing (SGP)** — parlays no longer pay the product of marginals for same-player overlapping-scope legs: new `odds_engine_stat_corr` (league stat-pair ρ, empirically seeded), `odds_engine_bvn_cdf` (bivariate normal, Simpson tetrachoric), `odds_engine_parlay_factors_internal` (cluster + factor engine; ≥3-leg clusters raise `CORRELATED_LEGS\|<player>`), `odds_engine_parlay_market_factors`, `parlay_price` (client preview), and `place_house_bet` folds the factors into stored leg odds (settlement/crutch/unsettle untouched). Specials exempt; engine off → legacy product. |
+| `migrations/20260723040000_parlay_quote_implied_joint.sql` | **Quote-implied joint pricing** — fixes the impossible-odds inversion (a stale/ceiling-clamped leg quote — e.g. a legacy `odds_max` 8.00 seed rung vs fair ×8.29 — let a high-ρ pair price BELOW its better single, ×93.55 → ×90.08). Pair thresholds now derive from the quotes (`p̂ = 1/quoted`, `ẑ = odds_engine_norm_ppf(p̂)`; model thresholds only as fallback; ρ unchanged), so Fréchet guarantees joint ≥ max(quoted legs). `odds_engine_parlay_market_factors` gains `p_odds`; `parlay_price` + `place_house_bet` thread each leg's quoted odds through. |
+| `migrations/20260723043000_reprice_stale_ladders.sql` | **One-time re-ladder** — data-only DO block re-running `resync_week_markets` on every non-archived week: betless open markets rebuilt their ladders at current fair pricing, sweeping the pre-`fair_tail_odds` ceiling-clamped rungs (the ×8.000 seeds) off the live board. Markets with bets stayed frozen; seed rungs keep their canonical keys (identity, never deleted). |
 | `app/src/utils/supabase/db.ts` | Typed query objects (`betMarkets` / `bets` / `pinLedger` + RPC wrappers). |
 | `app/src/hooks/useBettingData.ts` | Normalizes the market/bet graph into flat `LineView` / `BetView`. |
 | `supabase/AUTH.md` | Auth / JWT / RLS architecture. |

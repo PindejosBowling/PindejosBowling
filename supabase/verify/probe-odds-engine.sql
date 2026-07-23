@@ -74,6 +74,11 @@
 --   CB3 quoted combo spec at an UNPOSTED line on the existing (bet-frozen)
 --       market mints the rung and composes (dedup path).
 --   CB4 combo + line-shaped extra pick (p_extra_picks) → ONE bet, two legs.
+--   M7  quote-implied joint floor (regression, 2026-07-23): a correlated pair
+--       with one leg quoted BELOW model fair (stale/ceiling-clamped posted
+--       rung) must still price ≥ the better single — factors derive from
+--       quote-implied probabilities, so the Fréchet bound guarantees
+--       joint ≥ max(quoted legs) whatever the quotes.
 -- Always aborts via the final RAISE.
 DO $$
 DECLARE
@@ -106,6 +111,15 @@ DECLARE
   v_seed_cnt int;
   c_seed constant int := 1000;
   i int;
+  -- M6 correlated-parlay vectors (dedicated names — summary vars untouched)
+  v6_ou_p1 uuid; v6_cf_p1 uuid; v6_sp_p1 uuid; v6_ou_p2 uuid;
+  v6_bet uuid; v6_bet_ind uuid;
+  v6_o1 numeric; v6_o2 numeric;
+  v6_rho numeric; v6_q numeric;
+  v6_prev jsonb; v6_res jsonb;
+  v6_payout int;
+  -- M7 quote-implied joint floor
+  v7_line numeric; v7_q_cf numeric; v7_q_ou numeric; v7_joint numeric;
 BEGIN
   ------------------------------------------------------------------ fixtures
   INSERT INTO auth.users (id, instance_id, aud, role, phone) VALUES
@@ -753,8 +767,158 @@ BEGIN
     RAISE EXCEPTION 'PROBE_FAIL: CB4 combo+extra ticket has % legs (expected 2)', v_n;
   END IF;
 
+  ------------------------------------------------------------------ M6 correlated parlay repricing
+  -- Fresh OPEN fixture markets, all game 1: p1 score O/U + p1 clean_frames
+  -- prop (positively correlated pair), p1 spares prop (3rd cluster member),
+  -- p2 score O/U (independence control). Seeds posted at even money so
+  -- placement reuses rungs (quoted 2.0) and the ONLY change to stored leg
+  -- odds is the correlation factor.
+  INSERT INTO public.bet_markets (market_type, title, week_id, subject_player_id, game_number, status, params)
+    VALUES ('over_under', 'PROBE corr OU p1', v_week, v_p1, 1, 'open', '{}'::jsonb)
+    RETURNING id INTO v6_ou_p1;
+  INSERT INTO public.bet_selections (market_id, key, label, odds, line, side) VALUES
+    (v6_ou_p1, 'over', 'Over', 2.000, 140.5, 'over'),
+    (v6_ou_p1, 'under', 'Under', 2.000, 140.5, 'under');
+  INSERT INTO public.bet_markets (market_type, title, week_id, subject_player_id, game_number, status, params)
+    VALUES ('prop', 'PROBE corr CF p1', v_week, v_p1, 1, 'open',
+            '{"stat": "clean_frames", "scope": "game", "source": "lanetalk"}'::jsonb)
+    RETURNING id INTO v6_cf_p1;
+  INSERT INTO public.bet_selections (market_id, key, label, odds, line, side) VALUES
+    (v6_cf_p1, 'over', 'Over', 2.000, 4.5, 'over'),
+    (v6_cf_p1, 'under', 'Under', 2.000, 4.5, 'under');
+  INSERT INTO public.bet_markets (market_type, title, week_id, subject_player_id, game_number, status, params)
+    VALUES ('prop', 'PROBE corr SP p1', v_week, v_p1, 1, 'open',
+            '{"stat": "spares", "scope": "game", "source": "lanetalk"}'::jsonb)
+    RETURNING id INTO v6_sp_p1;
+  INSERT INTO public.bet_selections (market_id, key, label, odds, line, side) VALUES
+    (v6_sp_p1, 'over', 'Over', 2.000, 3.5, 'over'),
+    (v6_sp_p1, 'under', 'Under', 2.000, 3.5, 'under');
+  INSERT INTO public.bet_markets (market_type, title, week_id, subject_player_id, game_number, status, params)
+    VALUES ('over_under', 'PROBE corr OU p2', v_week, v_p2, 1, 'open', '{}'::jsonb)
+    RETURNING id INTO v6_ou_p2;
+  INSERT INTO public.bet_selections (market_id, key, label, odds, line, side) VALUES
+    (v6_ou_p2, 'over', 'Over', 2.000, 120.5, 'over'),
+    (v6_ou_p2, 'under', 'Under', 2.000, 120.5, 'under');
+
+  v6_rho := public.odds_engine_stat_rho('score', 'clean_frames');
+
+  -- Independence control: different players → legs stored VERBATIM, product
+  -- payout exact.
+  PERFORM set_config('request.jwt.claims', json_build_object(
+    'sub', v_u2, 'role', 'authenticated', 'app_metadata', json_build_object('role', 'player'))::text, true);
+  v6_bet_ind := public.place_bet_at_lines(jsonb_build_array(
+    jsonb_build_object('market_id', v6_ou_p1, 'line', 140.5, 'quoted_odds', 2.0),
+    jsonb_build_object('market_id', v6_ou_p2, 'line', 120.5, 'quoted_odds', 2.0)), 20);
+  IF (SELECT count(*) FROM public.bet_legs WHERE bet_id = v6_bet_ind AND odds_at_placement <> 2.000) <> 0
+     OR (SELECT potential_payout FROM public.bets WHERE id = v6_bet_ind) <> 80 THEN
+    RAISE EXCEPTION 'PROBE_FAIL: M6 independent parlay repriced (payout %)',
+      (SELECT potential_payout FROM public.bets WHERE id = v6_bet_ind);
+  END IF;
+
+  -- Correlated pair: same player, same game, score↔clean_frames.
+  v6_bet := public.place_bet_at_lines(jsonb_build_array(
+    jsonb_build_object('market_id', v6_ou_p1, 'line', 140.5, 'quoted_odds', 2.0),
+    jsonb_build_object('market_id', v6_cf_p1, 'line', 4.5, 'quoted_odds', 2.0)), 20);
+  SELECT min(odds_at_placement), max(odds_at_placement) INTO v6_o1, v6_o2
+    FROM public.bet_legs WHERE bet_id = v6_bet;
+  v6_payout := (SELECT potential_payout FROM public.bets WHERE id = v6_bet);
+  IF v6_payout <> FLOOR(20 * v6_o1 * v6_o2) THEN
+    RAISE EXCEPTION 'PROBE_FAIL: M6 payout % <> floor(stake × leg product %·%)', v6_payout, v6_o1, v6_o2;
+  END IF;
+  IF v6_rho > 0.05 THEN
+    IF v6_o1 >= 2.000 OR v6_o2 >= 2.000 OR v6_payout >= 80 THEN
+      RAISE EXCEPTION 'PROBE_FAIL: M6 correlated pair not haircut (legs %, %, payout %, rho %)',
+        v6_o1, v6_o2, v6_payout, v6_rho;
+    END IF;
+  ELSIF v6_rho < -0.05 AND v6_payout <= 80 THEN
+    RAISE EXCEPTION 'PROBE_FAIL: M6 anti-correlated pair not boosted (payout %, rho %)', v6_payout, v6_rho;
+  END IF;
+
+  -- Preview parity: parlay_price reports the same joint price (rounding-level
+  -- agreement: legs round at 4dp, the preview at 2dp).
+  v6_prev := public.parlay_price(v_week, jsonb_build_array(
+    jsonb_build_object('market_id', v6_ou_p1, 'line', 140.5, 'quoted_odds', 2.0),
+    jsonb_build_object('market_id', v6_cf_p1, 'line', 4.5, 'quoted_odds', 2.0)), NULL);
+  IF abs((v6_prev ->> 'odds')::numeric - v6_o1 * v6_o2) > 0.05
+     OR ((v6_rho > 0.05 OR v6_rho < -0.05) AND NOT (v6_prev ->> 'correlated')::boolean) THEN
+    RAISE EXCEPTION 'PROBE_FAIL: M6 preview % disagrees with placed legs %·%', v6_prev, v6_o1, v6_o2;
+  END IF;
+
+  -- A 3-leg correlated cluster is rejected with the machine-parseable
+  -- contract, and the preview reports the blocking player.
+  BEGIN
+    PERFORM public.place_bet_at_lines(jsonb_build_array(
+      jsonb_build_object('market_id', v6_ou_p1, 'line', 140.5, 'quoted_odds', 2.0),
+      jsonb_build_object('market_id', v6_cf_p1, 'line', 4.5, 'quoted_odds', 2.0),
+      jsonb_build_object('market_id', v6_sp_p1, 'line', 3.5, 'quoted_odds', 2.0)), 20);
+    RAISE EXCEPTION 'PROBE_FAIL: M6 3-leg correlated cluster placed instead of raising';
+  EXCEPTION WHEN OTHERS THEN
+    IF SQLERRM LIKE 'PROBE_FAIL%' THEN RAISE; END IF;
+    IF SQLERRM NOT LIKE 'CORRELATED_LEGS|%' THEN
+      RAISE EXCEPTION 'PROBE_FAIL: M6 wrong 3-cluster error contract: %', SQLERRM;
+    END IF;
+  END;
+  v6_prev := public.parlay_price(v_week, jsonb_build_array(
+    jsonb_build_object('market_id', v6_ou_p1, 'line', 140.5, 'quoted_odds', 2.0),
+    jsonb_build_object('market_id', v6_cf_p1, 'line', 4.5, 'quoted_odds', 2.0),
+    jsonb_build_object('market_id', v6_sp_p1, 'line', 3.5, 'quoted_odds', 2.0)), NULL);
+  IF (v6_prev ->> 'blocked_player_id')::uuid IS DISTINCT FROM v_p1 THEN
+    RAISE EXCEPTION 'PROBE_FAIL: M6 preview did not report the blocking player: %', v6_prev;
+  END IF;
+
+  -- Combo ↔ pick: a fresh clean_frames GAME-1 combo including p1 parlayed
+  -- with p1's score O/U — member overlap clusters them; the haircut lands in
+  -- the stored legs (compose delegates to place_house_bet).
+  v6_res := public.combo_price_line(ARRAY[v_p1, v_p2], 'clean_frames', v_season, 1, v_week, 1, NULL);
+  v6_q := (v6_res ->> 'odds')::numeric;
+  IF v6_q IS NOT NULL THEN
+    v6_res := public.compose_combo_bet(
+      v_week,
+      jsonb_build_array(jsonb_build_object(
+        'member_ids', jsonb_build_array(v_p1::text, v_p2::text),
+        'stat', 'clean_frames', 'scope', 'game', 'game_number', 1,
+        'line', (v6_res ->> 'line')::numeric, 'quoted_odds', v6_q)),
+      25, NULL, NULL, NULL, NULL,
+      jsonb_build_array(jsonb_build_object(
+        'market_id', v6_ou_p1, 'line', 140.5, 'quoted_odds', 2.0)));
+    SELECT min(odds_at_placement), max(odds_at_placement) INTO v6_o1, v6_o2
+      FROM public.bet_legs WHERE bet_id = (v6_res ->> 'bet_id')::uuid;
+    IF v6_rho > 0.05 AND v6_o1 * v6_o2 >= v6_q * 2.0 THEN
+      RAISE EXCEPTION 'PROBE_FAIL: M6 combo↔pick parlay not haircut (%·% vs %·2.0)', v6_o1, v6_o2, v6_q;
+    END IF;
+  END IF;
+
+  ------------------------------------------------------------------ M7 quote-implied joint floor
+  -- Deep clean_frames tail (the band's max_line, fresh fair quote) parlayed
+  -- with an UNPOSTED score line quoted at 0.90 × its fresh fair price —
+  -- simulating a stale/ceiling-clamped posted rung. Under model-derived
+  -- factors this high-ρ pair priced BELOW the clean_frames single (the live
+  -- 2026-07-23 bug: cf 14.5 ×93.55 + tp 283.5 posted ×8.000 vs fair ×8.29 →
+  -- ×90.08); quote-implied factors floor the joint at the best single.
+  v6_prev := public.market_price_line(v6_cf_p1, NULL);
+  v7_line := (v6_prev ->> 'max_line')::numeric;
+  v6_prev := public.market_price_line(v6_cf_p1, v7_line);
+  v7_q_cf := (v6_prev ->> 'odds')::numeric;
+  v6_prev := public.market_price_line(v6_ou_p1, 150.5);
+  v7_q_ou := round(0.90 * (v6_prev ->> 'odds')::numeric, 2);
+  IF v7_q_cf IS NOT NULL AND v7_q_ou IS NOT NULL AND v7_q_ou > 1 THEN
+    v6_res := public.parlay_price(v_week, jsonb_build_array(
+      jsonb_build_object('market_id', v6_cf_p1, 'line', v7_line, 'quoted_odds', v7_q_cf),
+      jsonb_build_object('market_id', v6_ou_p1, 'line', 150.5, 'quoted_odds', v7_q_ou)), NULL);
+    v7_joint := (v6_res ->> 'odds')::numeric;
+    IF v7_joint IS NULL OR v7_joint + 0.05 < GREATEST(v7_q_cf, v7_q_ou) THEN
+      RAISE EXCEPTION 'PROBE_FAIL: M7 joint % below best single (cf ×% @ %, discounted ou ×%)',
+        v7_joint, v7_q_cf, v7_line, v7_q_ou;
+    END IF;
+  END IF;
+
   ------------------------------------------------------------------ result
   RAISE EXCEPTION 'PROBE_RESULT %', jsonb_build_object(
+    'parlay_haircut', jsonb_build_object(
+      'rho_score_cf', round(v6_rho, 3),
+      'pair_legs', jsonb_build_array(v6_o1, v6_o2),
+      'pair_payout', v6_payout),
+    'parlay_quote_floor', jsonb_build_array(v7_q_cf, v7_q_ou, v7_joint),
     'ladder_pairs', v_ladder_pairs,
     'seed_rung', 'over@142.5',
     'cold_start_mean', round(v_cold_mean, 3),

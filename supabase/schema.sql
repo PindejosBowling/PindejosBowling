@@ -421,6 +421,14 @@ CREATE TABLE odds_engine_config (
   quote_tolerance numeric NOT NULL DEFAULT 0.10
 );
 
+CREATE TABLE odds_engine_stat_corr (
+  stat_a text NOT NULL,
+  stat_b text NOT NULL,
+  rho numeric NOT NULL,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now()
+);
+
 CREATE TABLE pin_ledger (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   player_id uuid,
@@ -1101,6 +1109,12 @@ ALTER TABLE odds_engine_config ADD CONSTRAINT odds_engine_config_spacing_check C
 ALTER TABLE odds_engine_config ADD CONSTRAINT odds_engine_config_updated_by_fkey FOREIGN KEY (updated_by) REFERENCES players(id) ON DELETE SET NULL;
 
 ALTER TABLE odds_engine_config ADD CONSTRAINT odds_engine_config_variance_floors_check CHECK (((variance_floor_score > (0)::numeric) AND (variance_floor_count > (0)::numeric)));
+
+ALTER TABLE odds_engine_stat_corr ADD CONSTRAINT odds_engine_stat_corr_check CHECK ((stat_a < stat_b));
+
+ALTER TABLE odds_engine_stat_corr ADD CONSTRAINT odds_engine_stat_corr_pkey PRIMARY KEY (stat_a, stat_b);
+
+ALTER TABLE odds_engine_stat_corr ADD CONSTRAINT odds_engine_stat_corr_rho_check CHECK (((rho > ('-1'::integer)::numeric) AND (rho < (1)::numeric)));
 
 ALTER TABLE pin_ledger ADD CONSTRAINT pin_ledger_auction_id_fkey FOREIGN KEY (auction_id) REFERENCES auctions(id) ON DELETE CASCADE;
 
@@ -1932,6 +1946,15 @@ CREATE POLICY "admin can manage" ON odds_engine_config AS PERMISSIVE FOR ALL TO 
   WITH CHECK (is_admin());
 
 CREATE POLICY "authenticated can read" ON odds_engine_config AS PERMISSIVE FOR SELECT TO authenticated
+  USING (true);
+
+ALTER TABLE odds_engine_stat_corr ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "admin can manage" ON odds_engine_stat_corr AS PERMISSIVE FOR ALL TO authenticated
+  USING (is_admin())
+  WITH CHECK (is_admin());
+
+CREATE POLICY "authenticated can read" ON odds_engine_stat_corr AS PERMISSIVE FOR SELECT TO authenticated
   USING (true);
 
 ALTER TABLE pin_ledger ENABLE ROW LEVEL SECURITY;
@@ -5263,6 +5286,39 @@ END;
 $function$
 ;
 
+CREATE OR REPLACE FUNCTION public.odds_engine_bvn_cdf(p_h double precision, p_k double precision, p_rho double precision)
+ RETURNS double precision
+ LANGUAGE plpgsql
+ IMMUTABLE
+ SET search_path TO ''
+AS $function$
+DECLARE
+  v_r   double precision := LEAST(0.95, GREATEST(-0.95, p_rho));
+  v_ph  double precision := public.odds_engine_norm_cdf(p_h);
+  v_pk  double precision := public.odds_engine_norm_cdf(p_k);
+  v_sum double precision := 0;
+  v_t   double precision;
+  v_f   double precision;
+  v_w   double precision;
+  n     integer := 32;
+  i     integer;
+BEGIN
+  IF v_r <> 0 THEN
+    FOR i IN 0 .. n LOOP
+      v_t := v_r * i / n;
+      v_f := exp(-(p_h * p_h - 2 * v_t * p_h * p_k + p_k * p_k) / (2 * (1 - v_t * v_t)))
+             / sqrt(1 - v_t * v_t);
+      v_w := CASE WHEN i = 0 OR i = n THEN 1 WHEN i % 2 = 1 THEN 4 ELSE 2 END;
+      v_sum := v_sum + v_w * v_f;
+    END LOOP;
+    v_sum := v_sum * v_r / (3 * n) / (2 * pi());
+  END IF;
+  RETURN GREATEST(GREATEST(0, v_ph + v_pk - 1),
+                  LEAST(LEAST(v_ph, v_pk), v_ph * v_pk + v_sum));
+END;
+$function$
+;
+
 CREATE OR REPLACE FUNCTION public.odds_engine_get_config(p_season_id uuid)
  RETURNS odds_engine_config
  LANGUAGE plpgsql
@@ -5504,6 +5560,193 @@ END;
 $function$
 ;
 
+CREATE OR REPLACE FUNCTION public.odds_engine_parlay_factors_internal(p_legs jsonb, p_season_id uuid)
+ RETURNS numeric[]
+ LANGUAGE plpgsql
+ STABLE SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+DECLARE
+  v_n       integer := COALESCE(jsonb_array_length(p_legs), 0);
+  v_parent  integer[];
+  v_roots   integer[] := '{}';
+  v_factors numeric[];
+  v_members integer[];
+  v_la jsonb; v_lb jsonb;
+  a integer; b integer; ra integer; rb integer; v_root integer;
+  v_pl text;
+  v_h_a double precision; v_h_b double precision;
+  v_s_a integer; v_s_b integer;
+  v_sg_a double precision; v_sg_b double precision;
+  v_p_a double precision; v_p_b double precision;
+  v_q double precision;
+  v_cov double precision; v_games integer;
+  v_sig_pa double precision; v_sig_pb double precision;
+  v_rho double precision;
+  v_pp double precision;
+  v_f numeric;
+BEGIN
+  IF v_n < 2 THEN RETURN NULL; END IF;
+  v_parent  := ARRAY(SELECT generate_series(1, v_n));
+  v_factors := array_fill(1.0::numeric, ARRAY[v_n]);
+
+  FOR a IN 1 .. v_n LOOP
+    FOR b IN a + 1 .. v_n LOOP
+      v_la := p_legs -> (a - 1);
+      v_lb := p_legs -> (b - 1);
+      IF EXISTS (SELECT 1 FROM jsonb_array_elements_text(v_la -> 'subjects') sa(x)
+                 WHERE sa.x IN (SELECT sb.y FROM jsonb_array_elements_text(v_lb -> 'subjects') sb(y)))
+         AND ((v_la ->> 'game_number') IS NULL OR (v_lb ->> 'game_number') IS NULL
+              OR (v_la ->> 'game_number') = (v_lb ->> 'game_number')) THEN
+        ra := a; WHILE v_parent[ra] <> ra LOOP ra := v_parent[ra]; END LOOP;
+        rb := b; WHILE v_parent[rb] <> rb LOOP rb := v_parent[rb]; END LOOP;
+        IF ra <> rb THEN v_parent[rb] := ra; END IF;
+      END IF;
+    END LOOP;
+  END LOOP;
+
+  FOR a IN 1 .. v_n LOOP
+    ra := a; WHILE v_parent[ra] <> ra LOOP ra := v_parent[ra]; END LOOP;
+    v_roots := v_roots || ra;
+  END LOOP;
+
+  FOR v_root IN SELECT DISTINCT t.r FROM unnest(v_roots) AS t(r) LOOP
+    v_members := ARRAY(SELECT i FROM generate_subscripts(v_roots, 1) i WHERE v_roots[i] = v_root);
+    IF array_length(v_members, 1) = 1 THEN CONTINUE; END IF;
+    IF array_length(v_members, 1) > 2 THEN
+      v_pl := p_legs -> (v_members[1] - 1) -> 'subjects' ->> 0;
+      RAISE EXCEPTION 'CORRELATED_LEGS|%', COALESCE(v_pl, '');
+    END IF;
+
+    a := v_members[1];
+    b := v_members[2];
+    v_la := p_legs -> (a - 1);
+    v_lb := p_legs -> (b - 1);
+    v_sg_a := (v_la ->> 'sigma')::double precision;
+    v_sg_b := (v_lb ->> 'sigma')::double precision;
+    IF v_sg_a IS NULL OR v_sg_b IS NULL OR v_sg_a <= 0 OR v_sg_b <= 0 THEN CONTINUE; END IF;
+
+    -- Event as a lower-orthant: over X≥ℓ ⇔ (−Z) ≤ −z (s = −1), under ⇔ Z ≤ z.
+    v_s_a := CASE WHEN v_la ->> 'side' = 'under' THEN 1 ELSE -1 END;
+    v_s_b := CASE WHEN v_lb ->> 'side' = 'under' THEN 1 ELSE -1 END;
+
+    -- Thresholds are QUOTE-implied (p̂ = 1/quoted, ẑ = Φ⁻¹(p̂)) so the joint
+    -- price stays consistent with the odds the ticket multiplies; the model's
+    -- (line − mu)/σ threshold is the fallback for a missing/degenerate quote.
+    v_q := (v_la ->> 'quoted')::double precision;
+    IF v_q IS NOT NULL AND v_q > 1 THEN
+      v_p_a := LEAST(1 - 1e-9, GREATEST(1e-9, 1 / v_q));
+      v_h_a := public.odds_engine_norm_ppf(v_p_a);
+    ELSE
+      v_h_a := v_s_a * (((v_la ->> 'line')::double precision - (v_la ->> 'mu')::double precision) / v_sg_a);
+      v_p_a := public.odds_engine_norm_cdf(v_h_a);
+    END IF;
+    v_q := (v_lb ->> 'quoted')::double precision;
+    IF v_q IS NOT NULL AND v_q > 1 THEN
+      v_p_b := LEAST(1 - 1e-9, GREATEST(1e-9, 1 / v_q));
+      v_h_b := public.odds_engine_norm_ppf(v_p_b);
+    ELSE
+      v_h_b := v_s_b * (((v_lb ->> 'line')::double precision - (v_lb ->> 'mu')::double precision) / v_sg_b);
+      v_p_b := public.odds_engine_norm_cdf(v_h_b);
+    END IF;
+
+    -- Shared cells: overlapping scope means 1 shared game unless both night.
+    v_games := CASE WHEN (v_la ->> 'game_number') IS NULL AND (v_lb ->> 'game_number') IS NULL
+                    THEN LEAST(GREATEST((v_la ->> 'n_games')::integer, 1),
+                               GREATEST((v_lb ->> 'n_games')::integer, 1))
+                    ELSE 1 END;
+    v_cov := 0;
+    FOR v_pl IN SELECT sa.x FROM jsonb_array_elements_text(v_la -> 'subjects') sa(x)
+                WHERE sa.x IN (SELECT sb.y FROM jsonb_array_elements_text(v_lb -> 'subjects') sb(y))
+    LOOP
+      SELECT sqrt(GREATEST(ps.variance, 0)) INTO v_sig_pa
+        FROM public.odds_engine_player_stat(v_pl::uuid, p_season_id, v_la ->> 'stat') ps;
+      SELECT sqrt(GREATEST(ps.variance, 0)) INTO v_sig_pb
+        FROM public.odds_engine_player_stat(v_pl::uuid, p_season_id, v_lb ->> 'stat') ps;
+      v_cov := v_cov + v_games
+               * public.odds_engine_stat_rho(v_la ->> 'stat', v_lb ->> 'stat')::double precision
+               * COALESCE(v_sig_pa, 0) * COALESCE(v_sig_pb, 0);
+    END LOOP;
+
+    v_rho := GREATEST(-0.95, LEAST(0.95, v_cov / (v_sg_a * v_sg_b)));
+    v_rho := v_rho * v_s_a * v_s_b;
+
+    v_pp := GREATEST(public.odds_engine_bvn_cdf(v_h_a, v_h_b, v_rho), 1e-12);
+    v_f  := (v_p_a * v_p_b / v_pp)::numeric;
+    v_factors[a] := sqrt(v_f);
+    v_factors[b] := v_factors[a];
+  END LOOP;
+
+  RETURN v_factors;
+END;
+$function$
+;
+
+CREATE OR REPLACE FUNCTION public.odds_engine_parlay_market_factors(p_market_ids uuid[], p_lines numeric[], p_sides text[], p_odds numeric[])
+ RETURNS numeric[]
+ LANGUAGE plpgsql
+ STABLE SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+DECLARE
+  v_n integer := COALESCE(array_length(p_market_ids, 1), 0);
+  v_season uuid;
+  v_cfg public.odds_engine_config;
+  v_legs jsonb := '[]'::jsonb;
+  v_m record;
+  v_d record;
+  v_stat text;
+  v_subjects jsonb;
+  i integer;
+BEGIN
+  IF v_n < 2 THEN RETURN NULL; END IF;
+  SELECT w.season_id INTO v_season
+    FROM public.bet_markets m JOIN public.weeks w ON w.id = m.week_id
+    WHERE m.id = p_market_ids[1];
+  v_cfg := public.odds_engine_get_config(v_season);
+  IF NOT v_cfg.is_enabled THEN RETURN NULL; END IF;
+
+  FOR i IN 1 .. v_n LOOP
+    SELECT m.market_type, m.subject_player_id, m.game_number, m.params INTO v_m
+      FROM public.bet_markets m WHERE m.id = p_market_ids[i];
+    v_stat := NULL; v_subjects := '[]'::jsonb;
+    IF v_m.market_type = 'over_under' AND v_m.subject_player_id IS NOT NULL THEN
+      v_stat := 'score';
+      v_subjects := jsonb_build_array(v_m.subject_player_id::text);
+    ELSIF v_m.market_type = 'prop' AND v_m.subject_player_id IS NOT NULL
+          AND (v_m.params ->> 'stat') IN ('strikes', 'spares', 'clean_frames') THEN
+      v_stat := v_m.params ->> 'stat';
+      v_subjects := jsonb_build_array(v_m.subject_player_id::text);
+    ELSIF v_m.market_type = 'combo'
+          AND (v_m.params ->> 'stat') IN ('total_pins', 'strikes', 'spares', 'clean_frames') THEN
+      v_stat := CASE WHEN v_m.params ->> 'stat' = 'total_pins' THEN 'score' ELSE v_m.params ->> 'stat' END;
+      v_subjects := COALESCE(v_m.params -> 'member_ids', '[]'::jsonb);
+    END IF;
+
+    IF v_stat IS NOT NULL AND p_lines[i] IS NOT NULL THEN
+      SELECT d.mean, d.variance, d.n_games INTO v_d
+        FROM public.odds_engine_market_distribution(p_market_ids[i]) d;
+      IF v_d.mean IS NOT NULL AND v_d.variance IS NOT NULL AND v_d.variance > 0 THEN
+        v_legs := v_legs || jsonb_build_array(jsonb_build_object(
+          'subjects', v_subjects, 'stat', v_stat,
+          'game_number', v_m.game_number, 'n_games', v_d.n_games,
+          'mu', v_d.mean * GREATEST(v_d.n_games, 1),
+          'sigma', sqrt(v_d.variance * GREATEST(v_d.n_games, 1)),
+          'line', p_lines[i], 'side', COALESCE(p_sides[i], 'over'),
+          'quoted', p_odds[i]));
+        CONTINUE;
+      END IF;
+    END IF;
+    v_legs := v_legs || jsonb_build_array(jsonb_build_object(
+      'subjects', '[]'::jsonb, 'stat', 'none', 'game_number', v_m.game_number,
+      'n_games', 1, 'mu', 0, 'sigma', 0, 'line', 0, 'side', 'over'));
+  END LOOP;
+
+  RETURN public.odds_engine_parlay_factors_internal(v_legs, v_season);
+END;
+$function$
+;
+
 CREATE OR REPLACE FUNCTION public.odds_engine_player_stat(p_player_id uuid, p_season_id uuid, p_stat text, OUT mean numeric, OUT variance numeric, OUT w_total numeric)
  RETURNS record
  LANGUAGE plpgsql
@@ -5719,6 +5962,19 @@ END;
 $function$
 ;
 
+CREATE OR REPLACE FUNCTION public.odds_engine_stat_rho(p_a text, p_b text)
+ RETURNS numeric
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+  SELECT CASE WHEN p_a = p_b THEN 1.0::numeric
+              ELSE COALESCE((SELECT c.rho FROM public.odds_engine_stat_corr c
+                             WHERE c.stat_a = LEAST(p_a, p_b)
+                               AND c.stat_b = GREATEST(p_a, p_b)), 0) END;
+$function$
+;
+
 CREATE OR REPLACE FUNCTION public.open_auction_internal(p_auction_id uuid)
  RETURNS void
  LANGUAGE plpgsql
@@ -5783,6 +6039,152 @@ BEGIN
 
   UPDATE public.auctions SET opens_at = now() WHERE id = p_auction_id;
   PERFORM public.open_auction_internal(p_auction_id);
+END;
+$function$
+;
+
+CREATE OR REPLACE FUNCTION public.parlay_price(p_week_id uuid DEFAULT NULL::uuid, p_picks jsonb DEFAULT NULL::jsonb, p_combos jsonb DEFAULT NULL::jsonb)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ STABLE SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+DECLARE
+  v_week uuid := p_week_id;
+  v_season uuid;
+  v_cfg public.odds_engine_config;
+  v_legs jsonb := '[]'::jsonb;
+  v_quoted numeric[] := '{}';
+  v_pick jsonb;
+  v_combo jsonb;
+  v_mid uuid;
+  v_m record;
+  v_d record;
+  v_stat text;
+  v_subjects jsonb;
+  v_members uuid[];
+  v_cn integer;
+  v_week_games integer;
+  v_mu numeric;
+  v_var numeric;
+  v_factors numeric[];
+  v_odds numeric := 1;
+  v_corr boolean := false;
+  v_n integer;
+  i integer;
+BEGIN
+  IF v_week IS NULL AND p_picks IS NOT NULL AND jsonb_array_length(p_picks) > 0 THEN
+    SELECT m.week_id INTO v_week FROM public.bet_markets m
+      WHERE m.id = ((p_picks -> 0) ->> 'market_id')::uuid;
+  END IF;
+  IF v_week IS NULL THEN
+    RAISE EXCEPTION 'A week (or at least one pick) is required';
+  END IF;
+  SELECT w.season_id INTO v_season FROM public.weeks w WHERE w.id = v_week;
+  IF v_season IS NULL THEN
+    RAISE EXCEPTION 'Week has no season';
+  END IF;
+  v_cfg := public.odds_engine_get_config(v_season);
+
+  SELECT COUNT(DISTINCT g.game_number) INTO v_week_games
+    FROM public.games g JOIN public.teams t ON t.id = g.team_a_id
+    WHERE t.week_id = v_week;
+  IF v_week_games IS NULL OR v_week_games = 0 THEN v_week_games := 2; END IF;
+
+  FOR v_pick IN SELECT value FROM jsonb_array_elements(COALESCE(p_picks, '[]'::jsonb)) LOOP
+    v_mid := (v_pick ->> 'market_id')::uuid;
+    IF v_mid IS NULL OR (v_pick ->> 'quoted_odds') IS NULL THEN
+      RAISE EXCEPTION 'Every pick needs a market_id and quoted_odds';
+    END IF;
+    SELECT m.market_type, m.subject_player_id, m.game_number, m.params INTO v_m
+      FROM public.bet_markets m WHERE m.id = v_mid;
+    v_stat := NULL; v_subjects := '[]'::jsonb;
+    IF v_m.market_type = 'over_under' AND v_m.subject_player_id IS NOT NULL THEN
+      v_stat := 'score'; v_subjects := jsonb_build_array(v_m.subject_player_id::text);
+    ELSIF v_m.market_type = 'prop' AND v_m.subject_player_id IS NOT NULL
+          AND (v_m.params ->> 'stat') IN ('strikes', 'spares', 'clean_frames') THEN
+      v_stat := v_m.params ->> 'stat'; v_subjects := jsonb_build_array(v_m.subject_player_id::text);
+    ELSIF v_m.market_type = 'combo'
+          AND (v_m.params ->> 'stat') IN ('total_pins', 'strikes', 'spares', 'clean_frames') THEN
+      v_stat := CASE WHEN v_m.params ->> 'stat' = 'total_pins' THEN 'score' ELSE v_m.params ->> 'stat' END;
+      v_subjects := COALESCE(v_m.params -> 'member_ids', '[]'::jsonb);
+    END IF;
+    IF v_stat IS NOT NULL AND (v_pick ->> 'line') IS NOT NULL THEN
+      SELECT d.mean, d.variance, d.n_games INTO v_d
+        FROM public.odds_engine_market_distribution(v_mid) d;
+      IF v_d.mean IS NOT NULL AND v_d.variance IS NOT NULL AND v_d.variance > 0 THEN
+        v_legs := v_legs || jsonb_build_array(jsonb_build_object(
+          'subjects', v_subjects, 'stat', v_stat,
+          'game_number', v_m.game_number, 'n_games', v_d.n_games,
+          'mu', v_d.mean * GREATEST(v_d.n_games, 1),
+          'sigma', sqrt(v_d.variance * GREATEST(v_d.n_games, 1)),
+          'line', (v_pick ->> 'line')::numeric, 'side', 'over',
+          'quoted', (v_pick ->> 'quoted_odds')::numeric));
+      ELSE
+        v_stat := NULL;
+      END IF;
+    END IF;
+    IF v_stat IS NULL THEN
+      v_legs := v_legs || jsonb_build_array(jsonb_build_object(
+        'subjects', '[]'::jsonb, 'stat', 'none', 'game_number', v_m.game_number,
+        'n_games', 1, 'mu', 0, 'sigma', 0, 'line', 0, 'side', 'over'));
+    END IF;
+    v_quoted := v_quoted || (v_pick ->> 'quoted_odds')::numeric;
+  END LOOP;
+
+  FOR v_combo IN SELECT value FROM jsonb_array_elements(COALESCE(p_combos, '[]'::jsonb)) LOOP
+    IF (v_combo ->> 'quoted_odds') IS NULL OR (v_combo ->> 'line') IS NULL THEN
+      RAISE EXCEPTION 'Every combo needs a line and quoted_odds';
+    END IF;
+    SELECT array_agg(DISTINCT m::uuid) INTO v_members
+      FROM jsonb_array_elements_text(v_combo -> 'member_ids') m;
+    IF v_members IS NULL OR array_length(v_members, 1) < 2 THEN
+      RAISE EXCEPTION 'A combo needs at least two distinct players';
+    END IF;
+    v_stat := CASE WHEN v_combo ->> 'stat' = 'total_pins' THEN 'score' ELSE v_combo ->> 'stat' END;
+    IF v_stat NOT IN ('score', 'strikes', 'spares', 'clean_frames') THEN
+      RAISE EXCEPTION 'Unknown combo stat %', COALESCE(v_combo ->> 'stat', '(null)');
+    END IF;
+    v_cn := CASE WHEN v_combo ->> 'scope' = 'game' THEN 1 ELSE v_week_games END;
+    SELECT COALESCE(SUM(ps.mean), 0), COALESCE(SUM(ps.variance), 0) INTO v_mu, v_var
+      FROM unnest(v_members) mem(m)
+      CROSS JOIN LATERAL public.odds_engine_player_stat(mem.m, v_season, v_stat) ps;
+    v_legs := v_legs || jsonb_build_array(jsonb_build_object(
+      'subjects', (SELECT jsonb_agg(m::text ORDER BY m) FROM unnest(v_members) m),
+      'stat', v_stat,
+      'game_number', CASE WHEN v_combo ->> 'scope' = 'game'
+                          THEN (v_combo ->> 'game_number')::integer END,
+      'n_games', v_cn,
+      'mu', COALESCE(v_mu, 0) * v_cn,
+      'sigma', CASE WHEN v_var > 0 THEN sqrt(v_var * v_cn) ELSE 0 END,
+      'line', (v_combo ->> 'line')::numeric, 'side', 'over',
+      'quoted', (v_combo ->> 'quoted_odds')::numeric));
+    v_quoted := v_quoted || (v_combo ->> 'quoted_odds')::numeric;
+  END LOOP;
+
+  v_n := jsonb_array_length(v_legs);
+  IF v_n = 0 THEN
+    RAISE EXCEPTION 'Nothing to price';
+  END IF;
+
+  IF v_cfg.is_enabled AND v_n >= 2 THEN
+    v_factors := public.odds_engine_parlay_factors_internal(v_legs, v_season);
+  END IF;
+
+  FOR i IN 1 .. v_n LOOP
+    v_odds := v_odds * v_quoted[i] * COALESCE(v_factors[i], 1);
+    IF v_factors[i] IS NOT NULL AND v_factors[i] <> 1 THEN v_corr := true; END IF;
+  END LOOP;
+
+  RETURN jsonb_build_object(
+    'odds', round(v_odds, 2),
+    'correlated', v_corr,
+    'factors', COALESCE(to_jsonb(v_factors), 'null'::jsonb));
+EXCEPTION WHEN OTHERS THEN
+  IF SQLERRM LIKE 'CORRELATED_LEGS|%' THEN
+    RETURN jsonb_build_object('blocked_player_id', NULLIF(split_part(SQLERRM, '|', 2), ''));
+  END IF;
+  RAISE;
 END;
 $function$
 ;
@@ -5945,6 +6347,13 @@ DECLARE
   v_line      public.custom_lines%ROWTYPE;
   v_boost_pct numeric := NULL;
   v_total_payout integer;
+  v_leg_ids   uuid[]    := '{}';
+  v_leg_mkts  uuid[]    := '{}';
+  v_leg_odds  numeric[] := '{}';
+  v_leg_lines numeric[] := '{}';
+  v_leg_sides text[]    := '{}';
+  v_factors   numeric[];
+  i           integer;
 BEGIN
   v_player_id := public.current_player_id();
 
@@ -6015,11 +6424,37 @@ BEGIN
       RAISE EXCEPTION 'A player cannot bet the under on their own line';
     END IF;
 
+    v_leg_ids   := v_leg_ids   || v_sel.selection_id;
+    v_leg_mkts  := v_leg_mkts  || v_sel.market_id;
+    v_leg_odds  := v_leg_odds  || v_sel.odds;
+    v_leg_lines := v_leg_lines || v_sel.line;
+    v_leg_sides := v_leg_sides || v_sel.side;
+
     v_odds := v_odds * v_sel.odds;
   END LOOP;
 
   IF v_n <> array_length(p_selection_ids, 1) THEN
     RAISE EXCEPTION 'One or more selections not found';
+  END IF;
+
+  -- Correlated-parlay repricing (SGP): legs on the same player in
+  -- overlapping scopes (same game, or night↔game) cannot pay the product of
+  -- marginals — each correlated pair is repriced off the joint bivariate
+  -- model AT THE QUOTE-IMPLIED thresholds (p̂ = 1/stored odds), so the joint
+  -- price is monotone vs. the singles even when a posted quote is stale or
+  -- ceiling-clamped; the ratio is folded into the STORED leg odds, so
+  -- settlement's product recompute (incl. Winner's Crutch leg drops) needs no
+  -- change. Specials are admin-priced bundles — exempt. Engine off → NULL →
+  -- legacy product. A ≥3-leg correlated cluster raises CORRELATED_LEGS|<player>.
+  IF v_n >= 2 AND p_custom_line_id IS NULL THEN
+    v_factors := public.odds_engine_parlay_market_factors(v_leg_mkts, v_leg_lines, v_leg_sides, v_leg_odds);
+    IF v_factors IS NOT NULL THEN
+      v_odds := 1;
+      FOR i IN 1 .. v_n LOOP
+        v_leg_odds[i] := round(v_leg_odds[i] * v_factors[i], 4);
+        v_odds := v_odds * v_leg_odds[i];
+      END LOOP;
+    END IF;
   END IF;
 
   v_payout := FLOOR(p_stake * v_odds);
@@ -6127,10 +6562,12 @@ BEGIN
             p_insurance_item_id, p_crutch_item_id, p_boost_item_id, v_boost_pct)
     RETURNING id INTO v_bet_id;
 
+  -- Legs snapshot the (possibly correlation-repriced) odds gathered above —
+  -- NOT re-read from bet_selections, so the stored product always equals the
+  -- payout basis.
   INSERT INTO public.bet_legs (bet_id, selection_id, side, odds_at_placement, line_at_placement)
-    SELECT v_bet_id, s.id, 'back', s.odds, s.line
-    FROM public.bet_selections s
-    WHERE s.id = ANY (p_selection_ids);
+    SELECT v_bet_id, u.sel_id, 'back', u.o, u.l
+    FROM unnest(v_leg_ids, v_leg_odds, v_leg_lines) AS u(sel_id, o, l);
 
   -- Double-entry stake: player -stake, house +stake (nets to zero).
   PERFORM public.pin_ledger_double_entry(
@@ -10858,6 +11295,8 @@ CREATE TRIGGER set_updated_at BEFORE UPDATE ON public.loan_products FOR EACH ROW
 CREATE TRIGGER set_updated_at BEFORE UPDATE ON public.loans FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
 CREATE TRIGGER set_updated_at BEFORE UPDATE ON public.odds_engine_config FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+CREATE TRIGGER set_updated_at BEFORE UPDATE ON public.odds_engine_stat_corr FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
 CREATE TRIGGER set_updated_at BEFORE UPDATE ON public.pin_ledger FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
