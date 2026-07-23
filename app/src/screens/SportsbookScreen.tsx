@@ -1010,8 +1010,8 @@ export default function SportsbookScreen() {
           contextNote={
             comboGroupAvg != null
               ? comboGroupProj != null
-                ? `Group avg ${comboGroupAvg.toFixed(1)} · forecast ${comboGroupProj.toFixed(1)} — lines above the forecast pay longer odds`
-                : `Group average: ${comboGroupAvg.toFixed(1)} — lines above it pay longer odds`
+                ? `Group Average ${comboGroupAvg.toFixed(1)} · Forecast ${comboGroupProj.toFixed(1)}`
+                : `Group Average: ${comboGroupAvg.toFixed(1)} — lines above it pay longer odds`
               : undefined
           }
           source={comboSource}
